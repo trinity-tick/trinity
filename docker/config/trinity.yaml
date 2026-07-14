@@ -1,0 +1,32 @@
+# Trinity Configuration
+# ============================================================
+# This file is loaded at startup. Values can be overridden
+# via environment variables (TRINITY_<KEY>).
+
+storage:
+  path: /app/data
+  db_type: sqlite  # or: postgresql
+  pg_host: ${TRINITY_PG_HOST:-localhost}
+  pg_port: ${TRINITY_PG_PORT:-5432}
+  pg_db: ${TRINITY_PG_DB:-trinity}
+  pg_user: ${TRINITY_PG_USER:-trinity}
+  pg_password: ${TRINITY_PG_PASSWORD:-trinity}
+
+server:
+  mcp:
+    transport: ${TRINITY_MCP_TRANSPORT:-stdio}  # stdio or sse
+    port: ${TRINITY_MCP_PORT:-8000}
+    host: ${TRINITY_MCP_HOST:-0.0.0.0}
+  api:
+    port: ${TRINITY_API_PORT:-8001}
+    host: ${TRINITY_API_HOST:-0.0.0.0}
+
+guardian:
+  enabled: ${TRINITY_GUARDIAN_ENABLED:-true}
+  tiers: all  # or: L1,L2,L3,...
+  blocking_policy: first_fail  # first_fail or aggregate
+
+benchmark:
+  mock_personas: 3
+  mock_top_k: 10
+  default_top_k: 5

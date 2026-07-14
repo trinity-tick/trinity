@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+eggs/
+*.egg
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+
+# Environment
+.env
+.env.local
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Database
+*.db
+*.sqlite
+
+# Benchmark outputs (keep reports, remove cache)
+benchmark/*_cache/
+benchmark/scenarios/*.tmp
+trinity/benchmark_scripts/results/
+
+# Logs
+*.log
+logs/
+
+# Package
+*.tar.gz
+*.whl
+
+# Auto-daemon runtime
+auto-daemon/runtime/
+auto-daemon/state/
+
+# Data directory (created at runtime)
+trinity/data/

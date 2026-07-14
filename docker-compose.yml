@@ -1,0 +1,118 @@
+# =============================================================================
+# Trinity — Docker Compose
+# =============================================================================
+# Start all services:
+#   docker compose up -d
+#
+# Services:
+#   trinity-mcp     — MCP server (memory tools via Model Context Protocol)
+#   trinity-api     — REST API server (FastAPI)
+#   trinity-db      — PostgreSQL (for multi-tenant mode)
+#   trinity-dash    — Web management dashboard
+# =============================================================================
+
+services:
+  # ── MCP Server ─────────────────────────────────────────────────────────
+  trinity-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trinity-mcp
+    ports:
+      - "8000:8000"
+    volumes:
+      - trinity-data:/app/data
+    environment:
+      TRINITY_MCP_TRANSPORT: sse
+      TRINITY_MCP_PORT: "8000"
+      TRINITY_MCP_HOST: "0.0.0.0"
+      PYTHONUNBUFFERED: "1"
+    command: mcp --mode sse --port 8000
+    healthcheck:
+      test: ["CMD", "python", "-c", "from trinity import Trinity; Trinity().diagnostics()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - trinity-net
+
+  # ── REST API Server ────────────────────────────────────────────────────
+  trinity-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trinity-api
+    ports:
+      - "8001:8001"
+    volumes:
+      - trinity-data:/app/data
+    environment:
+      TRINITY_MCP_HOST: trinity-mcp
+      TRINITY_MCP_PORT: "8000"
+      PYTHONUNBUFFERED: "1"
+    command: api --port 8001
+    depends_on:
+      trinity-mcp:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - trinity-net
+
+  # ── PostgreSQL (for multi-tenant mode) ────────────────────────────────
+  trinity-db:
+    image: postgres:16-alpine
+    container_name: trinity-db
+    ports:
+      - "5432:5432"
+    volumes:
+      - trinity-pgdata:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    environment:
+      POSTGRES_DB: trinity
+      POSTGRES_USER: trinity
+      POSTGRES_PASSWORD: trinity
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trinity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - trinity-net
+    profiles:
+      - multi-tenant
+      - full
+
+  # ── Web Dashboard ─────────────────────────────────────────────────────
+  trinity-dash:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trinity-dash
+    ports:
+      - "3000:3000"
+    volumes:
+      - trinity-data:/app/data
+      - ./trinity/api/static:/app/static:ro
+    environment:
+      TRINITY_API_URL: http://trinity-api:8001
+      PYTHONUNBUFFERED: "1"
+    command: dashboard --port 3000
+    depends_on:
+      trinity-api:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - trinity-net
+    profiles:
+      - full
+
+volumes:
+  trinity-data:
+  trinity-pgdata:
+
+networks:
+  trinity-net:
+    driver: bridge

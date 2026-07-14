@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trinity Dashboard — 三位一体记忆系统</title>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --bg-card: #161b22;
+            --bg-input: #21262d;
+            --text: #f0f6fc;
+            --text-secondary: #8b949e;
+            --accent: #58a6ff;
+            --green: #3fb950;
+            --red: #f85149;
+            --yellow: #d29922;
+            --border: #30363d;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+        /* Header */
+        .header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 20px 0; border-bottom: 1px solid var(--border); margin-bottom: 24px;
+        }
+        .header h1 { font-size: 24px; font-weight: 600; }
+        .header h1 span { color: var(--accent); }
+        .header .status {
+            padding: 6px 16px; border-radius: 20px; font-size: 13px;
+            background: var(--green); color: #000; font-weight: 600;
+        }
+
+        /* Cards */
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 8px; padding: 20px;
+        }
+        .card h3 { font-size: 14px; color: var(--text-secondary); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .card .value { font-size: 28px; font-weight: 700; }
+        .card .value .unit { font-size: 14px; color: var(--text-secondary); font-weight: 400; }
+        .card .sub { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+
+        /* Search */
+        .search-box {
+            display: flex; gap: 8px; margin-bottom: 16px;
+        }
+        .search-box input {
+            flex: 1; padding: 12px 16px; border-radius: 8px; border: 1px solid var(--border);
+            background: var(--bg-input); color: var(--text); font-size: 15px;
+        }
+        .search-box input:focus { outline: none; border-color: var(--accent); }
+        .search-box button {
+            padding: 12px 24px; border-radius: 8px; border: none;
+            background: var(--accent); color: #fff; font-weight: 600; cursor: pointer;
+            font-size: 15px; transition: opacity 0.2s;
+        }
+        .search-box button:hover { opacity: 0.85; }
+
+        /* Results */
+        .result-item {
+            padding: 12px 16px; border: 1px solid var(--border);
+            border-radius: 6px; margin-bottom: 8px;
+            background: var(--bg-input);
+        }
+        .result-item .score { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; background: var(--accent); color: #000; margin-bottom: 6px; }
+        .result-item .content { font-size: 14px; }
+        .result-item .meta { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+
+        /* Memory form */
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; }
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid var(--border);
+            background: var(--bg-input); color: var(--text); font-size: 14px;
+        }
+        .form-group textarea { min-height: 80px; resize: vertical; }
+        .form-group input:focus, .form-group textarea:focus { outline: none; border-color: var(--accent); }
+
+        .tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+        .tab { padding: 10px 20px; cursor: pointer; color: var(--text-secondary); border-bottom: 2px solid transparent; font-size: 14px; font-weight: 500; }
+        .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .btn {
+            padding: 10px 20px; border-radius: 6px; border: none; font-weight: 600;
+            cursor: pointer; font-size: 14px; transition: opacity 0.2s;
+        }
+        .btn-primary { background: var(--accent); color: #fff; }
+        .btn-danger { background: var(--red); color: #fff; }
+        .btn:hover { opacity: 0.85; }
+
+        .toast {
+            position: fixed; bottom: 24px; right: 24px; padding: 12px 20px;
+            border-radius: 8px; font-size: 14px; z-index: 1000;
+            opacity: 0; transition: opacity 0.3s; pointer-events: none;
+        }
+        .toast.show { opacity: 1; }
+        .toast.success { background: var(--green); color: #000; }
+        .toast.error { background: var(--red); color: #fff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>Trinity <span>Dashboard</span></h1>
+            <div class="status" id="statusBadge">● Connected</div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="grid">
+            <div class="card">
+                <h3>System Version</h3>
+                <div class="value" id="sysVersion">—</div>
+            </div>
+            <div class="card">
+                <h3>Guardian Chain</h3>
+                <div class="value" id="guardChain">— <span class="unit">tiers</span></div>
+            </div>
+            <div class="card">
+                <h3>Retrieval Channels</h3>
+                <div class="value" id="retrievalCh">—</div>
+            </div>
+            <div class="card">
+                <h3>Memories Stored</h3>
+                <div class="value" id="memCount">—</div>
+                <div class="sub" id="dbSize"></div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('search')">🔍 Search</div>
+            <div class="tab" onclick="switchTab('ingest')">✏️ Ingest</div>
+            <div class="tab" onclick="switchTab('reason')">🧠 Reason</div>
+            <div class="tab" onclick="switchTab('system')">⚙️ System</div>
+        </div>
+
+        <!-- Search Tab -->
+        <div id="tab-search" class="tab-content active">
+            <div class="card">
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="Search memories..." onkeydown="if(event.key==='Enter')doSearch()">
+                    <button onclick="doSearch()">Search</button>
+                </div>
+                <div style="display:flex;gap:12px;font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
+                    <label><input type="number" id="searchTopK" value="5" style="width:50px;background:var(--bg-input);border:1px solid var(--border);color:var(--text);padding:2px 6px;border-radius:4px;"> top-k</label>
+                    <label><input type="text" id="searchPersona" placeholder="persona_id (optional)" style="width:160px;background:var(--bg-input);border:1px solid var(--border);color:var(--text);padding:2px 6px;border-radius:4px;"></label>
+                </div>
+                <div id="searchResults"></div>
+            </div>
+        </div>
+
+        <!-- Ingest Tab -->
+        <div id="tab-ingest" class="tab-content">
+            <div class="card">
+                <div class="form-group">
+                    <label>Memory Content</label>
+                    <textarea id="ingestContent" placeholder="Enter memory text..."></textarea>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                    <div class="form-group">
+                        <label>Persona ID</label>
+                        <input type="text" id="ingestPersona" value="default">
+                    </div>
+                    <div class="form-group">
+                        <label>Role</label>
+                        <select id="ingestRole">
+                            <option value="user">user</option>
+                            <option value="assistant">assistant</option>
+                            <option value="system">system</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Importance (0-1)</label>
+                        <input type="number" id="ingestImportance" value="0.5" min="0" max="1" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label>Tags (comma-separated)</label>
+                        <input type="text" id="ingestTags" placeholder="preference, user">
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="doIngest()" style="margin-top:8px;">Store Memory</button>
+                <div id="ingestResult" style="margin-top:12px;font-size:13px;"></div>
+            </div>
+        </div>
+
+        <!-- Reason Tab -->
+        <div id="tab-reason" class="tab-content">
+            <div class="card">
+                <div class="form-group">
+                    <label>Question</label>
+                    <textarea id="reasonQuery" placeholder="Ask an open-domain question..."></textarea>
+                </div>
+                <div style="display:flex;gap:12px;align-items:center;">
+                    <label style="font-size:13px;"><input type="checkbox" id="reasonMultiHop"> Multi-hop expansion</label>
+                    <button class="btn btn-primary" onclick="doReason()">Ask</button>
+                </div>
+                <div id="reasonResult" style="margin-top:12px;"></div>
+            </div>
+        </div>
+
+        <!-- System Tab -->
+        <div id="tab-system" class="tab-content">
+            <div class="card">
+                <h3>Full Diagnostics</h3>
+                <pre id="sysDiagnostics" style="background:var(--bg-input);padding:16px;border-radius:6px;font-size:12px;overflow-x:auto;margin-top:8px;max-height:400px;overflow-y:auto;"></pre>
+                <button class="btn btn-primary" onclick="loadDiagnostics()" style="margin-top:8px;">Refresh</button>
+            </div>
+            <div class="card" style="margin-top:16px;">
+                <h3>API Endpoints</h3>
+                <table style="width:100%;font-size:13px;border-collapse:collapse;">
+                    <tr style="border-bottom:1px solid var(--border);"><th style="text-align:left;padding:8px;">Endpoint</th><th style="text-align:left;">Method</th><th style="text-align:left;">Description</th></tr>
+                    <tr><td style="padding:6px;">/health</td><td>GET</td><td>Health check</td></tr>
+                    <tr><td style="padding:6px;">/diagnostics</td><td>GET</td><td>Full diagnostics</td></tr>
+                    <tr><td style="padding:6px;">/memories</td><td>POST</td><td>Store memory</td></tr>
+                    <tr><td style="padding:6px;">/memories?query=</td><td>GET</td><td>Search memories</td></tr>
+                    <tr><td style="padding:6px;">/memories/{id}</td><td>DELETE</td><td>Delete memory</td></tr>
+                    <tr><td style="padding:6px;">/personas/{id}/memories</td><td>GET</td><td>Persona memories</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        const API = '';
+
+        function showToast(msg, type='success') {
+            const t = document.getElementById('toast');
+            t.textContent = msg; t.className = 'toast ' + type + ' show';
+            setTimeout(() => t.className = 'toast', 2500);
+        }
+
+        function switchTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelector(`.tab[onclick*="'${name}'"]`).classList.add('active');
+            document.getElementById('tab-' + name).classList.add('active');
+        }
+
+        async function api(method, path, body) {
+            const opts = { method, headers: {'Content-Type': 'application/json'} };
+            if (body) opts.body = JSON.stringify(body);
+            const res = await fetch(API + path, opts);
+            if (!res.ok) { const e = await res.json(); throw new Error(e.detail || res.statusText); }
+            return res.json();
+        }
+
+        // Load diagnostics on startup
+        async function loadDiagnostics() {
+            try {
+                const d = await api('GET', '/diagnostics');
+                document.getElementById('sysVersion').textContent = d.trinity_version || d.source_version || '?';
+                document.getElementById('guardChain').innerHTML = (d.guardian_chain?.length || '?') + ' <span class="unit">tiers</span>';
+                document.getElementById('retrievalCh').textContent = d.retrieval_channels || '?';
+                document.getElementById('memCount').textContent = d.storage?.total_memories || '?';
+                document.getElementById('dbSize').textContent = 'DB: ' + (d.storage?.db_size_mb || '0') + 'MB';
+                document.getElementById('sysDiagnostics').textContent = JSON.stringify(d, null, 2);
+                document.getElementById('statusBadge').textContent = '● Connected';
+                document.getElementById('statusBadge').style.background = 'var(--green)';
+                showToast('System connected');
+            } catch(e) {
+                document.getElementById('statusBadge').textContent = '● Disconnected';
+                document.getElementById('statusBadge').style.background = 'var(--red)';
+                showToast('Connection failed: ' + e.message, 'error');
+            }
+        }
+        loadDiagnostics();
+
+        // Search
+        async function doSearch() {
+            const query = document.getElementById('searchInput').value;
+            if (!query) return showToast('Enter a search query', 'error');
+            const topK = document.getElementById('searchTopK').value || 5;
+            const persona = document.getElementById('searchPersona').value;
+            let path = `/memories?query=${encodeURIComponent(query)}&top_k=${topK}`;
+            if (persona) path += `&persona_id=${encodeURIComponent(persona)}`;
+            try {
+                const data = await api('GET', path);
+                const container = document.getElementById('searchResults');
+                if (data.results && data.results.length > 0) {
+                    container.innerHTML = `<div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">${data.total} results</div>` +
+                        data.results.map(r => `
+                            <div class="result-item">
+                                <div class="score">${(r.score || 0).toFixed(3)}</div>
+                                <div class="content">${escapeHtml(r.content_preview || r.content || '')}</div>
+                                <div class="meta">${r.persona_id || ''} ${r.session_id ? '· ' + r.session_id : ''} ${r.category ? '· ' + r.category : ''}</div>
+                            </div>
+                        `).join('');
+                } else {
+                    container.innerHTML = '<div style="color:var(--text-secondary);padding:20px;text-align:center;">No results found.</div>';
+                }
+                showToast(`Found ${data.total} results`);
+            } catch(e) { showToast('Search failed: ' + e.message, 'error'); }
+        }
+
+        // Ingest
+        async function doIngest() {
+            const content = document.getElementById('ingestContent').value;
+            if (!content) return showToast('Enter memory content', 'error');
+            const body = {
+                content,
+                persona_id: document.getElementById('ingestPersona').value || 'default',
+                role: document.getElementById('ingestRole').value,
+                importance: parseFloat(document.getElementById('ingestImportance').value) || 0.5,
+                tags: document.getElementById('ingestTags').value.split(',').map(t => t.trim()).filter(Boolean),
+            };
+            try {
+                const result = await api('POST', '/memories', body);
+                document.getElementById('ingestResult').innerHTML =
+                    `<div style="color:var(--green);">✅ Stored: ${result.memory_id}</div>
+                     <div style="font-size:12px;color:var(--text-secondary);">SHA-256: ${result.sha256_hash?.substring(0,16)}...</div>`;
+                document.getElementById('ingestContent').value = '';
+                showToast('Memory stored');
+                loadDiagnostics();
+            } catch(e) { showToast('Ingest failed: ' + e.message, 'error'); }
+        }
+
+        // Reason
+        async function doReason() {
+            const query = document.getElementById('reasonQuery').value;
+            if (!query) return showToast('Enter a question', 'error');
+            try {
+                const result = await api('POST', '/reason', {
+                    query,
+                    multi_hop: document.getElementById('reasonMultiHop').checked,
+                    top_k: 5,
+                });
+                document.getElementById('reasonResult').innerHTML = `
+                    <div class="result-item">
+                        <div style="font-weight:600;margin-bottom:4px;">Answer</div>
+                        <div class="content">${escapeHtml(result.response || 'No answer')}</div>
+                        <div class="meta">Confidence: ${(result.confidence || 0).toFixed(3)} | Evidence: ${result.evidence_count || 0} | Duration: ${result.duration_ms || 0}ms</div>
+                    </div>
+                `;
+            } catch(e) { showToast('Reasoning failed: ' + e.message, 'error'); }
+        }
+
+        function escapeHtml(text) {
+            const d = document.createElement('div');
+            d.textContent = text;
+            return d.innerHTML;
+        }
+    </script>
+</body>
+</html>
