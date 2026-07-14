@@ -1,0 +1,97 @@
+# ---------------------------------------------------------------------------
+# CI Workflow: PyPI Publish
+# ---------------------------------------------------------------------------
+# This workflow publishes both the main `trinity` package and the
+# `trinity-auto-daemon` sub-package to PyPI whenever a version tag
+# (v*) is pushed.
+#
+# It uses Trusted Publishing (OpenID Connect) so no API tokens are
+# stored as secrets.
+#
+# Packages published:
+#   - trinity              (from project root)
+#   - trinity-auto-daemon  (from auto-daemon/)
+# ---------------------------------------------------------------------------
+
+name: "PyPI Publish"
+
+on:
+  push:
+    tags:
+      - "v*"                   # e.g. v1.2.3, v0.5.0-rc1
+
+# Only one publish run at a time; cancel if superseded
+concurrency:
+  group: pypi-publish
+  cancel-in-progress: true
+
+jobs:
+  # -----------------------------------------------------------------------
+  # Publish the main trinity package to PyPI
+  # -----------------------------------------------------------------------
+  publish-trinity:
+    name: "Publish trinity to PyPI"
+    runs-on: ubuntu-latest
+
+    # Trusted Publishing requires the id-token permission
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      # Step 1: Check out the repository
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Python (use 3.12 for the build tools)
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Step 3: Upgrade pip and install build tools
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+
+      # Step 4: Build the wheel and source distribution for trinity
+      - name: Build wheel (trinity)
+        run: python -m build --outdir dist/
+
+      # Step 5: Publish to PyPI using Trusted Publishing
+      - name: Publish package to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  # -----------------------------------------------------------------------
+  # Publish the auto-daemon sub-package to PyPI
+  # -----------------------------------------------------------------------
+  publish-auto-daemon:
+    name: "Publish trinity-auto-daemon to PyPI"
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+
+      # Step: Build the auto-daemon package from its own directory
+      - name: Build wheel (trinity-auto-daemon)
+        run: python -m build --outdir dist/ auto-daemon/
+
+      # Step: Publish to PyPI
+      - name: Publish package to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

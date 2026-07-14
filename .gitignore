@@ -61,3 +61,10 @@ auto-daemon/state/
 
 # Data directory (created at runtime)
 trinity/data/
+
+# Runtime engine artifacts
+trinity/modules/second_brain/context_tree/
+trinity/modules/second_brain/curation_state/
+trinity/modules/second_brain/sidecar/
+trinity/modules/second_brain/*.json
+trinity/modules/second_brain/*.jsonl

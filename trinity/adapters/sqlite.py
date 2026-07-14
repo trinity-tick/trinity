@@ -254,6 +254,13 @@ class SQLiteAdapter(StorageAdapter):
         if not conn:
             return False
 
+        cursor = conn.execute(
+            "SELECT memory_id FROM memories WHERE memory_id = ?",
+            (memory_id,)
+        )
+        if not cursor.fetchone():
+            return False
+
         conn.execute(
             "UPDATE memories SET status = 'deleted', updated_at = datetime('now') WHERE memory_id = ?",
             (memory_id,)

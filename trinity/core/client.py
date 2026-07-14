@@ -50,6 +50,17 @@ def _import_trinity_bridge():
     return _trinity
 
 
+# ── Cached bridge import ────────────────────────────────────────────────
+_BRIDGE_CACHE: Optional[Any] = None
+
+def _get_cached_bridge():
+    """Return the cached trinity_call bridge, importing it only on first call."""
+    global _BRIDGE_CACHE
+    if _BRIDGE_CACHE is None:
+        _BRIDGE_CACHE = _import_trinity_bridge()
+    return _BRIDGE_CACHE
+
+
 class Trinity:
     """Unified Trinity memory system client.
 
@@ -79,17 +90,27 @@ class Trinity:
         self.tenant_id = tenant_id
         self._bridge = None
         self._adapter = None
+        self._engine = None
 
         # Initialize adapter
         if adapter == "postgresql":
             self._init_postgres_adapter()
-        elif adapter == "sqlite" or not adapter:
+        elif adapter == "sqlite":
             self._init_sqlite_adapter()
+        elif adapter is None:
+            # Legacy mode — use cached second_brain engine instead of re-importing
+            from trinity.core.cache import get_engine
+            self._engine = get_engine()
+        else:
+            raise ValueError(f"Unknown adapter: {adapter}")
 
     def _init_sqlite_adapter(self):
         from trinity.adapters.sqlite import SQLiteAdapter
-        # Store in a project-local location (not the legacy Marvis dir)
-        _store_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+        # Use store_path if provided, else project-local data dir
+        global _TRINITY_STORE
+        _store_dir = os.path.join(_TRINITY_STORE, "data") if _TRINITY_STORE else os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "data"
+        )
         os.makedirs(_store_dir, exist_ok=True)
         db_path = os.path.join(_store_dir, "trinity_store.db")
         self._adapter = SQLiteAdapter(db_path=db_path)
@@ -109,7 +130,7 @@ class Trinity:
     @property
     def bridge(self):
         if self._bridge is None:
-            self._bridge = _import_trinity_bridge()
+            self._bridge = _get_cached_bridge()
         return self._bridge
 
     # ── Core operations ──────────────────────────────────────────────────
@@ -287,6 +308,18 @@ class Trinity:
         Returns:
             Dict with response, confidence, evidence chain.
         """
+        # If engine is cached, use it for reasoning
+        if self._engine:
+            # Import reasoner lazily and use engine
+            from trinity.modules.open_domain.reasoner import OpenDomainReasoner
+            reasoner = OpenDomainReasoner()
+            if multi_hop:
+                return reasoner.answer_multi_hop(query, retriever=self.search, top_k=top_k)
+            return reasoner.answer(query, retriever=self.search, top_k=top_k)
+
+        # Fallback to bridge for legacy mode
+        return self.bridge("reason", query=query, multi_hop=multi_hop, top_k=top_k)
+
     # ── Multi-tenant / Persona methods ─────────────────────────────────
 
     def get_persona_memories(
@@ -344,13 +377,6 @@ class Trinity:
         """
         self.tenant_id = tenant_id
         return self
-
-    # ── Open-domain reasoning ──────────────────────────────────────────
-        reasoner = OpenDomainReasoner()
-
-        if multi_hop:
-            return reasoner.answer_multi_hop(query, retriever=self.search, top_k=top_k)
-        return reasoner.answer(query, retriever=self.search, top_k=top_k)
 
     def benchmark(self, name: str = "longmemeval",
                   config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
