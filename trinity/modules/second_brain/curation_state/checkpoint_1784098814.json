@@ -1,0 +1,72 @@
+{
+  "timestamp": 1784098814.3986773,
+  "operation_count": 10,
+  "total_curations": 8,
+  "pending_operations": [
+    {
+      "op": "curate",
+      "entry_id": "cu_6e15e0fac43f_1784098814",
+      "content_preview": "The AI memory system uses a five-level progressive cascade: L1 Cache, L2 MiniSearch, L3 Semantic, L4",
+      "timestamp": 1784098814.3859875,
+      "crc_hash": "5b9b290ad711423b"
+    },
+    {
+      "op": "curate",
+      "entry_id": "cu_d726acdb424a_1784098814",
+      "content_preview": "[EpisodeTurn] Hi, my name is Alice and I love hiking in the mountains.",
+      "timestamp": 1784098814.3897405,
+      "crc_hash": "4e352d34d96bffc1"
+    },
+    {
+      "op": "curate",
+      "entry_id": "cu_febaee870e48_1784098814",
+      "content_preview": "[EpisodeTurn] Hello Alice! Hiking is a great hobby. Where do you usually hike?",
+      "timestamp": 1784098814.390831,
+      "crc_hash": "1ba64128bfcfd608"
+    },
+    {
+      "op": "curate",
+      "entry_id": "cu_02f951be1ad0_1784098814",
+      "content_preview": "[EpisodeTurn] I usually go to the Rocky Mountains. I also work at OpenAI as an engineer.",
+      "timestamp": 1784098814.3918765,
+      "crc_hash": "9c0f04087102d9cf"
+    },
+    {
+      "op": "curate",
+      "entry_id": "cu_c848dfeb1d6b_1784098814",
+      "content_preview": "[EpisodeTurn] The Rockies are beautiful. What kind of engineering work do you do?",
+      "timestamp": 1784098814.3929386,
+      "crc_hash": "20f9a27b3f799ba7"
+    },
+    {
+      "op": "curate",
+      "entry_id": "cu_de54c5b20674_1784098814",
+      "content_preview": "[EpisodeTurn] I work on language models, specifically memory systems for AI agents.",
+      "timestamp": 1784098814.3940413,
+      "crc_hash": "e893a44de05f36c8"
+    },
+    {
+      "op": "curate",
+      "entry_id": "cu_805582838a2a_1784098814",
+      "content_preview": "[AtomicMemory] [user]: Hi, my name is Alice and I love hiking in the mountains.",
+      "timestamp": 1784098814.3957393,
+      "crc_hash": "cb16c520199bc278"
+    },
+    {
+      "op": "curate",
+      "entry_id": "cu_85e19da10684_1784098814",
+      "content_preview": "[AtomicMemory] [assistant]: Hello Alice!",
+      "timestamp": 1784098814.3967836,
+      "crc_hash": "65af1577d64b0852"
+    },
+    {
+      "op": "curate",
+      "entry_id": "cu_c74c7c90fc20_1784098814",
+      "content_preview": "[AtomicMemory] Hiking is a great hobby.",
+      "timestamp": 1784098814.3978076,
+      "crc_hash": "c258ca7846aec6a4"
+    }
+  ],
+  "curated_entry_count": 9,
+  "coordination_context_count": 1
+}

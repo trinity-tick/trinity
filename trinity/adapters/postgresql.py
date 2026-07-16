@@ -217,6 +217,21 @@ class PostgreSQLAdapter(StorageAdapter):
         """, (memory_id,))
         return [dict(row) for row in cursor.fetchall()]
 
+    def get_all_memories(self, limit: int = 200) -> List[Dict[str, Any]]:
+        """Get all active memories across all personas/tenants."""
+        if not self._conn:
+            return []
+
+        import psycopg2.extras
+        cursor = self._conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cursor.execute("""
+            SELECT * FROM memories
+            WHERE status = 'active'
+            ORDER BY created_at DESC
+            LIMIT %s
+        """, (limit,))
+        return [dict(row) for row in cursor.fetchall()]
+
     def diagnostics(self) -> Dict[str, Any]:
         if not self._conn:
             return {"error": "Not connected"}

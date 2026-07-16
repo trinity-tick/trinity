@@ -74,6 +74,26 @@ def build_parser() -> argparse.ArgumentParser:
     p_mcp.add_argument("--port", type=int, default=8000, help="SSE port (default: 8000)")
     p_mcp.add_argument("--host", default="127.0.0.1", help="SSE host (default: 127.0.0.1)")
 
+    # ── embed ───────────────────────────────────────────────────────
+    p_embed = sub.add_parser("embed", help="Semantic embedding (v6.37+)")
+    p_embed.add_argument("--text", "-t", required=True, help="Text to embed")
+    p_embed.add_argument("--backend", choices=["auto", "ollama", "sklearn", "hash"],
+                         default="auto", help="Embedding backend (default: auto)")
+    p_embed.add_argument("--model", default=None, help="Ollama model name (default: bge-m3)")
+    p_embed.add_argument("--compare", "-c", default=None, help="Compare with another text (cosine sim)")
+
+    # ── vector ──────────────────────────────────────────────────────
+    p_vec = sub.add_parser("vector", help="Vector index operations (v6.37+)")
+    vec_sub = p_vec.add_subparsers(dest="vector_cmd", help="Vector sub-commands")
+
+    p_vec_search = vec_sub.add_parser("search", help="Vector similarity search")
+    p_vec_search.add_argument("--query", "-q", required=True, help="Search query")
+    p_vec_search.add_argument("--top-k", type=int, default=10, help="Number of results")
+    p_vec_search.add_argument("--backend", choices=["numpy", "faiss", "chromadb", "hybrid"],
+                              default="numpy", help="Index backend")
+
+    p_vec_list = vec_sub.add_parser("list", help="List available backends and info")
+
     # ── bench ───────────────────────────────────────────────────────
     p_bench = sub.add_parser("bench", help="Run benchmarks")
     p_bench.add_argument("--name", default="longmemeval",
@@ -94,6 +114,14 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     if args.command == "mcp":
         _run_mcp(args)
+        return
+
+    if args.command == "embed":
+        _run_embed(args)
+        return
+
+    if args.command == "vector":
+        _run_vector(args)
         return
 
     # For all other commands, use the trinity_call bridge
@@ -150,6 +178,84 @@ def _run_mcp(args) -> None:
     """Start MCP server (delegated to trinity.mcp.server)."""
     from trinity.mcp.server import run_server
     run_server(mode=args.mode, port=args.port, host=args.host)
+
+
+def _run_embed(args) -> None:
+    """Generate semantic embedding for a text (v6.37+)."""
+    from trinity.embeddings import create_engine
+    import numpy as np
+
+    model_kwargs = {}
+    if args.model:
+        model_kwargs["model"] = args.model
+
+    engine = create_engine(backend=args.backend, use_cache=False, **model_kwargs)
+    vec = engine.embed(args.text)
+
+    result = {
+        "text": args.text[:100],
+        "model": engine.model_name(),
+        "dim": engine.embedding_dim(),
+        "norm": round(float(np.linalg.norm(vec)), 4),
+        "embedding": [round(v, 6) for v in vec.tolist()[:8]] + ["..."],
+    }
+
+    if args.compare:
+        vec2 = engine.embed(args.compare)
+        sim = engine.cosine_similarity(vec, vec2)
+        result["comparison"] = {
+            "text_b": args.compare[:100],
+            "cosine_similarity": round(float(sim), 4),
+        }
+
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+
+
+def _run_vector(args) -> None:
+    """Vector index operations (v6.37+)."""
+    if args.vector_cmd == "list":
+        print(json.dumps({
+            "available_backends": ["numpy", "faiss", "chromadb", "hybrid"],
+            "recommended": "numpy (no extra deps) | chromadb (persistent) | faiss (fast GPU)",
+            "usage": "trinity vector search --query 'text' --top-k 10 --backend numpy",
+        }, indent=2))
+        return
+
+    if args.vector_cmd == "search":
+        from trinity.embeddings import create_engine
+        from trinity.vector_index import create_index
+
+        engine = create_engine(backend="auto", use_cache=True)
+        idx = create_index(backend=args.backend, dim=engine.embedding_dim())
+
+        # Get all memories from Trinity
+        from trinity.core.client import Trinity
+        memory = Trinity()
+
+        # Search using Trinity's own search first (for memory pool)
+        mem_results = memory.search(args.query, top_k=args.top_k)
+
+        result = {
+            "query": args.query,
+            "top_k": args.top_k,
+            "embedding_model": engine.model_name(),
+            "index_backend": args.backend,
+            "results": [
+                {
+                    "score": round(r.get("score", r.get("final_score", 0)), 4) if isinstance(r, dict) else 0,
+                    "content": (r.get("content", r.get("content_preview", ""))[:100] if isinstance(r, dict) else str(r)[:100]),
+                }
+                for r in mem_results
+            ] if mem_results else [],
+        }
+
+        if not mem_results:
+            result["note"] = "Using Trinity search. For vector-only search, use --vector flag in API."
+
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return
+
+    print(json.dumps({"error": f"Unknown vector sub-command: {args.vector_cmd}"}, indent=2))
 
 
 if __name__ == "__main__":

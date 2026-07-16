@@ -2,9 +2,11 @@
 记忆资源 (Memory Resources)
 
 通过 MCP 资源 URI 暴露 Trinity 系统元信息：
-- trinity://stats       — 系统统计
-- trinity://snapshot/...   — 时间点快照（ContextNest 兼容）
-- trinity://health      — 健康检查
+- trinity://stats              — 系统统计
+- trinity://snapshot/{...}     — 时间点快照（ContextNest 兼容）
+- trinity://health             — 健康检查
+- sessions://list              — 列出历史会话
+- sessions://{id}              — 获取具体会话内容
 """
 
 import json
@@ -23,6 +25,7 @@ logger = logging.getLogger("trinity_mcp.resources")
 # ---------------------------------------------------------------------------
 _MEMORY_STORE: dict[str, dict[str, Any]] = {}
 _VERSION_STORE: dict[str, list[dict[str, Any]]] = {}
+_SESSION_RECORDER: Any = None
 
 
 def set_backend_references(
@@ -40,6 +43,17 @@ def set_backend_references(
     _VERSION_STORE = version_store
 
 
+def set_session_recorder(recorder: Any) -> None:
+    """注入 ChatSessionRecorder 引用供 sessions 资源使用。
+
+    Args:
+        recorder: ChatSessionRecorder 实例。
+    """
+    global _SESSION_RECORDER
+    _SESSION_RECORDER = recorder
+    logger.info("ChatSessionRecorder 引用已注入 resources 模块。")
+
+
 # ---------------------------------------------------------------------------
 # 注册入口
 # ---------------------------------------------------------------------------
@@ -51,11 +65,11 @@ def register_memory_resources(mcp: FastMCP) -> None:
     """
     # 先注入后端引用
     try:
-        tools_module = sys.modules.get("tools.memory_tools")
+        tools_module = sys.modules.get("trinity.mcp.tools.memory_tools")
         if tools_module is None:
-            import tools.memory_tools as tools_module
-        ms = tools_module._MEMORY_STORE
-        vs = tools_module._VERSION_STORE
+            from trinity.mcp.tools import memory_tools as tools_module
+        ms = tools_module._MEMORY_STORE  # type: ignore[attr-defined]
+        vs = tools_module._VERSION_STORE  # type: ignore[attr-defined]
         set_backend_references(ms, vs)
     except Exception:
         logger.warning("Could not bind memory backend references; resources will show empty stats.")
@@ -63,7 +77,9 @@ def register_memory_resources(mcp: FastMCP) -> None:
     _register_stats_resource(mcp)
     _register_snapshot_resource(mcp)
     _register_health_resource(mcp)
-    logger.info("Registered 3 memory resources.")
+    _register_sessions_list_resource(mcp)
+    _register_session_detail_resource(mcp)
+    logger.info("Registered 5 memory resources.")
 
 
 # ---------------------------------------------------------------------------
@@ -97,6 +113,14 @@ def _register_stats_resource(mcp: FastMCP) -> None:
             layer: str = m.get("metadata", {}).get("layer", "unknown")
             layer_dist[layer] = layer_dist.get(layer, 0) + 1
 
+        # 增加会话统计（如果可用）
+        session_stats = {}
+        if _SESSION_RECORDER is not None:
+            try:
+                session_stats = _SESSION_RECORDER.session_stats()
+            except Exception:
+                session_stats = {"error": "session_stats unavailable"}
+
         stats: dict[str, Any] = {
             "server": "Trinity MCP Server",
             "version": "1.0.0",
@@ -107,6 +131,7 @@ def _register_stats_resource(mcp: FastMCP) -> None:
             "category_distribution": category_dist,
             "layer_distribution": layer_dist,
             "guardian_status": "active" if total > 0 else "idle",
+            "session_stats": session_stats,
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
         logger.info("trinity://stats served: %d memories.", total)
@@ -194,13 +219,24 @@ def _register_health_resource(mcp: FastMCP) -> None:
         )
         error_rate: float = errors / max(total, 1)
 
+        # 会话记录器健康检查
+        session_recorder_status = "unavailable"
+        session_count = 0
+        if _SESSION_RECORDER is not None:
+            try:
+                all_sessions = _SESSION_RECORDER.list_all_sessions()
+                session_count = len(all_sessions)
+                session_recorder_status = "healthy" if session_count >= 0 else "degraded"
+            except Exception:
+                session_recorder_status = "error"
+
         health: dict[str, Any] = {
             "status": "healthy" if error_rate < 0.05 else "degraded",
             "uptime_seconds": round(uptime_seconds, 1),
             "components": {
                 "memory_store": {
                     "status": "healthy" if total > 0 or _MEMORY_STORE is not None else "empty",
-                    "latency_ms": 1.2,   # 生产环境实际测量
+                    "latency_ms": 1.2,
                     "memory_count": total,
                 },
                 "version_chain": {
@@ -213,9 +249,135 @@ def _register_health_resource(mcp: FastMCP) -> None:
                     "latency_ms": 15.3,
                     "indexed_count": total,
                 },
+                "session_recorder": {
+                    "status": session_recorder_status,
+                    "session_count": session_count,
+                },
             },
             "error_rate": round(error_rate, 4),
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         logger.info("trinity://health served: status=%s.", health["status"])
         return json.dumps(health, ensure_ascii=False, indent=2)
+
+
+# ---------------------------------------------------------------------------
+# Resource: sessions://list
+# ---------------------------------------------------------------------------
+def _register_sessions_list_resource(mcp: FastMCP) -> None:
+    """注册 sessions://list 资源 — 列出历史会话。"""
+
+    @mcp.resource("sessions://list")
+    def get_sessions_list() -> str:
+        """列出所有历史会话。
+
+        返回会话摘要列表，按 started_at 降序排列。
+
+        Returns:
+            JSON 字符串，包含会话列表。
+        """
+        if _SESSION_RECORDER is None:
+            return json.dumps({
+                "sessions": [],
+                "total": 0,
+                "message": "ChatSessionRecorder 未初始化",
+            }, ensure_ascii=False, indent=2)
+
+        try:
+            sessions = _SESSION_RECORDER.list_all_sessions()
+            # 添加人类可读时间
+            result = []
+            for s in sessions:
+                started_dt = datetime.fromtimestamp(s["started_at"], tz=timezone.utc) if s["started_at"] else None
+                ended_dt = datetime.fromtimestamp(s["ended_at"], tz=timezone.utc) if s.get("ended_at") else None
+                result.append({
+                    "session_id": s["session_id"],
+                    "started_at": s["started_at"],
+                    "started_at_iso": started_dt.isoformat() if started_dt else None,
+                    "ended_at": s.get("ended_at"),
+                    "ended_at_iso": ended_dt.isoformat() if ended_dt else None,
+                    "turn_count": s["turn_count"],
+                    "tags": s.get("tags", []),
+                    "task": s.get("task", ""),
+                })
+
+            # 尝试获取统计信息
+            stats = {}
+            try:
+                stats = _SESSION_RECORDER.session_stats()
+            except Exception:
+                pass
+
+            return json.dumps({
+                "sessions": result,
+                "total": len(result),
+                "stats": {
+                    "total_sessions": stats.get("total_sessions", 0),
+                    "total_turns": stats.get("total_turns", 0),
+                    "top_tags": stats.get("top_tags", {}),
+                },
+            }, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.exception("获取会话列表失败")
+            return json.dumps({
+                "error": str(e),
+                "sessions": [],
+                "total": 0,
+            }, ensure_ascii=False, indent=2)
+
+
+# ---------------------------------------------------------------------------
+# Resource: sessions://{id}
+# ---------------------------------------------------------------------------
+def _register_session_detail_resource(mcp: FastMCP) -> None:
+    """注册 sessions://{id} 资源 — 获取具体会话内容。"""
+
+    @mcp.resource("sessions://{session_id}")
+    def get_session_detail(session_id: str) -> str:
+        """获取指定会话的完整内容。
+
+        Args:
+            session_id: 会话 ID。
+
+        Returns:
+            JSON 字符串，包含完整会话数据。
+        """
+        if _SESSION_RECORDER is None:
+            return json.dumps({
+                "error": "ChatSessionRecorder 未初始化",
+                "session_id": session_id,
+            }, ensure_ascii=False, indent=2)
+
+        try:
+            session = _SESSION_RECORDER.get_session(session_id)
+            if session is None:
+                return json.dumps({
+                    "error": f"会话不存在: {session_id}",
+                    "session_id": session_id,
+                }, ensure_ascii=False, indent=2)
+
+            # 添加人类可读时间
+            result = dict(session)
+            if "started_at" in result and result["started_at"]:
+                result["started_at_iso"] = datetime.fromtimestamp(
+                    result["started_at"], tz=timezone.utc
+                ).isoformat()
+            if result.get("ended_at"):
+                result["ended_at_iso"] = datetime.fromtimestamp(
+                    result["ended_at"], tz=timezone.utc
+                ).isoformat()
+
+            # 为每条轮次添加可读时间
+            for turn in result.get("turns", []):
+                if turn.get("timestamp"):
+                    turn["timestamp_iso"] = datetime.fromtimestamp(
+                        turn["timestamp"], tz=timezone.utc
+                    ).isoformat()
+
+            return json.dumps(result, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.exception("获取会话详情失败: %s", session_id)
+            return json.dumps({
+                "error": str(e),
+                "session_id": session_id,
+            }, ensure_ascii=False, indent=2)

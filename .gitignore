@@ -61,6 +61,7 @@ auto-daemon/state/
 
 # Data directory (created at runtime)
 trinity/data/
+data/
 
 # Runtime engine artifacts
 trinity/modules/second_brain/context_tree/
@@ -68,3 +69,19 @@ trinity/modules/second_brain/curation_state/
 trinity/modules/second_brain/sidecar/
 trinity/modules/second_brain/*.json
 trinity/modules/second_brain/*.jsonl
+
+# Temp test artifacts
+_selftest_*.py
+diag_*.txt
+out.txt
+t.txt
+test_*.py
+!tests/test_*.py
+
+# Batch scripts (user-specific)
+start_trinity.bat
+stop_trinity.bat
+
+# Documentation backups
+docs/*.md
+!docs/ARCHITECTURE.md

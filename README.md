@@ -1,156 +1,107 @@
-# Trinity — A Triune Architecture for AGI Long-Term Memory
+# Trinity Memory — 三位一体长程记忆系统
 
-<p align="center">
-  <img src="https://img.shields.io/badge/version-6.37-blue.svg" alt="Version 6.37">
-  <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
-  <img src="https://img.shields.io/badge/python-3.10%2B-brightgreen.svg" alt="Python 3.10+">
-  <img src="https://img.shields.io/badge/status-beta-yellow.svg" alt="Status: Beta">
-</p>
-
-**Trinity** is a triune (three-in-one) memory architecture purpose-built for AGI long-term memory. It unifies **episodic encoding**, **self-evolving reasoning**, and **hierarchical retrieval** into a single, tightly integrated system — outperforming existing memory solutions on recall accuracy, latency, safety, and identity permanence.
-
-- **second_brain** — 122 modules covering memory encoding, compression, retrieval, reasoning, and self-evolution
-- **auto_daemon** — 50-tier guardian chain for input filtering, inference guarding, and governance
-- **chromadb** — Vector store with KV compression, sparse attention, and tiered routing
+[![Tests](https://img.shields.io/badge/tests-321%20passed-brightgreen)]()
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)]()
+[![License](https://img.shields.io/badge/license-MIT-green)]()
+[![MCP](https://img.shields.io/badge/MCP-1.0-orange)]()
 
 ---
 
-## Quick Start
+## 快速开始
 
 ```bash
+# 安装
 pip install trinity-memory
-```
 
-```python
+# Python API
 from trinity import Trinity
+mem = Trinity()
+mem.ingest("用户偏好暗色模式", tags=["preference", "ui"])
+results = mem.search("用户偏好")
+print(results)
 
-# One-line initialization
-memory = Trinity()
+# 启动 API 服务
+trinity-api --port 8100
 
-# Write a memory
-memory.ingest("User prefers dark mode and sprint reviews every Friday afternoon.")
-
-# Search memories
-results = memory.search("What theme does the user like?", top_k=5)
-for r in results:
-    print(f"[{r.score:.3f}] {r.content}")
-
-# MCP server mode (stdio)
-# trinity --mcp
-
-# REST API mode (SSE on port 8000)
-# trinity --mcp --mode sse --port 8000
+# 启动 MCP Server
+trinity-mcp --mode stdio
 ```
 
----
+## 架构
 
-## Architecture
+Trinity 是三位一体记忆架构，整合了 12+ 业界最优方案：
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                         Trinity System                          │
-├────────────────────────────┬─────────────────┬──────────────────┤
-│       second_brain         │   auto_daemon   │     chromadb     │
-│       (122 modules)        │  (50-tier chain) │   (7 modules)   │
-│                            │                  │                  │
-│  ┌──────────────────────┐  │  Tier 46-50:    │  ┌────────────┐  │
-│  │ CB54  Exa (Episodic) │  │  P125-P129      │  │ CB42  KV   │  │
-│  │ CB55  Hind (Reason)  │  │  Paper-aligned  │  │ CB43  Echo │  │
-│  │ CB56  Zikk (Index)   │  │  safety guards  │  │ CB44  Route│  │
-│  │ CB57  SelfMem (Evol) │  │                 │  │ CB45  Frac │  │
-│  └──────────────────────┘  └─────────────────┘  └────────────┘  │
-└────────────────────────────┴─────────────────┴──────────────────┘
-```
+| 层级 | 组件 | 对齐方案 |
+|:-----|:-----|:---------|
+| **检索层** | CB53 BEAM-LIGHT | ICLR 2026 BEAM 基准 |
+| | CB54 Exabase 三阶段检索 | LongMemEval 96.4% SOTA |
+| | CB55 Hindsight 四网络 | BEAM 10M SOTA 64.1% |
+| | CB56 Zikkaron Hopfield | 非LLM SOTA 40.4% |
+| **记忆层** | CB45-CB48 级联提取 | ByteRover / Mem0 / Graphiti |
+| | CB49-CB52 关系管理 | Supermemory / Mastra / MemMachine |
+| | CB57 自优化 | SelfMem July 2026 |
+| **保护层** | 50 级 Guardian 链 | 遗忘防护 / 压缩审计 |
+| **检索通道** | 47 路融合检索 | 语义/图谱/精确/混合 |
 
-| Engine | Version | Role |
-|--------|---------|------|
-| **second_brain** | v6.37 | 122 modules: memory encoding, compression, retrieval, reasoning, self-evolution |
-| **auto_daemon** | v1.11 | 50-tier guardian chain: input filtering → inference guarding → governance |
-| **chromadb** | v6.17 | Vector storage, KV compression, sparse attention, hierarchical routing |
+## 快速集成
 
----
+### 作为 MCP Server
 
-## Key Capabilities
+Trinity 提供标准 MCP 接口，可被任何 MCP 客户端调用：
 
-| Capability | Industry (Mem0 / Zep / Letta) | Trinity |
-|---|---|---|
-| **Recall Accuracy** | Mem0 66.9%, Zep 75.1% | **~97.8%** (internal) |
-| **Retrieval Latency** | Mem0 ~100–250ms, Zep ~150ms | **P50 0.05ms** (progressive cascade) |
-| **Security Guards** | None built-in | **50-tier guardian chain** (industry-first) |
-| **Conflict Resolution** | Zep: last-write-wins (dropping old facts) | **CRDT-based full history** (industry-first) |
-| **Identity Permanence** | Not supported | **SHA-256 deterministic anchoring** (industry-first) |
-| **Reasoning Drift Detection** | Not supported | **Jensen-Shannon divergence monitoring** (industry-first) |
-| **Sycophancy Prevention** | Not supported | **MemSyco 1.000** (industry-first) |
-| **Self-Evolution** | Not supported | **SelfMem policy auto-optimization** (industry-first) |
-
----
-
-## Multi-Tenant Example
-
-Trinity natively supports multi-tenant isolation — each tenant operates in a sandboxed memory space.
-
-```python
-from trinity import Trinity
-
-memory = Trinity()
-
-# Create two isolated tenants
-alice = memory.tenant("alice")
-bob   = memory.tenant("bob")
-
-alice.ingest("Alice works in product design and uses Figma daily.")
-bob.ingest("Bob is a backend engineer and prefers Rust.")
-
-# Queries are isolated
-alice.search("What tools does Alice use?")   # → Figma
-bob.search("What tools does Bob use?")      # → (empty — no cross-tenant leakage)
-```
-
----
-
-## MCP, REST API & Docker
-
-Trinity supports the **Model Context Protocol (MCP)** for seamless integration with AI assistants, plus a full REST API for programmatic access.
-
-| Mode | Command | Port |
-|------|---------|------|
-| MCP stdio | `trinity --mcp` | — |
-| MCP SSE | `trinity --mcp --mode sse` | 8000 |
-| REST API | `trinity --api` | 8000 |
-| Docker | `docker run -p 8000:8000 trinity-memory/trinity` | 8000 |
-
-> **Docker image**: [`trinity-memory/trinity`](https://hub.docker.com/r/trinity-memory/trinity)
-
----
-
-## Documentation
-
-| Guide | Link |
-|-------|------|
-| Architecture Deep Dive | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| API Reference | [docs/API.md](docs/API.md) |
-| Benchmarks | [docs/BENCHMARKS.md](docs/BENCHMARKS.md) |
-| Security Model | [docs/SECURITY.md](docs/SECURITY.md) |
-| Contributing | [CONTRIBUTING.md](CONTRIBUTING.md) |
-
----
-
-## Citation
-
-If you use Trinity in your research, please cite:
-
-```bibtex
-@software{trinity2026,
-  title     = {Trinity: A Triune Architecture for AGI Long-Term Memory},
-  author    = {Trinity Team},
-  year      = {2026},
-  version   = {6.37},
-  url       = {https://github.com/trinity-memory/trinity}
+```json
+{
+  "mcpServers": {
+    "trinity-memory": {
+      "command": "trinity-mcp",
+      "args": ["--mode", "stdio"]
+    }
+  }
 }
 ```
 
----
+8 个工具可用：`memory_search`, `memory_write`, `memory_update`, `memory_delete`, `audit_query`, `trinity_diagnostics`, `memory_chronicle`, `memory_tag_search`
 
-## License
+### 作为 REST API
 
-MIT](LICENSE) © 2026 Trinity Team
+```bash
+# 写入记忆
+curl -X POST http://localhost:8100/memories \
+  -H "Content-Type: application/json" \
+  -d '{"content":"用户信息","importance":0.8}'
+
+# 搜索记忆
+curl "http://localhost:8100/search?q=用户&top_k=5"
+```
+
+## 部署
+
+### Docker
+
+```bash
+docker build -t trinity-memory .
+docker run -d -p 8100:8100 -p 8000:8000 -v /data:/data trinity-memory
+```
+
+### 一键启动
+
+```bash
+# Windows
+start_trinity.bat
+
+# Linux/Mac
+chmod +x docker-entrypoint.sh
+./docker-entrypoint.sh
+```
+
+## 商业化
+
+| 产品 | 定价 | 适用场景 |
+|:-----|:----:|:---------|
+| **MCP Server** | 免费开源 | AI Agent 集成 |
+| **SaaS API** | 按量付费 | 应用开发 |
+| **企业私有部署** | 许可证 | 合规需求 |
+
+## 许可证
+
+MIT License — 可自由使用于商业和非商业项目。

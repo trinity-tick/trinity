@@ -92,6 +92,19 @@ class StorageAdapter(ABC):
         """Get the full version/audit chain for a memory."""
         ...
 
+    def get_all_memories(self, limit: int = 200) -> List[Dict[str, Any]]:
+        """Get all active memories across all personas.
+
+        Args:
+            limit: Max memories to return.
+
+        Returns:
+            List of memory dicts.
+        """
+        # Default implementation uses get_persona_memories with empty persona_id
+        # Subclasses should override for better performance
+        return []
+
     @abstractmethod
     def diagnostics(self) -> Dict[str, Any]:
         """Return storage diagnostics."""

@@ -99,12 +99,14 @@ class AudioMemoryEncoder:
         model_path: Optional[str] = None,
         model_callable: Optional[callable] = None,
         target_sr: int = DEFAULT_SAMPLE_RATE,
+        use_ollama: bool = True,
     ):
         self.embed_dim = embed_dim
         self.use_model = use_model
         self.model_path = model_path
         self._model_callable = model_callable
         self.target_sr = target_sr
+        self.use_ollama = use_ollama
 
         # Internal LRU cache for loaded audio
         self._audio_cache: OrderedDict[str, AudioEngram] = OrderedDict()
@@ -115,6 +117,77 @@ class AudioMemoryEncoder:
         self._total_errors = 0
 
     # ── Public API ────────────────────────────────────────────────────
+
+    def _describe_audio_content(self, audio_path: str) -> str:
+        """Generate a basic text description of audio content from acoustic features."""
+        import numpy as np
+
+        try:
+            import soundfile as sf
+            data, sr = sf.read(audio_path)
+        except Exception:
+            try:
+                import wave
+                with wave.open(audio_path, 'rb') as wf:
+                    frames = wf.readframes(wf.getnframes())
+                    data = np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32768.0
+                    sr = wf.getframerate()
+            except Exception:
+                return "Unknown audio"
+
+        if len(data.shape) > 1:
+            data = data.mean(axis=1)
+
+        duration = len(data) / sr
+        rms = float(np.sqrt(np.mean(data**2)))
+        peak = float(np.max(np.abs(data)))
+        zcr = float(np.mean(np.abs(np.diff(np.sign(data)))) / 2)
+
+        desc = [f"Audio {duration:.1f}s"]
+
+        if peak > 0.5:
+            desc.append("loud")
+        elif peak > 0.1:
+            desc.append("moderate volume")
+        else:
+            desc.append("quiet")
+
+        if rms > 0.1:
+            desc.append("high energy")
+        elif rms > 0.01:
+            desc.append("medium energy")
+        else:
+            desc.append("low energy")
+
+        if zcr > 0.1:
+            desc.append("high frequency content")
+        elif zcr > 0.02:
+            desc.append("mixed frequencies")
+        else:
+            desc.append("low frequencies")
+
+        return ", ".join(desc)
+
+    def semantic_embedding(self, audio_path: str) -> Optional[np.ndarray]:
+        """Generate a text description of audio and embed it with bge-m3.
+        
+        Two-step:
+          1. Describe audio content from acoustic features → text
+          2. Embed text with bge-m3 → semantic vector
+        
+        Returns None if embedding engine unavailable.
+        """
+        try:
+            desc = self._describe_audio_content(audio_path)
+            if not desc:
+                return None
+
+            from trinity.embeddings import create_engine
+            engine = create_engine(backend="ollama", model="bge-m3", use_cache=True)
+            return engine.embed(desc)
+
+        except Exception:
+            return None
 
     def encode(
         self,
@@ -133,8 +206,29 @@ class AudioMemoryEncoder:
         if metadata is None:
             metadata = {}
 
-        # Check cache
         cache_key = hashlib.md5(path_or_data.encode()).hexdigest()
+
+        # Tier 1: Ollama semantic embedding (if enabled)
+        if self.use_ollama:
+            sem_emb = self.semantic_embedding(path_or_data)
+            if sem_emb is not None:
+                h = hashlib.sha256(str(path_or_data).encode()).hexdigest()[:16]
+                engram = AudioEngram(
+                    audio_id=f"aud_{self._total_encoded:08d}",
+                    audio_hash=h,
+                    embedding=sem_emb,
+                    source=path_or_data,
+                    metadata={**metadata, "_encoder": "ollama_semantic_bge3"},
+                    dim=sem_emb.shape[0],
+                    duration=0.0,
+                )
+                self._audio_cache[cache_key] = engram
+                if len(self._audio_cache) > self._cache_max_size:
+                    self._audio_cache.popitem(last=False)
+                self._total_encoded += 1
+                return engram
+
+        # Check cache (Tier 2)
         if cache_key in self._audio_cache:
             cached = self._audio_cache[cache_key]
             cached.last_accessed = time.time()

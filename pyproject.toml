@@ -75,6 +75,7 @@ Issues = "https://github.com/trinity-memory/trinity/issues"
 [project.scripts]
 trinity = "trinity.__main__:main"
 trinity-api = "trinity.api.server:main"
+trinity-mcp = "trinity.mcp.server:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

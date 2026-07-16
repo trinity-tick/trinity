@@ -106,11 +106,15 @@ class ImageMemoryEncoder:
         use_model: bool = False,
         model_path: Optional[str] = None,
         model_callable: Optional[callable] = None,
+        use_ollama: bool = True,
+        ollama_model: str = "qwen3:0.6b",
     ):
         self.embed_dim = embed_dim
         self.use_model = use_model
         self.model_path = model_path
         self._model_callable = model_callable
+        self.use_ollama = use_ollama
+        self.ollama_model = ollama_model
 
         # Internal LRU cache for loaded images (reduces disk I/O)
         self._image_cache: OrderedDict[str, ImageEngram] = OrderedDict()
@@ -119,6 +123,7 @@ class ImageMemoryEncoder:
         # Statistics
         self._total_encoded = 0
         self._total_errors = 0
+        self._total_embeddings = 0
 
     # ── Public API ────────────────────────────────────────────────────
 
@@ -138,7 +143,26 @@ class ImageMemoryEncoder:
         if metadata is None:
             metadata = {}
 
-        # Check cache first
+        # Tier 1: Ollama caption-based semantic embedding (if enabled)
+        if self.use_ollama:
+            caption_emb = self.ollama_caption_based_embedding(path_or_url)
+            if caption_emb is not None:
+                h = hashlib.sha256(str(path_or_url).encode()).hexdigest()[:16]
+                engram = ImageEngram(
+                    image_id=f"img_{self._total_encoded:08d}",
+                    image_hash=h,
+                    embedding=caption_emb,
+                    source=path_or_url,
+                    metadata={**metadata, "_encoder": "ollama_caption_bge3"},
+                    dim=caption_emb.shape[0],
+                )
+                self._image_cache[cache_key] = engram
+                if len(self._image_cache) > self._cache_max_size:
+                    self._image_cache.popitem(last=False)
+                self._total_encoded += 1
+                return engram
+
+        # Check cache second (Tier 1 bypasses cache)
         cache_key = hashlib.md5(path_or_url.encode()).hexdigest()
         if cache_key in self._image_cache:
             cached = self._image_cache[cache_key]
@@ -248,6 +272,57 @@ class ImageMemoryEncoder:
             return img, info
         except Exception:
             return None, {}
+
+    def ollama_caption_based_embedding(self, image_path: str) -> Optional[np.ndarray]:
+        """Use Ollama multimodal model to generate a caption, then embed with bge-m3.
+        
+        Two-step:
+          1. Send image to Ollama (qwen3:0.6b) → get text caption
+          2. Embed caption text with bge-m3 → get semantic vector
+        
+        Returns None if Ollama unavailable or image unreadable.
+        """
+        try:
+            import requests
+            import base64 as b64mod
+            from PIL import Image as PILImage
+            import io
+            
+            img = PILImage.open(image_path)
+            max_size = 512
+            if max(img.size) > max_size:
+                ratio = max_size / max(img.size)
+                new_size = (int(img.size[0] * ratio), int(img.size[1] * ratio))
+                img = img.resize(new_size, PILImage.LANCZOS)
+            
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            b64data = b64mod.b64encode(buf.getvalue()).decode("utf-8")
+            
+            resp = requests.post(
+                "http://localhost:11434/api/generate",
+                json={
+                    "model": self.ollama_model,
+                    "prompt": "Describe this image in one short sentence, "
+                              "focusing on the main subject, colors, objects, and scene.",
+                    "images": [b64data],
+                    "stream": False,
+                    "options": {"num_predict": 64},
+                },
+                timeout=30,
+            )
+            resp.raise_for_status()
+            caption = resp.json().get("response", "")
+            
+            if not caption:
+                return None
+            
+            from trinity.embeddings import create_engine
+            engine = create_engine(backend="ollama", model="bge-m3", use_cache=True)
+            return engine.embed(caption)
+            
+        except Exception:
+            return None
 
     def _load_from_url(self, url: str) -> Tuple[Optional[Image.Image], Dict[str, Any]]:
         """Load image from HTTP(S) URL."""

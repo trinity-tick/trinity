@@ -2,11 +2,14 @@
 Memory Tools — Trinity MCP tools backed by the real engine.
 
 Tools:
-  - memory_search     Tri-signal semantic search (supports semantic/graph/exact/hybrid)
-  - memory_write      Write memory (CRDT versioned, SHA-256 audited)
-  - memory_update     Update memory (conflict-preserving)
-  - memory_delete     Soft delete memory (audit chain preserved)
-  - audit_query       SHA-256 provenance query
+  - memory_search       Tri-signal semantic search (supports semantic/graph/exact/hybrid)
+  - memory_write        Write memory (CRDT versioned, SHA-256 audited)
+  - memory_update       Update memory (conflict-preserving)
+  - memory_delete       Soft delete memory (audit chain preserved)
+  - audit_query         SHA-256 provenance query
+  - trinity_diagnostics Full system diagnostics
+  - memory_chronicle    Record event sequences (journal-style)
+  - memory_tag_search   Search memories by tags
 """
 
 import hashlib
@@ -25,12 +28,31 @@ logger = logging.getLogger("trinity.mcp.tools")
 # Shared Trinity engine instance
 _engine: Optional[Trinity] = None
 
+# ChatSessionRecorder reference (injected by server.py)
+_session_recorder: Any = None
+
 
 def _get_engine() -> Trinity:
     global _engine
     if _engine is None:
         _engine = Trinity()
     return _engine
+
+
+def set_session_recorder(recorder: Any) -> None:
+    """注入 ChatSessionRecorder 引用供 tools 使用。
+
+    Args:
+        recorder: ChatSessionRecorder 实例。
+    """
+    global _session_recorder
+    _session_recorder = recorder
+    logger.info("ChatSessionRecorder 引用已注入 tools 模块。")
+
+
+def get_session_recorder():
+    """获取 ChatSessionRecorder 实例。"""
+    return _session_recorder
 
 
 def register_memory_tools(mcp: FastMCP) -> None:
@@ -41,7 +63,9 @@ def register_memory_tools(mcp: FastMCP) -> None:
     _register_memory_delete(mcp)
     _register_audit_query(mcp)
     _register_trinity_diagnostics(mcp)
-    logger.info("Registered 6 memory tools (backed by real engine).")
+    _register_memory_chronicle(mcp)
+    _register_memory_tag_search(mcp)
+    logger.info("Registered 8 memory tools (backed by real engine).")
 
 
 # ---------------------------------------------------------------------------
@@ -63,6 +87,8 @@ def _register_memory_search(mcp: FastMCP) -> None:
         - exact:    KV exact match
         - hybrid:   multi-channel RRF fusion (default)
 
+        如果语义搜索结果为空，自动回退到 ChatSessionRecorder.fulltext 搜索。
+
         Args:
             query:  Search query string.
             top_k:  Number of results (default: 5).
@@ -73,7 +99,27 @@ def _register_memory_search(mcp: FastMCP) -> None:
         """
         engine = _get_engine()
         result = engine.search(query=query, top_k=top_k)
-        return result.get("results", result if isinstance(result, list) else [])
+        results = result.get("results", result if isinstance(result, list) else [])
+
+        # 如果结果为空，回退到会话全文搜索
+        if not results and _session_recorder is not None:
+            logger.info("memory_search 结果为空，回退到 ChatSessionRecorder.fulltext 搜索。")
+            fallback = _session_recorder.search(query=query, top_k=top_k)
+            if fallback:
+                results = [
+                    {
+                        "session_id": r["session_id"],
+                        "content": r["content"],
+                        "role": r["role"],
+                        "timestamp": r["timestamp"],
+                        "tags": r["tags"],
+                        "score": r["score"],
+                        "source": "session_recorder",
+                    }
+                    for r in fallback
+                ]
+
+        return results
 
 
 # ---------------------------------------------------------------------------
@@ -185,7 +231,7 @@ def _register_audit_query(mcp: FastMCP) -> None:
         """SHA-256 provenance query.
 
         Returns the full version chain for a memory entry:
-        version → timestamp → SHA-256 → operation type.
+        version -> timestamp -> SHA-256 -> operation type.
 
         Args:
             memory_id: Target memory ID.
@@ -216,3 +262,135 @@ def _register_trinity_diagnostics(mcp: FastMCP) -> None:
         """
         engine = _get_engine()
         return engine.diagnostics()
+
+
+# ---------------------------------------------------------------------------
+# Tool: memory_chronicle
+# ---------------------------------------------------------------------------
+def _register_memory_chronicle(mcp: FastMCP) -> None:
+
+    @mcp.tool()
+    async def memory_chronicle(
+        events: list[dict[str, Any]],
+        title: str = "",
+        session_id: Optional[str] = None,
+    ) -> dict[str, Any]:
+        """Record a sequence of events (journal/diary-style chronicle).
+
+        记录一系列事件到会话历史中，适合日志式记录。
+
+        Args:
+            events:     事件列表。每项含 role, content, 可选 metadata。
+            title:      可选的条目标题。
+            session_id: 可选的目标会话 ID。不指定则自动创建新会话。
+
+        Returns:
+            Dict with session_id, event_count, tags.
+        """
+        global _session_recorder
+        if _session_recorder is None:
+            return {
+                "error": "ChatSessionRecorder 未初始化",
+                "event_count": 0,
+            }
+
+        # 如果指定了 title 但没有活跃会话，或需要新会话
+        sid = session_id
+        if title and not sid:
+            # 开始新会话
+            sid = _session_recorder.start_session(task=title)
+        elif sid is None and _session_recorder.current_session is None:
+            sid = _session_recorder.start_session(task=title or "chronicle")
+
+        all_tags: list[str] = []
+        for event in events:
+            role = event.get("role", "user")
+            content = event.get("content", "")
+            metadata = event.get("metadata")
+            result = _session_recorder.record_turn(
+                role=role,
+                content=content,
+                metadata=metadata,
+                session_id=sid,
+            )
+            all_tags.extend(result.get("tags", []))
+
+        return {
+            "session_id": sid or _session_recorder.current_session,
+            "event_count": len(events),
+            "tags": list(set(all_tags)),
+        }
+
+
+# ---------------------------------------------------------------------------
+# Tool: memory_tag_search
+# ---------------------------------------------------------------------------
+def _register_memory_tag_search(mcp: FastMCP) -> None:
+
+    @mcp.tool()
+    async def memory_tag_search(
+        tags: list[str],
+        top_k: int = 10,
+        session_id: Optional[str] = None,
+    ) -> list[dict[str, Any]]:
+        """按标签搜索记忆或会话。
+
+        搜索所有包含指定标签的记忆条目。
+        如果指定 session_id，则仅在该会话中搜索。
+
+        Args:
+            tags:       要搜索的标签列表（OR 逻辑 — 匹配任一标签即可）。
+            top_k:      返回结果数量上限。
+            session_id: 可选，限定搜索范围到指定会话。
+
+        Returns:
+            匹配的记忆条目列表。
+        """
+        global _session_recorder
+        if _session_recorder is None:
+            return []
+
+        matches: list[dict[str, Any]] = []
+        tag_set = set(t.lower() for t in tags)
+
+        if session_id:
+            # 限定到单个会话
+            session = _session_recorder.get_session(session_id)
+            if not session:
+                return []
+            for i, turn in enumerate(session.get("turns", [])):
+                turn_tags = set(t.lower() for t in turn.get("tags", []))
+                if turn_tags & tag_set:  # OR 匹配
+                    matches.append({
+                        "session_id": session_id,
+                        "turn_index": i,
+                        "role": turn.get("role", "unknown"),
+                        "content": turn.get("content", ""),
+                        "timestamp": turn.get("timestamp", 0.0),
+                        "tags": turn.get("tags", []),
+                        "match_type": "tag_or",
+                    })
+        else:
+            # 扫描所有会话
+            all_sessions = _session_recorder.list_all_sessions()
+            for sess_summary in all_sessions:
+                sess_id = sess_summary["session_id"]
+                session = _session_recorder.get_session(sess_id)
+                if not session:
+                    continue
+                for i, turn in enumerate(session.get("turns", [])):
+                    turn_tags = set(t.lower() for t in turn.get("tags", []))
+                    if turn_tags & tag_set:
+                        matches.append({
+                            "session_id": sess_id,
+                            "turn_index": i,
+                            "role": turn.get("role", "unknown"),
+                            "content": turn.get("content", ""),
+                            "timestamp": turn.get("timestamp", 0.0),
+                            "tags": turn.get("tags", []),
+                            "match_type": "tag_or",
+                        })
+
+        # 按时间戳倒序排列，取 top_k
+        matches.sort(key=lambda m: m["timestamp"], reverse=True)
+        return matches[:top_k]

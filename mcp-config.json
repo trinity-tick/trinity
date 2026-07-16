@@ -1,0 +1,125 @@
+{
+  "schemaVersion": "1.0",
+  "server": {
+    "name": "Trinity Memory MCP Server",
+    "version": "1.1.0",
+    "description": "生产级长程记忆系统 — 为 AI Agent 提供记忆写入、语义检索、更新、删除及审计溯源能力。\n\nTrinity 是三位一体记忆架构：\n- 122 个模块驱动的多通道检索引擎\n- 50 层守护链确保记忆完整性\n- 47 路检索通道覆盖语义/图谱/精确/混合模式\n- 支持多租户（tenant_id / persona_id 全链路）\n- SHA-256 版本审计追踪\n\n对齐最新论文方案：BEAM-LIGHT (ICLR 2026)、Hindsight (BEAM SOTA 64.1%)、Zikkaron、SelfMem、Mem0、Supermemory、Mastra、MemMachine 等 12+ 方案",
+    "command": "trinity-mcp",
+    "args": ["--mode", "stdio"],
+    "env": {},
+    "tools": [
+      {
+        "name": "memory_search",
+        "description": "语义记忆搜索。支持 semantic / graph / exact / hybrid 四种模式。结果为空时自动回退到会话全文搜索。",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": {"type": "string", "description": "搜索查询"},
+            "top_k": {"type": "number", "default": 5, "description": "返回结果数"},
+            "mode": {"type": "string", "enum": ["semantic", "graph", "exact", "hybrid"], "default": "hybrid"}
+          },
+          "required": ["query"]
+        }
+      },
+      {
+        "name": "memory_write",
+        "description": "写入记忆（CRDT 版本化、SHA-256 审计）。每次写入生成唯一版本 ID 和内容哈希。",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "content": {"type": "string", "description": "记忆内容"},
+            "tags": {"type": "array", "items": {"type": "string"}, "description": "标签列表"},
+            "importance": {"type": "number", "default": 0.5, "description": "重要性 0-1"},
+            "category": {"type": "string", "default": "general"}
+          },
+          "required": ["content"]
+        }
+      },
+      {
+        "name": "memory_update",
+        "description": "更新记忆（冲突保留策略）。旧版本标记为 superseded，完整版本链保留。",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "memory_id": {"type": "string", "description": "目标记忆 ID"},
+            "new_content": {"type": "string", "description": "新内容"}
+          },
+          "required": ["memory_id", "new_content"]
+        }
+      },
+      {
+        "name": "memory_delete",
+        "description": "软删除记忆。状态标记为 deleted，数据和版本链仍可通过 audit_query 查询。",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "memory_id": {"type": "string", "description": "目标记忆 ID"}
+          },
+          "required": ["memory_id"]
+        }
+      },
+      {
+        "name": "audit_query",
+        "description": "SHA-256 审计查询。返回记忆的完整版本链：版本→时间戳→SHA-256→操作类型。",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "memory_id": {"type": "string", "description": "目标记忆 ID"}
+          },
+          "required": ["memory_id"]
+        }
+      },
+      {
+        "name": "trinity_diagnostics",
+        "description": "运行 Trinity 全系统诊断。返回模块状态、守护链状态、存储信息、47 路检索通道状态。",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "memory_chronicle",
+        "description": "记录事件序列（日志/日记式记录）。适合批量记录操作日志。",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "events": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "role": {"type": "string"},
+                  "content": {"type": "string"}
+                },
+                "required": ["role", "content"]
+              },
+              "description": "事件列表"
+            },
+            "title": {"type": "string", "description": "条目标题"}
+          },
+          "required": ["events"]
+        }
+      },
+      {
+        "name": "memory_tag_search",
+        "description": "按标签搜索记忆（OR 逻辑—匹配任一标签即可）。支持按会话限定范围。",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "tags": {"type": "array", "items": {"type": "string"}, "description": "标签列表"},
+            "top_k": {"type": "number", "default": 10},
+            "session_id": {"type": "string", "description": "可选，限定会话"}
+          },
+          "required": ["tags"]
+        }
+      }
+    ],
+    "resources": [
+      {"uri": "trinity://stats", "description": "系统统计信息"},
+      {"uri": "trinity://health", "description": "健康检查"},
+      {"uri": "trinity://snapshot/{ts}", "description": "时间点快照"},
+      {"uri": "sessions://list", "description": "历史会话列表"},
+      {"uri": "sessions://{id}", "description": "指定会话详情"}
+    ]
+  }
+}

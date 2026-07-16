@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trinity Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #f0f2f5;
+      color: #333;
+      min-height: 100vh;
+    }
+    /* ── Navigation ── */
+    nav {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #fff;
+      padding: 0 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.15);
+    }
+    nav .brand {
+      font-size: 1.2rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+    nav .brand span { color: #4fc3f7; }
+    nav .links { display: flex; gap: 1.5rem; }
+    nav .links a {
+      color: #b0bec5;
+      text-decoration: none;
+      font-size: .9rem;
+      transition: color .2s;
+    }
+    nav .links a:hover, nav .links a.active { color: #4fc3f7; }
+    /* ── Container ── */
+    .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+    /* ── Stats Cards ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .stat-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.5rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      transition: transform .2s, box-shadow .2s;
+    }
+    .stat-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 6px 20px rgba(0,0,0,.12);
+    }
+    .stat-card .label {
+      font-size: .85rem;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: .5rem;
+    }
+    .stat-card .value {
+      font-size: 2.2rem;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+    .stat-card .value.green { color: #43a047; }
+    .stat-card .value.orange { color: #fb8c00; }
+    .stat-card .value.purple { color: #7b1fa2; }
+    .stat-card .value.blue { color: #1565c0; }
+    /* ── Search Section ── */
+    .search-section {
+      background: #fff;
+      border-radius: 12px;
+      padding: 1.5rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      margin-bottom: 2rem;
+    }
+    .search-section h2 {
+      font-size: 1.1rem;
+      margin-bottom: 1rem;
+      color: #1a1a2e;
+    }
+    .search-box {
+      display: flex;
+      gap: .75rem;
+      margin-bottom: 1rem;
+    }
+    .search-box input {
+      flex: 1;
+      padding: .7rem 1rem;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: .95rem;
+      outline: none;
+      transition: border .2s;
+    }
+    .search-box input:focus { border-color: #4fc3f7; }
+    .search-box button {
+      padding: .7rem 1.5rem;
+      background: linear-gradient(135deg, #1a1a2e, #16213e);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: .95rem;
+      cursor: pointer;
+      transition: opacity .2s;
+    }
+    .search-box button:hover { opacity: .85; }
+    .search-box button:disabled { opacity: .5; cursor: not-allowed; }
+    /* ── Search Results ── */
+    #results {
+      list-style: none;
+    }
+    #results li {
+      padding: .8rem 1rem;
+      border-bottom: 1px solid #f0f0f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+    #results li:last-child { border-bottom: none; }
+    #results .content { flex: 1; }
+    #results .content .text { margin-bottom: .25rem; line-height: 1.5; }
+    #results .content .meta {
+      font-size: .8rem;
+      color: #999;
+    }
+    #results .score {
+      font-size: .9rem;
+      font-weight: 600;
+      color: #1565c0;
+      white-space: nowrap;
+    }
+    .no-results {
+      text-align: center;
+      color: #999;
+      padding: 2rem 0;
+    }
+    .loading {
+      text-align: center;
+      color: #999;
+      padding: 1rem 0;
+    }
+    /* ── Error message ── */
+    .error-msg {
+      background: #ffebee;
+      color: #c62828;
+      padding: .75rem 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      display: none;
+    }
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      color: #aaa;
+      font-size: .8rem;
+      padding: 2rem;
+    }
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      .container { padding: 1rem; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      nav { padding: 0 1rem; flex-wrap: wrap; height: auto; min-height: 50px; }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="brand">Trinity <span>Dashboard</span></div>
+    <div class="links">
+      <a href="/dashboard.html" class="active">Dashboard</a>
+      <a href="/docs">API Docs</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <!-- Error message -->
+    <div id="error" class="error-msg"></div>
+
+    <!-- Statistics Cards -->
+    <div class="stats-grid" id="stats-grid">
+      <div class="stat-card">
+        <div class="label">Evolution Cycles</div>
+        <div class="value purple" id="stat-cycles">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Total Memories</div>
+        <div class="value blue" id="stat-memories">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">FTS5 Status</div>
+        <div class="value green" id="stat-fts5">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Learned Patterns</div>
+        <div class="value orange" id="stat-patterns">—</div>
+      </div>
+    </div>
+
+    <!-- Memory Search -->
+    <div class="search-section">
+      <h2>🔍 Memory Search</h2>
+      <div class="search-box">
+        <input type="text" id="search-input" placeholder="Search memories..." autocomplete="off">
+        <button id="search-btn">Search</button>
+      </div>
+      <ul id="results"></ul>
+    </div>
+  </div>
+
+  <footer>Trinity Memory System v6.37</footer>
+
+  <script>
+    const API = '/api';
+
+    function showError(msg) {
+      const el = document.getElementById('error');
+      el.textContent = msg;
+      el.style.display = 'block';
+      setTimeout(() => { el.style.display = 'none'; }, 5000);
+    }
+
+    // ── Load Statistics ──
+    async function loadStats() {
+      try {
+        const res = await fetch(`${API}/stats`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        document.getElementById('stat-cycles').textContent =
+          data.evolution?.total_cycles ?? 'N/A';
+
+        document.getElementById('stat-memories').textContent =
+          data.adapter?.active_memories ?? data.adapter?.total_memories ?? 'N/A';
+
+        const fts5 = data.adapter?.fts5_enabled;
+        const fts5El = document.getElementById('stat-fts5');
+        if (fts5 === true) {
+          fts5El.textContent = 'Enabled';
+          fts5El.className = 'value green';
+        } else if (fts5 === false) {
+          fts5El.textContent = 'Disabled';
+          fts5El.className = 'value orange';
+        } else {
+          fts5El.textContent = 'N/A';
+        }
+
+        document.getElementById('stat-patterns').textContent =
+          data.evolution?.patterns_count ?? 'N/A';
+      } catch (err) {
+        showError('Failed to load stats: ' + err.message);
+      }
+    }
+
+    // ── Search Memories ──
+    async function searchMemories(query) {
+      const btn = document.getElementById('search-btn');
+      const list = document.getElementById('results');
+
+      if (!query.trim()) { list.innerHTML = ''; return; }
+
+      btn.disabled = true;
+      btn.textContent = 'Searching...';
+      list.innerHTML = '<li class="loading">Searching...</li>';
+
+      try {
+        const res = await fetch(`${API}/search?q=${encodeURIComponent(query)}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        list.innerHTML = '';
+        const items = data.results || [];
+        if (items.length === 0) {
+          list.innerHTML = '<li class="no-results">No results found</li>';
+          return;
+        }
+
+        items.forEach(item => {
+          const li = document.createElement('li');
+          const text = item.content || item.content_preview || '(no content)';
+          const score = item.score != null ? (typeof item.score === 'number' ? item.score.toFixed(4) : item.score) : '';
+          const ts = item.created_at ? new Date(item.created_at).toLocaleString() : '';
+
+          li.innerHTML = `
+            <div class="content">
+              <div class="text">${escapeHtml(text)}</div>
+              <div class="meta">${ts ? ts : ''}${item.persona_id ? ' &middot; ' + escapeHtml(item.persona_id) : ''}</div>
+            </div>
+            ${score ? `<div class="score">${score}</div>` : ''}
+          `;
+          list.appendChild(li);
+        });
+      } catch (err) {
+        list.innerHTML = '';
+        showError('Search failed: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Search';
+      }
+    }
+
+    function escapeHtml(str) {
+      const d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    // ── Event Listeners ──
+    document.getElementById('search-btn').addEventListener('click', () => {
+      searchMemories(document.getElementById('search-input').value);
+    });
+    document.getElementById('search-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') searchMemories(e.target.value);
+    });
+
+    // ── Init ──
+    loadStats();
+  </script>
+</body>
+</html>

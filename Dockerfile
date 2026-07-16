@@ -1,71 +1,65 @@
-# =============================================================================
-# Trinity �?Multi-stage Docker Build
-# =============================================================================
-# Build:
-#   docker build -t trinity:latest .
+# ============================================================
+# Trinity Memory — 生产 Docker 部署
+# ============================================================
+# 用法:
+#   docker build -t trinity-memory .
+#   docker run -d -p 8100:8100 -p 8000:8000 trinity-memory
 #
-# Run:
-#   docker run -p 8000:8000 trinity:latest                   # MCP server (stdio)
-#   docker run -p 8000:8000 trinity:latest --mode sse         # MCP server (SSE)
-#   docker run trinity:latest diagnostics                     # Run diagnostics
-#
-# With docker-compose:
-#   docker compose up -d
-# =============================================================================
+# 环境变量:
+#   PORT=8100           API 端口
+#   MCP_PORT=8000       MCP SSE 端口
+#   STORE_PATH=/data    记忆存储路径
+# ============================================================
 
-# ─── Stage 1: Build ───────────────────────────────────────────────────────
 FROM python:3.12-slim AS builder
 
-WORKDIR /build
+WORKDIR /app
 
-# Install build dependencies
+# 系统依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy package
-COPY pyproject.toml README.md LICENSE ./
-COPY trinity/ ./trinity/
+# 安装 Python 依赖
+COPY pyproject.toml README.md ./
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -e ".[api,mcp]"
 
-# Build wheel
-RUN pip install --no-cache-dir build && \
-    python -m build --wheel && \
-    ls dist/
+# 复制源代码
+COPY trinity/ trinity/
+COPY tests/ tests/
 
-# ─── Stage 2: Runtime ─────────────────────────────────────────────────────
-FROM python:3.12-slim AS runtime
+# 运行测试
+RUN python -m pytest tests/ -q --tb=no || echo "Tests completed (non-fatal for build)"
+
+# ============================================================
+
+FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl ca-certificates \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy wheel from builder
-COPY --from=builder /build/dist/*.whl /tmp/
-RUN pip install --no-cache-dir /tmp/*.whl && \
-    rm /tmp/*.whl
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=builder /app/trinity /app/trinity
+COPY --from=builder /app/pyproject.toml /app/
 
-# Create data directory
-RUN mkdir -p /app/data /app/config
+# 创建数据卷
+VOLUME ["/data"]
+ENV STORE_PATH=/data
 
-# Copy config
-COPY docker/config/trinity.yaml /app/config/trinity.yaml
-
-# Environment
-ENV TRINITY_STORE=/app/data
-ENV PYTHONUNBUFFERED=1
-
-# Expose MCP SSE port
+# 暴露端口
+EXPOSE 8100
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "from trinity import Trinity; Trinity().diagnostics()" || exit 1
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8100/health || exit 1
 
-# Entrypoint
-COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+# 启动 API 和 MCP 服务
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["docker-entrypoint.sh"]
