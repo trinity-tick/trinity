@@ -1,9 +1,9 @@
 site_name: Trinity Documentation
 site_description: A persistent memory layer for AI agents with multi-modal, multi-tenant capabilities
 site_author: Agentic AI Foundation
-site_url: https://github.com/agentic-ai/trinity
-repo_url: https://github.com/agentic-ai/trinity
-repo_name: agentic-ai/trinity
+site_url: https://trinity-tick.github.io/trinity
+repo_url: https://github.com/trinity-tick/trinity
+repo_name: trinity-tick/trinity
 edit_uri: blob/main/docs/
 
 theme:
@@ -32,13 +32,13 @@ theme:
     - content.code.annotate
   icon:
     repo: fontawesome/brands/github
-  logo: https://raw.githubusercontent.com/agentic-ai/trinity/main/docs/assets/logo.png
-  favicon: https://raw.githubusercontent.com/agentic-ai/trinity/main/docs/assets/favicon.png
+  logo: https://raw.githubusercontent.com/trinity-tick/trinity/main/docs/assets/logo.png
+  favicon: https://raw.githubusercontent.com/trinity-tick/trinity/main/docs/assets/favicon.png
 
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/agentic-ai/trinity
+      link: https://github.com/trinity-tick/trinity
     - icon: fontawesome/brands/python
       link: https://pypi.org/project/trinity-memory/
 
@@ -62,12 +62,16 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Getting Started: getting-started.md
-  - Architecture: architecture.md
-  - API Reference: api-reference.md
+  - Architecture: ARCHITECTURE.md
+  - API Reference: API_REFERENCE.md
   - Multi-Tenant: multi-tenant.md
   - Multimodal: multimodal.md
+  - Benchmarks: BENCHMARKS.md
+  - Knowledge Graph: KGRAPH_USAGE.md
+  - Cross Window: CROSS_WINDOW.md
+  - Evolution: EVOLUTION.md
+  - Security: SECURITY.md
   - Deployment: deployment.md
-  - Benchmarks: benchmarks.md
   - Contributing: contributing.md
 
-copyright: Copyright &copy; 2025-2026 Agentic AI Foundation
+copyright: Copyright &copy; 2025-2026 trinity-tick
