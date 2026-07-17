@@ -78,6 +78,9 @@ t.txt
 test_*.py
 !tests/test_*.py
 
+# Local config (not committed)
+.github_token
+
 # Batch scripts (user-specific)
 start_trinity.bat
 stop_trinity.bat
