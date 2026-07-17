@@ -1,0 +1,59 @@
+name: Release — Automated
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: pip install build
+
+      - name: Build distributions
+        run: python -m build
+
+      - name: Generate changelog
+        id: changelog
+        uses: mikepenz/release-changelog-builder-action@v5
+        with:
+          configurationJson: |
+            {
+              "template": "#{{CHANGELOG}}#\n\n${{UNCATEGORIZED}}",
+              "categories": [
+                {"title": "## 🚀 Features", "labels": ["enhancement", "feat"]},
+                {"title": "## 🐛 Bug Fixes", "labels": ["bug", "fix"]},
+                {"title": "## 📖 Documentation", "labels": ["docs", "documentation"]},
+                {"title": "## 🔧 Maintenance", "labels": ["chore", "dependencies"]}
+              ],
+              "max_tags_to_fetch": 10
+            }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body: ${{ steps.changelog.outputs.changelog }}
+          files: |
+            dist/*.tar.gz
+            dist/*.whl
+          generate_release_notes: false
+          draft: false
+          prerelease: false
