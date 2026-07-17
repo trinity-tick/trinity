@@ -1,0 +1,42 @@
+name: Label Issues
+
+on:
+  issues:
+    types: [opened]
+  pull_request_target:
+    types: [opened]
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const title = context.payload.issue?.title || context.payload.pull_request?.title || '';
+            const labels = [];
+
+            if (/bug|error|fail|crash|issue/i.test(title)) labels.push('bug');
+            if (/feature|enhance|request|want|new/i.test(title)) labels.push('enhancement');
+            if (/doc|docs|readme|api/i.test(title)) labels.push('docs');
+            if (/deps|dependabot|upgrade/i.test(title)) labels.push('dependencies');
+            if (/question|help|how/i.test(title)) labels.push('question');
+            if (title.startsWith('[')) {
+              const tag = title.match(/\[(\w+)\]/);
+              if (tag && !labels.includes(tag[1].toLowerCase())) {
+                labels.push(tag[1].toLowerCase());
+              }
+            }
+
+            if (labels.length > 0) {
+              const issue_number = context.issue?.number || context.payload.pull_request?.number;
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue_number,
+                labels: labels
+              });
+            }
