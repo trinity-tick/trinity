@@ -57,7 +57,7 @@ jobs:
       #   - tag v1.2.3   → trinity/trinity:v1.2.3, trinity/trinity:latest
       - name: Extract Docker metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
           tags: |
