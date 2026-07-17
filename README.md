@@ -1,10 +1,12 @@
 # Trinity Memory — A Triune Architecture for AGI Long-Term Memory
 
 [![PyPI version](https://img.shields.io/pypi/v/trinity-memory)](https://pypi.org/project/trinity-memory/)
+[![PyPI downloads](https://img.shields.io/pypi/dm/trinity-memory)](https://pypi.org/project/trinity-memory/)
 [![CI](https://github.com/trinity-tick/trinity/actions/workflows/ci.yml/badge.svg)](https://github.com/trinity-tick/trinity/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-1.0-orange)](https://modelcontextprotocol.io)
+[![GitHub release](https://img.shields.io/github/v/release/trinity-tick/trinity)](https://github.com/trinity-tick/trinity/releases)
 
 A high-performance, production-ready persistent memory layer for AI agents. Trinity integrates 12+ state-of-the-art memory approaches into a unified architecture with **50-tier guardian chains**, **47 retrieval channels**, and **multi-modal support**.
 
