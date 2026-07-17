@@ -1,0 +1,19 @@
+---
+name: Question / Support
+about: Ask a question about using Trinity
+title: "[Question] "
+labels: question
+assignees: ''
+
+---
+
+**What are you trying to do?**
+Describe what you're trying to accomplish with Trinity.
+
+**What have you tried so far?**
+Describe what you've already tried or looked into.
+
+**Environment (if applicable):**
+- OS: [e.g. Windows, macOS, Linux]
+- Python version: [e.g. 3.10, 3.12]
+- Trinity version: [e.g. 6.36.0]

@@ -1,0 +1,19 @@
+include README.md
+include LICENSE
+include CHANGELOG.md
+include ROADMAP.md
+include CODE_OF_CONDUCT.md
+include CONTRIBUTING.md
+
+graft docs
+graft examples
+
+recursive-include trinity *.typed
+recursive-include trinity *.html
+recursive-include trinity *.css
+recursive-include trinity *.js
+
+global-exclude __pycache__
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude .git

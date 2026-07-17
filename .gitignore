@@ -83,6 +83,4 @@ start_trinity.bat
 stop_trinity.bat
 
 # Documentation backups
-docs/*.md
-!docs/ARCHITECTURE.md
-site/  
+site/
