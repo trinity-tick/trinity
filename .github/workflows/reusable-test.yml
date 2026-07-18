@@ -32,7 +32,7 @@ jobs:
     steps:
       # Step 1: Check out the repository
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Step 2: Set up the requested Python version
       - name: Setup Python ${{ inputs.python-version }}
@@ -64,7 +64,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Python ${{ inputs.python-version }}
         uses: actions/setup-python@v5
