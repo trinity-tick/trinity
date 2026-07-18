@@ -168,18 +168,43 @@ class NumpyBruteForceIndex(VectorIndex):
 
 # ── FaissIndex (FAISS GPU/CPU) ─────────────────────────────────────────
 
+@dataclass
+class HNSWConfig:
+    """HNSW index hyperparameters.
+
+    M:              Number of neighbors per node (default 32, range 4-64).
+    efConstruction: Build-time dynamic list size (default 200, range 40-400).
+                    Higher = better recall, slower build.
+    efSearch:       Query-time dynamic list size (default 64, range 1-1000).
+                    Higher = better recall, slower query.
+    """
+    M: int = 32
+    efConstruction: int = 200
+    efSearch: int = 64
+
+    def to_dict(self) -> Dict[str, int]:
+        return {"M": self.M, "efConstruction": self.efConstruction}
+
+
 class FaissIndex(VectorIndex):
     """Facebook AI Similarity Search (FAISS) based index.
 
     Requires: pip install faiss-cpu (or faiss-gpu)
-    Supports IVF, HNSW, and Flat indexes.
+    Supports IVF, HNSW (default), and Flat indexes.
+
+    HNSW is the recommended default for most use cases:
+    - O(log n) search time
+    - High recall (95%+ at efSearch=128)
+    - No training required (unlike IVF)
     """
 
     def __init__(self, dim: int, metric: str = "cosine",
-                 index_type: str = "flat", nlist: int = 100):
+                 index_type: str = "hnsw", nlist: int = 100,
+                 hnsw_config: Optional[HNSWConfig] = None):
         super().__init__(dim, metric)
         self._index_type = index_type
         self._nlist = nlist
+        self._hnsw_config = hnsw_config or HNSWConfig()
         self._index = None
         self._id_map: Dict[int, str] = {}  # faiss_id -> our_id
         self._next_faiss_id = 0
@@ -209,7 +234,9 @@ class FaissIndex(VectorIndex):
             )
             self._index.train(self._faiss.random(self._faiss.float32, (self._nlist, self._dim)))
         elif self._index_type == "hnsw":
-            self._index = self._faiss.IndexHNSWFlat(self._dim, 32)
+            self._index = self._faiss.IndexHNSWFlat(self._dim, self._hnsw_config.M)
+            self._index.hnsw.efConstruction = self._hnsw_config.efConstruction
+            self._index.hnsw.efSearch = self._hnsw_config.efSearch
         else:
             self._index = self._faiss.IndexFlatIP(self._dim)
 
@@ -417,6 +444,8 @@ def create_index(
     backend: str = "auto",
     dim: int = 1024,
     metric: str = "cosine",
+    index_type: str = "hnsw",
+    hnsw_config: Optional[HNSWConfig] = None,
     **kwargs,
 ) -> VectorIndex:
     """Create a vector index with the specified backend.
@@ -426,6 +455,8 @@ def create_index(
                  "numpy", "chromadb"
         dim: Embedding dimension.
         metric: "cosine" or "l2".
+        index_type: For FAISS backend: "hnsw" (default), "flat", "ivf".
+        hnsw_config: HNSW hyperparameters (M, efConstruction, efSearch).
 
     Returns:
         Configured VectorIndex instance.
@@ -434,7 +465,8 @@ def create_index(
         return NumpyBruteForceIndex(dim, metric, **kwargs)
 
     if backend == "faiss":
-        return FaissIndex(dim, metric, **kwargs)
+        return FaissIndex(dim, metric, index_type=index_type,
+                          hnsw_config=hnsw_config, **kwargs)
 
     if backend == "annoy":
         return AnnoyIndex(dim, metric, **kwargs)
@@ -445,7 +477,8 @@ def create_index(
     if backend == "auto":
         try:
             import faiss
-            return FaissIndex(dim, metric, **kwargs)
+            return FaissIndex(dim, metric, index_type=index_type,
+                              hnsw_config=hnsw_config, **kwargs)
         except ImportError:
             pass
         try:
