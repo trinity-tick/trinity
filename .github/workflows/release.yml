@@ -1,4 +1,4 @@
-name: Release — Automated
+name: Release - Automated
 
 on:
   push:
@@ -13,7 +13,7 @@ jobs:
       id-token: write
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -29,31 +29,12 @@ jobs:
       - name: Build distributions
         run: python -m build
 
-      - name: Generate changelog
-        id: changelog
-        uses: mikepenz/release-changelog-builder-action@v5
-        with:
-          configurationJson: |
-            {
-              "template": "#{{CHANGELOG}}#\n\n${{UNCATEGORIZED}}",
-              "categories": [
-                {"title": "## 🚀 Features", "labels": ["enhancement", "feat"]},
-                {"title": "## 🐛 Bug Fixes", "labels": ["bug", "fix"]},
-                {"title": "## 📖 Documentation", "labels": ["docs", "documentation"]},
-                {"title": "## 🔧 Maintenance", "labels": ["chore", "dependencies"]}
-              ],
-              "max_tags_to_fetch": 10
-            }
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          body: ${{ steps.changelog.outputs.changelog }}
+          generate_release_notes: true
           files: |
             dist/*.tar.gz
             dist/*.whl
-          generate_release_notes: false
           draft: false
           prerelease: false
