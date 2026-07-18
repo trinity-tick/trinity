@@ -74,10 +74,19 @@ def _get_embedding_engine():
 
 
 def _get_vector_index(dim: int = 1024):
-    """延迟加载向量索引（只初始化一次）。"""
+    """延迟加载向量索引（只初始化一次）。
+    
+    默认使用 FAISS HNSW（对数级搜索），回退到 Annoy，最后到 Numpy。
+    """
     try:
-        from trinity.vector_index.index import create_index
-        return create_index(backend="numpy", dim=dim, metric="cosine")
+        from trinity.vector_index.index import create_index, HNSWConfig
+        return create_index(
+            backend="auto",
+            dim=dim,
+            metric="cosine",
+            index_type="hnsw",
+            hnsw_config=HNSWConfig(M=32, efConstruction=200, efSearch=64),
+        )
     except Exception:
         return None
 
@@ -362,6 +371,20 @@ class Trinity:
                 if self._vector_index is None:
                     return []
 
+                # 使用混合索引（BM25稀疏 + FAISS HNSW稠密）
+                try:
+                    from trinity.vector_index.mixed import HybridIndex
+                    if isinstance(self._vector_index, HybridIndex):
+                        hybrid_results = self._vector_index.search(
+                            query_vec,
+                            top_k=top_k,
+                            query_text=query,
+                        )
+                        if hybrid_results:
+                            search_results = hybrid_results
+                except Exception:
+                    pass
+
                 # 编码批量记忆
                 texts = [m["content"] for m in all_memories]
                 vectors = self._embedding_engine.embed_batch(texts)
@@ -578,7 +601,9 @@ class Trinity:
         if not hasattr(self, "_gpu_index"):
             self._gpu_index = None
         if self._gpu_index is None:
-            from trinity.vector_index.index import FaissIndex
+            from trinity.vector_index.index import (
+                FaissIndex, HNSWConfig, NumpyBruteForceIndex,
+            )
             try:
                 import faiss
                 has_gpu = hasattr(faiss, 'StandardGpuResources')
@@ -586,11 +611,11 @@ class Trinity:
                 has_gpu = False
             if has_gpu:
                 self._gpu_index = FaissIndex(
-                    dim=1024, metric="cosine", index_type="flat"
+                    dim=1024, metric="cosine", index_type="hnsw",
+                    hnsw_config=HNSWConfig(M=32, efConstruction=200, efSearch=64),
                 )
             else:
-                # 回退到本地 numpy
-                from trinity.vector_index.index import NumpyBruteForceIndex
+                # 回退到本地 numpy 作为精确搜索后端
                 self._gpu_index = NumpyBruteForceIndex(dim=1024, metric="cosine")
         return self._gpu_index
 

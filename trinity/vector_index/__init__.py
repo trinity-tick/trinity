@@ -23,11 +23,19 @@ from trinity.vector_index.index import (
     AnnoyIndex,
     NumpyBruteForceIndex,
     ChromaDBIndex,
+    HNSWConfig,
     create_index,
 )
 from trinity.vector_index.mixed import (
     HybridIndex,
     create_hybrid_index,
+)
+from trinity.vector_index.sparse import (
+    BM25SparseRetriever,
+    fuse_scores_sparse_dense,
+)
+from trinity.vector_index.reranker import (
+    CrossEncoderReranker,
 )
 
 __all__ = [
@@ -36,7 +44,11 @@ __all__ = [
     "AnnoyIndex",
     "NumpyBruteForceIndex",
     "ChromaDBIndex",
+    "HNSWConfig",
     "create_index",
     "HybridIndex",
     "create_hybrid_index",
+    "BM25SparseRetriever",
+    "fuse_scores_sparse_dense",
+    "CrossEncoderReranker",
 ]
