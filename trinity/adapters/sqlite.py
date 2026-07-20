@@ -441,11 +441,18 @@ class SQLiteAdapter(StorageAdapter):
         return results
 
     def _maybe_flush(self) -> None:
-        """如果达到批量条件则 flush。"""
+        """如果达到批量条件则 flush。同时确保每次写入后立即 commit。"""
         now = time.time()
         if (len(self._batch_buffer) >= _BATCH_SIZE or
                 (self._batch_buffer and now - self._batch_last_flush >= _BATCH_TIMEOUT)):
             self._flush_batch()
+        else:
+            # 确保每次写入都 commit，防止进程退出时数据丢失
+            try:
+                self._conn.commit()
+                self._batch_last_flush = time.time()
+            except Exception:
+                pass
 
     def _flush_batch(self) -> None:
         """提交所有缓冲写入。"""
@@ -600,9 +607,9 @@ class SQLiteAdapter(StorageAdapter):
         self, query: str, params: List[Any], where: str, top_k: int
     ) -> List[Dict[str, Any]]:
         """使用 FTS5 全文搜索。"""
-        # 构造 FTS5 查询词：用 * 做前缀匹配
+        # 构造 FTS5 查询词：用 * 做前缀匹配，OR 连接避免多词全命中失败
         terms = query.strip().split()
-        fts_query = " AND ".join(f'"{t}"*' for t in terms if t)
+        fts_query = " OR ".join(f'"{t}"*' for t in terms if t)
         if not fts_query:
             return []
 
