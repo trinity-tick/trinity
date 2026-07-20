@@ -87,3 +87,6 @@ stop_trinity.bat
 
 # Documentation backups
 site/
+# WMS design docs (not Trinity core)  
+docs/wms_*  
+docs/dashboards/ 
