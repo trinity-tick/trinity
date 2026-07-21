@@ -14,8 +14,6 @@ env/
 .gitkeep
 auto-daemon/
 benchmark/scenarios/*.json
-tests/
 examples/
 docs/
 trinity/benchmark_scripts/results/
-*.md

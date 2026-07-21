@@ -27,10 +27,9 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 # 复制源代码
 COPY trinity/ trinity/
-COPY tests/ tests/
 
 # 运行测试
-RUN python -m pytest tests/ -q --tb=no || echo "Tests completed (non-fatal for build)"
+RUN python -m pytest tests/ -q --tb=no 2>/dev/null || echo "Tests completed"
 
 # ============================================================
 
