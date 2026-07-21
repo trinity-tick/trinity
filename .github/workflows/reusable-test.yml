@@ -44,10 +44,10 @@ jobs:
           pip install .[dev]
 
       - name: Run tests (core)
-        run: pytest tests/
+        run: python -m pytest tests/ -v --tb=short
 
       - name: Run tests (auto-daemon)
-        run: pytest auto-daemon/tests/
+        run: python -m pytest auto-daemon/tests/ -v --tb=short
 
   # -----------------------------------------------------------------------
   # Benchmark job — only runs when explicitly requested
