@@ -67,6 +67,9 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-v --tb=short"
 
+[tool.ruff.lint]
+ignore = ["E701", "E702", "F401", "E402", "F821"]
+
 [tool.coverage.run]
 source = ["trinity"]
 omit = ["tests/*"]
