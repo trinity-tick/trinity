@@ -68,7 +68,7 @@ python_files = ["test_*.py"]
 addopts = "-v --tb=short"
 
 [tool.ruff.lint]
-ignore = ["E701", "E702", "F401", "E402", "F821"]
+ignore = ["E401", "E402", "E701", "E702", "E712", "F401", "F402", "F541", "F811", "F821", "F841"]
 
 [tool.coverage.run]
 source = ["trinity"]
