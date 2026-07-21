@@ -358,7 +358,9 @@ def fuse_scores_sparse_dense(
         range_s = max_s - min_s if max_s > min_s else 1.0
         return {r.get(id_key, ""): (r.get(key, 0) - min_s) / range_s for r in results}
 
-    sparse_scores = normalize(sparse_results, "bm25_score")
+    # Support both BM25 and SPLADE sparse score keys
+    sparse_score_key = "splade_score" if any("splade_score" in r for r in sparse_results) else "bm25_score"
+    sparse_scores = normalize(sparse_results, sparse_score_key)
     dense_scores = normalize(dense_results)
 
     # Reciprocal Rank Fusion

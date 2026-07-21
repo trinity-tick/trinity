@@ -8,7 +8,7 @@ with true multi-stage hybrid search.
 
 Pipeline:
   Stage 1: Query Understanding (expansion, intent)
-  Stage 2: BM25 Sparse (keyword matching)
+  Stage 2: SPLADE Sparse (learned sparse retrieval, replaces BM25)
   Stage 3: FAISS HNSW Dense (semantic similarity)
   Stage 4: RRF Fusion (sparse + dense combined)
   Stage 5: Cross-Encoder Reranking (precision refinement)
@@ -25,12 +25,14 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
 from trinity.vector_index.sparse import BM25SparseRetriever, fuse_scores_sparse_dense
+from trinity.vector_index.splade import SPLADESparseRetriever
 from trinity.vector_index.reranker import CrossEncoderReranker
 from trinity.vector_index.index import VectorIndex, create_index
 
@@ -50,6 +52,7 @@ class TrinityRetrievalPipeline:
         self,
         dim: int = 1024,
         enable_sparse: bool = True,
+        enable_splade: bool = True,
         enable_reranker: bool = True,
         enable_query_expansion: bool = True,
         approx_top_k: int = 100,
@@ -71,19 +74,28 @@ class TrinityRetrievalPipeline:
             index_type="hnsw",
         )
 
-        # Sparse BM25 retriever
+        # Sparse retriever: SPLADE (learned) or BM25 (keyword)
         self._sparse: Optional[BM25SparseRetriever] = None
         if enable_sparse:
-            self._sparse = BM25SparseRetriever()
+            if enable_splade:
+                self._sparse = SPLADESparseRetriever()
+            else:
+                self._sparse = BM25SparseRetriever()
 
         # Cross-Encoder reranker
         self._reranker: Optional[CrossEncoderReranker] = None
         if enable_reranker:
             self._reranker = CrossEncoderReranker(model_name=reranker_model)
 
-        # Semantic cache (Stage 0)
-        from trinity.core.cache import SemanticCache
-        self._cache = SemanticCache(max_size=5000, default_ttl=300)
+        # Semantic cache (Stage 0) — Redis-backed for persistence
+        from trinity.core.cache import configure_cache, get_cache
+        configure_cache(backend="redis", redis_url="redis://localhost:6379/0",
+                        max_size=5000, default_ttl=300)
+        self._cache = get_cache()
+
+        # Background preload of Cross-Encoder model (eliminates first-query delay)
+        if self._reranker:
+            threading.Thread(target=self._reranker._load_model, daemon=True).start()
 
         # Stats
         self._stats = {

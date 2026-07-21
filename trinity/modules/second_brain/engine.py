@@ -8794,7 +8794,8 @@ class SecondBrainV636:
         ])
         drift_result = m103.audit("session_1")
         results["M103_divergence_js"] = drift_result["divergence_js"]
-        results["M103_drift_detected"] = drift_result["drift_detected"]
+        # Invert: drift_detected=False = no drift (healthy), so ALL_PASS=True
+        results["M103_no_drift"] = not drift_result["drift_detected"]
 
         results["guardian_valid"] = self.guardian_chain.validate()
         results["retrieval_valid"] = self.retrieval.validate()
@@ -9371,9 +9372,9 @@ class SecondBrainV636:
         results["version_fallback"] = vdisc["fallback_chain"]
 
         all_pass = all([
-            self.total_modules == 121,
-            self.guardian_chain.total == 49,
-            self.retrieval.total == 46,
+            self.total_modules == 122,
+            self.guardian_chain.total == 50,
+            self.retrieval.total == 47,
             results["M101_dual_channel"],
             results["M102_consolidated"],
             results["M102_auditable"],
