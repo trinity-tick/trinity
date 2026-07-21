@@ -12,7 +12,7 @@ Usage:
 import argparse
 import json
 import sys
-from auto_daemon.engine import GuardianChain, TIER_REGISTRY, GuardianConfig
+from auto_daemon.engine import GuardianChain, TIER_REGISTRY
 
 
 def build_parser() -> argparse.ArgumentParser:

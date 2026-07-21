@@ -13,12 +13,9 @@ The chain operates in a pipeline: all tiers must pass for execution to proceed.
 """
 
 import hashlib
-import json
 import logging
 import time
-import uuid
 from dataclasses import dataclass, field
-from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger("auto_daemon")
@@ -350,7 +347,7 @@ class GuardianChain:
                 score -= 0.2
         
         passed = score >= threshold
-        msg = "passed" if passed else f"behavioral anomaly detected"
+        msg = "passed" if passed else "behavioral anomaly detected"
         return max(score, 0), passed, msg
 
     def _check_execution(self, tier_id: str, content: str, ctx: Dict) -> Tuple[float, bool, str]:
@@ -365,16 +362,16 @@ class GuardianChain:
                 score -= 0.5
         
         passed = score >= threshold
-        msg = "passed" if passed else f"dangerous operation detected"
+        msg = "passed" if passed else "dangerous operation detected"
         return max(score, 0), passed, msg
 
     def _check_audit(self, tier_id: str, content: str, ctx: Dict) -> Tuple[float, bool, str]:
         """L31-L40: Audit & provenance."""
-        threshold = self.config.thresholds.get(tier_id, 0.8)
+        self.config.thresholds.get(tier_id, 0.8)
         # Audit tiers are informational — always pass with metadata
         score = 1.0
         passed = True
-        msg = f"audit logged"
+        msg = "audit logged"
         return score, passed, msg
 
     def _check_reasoning(self, tier_id: str, content: str, ctx: Dict) -> Tuple[float, bool, str]:

@@ -8,7 +8,7 @@ for popular LLM frameworks.
 import logging
 from typing import Any, Callable, Dict, List, Optional
 
-from auto_daemon.engine import GuardianChain, GuardianConfig, TIER_REGISTRY
+from auto_daemon.engine import GuardianChain, GuardianConfig
 
 logger = logging.getLogger("auto_daemon.integrations")
 
