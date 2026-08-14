@@ -22,14 +22,32 @@ from typing import Any, Optional
 from mcp.server.fastmcp import FastMCP
 
 from trinity.core.client import Trinity
+from trinity.agents.aggregator import MemoryAggregator
+from trinity.agents.auto_discovery import get_aggregator
 
 logger = logging.getLogger("trinity.mcp.tools")
 
 # Shared Trinity engine instance
 _engine: Optional[Trinity] = None
 
+# Shared MemoryAggregator instance (v6.96.0 — dual-write to shared pool)
+_aggregator: Optional[MemoryAggregator] = None
+
 # ChatSessionRecorder reference (injected by server.py)
 _session_recorder: Any = None
+
+
+def _get_aggregator() -> MemoryAggregator:
+    """Lazy-init the shared MemoryAggregator singleton with persistence."""
+    global _aggregator
+    if _aggregator is None:
+        from trinity.agents.aggregator import MemoryAggregator
+        _aggregator = get_aggregator()
+        if _aggregator is None:
+            _aggregator = MemoryAggregator()
+        logger.info("MemoryAggregator 共享池已接入 MCP write 路径（persist=%s）。",
+                    _aggregator._persist_path or "disabled")
+    return _aggregator
 
 
 def _get_engine() -> Trinity:
@@ -159,6 +177,23 @@ def _register_memory_write(mcp: FastMCP) -> None:
             category=category,
             metadata=metadata,
         )
+
+        # v6.96.0: Dual-write to shared MemoryAggregator
+        try:
+            agg = _get_aggregator()
+            source = metadata.get("source_agent", "mcp-marvis") if metadata else "mcp-marvis"
+            agg.ingest(
+                content=content,
+                source=source,
+                importance=importance,
+                tags=tags,
+                category=category,
+                metadata=metadata,
+            )
+            logger.debug("Dual-write to aggregator OK: source=%s", source)
+        except Exception as exc:
+            logger.warning("Dual-write to aggregator failed (non-fatal): %s", exc)
+
         return result
 
 

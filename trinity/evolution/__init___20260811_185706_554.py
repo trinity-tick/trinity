@@ -1,0 +1,84 @@
+"""Trinity Self-Evolving Memory System — evolution package.
+
+Submodules:
+    usage_analyzer      — access pattern analysis (hotspots, patterns, heatmaps)
+    feedback_collector  — agent feedback aggregation and quality detection
+    mutation_engine     — memory mutation suggestions and auto-application
+    optimization_engine — index, graph, pruning, defragmentation optimisation
+    evolution_scheduler — orchestrates periodic self-evolution cycles
+    strategies          — pluggable evolution strategy registry
+"""
+
+from .usage_analyzer import (
+    UsageAnalyzer,
+    AccessEntry,
+    Hotspot,
+    UsagePattern,
+    Heatmap,
+)
+from .feedback_collector import (
+    FeedbackCollector,
+    FeedbackEntry,
+    FeedbackAggregate,
+    QualityIssue,
+    QualityTrend,
+)
+from .mutation_engine import (
+    MutationEngine,
+    MergeSuggestion,
+    EnrichSuggestion,
+    SplitSuggestion,
+    SynthesisMemory,
+)
+from .optimization_engine import (
+    OptimizationEngine,
+    IndexChange,
+    GraphReorganization,
+    PruneResult,
+    OptimizationStats,
+)
+from .evolution_scheduler import (
+    EvolutionScheduler,
+    EvolutionCycleResult,
+)
+from .strategies import (
+    StrategyRegistry,
+    EvolutionStrategy,
+    InterventionLevel,
+    create_default_strategies,
+)
+
+__all__ = [
+    # usage_analyzer
+    "UsageAnalyzer",
+    "AccessEntry",
+    "Hotspot",
+    "UsagePattern",
+    "Heatmap",
+    # feedback_collector
+    "FeedbackCollector",
+    "FeedbackEntry",
+    "FeedbackAggregate",
+    "QualityIssue",
+    "QualityTrend",
+    # mutation_engine
+    "MutationEngine",
+    "MergeSuggestion",
+    "EnrichSuggestion",
+    "SplitSuggestion",
+    "SynthesisMemory",
+    # optimization_engine
+    "OptimizationEngine",
+    "IndexChange",
+    "GraphReorganization",
+    "PruneResult",
+    "OptimizationStats",
+    # evolution_scheduler
+    "EvolutionScheduler",
+    "EvolutionCycleResult",
+    # strategies
+    "StrategyRegistry",
+    "EvolutionStrategy",
+    "InterventionLevel",
+    "create_default_strategies",
+]

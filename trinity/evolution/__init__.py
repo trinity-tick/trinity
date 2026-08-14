@@ -1,23 +1,88 @@
-"""
-Trinity Meta-Evolution System
-===============================
-Unified self-evolution framework that integrates:
-  - self-improving/ skill system (memory.md, corrections.md, heartbeat)
-  - SecondBrain evolution modules (M112-M120)
-  - Trinity embeddings + vector_index for semantic memory
+"""Trinity Self-Evolving Memory System — evolution package.
 
-Core loop: Observe → Analyze → Plan → Execute → Certify
+Submodules:
+    usage_analyzer      — access pattern analysis (hotspots, patterns, heatmaps)
+    feedback_collector  — agent feedback aggregation and quality detection
+    mutation_engine     — memory mutation suggestions and auto-application
+    optimization_engine — index, graph, pruning, defragmentation optimisation
+    evolution_scheduler — orchestrates periodic self-evolution cycles
+    strategies          — pluggable evolution strategy registry
 """
 
-from trinity.evolution.core import MetaEvolution, EvolutionPhase
-from trinity.evolution.skill_system import SkillSystemAdapter
-from trinity.evolution.serialization import EvolutionStateSerializer
-from trinity.evolution.cross_platform import CrossPlatformAdapter
+from .usage_analyzer import (
+    UsageAnalyzer,
+    AccessEntry,
+    Hotspot,
+    UsagePattern,
+    Heatmap,
+)
+from .feedback_collector import (
+    FeedbackCollector,
+    FeedbackEntry,
+    FeedbackAggregate,
+    QualityIssue,
+    QualityTrend,
+)
+from .mutation_engine import (
+    MutationEngine,
+    MergeSuggestion,
+    EnrichSuggestion,
+    SplitSuggestion,
+    SynthesisMemory,
+)
+from .optimization_engine import (
+    OptimizationEngine,
+    IndexChange,
+    GraphReorganization,
+    PruneResult,
+    OptimizationStats,
+)
+from .evolution_scheduler import (
+    ABTestConfig,
+    ABTestResult,
+    EvolutionScheduler,
+    EvolutionCycleResult,
+)
+from .strategies import (
+    StrategyRegistry,
+    EvolutionStrategy,
+    InterventionLevel,
+    create_default_strategies,
+)
 
 __all__ = [
-    "MetaEvolution",
-    "EvolutionPhase",
-    "SkillSystemAdapter",
-    "EvolutionStateSerializer",
-    "CrossPlatformAdapter",
+    # usage_analyzer
+    "UsageAnalyzer",
+    "AccessEntry",
+    "Hotspot",
+    "UsagePattern",
+    "Heatmap",
+    # feedback_collector
+    "FeedbackCollector",
+    "FeedbackEntry",
+    "FeedbackAggregate",
+    "QualityIssue",
+    "QualityTrend",
+    # mutation_engine
+    "MutationEngine",
+    "MergeSuggestion",
+    "EnrichSuggestion",
+    "SplitSuggestion",
+    "SynthesisMemory",
+    # optimization_engine
+    "OptimizationEngine",
+    "IndexChange",
+    "GraphReorganization",
+    "PruneResult",
+    "OptimizationStats",
+    # evolution_scheduler
+    "EvolutionScheduler",
+    "EvolutionCycleResult",
+    "ABTestConfig",
+    "ABTestResult",
+    # strategies
+    "StrategyRegistry",
+    "EvolutionStrategy",
+    "InterventionLevel",
+    "create_default_strategies",
 ]

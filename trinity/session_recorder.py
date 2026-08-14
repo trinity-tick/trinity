@@ -143,6 +143,20 @@ class ChatSessionRecorder:
             self._use_sqlite = False
             self._db_conn = None
 
+    def close(self) -> None:
+        """显式关闭 SQLite 数据库连接。
+
+        调用此方法后，记录器将回退到 JSON 模式。
+        如果不调用此方法，连接将在对象被垃圾回收时自动关闭。
+        """
+        if self._db_conn:
+            try:
+                self._db_conn.close()
+            except Exception:
+                pass
+            self._db_conn = None
+            self._use_sqlite = False
+
     def _fts_available(self) -> bool:
         """检查 FTS5 是否可用。"""
         if not self._use_sqlite or not self._db_conn:
