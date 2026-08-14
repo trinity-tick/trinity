@@ -52,6 +52,8 @@ $Global:FAILED = @()
 . (Join-Path $PSScriptRoot "dsh-credentials.ps1")
 $PgHost = if ($env:TRINITY_PG_HOST) { $env:TRINITY_PG_HOST } else { (Get-DshCredential "TRINITY_PG_HOST") }
 if (-not $PgHost) { $PgHost = "127.0.0.1" }
+$PgPort = if ($env:TRINITY_PG_PORT) { $env:TRINITY_PG_PORT } else { (Get-DshCredential "TRINITY_PG_PORT") }
+if (-not $PgPort) { $PgPort = "5432" }
 $PgUser = if ($env:TRINITY_PG_USER) { $env:TRINITY_PG_USER } else { (Get-DshCredential "TRINITY_PG_USER") }
 if (-not $PgUser) { $PgUser = "postgres" }
 $PgPass = if ($env:TRINITY_PG_PASSWORD) { $env:TRINITY_PG_PASSWORD } else { (Get-DshCredential "TRINITY_PG_PASSWORD") }
@@ -177,7 +179,7 @@ $decayCmd = @"
 import sys, json
 sys.path.insert(0, r"$TrinityRoot")
 import runpy
-sys.argv = ["run_decay_compress", "--host", "$PgHost", "--user", "$PgUser", "--password", "$PgPass",
+sys.argv = ["run_decay_compress", "--host", "$PgHost", "--port", "$PgPort", "--user", "$PgUser", "--password", "$PgPass",
             "--limit", "$DecayLimit",
             "--output", r"$LogDir\decay_compress_$Timestamp.json"]
 runpy.run_path(r"$TrinityRoot\scripts\run_decay_compress.py", run_name="__main__")
@@ -189,7 +191,7 @@ $tiersCmd = @"
 import sys, json
 sys.path.insert(0, r"$TrinityRoot")
 import runpy
-sys.argv = ["run_memory_tiers", "--host", "$PgHost", "--user", "$PgUser", "--password", "$PgPass",
+sys.argv = ["run_memory_tiers", "--host", "$PgHost", "--port", "$PgPort", "--user", "$PgUser", "--password", "$PgPass",
             "--output", r"$LogDir\memory_tiers_$Timestamp.json"]
 runpy.run_path(r"$TrinityRoot\scripts\run_memory_tiers.py", run_name="__main__")
 "@
