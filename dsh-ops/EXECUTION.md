@@ -465,3 +465,99 @@ Remove-Item C:\Users\Administrator\trinity\benchmark\longmemeval_500q_runner.py 
 # BEAM 结果文件（保留 1K 原始行则还原）
 git -C C:\Users\Administrator\trinity checkout -- benchmark/beam_results.csv benchmark/beam_report.md
 ```
+
+---
+
+## 十二、第八轮（2026-08-14，M1-M3 全量落地：PG 切换 / 真实 LLM / 存储统一 / 版本 / 产品化）
+
+落实 11.5 的建议并完成规划中的其余项，全部实测验证。
+
+### 12.1 PG 后端切换 Docker trinity-db（:5430/trinity/trinity）✅
+
+- **凭证修正**：`~/.dsh/.credentials.yaml` 的 `TRINITY_PG_*` 更新为
+  `127.0.0.1 / 5430 / trinity / trinity / trinity`（BOM+CRLF 保留，`Get-DshCredential` 验证通过）——
+  原 5432/postgres/postgres 已失配（原生 PG16 停止，5432 被 smartcos-postgres 占用）。
+- **schema 类型手术**（`scripts/sqlite_pg_mirror.py` 的 `_ensure_varchar_ids`，幂等）：
+  新容器 memories 的 id 列为 **UUID 型 + 7 条外键**，而 adapter/批处理按 **VARCHAR id** 设计
+  （写入 "default"/"squad_bench"/handoff_* 等非 UUID 值，UUID 列会让 adapter 自身
+  store_memory 报 InvalidTextRepresentation）。方案：drop 全部 FK → id 列整体转
+  VARCHAR(128) → 重建 FK → **移除 memories 上 3 条 FK**（session/persona/tenant，因
+  adapter 不预置这些行）→ TRUNCATE 旧镜像数据；`memory_versions.version_id` 同步转
+  VARCHAR(64)（与 align-pg-schema.sql 一致）。
+- **镜像落地**：`scripts/sqlite_pg_mirror.py`（新增）SQLite active 1449 条 → PG，
+  幂等（重跑 added=0/skipped=1449/0.2s）；tenants/personas/sessions 按名 resolve-or-create。
+- **链路验证**：`tests/test_pg_pool.py` 4/4（池连接、并发取连 12 线程、store/get/delete
+  往返，走真实 PG）；`run_decay_compress --dry-run --limit 5` 正常扫描 5 条 0 错误。
+- 决策文档：`docs_site/storage-architecture.md`（SQLite=记录源，PG=批处理镜像层，单向镜像不迁移）。
+
+### 12.2 M2-1 真实 LLM 压缩 ✅（DeepSeek 实测）
+
+- `trinity/daemon/memory_compressor.py` 新增 `create_llm_compress_callable()`
+  （OpenAI 兼容 /chat/completions，纯 stdlib urllib；环境变量
+  `TRINITY_LLM_BASE_URL / TRINITY_LLM_API_KEY / TRINITY_LLM_MODEL`）。
+- `scripts/run_decay_compress.py` 新增 `--llm {mock,real}` 与 `--llm-model`。
+- 实测：`DEEPSEEK_API_KEY`（凭证）+ `https://api.deepseek.com/v1` + `deepseek-chat`
+  调用成功（"Alice likes Sichuan food; project deadline moved to 2026-08-14."）；
+  `--llm real --limit 2` 全链路 0 错误。`tests/test_llm_compress.py` 6/6
+  （stub HTTP 服务 + fake adapter，覆盖缺 key 报错、env 回退、压缩落库归档）。
+- 注：网络仅 pypi/deepseek 可达（GitHub/HF 超时）——真实 LLM 可用，官方数据集仍不可下载。
+
+### 12.3 M1-4 版本号同步 v8.2.0 ✅
+
+- 系统 Python `pip install -e . --no-deps` 成功（旧 `trinity_memory-6.37.0.dist-info` 转 .bak；
+  安装期间 trinity-mcp.exe 被 dsh-mcp-client 自动拉起占用 → 用"安装期持续击杀"看门绕过，
+  装完后 MCP 自动恢复，PID 已轮换）。
+- `trinity/core/client.py` diagnostics 的**硬编码 v6.37.0** → 改读 `trinity.version`
+  （VERSION_STRING/v__version__）。MCP 重启后 `trinity_diagnostics` 报 **v8.2.0** ✅。
+
+### 12.4 M1-1 补充：store_path 文件语义修复（假"FTS5 bug"根因）✅
+
+- 根因：`Trinity(store_path=<db文件>)` 把 store_path 当**目录**（拼 `trinity_store.db`），
+  文件路径下 adapter 初始化静默失败（`_adapter=None`）→ `search()` 恒返回 0 ——
+  workflow 报告里的"多词 FTS5 + 过滤 bug 0%"实为**假警报**。
+- 修复：`trinity/core/client.py` 默认分支支持"store_path 已是 .db 文件则直接使用"；
+  `tests/test_store_path.py` 3/3 回归。
+- 统一入口：`benchmark/squad_runner.py`（新增）单次运行双口径
+  （`keyword_47ch` 产品级 47 通道 = headline 98.3% 177/180；`bm25_adapter` = 98.3% 177/180），
+  产物 `output/squad_unified_results.json`；与第七轮 README 98.3% 一致。
+
+### 12.5 M2-3 Hermes↔Trinity 近实时双向同步 ✅
+
+- 既有 `sync_hermes_trinity.py` 已是双向 + sha256 去重（一次性）。新增
+  `C:\Users\Administrator\.trinity\sync_hermes_watch.py` 轮询包装
+  （`--interval` 默认 60s / `--max-rounds` / `--once`），日志
+  `~/.trinity/logs/hermes-sync-watch.log`；实测一轮 exit 0 幂等（1449 skipped）。
+
+### 12.6 M2-4 Jaeger 遥测可视化 ✅
+
+- `docker/telemetry/docker-compose.yml`（project `trinity-telemetry`）：jaeger all-in-one
+  （16686 UI / 4317 gRPC / 4318 OTLP HTTP）；容器 Up，UI 200。
+- 验证：`flush_to_jaeger()` → `{"exported": 1, "status": "ok_200"}`；
+  `/api/services` 出现 trinity；`/api/traces?service=trinity` 可见 verify.otel span 与
+  运行中 MCP 的 `mcp.memory_search` 生产 span（默认端点已是 4318，tracer.py 未改动）。
+
+### 12.7 M3-1..M3-6 产品化 ✅（并行子代理 + 本会话验证）
+
+| 项 | 成果 | 验证 |
+|---|---|---|
+| M3-1 PG 连接池 | 已存在 SimpleConnectionPool；补 `tests/test_pg_pool.py` | 4/4 过（真实 PG） |
+| M3-2 Redis 缓存 | `core/cache.py` SemanticCache（memory/redis）接入 `retrieval/hybrid_retriever.py`；env `TRINITY_CACHE_BACKEND`（默认 off） | `tests/test_cache_redis.py` 8/8（Redis 3.0.504 RESP2 回退） |
+| M3-3 限流 | `api/middleware.py` + server.py：写端点限流（env RATE/BURST），429 计数 | `tests/test_api_metrics.py` 5/5 |
+| M3-4 指标 | `/metrics` Prometheus 文本（requests 计数/直方图/限流拒绝/memories 数） | 同上 |
+| M3-5 A2A | `scripts/a2a_demo.py` + `a2a_memory.py` 增量 + `tests/test_a2a_e2e.py` | 32/32（基线20+新增12）；demo 19/19 PASS |
+| M3-6 服务/CLI/插件 | `scripts/trinity_service.py`（pywin32 服务 + 看门狗）、`trinity_config_cli.py`、`trinity/plugins/` 注册表 | `tests/test_plugins.py`+`test_config_cli.py` 23/23；CLI --show 掩码正常 |
+
+### 12.8 回滚（第八轮）
+
+```powershell
+# 源码改动
+git -C C:\Users\Administrator\trinity checkout -- trinity/core/client.py trinity/daemon/memory_compressor.py scripts/run_decay_compress.py
+# 新增文件删除
+Remove-Item C:\Users\Administrator\trinity\benchmark\squad_runner.py, C:\Users\Administrator\trinity\scripts\sqlite_pg_mirror.py, C:\Users\Administrator\trinity\docs_site\storage-architecture.md -Force
+Remove-Item C:\Users\Administrator\trinity\tests\test_store_path.py, C:\Users\Administrator\trinity\tests\test_llm_compress.py, C:\Users\Administrator\trinity\tests\test_pg_pool.py -Force
+# 凭证恢复（原值）
+#   ~/.dsh/.credentials.yaml：TRINITY_PG_PORT 5432 / USER postgres / PASSWORD postgres
+# PG 数据：TRUNCATE memories, memory_versions, sessions, personas;（tenants 保留）
+# Jaeger：docker compose -p trinity-telemetry -f docker/telemetry/docker-compose.yml down
+# 同步 watch：删除 ~/.trinity/sync_hermes_watch.py
+```

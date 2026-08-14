@@ -54,6 +54,14 @@ from contextlib import asynccontextmanager
 from trinity import Trinity
 from trinity.agents import MemoryAggregator, create_aggregator
 from trinity.api.rbac_middleware import RBACMiddleware, get_rbac_engine
+from trinity.api.middleware import (
+    get_metrics,
+    is_rate_limited_request,
+    metrics_dispatch,
+    rate_limit_burst,
+    rate_limit_enabled,
+    rate_limit_rate,
+)
 from trinity.market import (
     OrderBook,
     TrustExchange,
@@ -378,7 +386,23 @@ class TokenBucket:
                 return True
             return False
 
-_rate_limiter = TokenBucket(rate=60, burst=120)
+def _build_rate_limiter() -> TokenBucket:
+    """Build a bucket from TRINITY_RATE_LIMIT_RATE / TRINITY_RATE_LIMIT_BURST."""
+    return TokenBucket(rate=rate_limit_rate(), burst=rate_limit_burst())
+
+
+_rate_limiter = _build_rate_limiter()
+
+
+def reconfigure_rate_limiter() -> TokenBucket:
+    """Re-read TRINITY_RATE_LIMIT_* env vars and rebuild the shared bucket.
+
+    Resets the token count to a full burst. Used by tests for isolation and
+    available for live reconfiguration without a restart.
+    """
+    global _rate_limiter
+    _rate_limiter = _build_rate_limiter()
+    return _rate_limiter
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -481,13 +505,35 @@ async def global_error_handler(request: Request, call_next):
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
-    """Token-bucket rate limiting on /agents/* write endpoints."""
-    if request.url.path.startswith("/agents/") and request.method in ("POST", "PUT", "DELETE"):
-        if not _rate_limiter.consume():
-            return JSONResponse(
-                status_code=429,
-                content={"error": "rate_limit_exceeded", "detail": "Too many requests"},
-            )
+    """Token-bucket rate limiting on /memories, /memory/* and /agents/* write endpoints.
+
+    - Only POST/PUT/DELETE are limited; read endpoints (GET/HEAD) pass through.
+    - /metrics is exempt (no rate limiting, no counting loop).
+    - Config via env: TRINITY_RATE_LIMIT_ENABLED (default on),
+      TRINITY_RATE_LIMIT_RATE (default 60/s), TRINITY_RATE_LIMIT_BURST (default 120).
+    - Denials return 429 {"error": "rate_limit_exceeded", "detail": ...} and are
+      counted in trinity_rate_limit_denied_total{path}.
+    """
+    path = request.url.path
+    if (
+        rate_limit_enabled()
+        and is_rate_limited_request(path, request.method)
+        and not _rate_limiter.consume()
+    ):
+        get_metrics().inc(
+            "trinity_rate_limit_denied_total",
+            {"path": path},
+        )
+        return JSONResponse(
+            status_code=429,
+            content={
+                "error": "rate_limit_exceeded",
+                "detail": (
+                    f"Too many write requests (limit {_rate_limiter.rate}/s, "
+                    f"burst {_rate_limiter.burst}); retry later"
+                ),
+            },
+        )
     return await call_next(request)
 
 
@@ -515,6 +561,15 @@ async def request_logging_middleware(request: Request, call_next):
         span.ok()
         span.finish()
         tracer.end_span(span)
+
+
+# Metrics middleware is registered last so it is the OUTERMOST layer:
+# it wraps the whole chain and therefore also records rate-limit 429
+# responses and the full end-to-end request duration.
+@app.middleware("http")
+async def metrics_middleware(request: Request, call_next):
+    """Prometheus request metrics — /metrics itself is skipped (no scrape loop)."""
+    return await metrics_dispatch(request, call_next)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -561,25 +616,62 @@ async def health():
     }
 
 
+# TTL-cached aggregator statistics for /metrics (avoids rebuilding the
+# pool distribution on every scrape). Refreshed at most once per TTL.
+_mem_stats_cache: Dict[str, Any] = {"ts": 0.0, "stats": None}
+_MEM_STATS_TTL = 5.0
+
+
 @app.get("/metrics")
 async def metrics():
-    """Prometheus-format metrics endpoint."""
-    agg = get_aggregator()
-    stats = agg.statistics()
+    """Prometheus-format metrics endpoint (text/plain; exposition 0.0.4).
+
+    Emits request counters/histograms from the metrics registry plus pool
+    gauges/counters from the aggregator. /metrics itself is exempt from
+    rate limiting and is not recorded in the request metrics (no scrape
+    feedback loop). If the aggregator statistics cannot be obtained,
+    trinity_memories_total falls back to 0 with an explanatory comment.
+    """
+    global _mem_stats_cache
+    now = time.time()
+    stats: Dict[str, Any] = {}
+    mem_notes: List[str] = []
+    if _mem_stats_cache["stats"] is not None and now - _mem_stats_cache["ts"] < _MEM_STATS_TTL:
+        stats = _mem_stats_cache["stats"]
+    else:
+        try:
+            stats = get_aggregator().statistics() or {}
+        except Exception as exc:
+            logger.warning("metrics: aggregator statistics unavailable: %s", exc)
+            mem_notes.append(
+                "# trinity_memories_total set to 0 (aggregator statistics unavailable)"
+            )
+        _mem_stats_cache = {"ts": now, "stats": stats}
+
+    try:
+        mem_total = int(stats.get("total_memories", 0) or 0)
+    except (TypeError, ValueError):
+        mem_total = 0
+        mem_notes.append("# trinity_memories_total set to 0 (unparseable aggregator count)")
+
     lines = [
         "# HELP trinity_memories_total Total memories in shared pool",
         "# TYPE trinity_memories_total gauge",
-        f"trinity_memories_total {stats['total_memories']}",
+        f"trinity_memories_total {mem_total}",
+        *mem_notes,
         "# HELP trinity_ingested_total Total memories ingested",
         "# TYPE trinity_ingested_total counter",
-        f"trinity_ingested_total {stats.get('total_ingested', 0)}",
+        f"trinity_ingested_total {int(stats.get('total_ingested', 0) or 0)}",
         "# HELP trinity_merged_total Total merges by similarity",
         "# TYPE trinity_merged_total counter",
-        f"trinity_merged_total {stats.get('total_merged', 0)}",
+        f"trinity_merged_total {int(stats.get('total_merged', 0) or 0)}",
         "# HELP trinity_queries_total Total queries executed",
         "# TYPE trinity_queries_total counter",
-        f"trinity_queries_total {stats.get('total_queries', 0)}",
+        f"trinity_queries_total {int(stats.get('total_queries', 0) or 0)}",
     ]
+    rendered = get_metrics().render().rstrip("\n")
+    if rendered:
+        lines.append(rendered)
     return PlainTextResponse("\n".join(lines) + "\n", media_type="text/plain")
 
 

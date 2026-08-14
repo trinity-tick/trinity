@@ -455,3 +455,70 @@ def mock_llm_compress(system_prompt: str, user_prompt: str) -> str:
         f"[AUTO-COMPRESSED] {len(entries)} memories merged: "
         f"{combined[:1500]}"
     )
+
+
+# ============================================================================
+# Real LLM callable (OpenAI-compatible chat completions, stdlib-only)
+# ============================================================================
+
+
+def create_llm_compress_callable(
+    base_url: Optional[str] = None,
+    api_key: Optional[str] = None,
+    model: Optional[str] = None,
+    timeout: float = 60.0,
+) -> Callable[[str, str], str]:
+    """创建真实 LLM 压缩 callable（OpenAI 兼容 /chat/completions）。
+
+    参数缺省时从环境变量读取：
+        TRINITY_LLM_BASE_URL  默认 https://api.openai.com/v1
+        TRINITY_LLM_API_KEY   （必填，缺失抛 ValueError）
+        TRINITY_LLM_MODEL     默认 gpt-4o-mini
+
+    Returns:
+        callable (system_prompt, user_prompt) -> str
+    """
+    import os
+    import urllib.request
+
+    base_url = (base_url or os.environ.get("TRINITY_LLM_BASE_URL")
+                or "https://api.openai.com/v1").rstrip("/")
+    api_key = api_key or os.environ.get("TRINITY_LLM_API_KEY")
+    model = model or os.environ.get("TRINITY_LLM_MODEL") or "gpt-4o-mini"
+
+    if not api_key:
+        raise ValueError(
+            "TRINITY_LLM_API_KEY 未设置：真实 LLM 压缩需要 API key。"
+            "可设置环境变量 TRINITY_LLM_API_KEY / TRINITY_LLM_BASE_URL / "
+            "TRINITY_LLM_MODEL，或继续使用 mock 压缩（--llm mock）。"
+        )
+
+    endpoint = f"{base_url}/chat/completions"
+
+    def _call(system_prompt: str, user_prompt: str) -> str:
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": 0.2,
+            "max_tokens": 800,
+        }
+        req = urllib.request.Request(
+            endpoint,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+        try:
+            return body["choices"][0]["message"]["content"].strip()
+        except (KeyError, IndexError, AttributeError) as e:
+            raise RuntimeError(f"LLM 响应格式异常: {body}") from e
+
+    return _call

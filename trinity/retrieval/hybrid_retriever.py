@@ -12,7 +12,65 @@ per-source score kept for each memory_id).
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional
+import logging
+import os
+import threading
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Semantic result cache (env-gated, off by default)
+#
+#  TRINITY_CACHE_BACKEND  memory | redis | off   (default: off)
+#  TRINITY_REDIS_URL      redis://host:port/db   (default: redis://127.0.0.1:6379/0)
+#  TRINITY_CACHE_TTL      seconds                (default: 300)
+#
+#  The wrapper is deliberately additive: with the default ``off`` the
+#  retrieval pipeline behaves exactly as before.
+# ═══════════════════════════════════════════════════════════════════════
+
+_cache_instance: Optional[Any] = None
+_cache_instance_config: Optional[Tuple[str, str, float]] = None
+_cache_instance_lock = threading.Lock()
+
+
+def _get_configured_cache() -> Optional[Any]:
+    """Return the env-configured SemanticCache, or None when caching is off.
+
+    Reads ``TRINITY_CACHE_BACKEND`` / ``TRINITY_REDIS_URL`` /
+    ``TRINITY_CACHE_TTL`` on every call and lazily (re)builds the shared
+    ``SemanticCache`` instance whenever the effective config changes, so
+    callers/tests can flip the environment and see it immediately.
+    """
+    global _cache_instance, _cache_instance_config
+
+    backend = os.environ.get("TRINITY_CACHE_BACKEND", "off").strip().lower()
+    if backend not in ("memory", "redis"):
+        return None
+
+    redis_url = os.environ.get(
+        "TRINITY_REDIS_URL", "redis://127.0.0.1:6379/0"
+    ).strip()
+    try:
+        ttl = float(os.environ.get("TRINITY_CACHE_TTL", "300"))
+    except ValueError:
+        ttl = 300.0
+
+    config = (backend, redis_url, ttl)
+    with _cache_instance_lock:
+        if _cache_instance is not None and _cache_instance_config == config:
+            return _cache_instance
+
+        from trinity.core.cache import SemanticCache
+
+        _cache_instance = SemanticCache(
+            backend=backend,
+            default_ttl=ttl,
+            redis_url=redis_url,
+        )
+        _cache_instance_config = config
+        return _cache_instance
 
 
 class HybridRetriever:
@@ -125,6 +183,18 @@ class HybridRetriever:
         if strategy not in ("fusion", "rrf", "cascade"):
             strategy = "fusion"
 
+        # ── semantic result cache (env-gated, off by default) ───────
+        cache = _get_configured_cache()
+        cache_key = None
+        if cache is not None:
+            cache_key = cache.make_text_key(query, top_k=top_k, strategy=strategy)
+            try:
+                cached = cache.get(cache_key)
+            except Exception:
+                cached = None
+            if cached is not None:
+                return cached
+
         # ── collect raw results from each source ───────────────────
         vector_results = self._get_vector_results(query, top_k)
         bm25_results = self._get_bm25_results(query, top_k)
@@ -149,7 +219,7 @@ class HybridRetriever:
         else:  # cascade
             fused = self._cascade_fuse(vector_norm, bm25_norm, graph_norm, aggr_norm, proc_norm, top_k)
 
-        return {
+        result: Dict[str, Any] = {
             "results": fused,
             "strategy": strategy,
             "query": query,
@@ -162,6 +232,15 @@ class HybridRetriever:
                 "unique_fused": len(fused),
             },
         }
+
+        # Store the serialised result for later identical queries.
+        if cache is not None and cache_key is not None:
+            try:
+                cache.set(cache_key, result)
+            except Exception:
+                logger.debug("semantic cache write failed", exc_info=True)
+
+        return result
 
     def search_cross_modal(
         self,

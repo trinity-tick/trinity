@@ -244,11 +244,17 @@ class Trinity:
         elif adapter == "sqlite":
             self._init_sqlite_adapter()
         elif adapter is None:
-            # Default: use SQLite with store_path, but honor TRINITY_DB_PATH env var
+            # Default: use SQLite with store_path, but honor TRINITY_DB_PATH env var.
+            # store_path 语义：目录 → 内部生成 trinity_store.db；已是 .db 文件 → 直接使用。
             from trinity.adapters.sqlite import SQLiteAdapter
-            _db_path = os.environ.get("TRINITY_DB_PATH") or (
-                os.path.join(_TRINITY_STORE, "trinity_store.db") if _TRINITY_STORE else "trinity_store.db"
-            )
+            _db_path = os.environ.get("TRINITY_DB_PATH")
+            if not _db_path:
+                if _TRINITY_STORE and os.path.isfile(_TRINITY_STORE):
+                    _db_path = _TRINITY_STORE
+                elif _TRINITY_STORE:
+                    _db_path = os.path.join(_TRINITY_STORE, "trinity_store.db")
+                else:
+                    _db_path = "trinity_store.db"
             try:
                 self._adapter = SQLiteAdapter(db_path=_db_path)
                 self._adapter.connect()
@@ -1416,9 +1422,10 @@ class Trinity:
                 engine_diag = engine.run_diagnostics()
             except Exception:
                 engine_diag = {"status": "engine not available"}
+            from trinity.version import __version__, VERSION_STRING
             return {
-                "trinity_version": "v6.37.0",
-                "source_version": "v6.37",
+                "trinity_version": VERSION_STRING,
+                "source_version": __version__,
                 "total_modules": 5,
                 "adapter": adapter_diag,
                 "engine": engine_diag,

@@ -22,7 +22,7 @@
 |---|---|---|
 | LongMemEval (simulated) | R@5 = **0.9818**（55 题 54/55） | 模板生成模拟集，**非官方 500 题 LongMemEval-S**；BM25+jieba 多词合并 |
 | LongMemEval-style (500q) | R@5 = **0.9160** / MRR = **0.8618** | 500 题社区生成集（对齐 LongMemEval-S 六类目结构，非官方标注集）；FTS5 keyword。分类：KU/SS-P/TR=1.000，SS-A/SS-U=0.980，**MS(多会话)=0.525（短板）** |
-| SQuAD v1.1 (adapted) | R@5 = **98.3%**（177/180） | **统一口径**：`squad_benchmark_runner.py`（BM25/FTS5 retrieval → passage-selection），SQuAD v1.1 dev 180 题。README 旧 35.6% 为早期代码结果，已更新 |
+| SQuAD v1.1 (adapted) | R@5 = **98.3%**（177/180，双口径一致：`keyword_47ch` 产品级 47 通道 = `bm25_adapter` 低层通道） | **统一入口**：`benchmark/squad_runner.py`（单次运行、同子集 seed=42/180 题、同命中判定，产物 `output/squad_unified_results.json`）。README 旧 35.6% 为早期代码结果；workflow 报告中的"keyword 0%"系 `Trinity(store_path=<文件>)` 误当目录导致 adapter 静默缺失（已修复，见 EXECUTION.md 12.4） |
 | LoCoMo（自建子集） | 最优配置 B.session-aggregate：R@5=**0.88** / MRR=**0.5353**（38 题） | 4 种配置对比：turn-baseline R@5=0.14 / session-aggregate 0.88 / turn+query-expansion 0.14 / session+query-expansion 0.88；temporal-reasoning 类目全 0（短板）。**官方 1982 题集网络不可达** |
 | BEAM Scale | 1K：R@5=**1.000**，P50 8.65ms · 10K：R@5=**1.000**，P50 240.0ms · 100K(110K 条)：R@5=**1.000**，P50 984.6ms | PostgreSQL FTS 内联 to_tsvector（**无 GIN 索引，全表扫描**，故延迟随规模线性增长）；隔离库 trinity_bench 实测后已删除；非官方 BEAM 数据集 |
 | ANN HNSW | Recall@10 = 1.000 | 向量索引召回 |
@@ -40,7 +40,7 @@
 
 | 项 | 结果 |
 |---|---|
-| pytest 全量 | **135 passed / 33 skipped / 0 failed**（2026-08-14 修复 test_core 5 个旧 API 断言后全绿；此前 5 fail/6 error 已解决） |
+| pytest 全量 | **161 passed / 6 skipped / 1 failed**（2026-08-14 晚；新增 8 组测试：真实 LLM 压缩 6、store_path 回归 3、Redis 缓存 8、限流/指标 5、A2A e2e 12、插件/CLI 23、PG 池 4。唯一失败 `trinity/tests/test_e2e_multi_agent.py` 依赖外部 Marvis 服务（:18001 未运行），**既有环境依赖非本轮引入**） |
 | 内部 self_test | 208/208 PASS（内部口径，与 pytest 不同集合） |
 | 进化周期 | 完整周期 3 次（observe→analyze→plan→execute→certify） |
 

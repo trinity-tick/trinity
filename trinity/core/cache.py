@@ -213,8 +213,18 @@ class SemanticCache:
         try:
             import redis as _redis_module
             url = self._redis_url or "redis://localhost:6379/0"
-            self._redis = _redis_module.Redis.from_url(url, decode_responses=True)
-            self._redis.ping()
+            try:
+                # Default: modern Redis (RESP3 handshake).
+                self._redis = _redis_module.Redis.from_url(url, decode_responses=True)
+                self._redis.ping()
+            except Exception:
+                # Fallback: older Redis servers (e.g. Redis 3.x Windows
+                # builds) reject the RESP3 ``HELLO`` command; retry with
+                # RESP2, which every server understands.
+                self._redis = _redis_module.Redis.from_url(
+                    url, decode_responses=True, protocol=2
+                )
+                self._redis.ping()
             self._redis_available = True
             logger.info("SemanticCache connected to Redis at %s", url)
         except Exception as e:
@@ -246,6 +256,35 @@ class SemanticCache:
         if top_k:
             fp = f"{fp}_k{top_k}"
 
+        return fp
+
+    def make_text_key(
+        self,
+        query_text: str,
+        top_k: Optional[int] = None,
+        strategy: Optional[str] = None,
+    ) -> str:
+        """Build a cache key from the raw query text (exact-match, SHA-256).
+
+        This is the key generator used by the retrieval-layer cache wrapper:
+        it hashes the query string itself (not an embedding), so only
+        byte-identical queries share a cache entry.
+
+        Args:
+            query_text: The raw query string.
+            top_k: Optional result count, folded into the key.
+            strategy: Optional retrieval strategy (e.g. ``"fusion"`` /
+                ``"rrf"`` / ``"cascade"``), folded into the key.
+
+        Returns:
+            SHA-256 hex digest (optionally suffixed with ``_k<top_k>`` and
+            ``_<strategy>``).
+        """
+        fp = hashlib.sha256(query_text.encode("utf-8")).hexdigest()
+        if top_k:
+            fp = f"{fp}_k{top_k}"
+        if strategy:
+            fp = f"{fp}_{strategy}"
         return fp
 
     # ── Get / Set ─────────────────────────────────────────────────
@@ -367,7 +406,7 @@ class SemanticCache:
         try:
             full_key = self._redis_prefix + key
             data = json.dumps(value, default=str, ensure_ascii=False)
-            self._redis.setex(full_key, int(ttl), data)
+            self._redis.set(full_key, data, ex=int(ttl))
             return True
         except Exception as e:
             logger.warning("Redis set failed: %s", e)

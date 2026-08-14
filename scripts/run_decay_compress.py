@@ -52,12 +52,13 @@ def _import_modules():
     )
     from trinity.daemon.memory_compressor import (
         MemoryCompressor, CompressionStatus, CompressionReport, mock_llm_compress,
+        create_llm_compress_callable,
     )
     from trinity.adapters.postgresql import PostgreSQLAdapter
     return (
         DecayConfig, DecayStatus, MemoryDecayEngine, DecayResult, DecayScanReport,
         MemoryCompressor, CompressionStatus, CompressionReport, mock_llm_compress,
-        PostgreSQLAdapter,
+        create_llm_compress_callable, PostgreSQLAdapter,
     )
 
 
@@ -276,13 +277,18 @@ def main():
     parser.add_argument("--lambda-knowledge", type=float, default=0.01, help="Knowledge decay rate")
     parser.add_argument("--lambda-general", type=float, default=0.02, help="General decay rate")
     parser.add_argument("--output", default="", help="Save stats JSON to file")
+    parser.add_argument("--llm", choices=["mock", "real"], default="mock",
+                        help="压缩器 LLM：mock（默认，离线抽取式摘要）或 real（OpenAI 兼容 API，"
+                             "需 TRINITY_LLM_API_KEY 环境变量）")
+    parser.add_argument("--llm-model", default="",
+                        help="真实 LLM 模型名（缺省读 TRINITY_LLM_MODEL，再缺省 gpt-4o-mini）")
     args = parser.parse_args()
 
-    # ── Import modules ────────────────────────────────────────
+    # ── Build compressor ─────────────────────────────────────
     (
         DecayConfig, DecayStatus, MemoryDecayEngine, DecayResult, DecayScanReport,
         MemoryCompressor, CompressionStatus, CompressionReport, mock_llm_compress,
-        PostgreSQLAdapter,
+        create_llm_compress_callable, PostgreSQLAdapter,
     ) = _import_modules()
 
     # ── Build decay config ────────────────────────────────────
@@ -305,11 +311,17 @@ def main():
     )
 
     # ── Build compressor ─────────────────────────────────────
+    if args.llm == "real":
+        llm_callable = create_llm_compress_callable(model=args.llm_model or None)
+        logger.info("Compressor initialized (REAL LLM mode)")
+    else:
+        llm_callable = mock_llm_compress  # default mock; replace with real LLM
+        logger.info("Compressor initialized (mock LLM mode)")
+
     compressor = MemoryCompressor(
         pg_adapter=adapter,
-        llm_callable=mock_llm_compress,  # default mock; replace with real LLM
+        llm_callable=llm_callable,
     )
-    logger.info("Compressor initialized (mock LLM mode)")
 
     # ── Run pipeline ──────────────────────────────────────────
     try:
