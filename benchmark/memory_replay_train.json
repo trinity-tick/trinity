@@ -1,0 +1,1105 @@
+{
+  "metadata": {
+    "format_version": "1.0",
+    "created_at": "2026-08-06 18:32:16",
+    "num_memories": 25,
+    "num_query_pairs": 50,
+    "num_contrastive_triplets": 50,
+    "generator": "MemoryReplayTrainer"
+  },
+  "memories": [
+    {
+      "memory_id": "evo_0fb98731ad89",
+      "content": "[Trinity Evolution State] Version: 1.0, Total Cycles: 5, Last Cycle: evo_085808c1ab, Active Preferences: 0, Active Patterns: 2",
+      "role": "system",
+      "session_id": "evolution_sync",
+      "category": "evolution_state",
+      "tags": [
+        "evolution",
+        "state",
+        "trinity"
+      ],
+      "importance": 0.7027,
+      "length": 126
+    },
+    {
+      "memory_id": "handoff_0a0eeaf15704",
+      "content": "[Trinity Handoff] Module: MetaEvolution, Total Cycles: 4\nInstructions: 1. Read this handoff file to restore evolution state; 2. Continue the Observe-Analyze-Plan-Execute-Certify loop; 3. Write updated state back to this file when done",
+      "role": "system",
+      "session_id": "handoff_sync",
+      "category": "handoff",
+      "tags": [
+        "handoff",
+        "metaevolution",
+        "evolution"
+      ],
+      "importance": 0.7012,
+      "length": 234
+    },
+    {
+      "memory_id": "handoff_9648184442c2",
+      "content": "[Trinity Handoff] Module: MetaEvolution, Total Cycles: 3\nInstructions: 1. Read this handoff file to restore evolution state; 2. Continue the Observe-Analyze-Plan-Execute-Certify loop; 3. Write updated state back to this file when done",
+      "role": "system",
+      "session_id": "handoff_sync",
+      "category": "handoff",
+      "tags": [
+        "handoff",
+        "metaevolution",
+        "evolution"
+      ],
+      "importance": 0.7012,
+      "length": 234
+    },
+    {
+      "memory_id": "handoff_42dee3ab48b8",
+      "content": "[Trinity Handoff] Module: MetaEvolution, Total Cycles: 3\nInstructions: 1. Read this handoff file to restore evolution state; 2. Continue the Observe-Analyze-Plan-Execute-Certify loop; 3. Write updated state back to this file when done",
+      "role": "system",
+      "session_id": "handoff_sync",
+      "category": "handoff",
+      "tags": [
+        "handoff",
+        "metaevolution",
+        "evolution"
+      ],
+      "importance": 0.7012,
+      "length": 234
+    },
+    {
+      "memory_id": "handoff_b97c201146d2",
+      "content": "[Trinity Handoff] Module: MetaEvolution, Total Cycles: 2\nInstructions: 1. Read this handoff file to restore evolution state; 2. Continue the Observe-Analyze-Plan-Execute-Certify loop; 3. Write updated state back to this file when done",
+      "role": "system",
+      "session_id": "handoff_sync",
+      "category": "handoff",
+      "tags": [
+        "handoff",
+        "metaevolution",
+        "evolution"
+      ],
+      "importance": 0.7012,
+      "length": 234
+    },
+    {
+      "memory_id": "handoff_790041998192",
+      "content": "[Trinity Handoff] Module: MetaEvolution, Total Cycles: 2\nInstructions: 1. Read this handoff file to restore evolution state; 2. Continue the Observe-Analyze-Plan-Execute-Certify loop; 3. Write updated state back to this file when done",
+      "role": "system",
+      "session_id": "handoff_sync",
+      "category": "handoff",
+      "tags": [
+        "handoff",
+        "metaevolution",
+        "evolution"
+      ],
+      "importance": 0.7012,
+      "length": 234
+    },
+    {
+      "memory_id": "handoff_77950fa922d4",
+      "content": "[Trinity Handoff] Module: MetaEvolution, Total Cycles: 2\nInstructions: 1. Read this handoff file to restore evolution state; 2. Continue the Observe-Analyze-Plan-Execute-Certify loop; 3. Write updated state back to this file when done",
+      "role": "system",
+      "session_id": "handoff_sync",
+      "category": "handoff",
+      "tags": [
+        "handoff",
+        "metaevolution",
+        "evolution"
+      ],
+      "importance": 0.7012,
+      "length": 234
+    },
+    {
+      "memory_id": "handoff_84e307d52725",
+      "content": "[Trinity Handoff] Module: MetaEvolution, Total Cycles: 1\nInstructions: 1. Read this handoff file to restore evolution state; 2. Continue the Observe-Analyze-Plan-Execute-Certify loop; 3. Write updated state back to this file when done",
+      "role": "system",
+      "session_id": "handoff_sync",
+      "category": "handoff",
+      "tags": [
+        "handoff",
+        "metaevolution",
+        "evolution"
+      ],
+      "importance": 0.7012,
+      "length": 234
+    },
+    {
+      "memory_id": "handoff_b9a111307936",
+      "content": "[Trinity Handoff] Module: MetaEvolution, Total Cycles: 2\nInstructions: 1. Read this handoff file to restore evolution state; 2. Continue the Observe-Analyze-Plan-Execute-Certify loop; 3. Write updated state back to this file when done",
+      "role": "system",
+      "session_id": "handoff_sync",
+      "category": "handoff",
+      "tags": [
+        "handoff",
+        "metaevolution",
+        "evolution"
+      ],
+      "importance": 0.7012,
+      "length": 234
+    },
+    {
+      "memory_id": "skill_42c2894b66fb",
+      "content": "# Self-Improving Memory\n\n## Confirmed Preferences\n- Chinese communication, structured output\n\n## Active Patterns\n- Pattern detected 3+ times\n\n## Recent\n- Updated: 2026-07-15T08:27:59.468906\n",
+      "role": "system",
+      "session_id": "skill_sync",
+      "category": "skill_memory",
+      "tags": [
+        "skill",
+        "self-improving",
+        "memory"
+      ],
+      "importance": 0.6416,
+      "length": 190
+    },
+    {
+      "memory_id": "mem_1eeebe3b5b3143a8",
+      "content": "WMS M8-M9 阶段补齐（精益与合规层）：M8 补齐增值加工 value-add-processing、任务调度 task-scheduler、促销赠品 promo-gift、智能补货 smart-replenishment、逆向物流增强 reverse-logistics-v2、容器管理 container-management。M9 补齐越库直通 cross-dock、货位优化引擎 slotting-optimizer（ABC-XYZ 分类+关联聚类亲和矩阵）、循环盘点 cycle-count、承运商管理 carrier-management（多物流费率）、碳排放追踪 carbon-tracking（Scope1-3/SBTi）、EDI 数据交换 edi-exchange（EDIFACT 850/856/810 标准报文）。",
+      "role": "user",
+      "session_id": "sess_b00d509fa8dd",
+      "category": "general",
+      "tags": [
+        "wms",
+        "M8",
+        "M9",
+        "lean"
+      ],
+      "importance": 0.6224,
+      "length": 371
+    },
+    {
+      "memory_id": "mem_bb0f876e0d5249bd",
+      "content": "WMS 合规与特色服务：效期管理 expiration-management（FEFO 规则/四级预警）、AI 关务 customs-brokerage（HS 归类/100+国规则引擎）、包材合规 packaging-material（GB 新国标）、拣选设备编排 pick-device-orchestrator（PTL/语音/AR 多模式）、套装 Kitting bundle-kit-assembly、运单面单 manifest-waybill、仓储绩效对标 warehouse-benchmark（5 级成熟度模型）。",
+      "role": "user",
+      "session_id": "sess_466e1d4f0363",
+      "category": "general",
+      "tags": [
+        "wms",
+        "compliance",
+        "specialized"
+      ],
+      "importance": 0.5632,
+      "length": 263
+    },
+    {
+      "memory_id": "mem_bff8019bd7bc4280",
+      "content": "WMS 算法层服务：上架策略引擎 putaway-engine（多维度分）、智能装箱 cartonization（3D bin packing）、波次引擎 wave-engine（遗传+模拟退火）、拣选路径优化 pick-path-optimizer。属于 M12-M14 阶段产出，是 Tier-1 WMS 核心能力。",
+      "role": "user",
+      "session_id": "sess_86525ca44252",
+      "category": "general",
+      "tags": [
+        "wms",
+        "algorithm",
+        "M12-M14"
+      ],
+      "importance": 0.4437,
+      "length": 160
+    },
+    {
+      "memory_id": "mem_ac786d8fe06b4a47",
+      "content": "WMS DDL 审计经验：全量遍历 108 服务 DDL 后，发现表名重复冲突（如 counting 与 cycle-count-service 的 count_plans）、6 个空壳服务（有代码无 DDL）、跨服务依赖无外键约束、billing 缺少组合计费表、inventory 缺少锁库表等问题。每张新表通过 COMMENT 标注对标来源。",
+      "role": "user",
+      "session_id": "sess_c804a5144317",
+      "category": "general",
+      "tags": [
+        "wms",
+        "audit",
+        "DDL"
+      ],
+      "importance": 0.4242,
+      "length": 174
+    },
+    {
+      "memory_id": "mem_f7beb7203b9b4bcf",
+      "content": "WMS 三方对标源：旺店通 WMS（PDA 操作/货主管理/增值加工/赠品策略/预售/多物流费率）、京东物流 WMS（人力调度/计件工资/任务调度/补货算法/越库/货位优化/盘点/200+API）、顺丰供应链 WMS（仓网规划/IoT 平台/逆向质检闭环/容器循环/碳核算 SBTi/EDI EDIFACT/月台调度）。",
+      "role": "user",
+      "session_id": "sess_e5421b5be9ef",
+      "category": "general",
+      "tags": [
+        "wms",
+        "benchmark",
+        "competitor"
+      ],
+      "importance": 0.397,
+      "length": 160
+    },
+    {
+      "memory_id": "pattern_aaec7e26c448",
+      "content": "Trinity Active Patterns: wr=0.3, warehouse=0.3",
+      "role": "system",
+      "session_id": "evolution_sync",
+      "category": "evolution_state",
+      "tags": [
+        "evolution",
+        "pattern"
+      ],
+      "importance": 0.3196,
+      "length": 46
+    },
+    {
+      "memory_id": "mem_775205cc6af64f20",
+      "content": "WMS 商业金融层服务：BMS 计费费率引擎 billing-rate-engine（阶梯计价/合同模型/多维度组合计费）、理赔管理 claims-management（区块链存证+AI 定损）。补齐后实现仓储物流全链路商业闭环。",
+      "role": "user",
+      "session_id": "sess_198640b673fe",
+      "category": "general",
+      "tags": [
+        "wms",
+        "finance",
+        "billing"
+      ],
+      "importance": 0.3118,
+      "length": 115
+    },
+    {
+      "memory_id": "mem_f0c472d4dabb4719",
+      "content": "Marvis 是运行在 Windows 上的桌面智能助手，基于腾讯混元 Hy3 和 DeepSeek-V4 Pro 模型",
+      "role": "user",
+      "session_id": "sess_cd2a5c44e551",
+      "category": "general",
+      "tags": [
+        "ai",
+        "assistant"
+      ],
+      "importance": 0.3052,
+      "length": 60
+    },
+    {
+      "memory_id": "mem_a24e315236ca4b8a",
+      "content": "WMS 客户端重构：对齐旺店通标准，涵盖 11 模块导航（入库/出库/库内/分拣/验货/货品档案/物流对接/员工管理/策略规则/报表/系统设置），每页面强制增删改停用按钮+搜索筛选分页+模态弹窗+深色主题，补齐分拣单/验货/物流对接/员工账号CRUD/库位地图/货品档案等缺失页面。",
+      "role": "user",
+      "session_id": "sess_a09a68bd9e0f",
+      "category": "general",
+      "tags": [
+        "wms",
+        "frontend",
+        "client"
+      ],
+      "importance": 0.2745,
+      "length": 141
+    },
+    {
+      "memory_id": "mem_7845f83beed649a7",
+      "content": "WMS 功能补齐项目：基于旺店通、京东物流、顺丰供应链三大标杆系统对标，共补齐 108 个微服务，分 14 个阶段（M1-M14）。基础出入库/库存/退货等运营层模块优先覆盖，中后期转向算法密集型、商业金融、专项合规三大深层缺口。",
+      "role": "user",
+      "session_id": "sess_d5f2ef39cac9",
+      "category": "general",
+      "tags": [
+        "wms",
+        "project",
+        "architecture"
+      ],
+      "importance": 0.2652,
+      "length": 115
+    },
+    {
+      "memory_id": "mem_9df17d8e5e374858",
+      "content": "三位一体架构由 ChromaDB 向量库、SecondBrain 记忆引擎、Ollama 模型调优器组成",
+      "role": "user",
+      "session_id": "sess_c045584ea74d",
+      "category": "general",
+      "tags": [
+        "architecture",
+        "threeinone"
+      ],
+      "importance": 0.2519,
+      "length": 52
+    },
+    {
+      "memory_id": "mem_6c7bcf017e0441f0",
+      "content": "Trinity v6.37 是 AGI 长期记忆系统，包含 122 模块、50 级守护链、47 检索通道",
+      "role": "user",
+      "session_id": "sess_7bccb699c1ee",
+      "category": "general",
+      "tags": [
+        "system",
+        "v6.37"
+      ],
+      "importance": 0.2286,
+      "length": 52
+    },
+    {
+      "memory_id": "mem_83bf8ea2f8ee",
+      "content": "彩棠新到重品0.1kg-0.3kg应放第一层货架",
+      "role": "assistant",
+      "session_id": "session_2026-07-15",
+      "category": "memory",
+      "tags": [
+        "warehouse",
+        "caitang",
+        "rule"
+      ],
+      "importance": 0.193,
+      "length": 24
+    },
+    {
+      "memory_id": "mem_20aed1b904b44a7d",
+      "content": "Test memory",
+      "role": "user",
+      "session_id": "sess_3d7fbe6e9db5",
+      "category": "general",
+      "tags": [],
+      "importance": 0.1571,
+      "length": 11
+    },
+    {
+      "memory_id": "mem_05b294b553a14fe2",
+      "content": "Test memory",
+      "role": "user",
+      "session_id": "sess_9977cab4d87f",
+      "category": "general",
+      "tags": [],
+      "importance": 0.1571,
+      "length": 11
+    }
+  ],
+  "query_pairs": [
+    {
+      "query": "Tell me about active.",
+      "memory_id": "evo_0fb98731ad89",
+      "query_type": "keyword"
+    },
+    {
+      "query": "Why is Version: 1 important?",
+      "memory_id": "evo_0fb98731ad89",
+      "query_type": "wh_question"
+    },
+    {
+      "query": "Do you have any memory of file?",
+      "memory_id": "handoff_0a0eeaf15704",
+      "query_type": "keyword"
+    },
+    {
+      "query": "Who was involved with Module: MetaEvolution, Total Cycles: 4?",
+      "memory_id": "handoff_0a0eeaf15704",
+      "query_type": "wh_question"
+    },
+    {
+      "query": "Find information related to handoff.",
+      "memory_id": "handoff_9648184442c2",
+      "query_type": "keyword"
+    },
+    {
+      "query": "Why is Module: MetaEvolution, Total Cycles: 3 important?",
+      "memory_id": "handoff_9648184442c2",
+      "query_type": "wh_question"
+    },
+    {
+      "query": "Tell me about module.",
+      "memory_id": "handoff_42dee3ab48b8",
+      "query_type": "keyword"
+    },
+    {
+      "query": "Where was Module: MetaEvolution, Total Cycles: 3 discussed?",
+      "memory_id": "handoff_42dee3ab48b8",
+      "query_type": "wh_question"
+    },
+    {
+      "query": "What do you remember about handoff?",
+      "memory_id": "handoff_b97c201146d2",
+      "query_type": "keyword"
+    },
+    {
+      "query": "What is Module: MetaEvolution, Total Cycles: 2?",
+      "memory_id": "handoff_b97c201146d2",
+      "query_type": "wh_question"
+    },
+    {
+      "query": "Search memory for file.",
+      "memory_id": "handoff_790041998192",
+      "query_type": "keyword"
+    },
+    {
+      "query": "How was Module: MetaEvolution, Total Cycles: 2 handled?",
+      "memory_id": "handoff_790041998192",
+      "query_type": "wh_question"
+    },
+    {
+      "query": "What do you remember about module?",
+      "memory_id": "handoff_77950fa922d4",
+      "query_type": "keyword"
+    },
+    {
+      "query": "Who was involved with Module: MetaEvolution, Total Cycles: 2?",
+      "memory_id": "handoff_77950fa922d4",
+      "query_type": "wh_question"
+    },
+    {
+      "query": "What was recorded regarding file?",
+      "memory_id": "handoff_84e307d52725",
+      "query_type": "keyword"
+    },
+    {
+      "query": "Where was Module: MetaEvolution, Total Cycles: 1 discussed?",
+      "memory_id": "handoff_84e307d52725",
+      "query_type": "wh_question"
+    },
+    {
+      "query": "Do you have any memory of handoff?",
+      "memory_id": "handoff_b9a111307936",
+      "query_type": "keyword"
+    },
+    {
+      "query": "Who was involved with Module: MetaEvolution, Total Cycles: 2?",
+      "memory_id": "handoff_b9a111307936",
+      "query_type": "wh_question"
+    },
+    {
+      "query": "What was recorded regarding confirmed?",
+      "memory_id": "skill_42c2894b66fb",
+      "query_type": "keyword"
+    },
+    {
+      "query": "When did # Self-Improving Memory happen?",
+      "memory_id": "skill_42c2894b66fb",
+      "query_type": "wh_question"
+    },
+    {
+      "query": "Find information related to m8-m9.",
+      "memory_id": "mem_1eeebe3b5b3143a8",
+      "query_type": "keyword"
+    },
+    {
+      "query": "When did WMS M8-M9 阶段补齐（精益与合规层）：M8 补齐增值加工 value-add-processing、任务调度 t happen?",
+      "memory_id": "mem_1eeebe3b5b3143a8",
+      "query_type": "wh_question"
+    },
+    {
+      "query": "Tell me about wms.",
+      "memory_id": "mem_bb0f876e0d5249bd",
+      "query_type": "keyword"
+    },
+    {
+      "query": "Where was WMS 合规与特色服务：效期管理 expiration-management（FEFO 规则/四级预警）、AI 关务 c discussed?",
+      "memory_id": "mem_bb0f876e0d5249bd",
+      "query_type": "wh_question"
+    },
+    {
+      "query": "Tell me about cartonization.",
+      "memory_id": "mem_bff8019bd7bc4280",
+      "query_type": "keyword"
+    },
+    {
+      "query": "When did WMS 算法层服务：上架策略引擎 putaway-engine（多维度分）、智能装箱 cartonization（3D  happen?",
+      "memory_id": "mem_bff8019bd7bc4280",
+      "query_type": "wh_question"
+    },
+    {
+      "query": "Do you have any memory of ddl?",
+      "memory_id": "mem_ac786d8fe06b4a47",
+      "query_type": "keyword"
+    },
+    {
+      "query": "Why is WMS DDL 审计经验：全量遍历 108 服务 DDL 后，发现表名重复冲突（如 counting 与 cycle-c important?",
+      "memory_id": "mem_ac786d8fe06b4a47",
+      "query_type": "wh_question"
+    },
+    {
+      "query": "Look up sbti in your memory.",
+      "memory_id": "mem_f7beb7203b9b4bcf",
+      "query_type": "keyword"
+    },
+    {
+      "query": "What is WMS 三方对标源：旺店通 WMS（PDA 操作/货主管理/增值加工/赠品策略/预售/多物流费率）、京东物流 WMS（人?",
+      "memory_id": "mem_f7beb7203b9b4bcf",
+      "query_type": "wh_question"
+    },
+    {
+      "query": "What was recorded regarding trinity?",
+      "memory_id": "pattern_aaec7e26c448",
+      "query_type": "keyword"
+    },
+    {
+      "query": "How was Trinity Active Patterns: wr=0 handled?",
+      "memory_id": "pattern_aaec7e26c448",
+      "query_type": "wh_question"
+    },
+    {
+      "query": "Do you have any memory of billing-rate-engine?",
+      "memory_id": "mem_775205cc6af64f20",
+      "query_type": "keyword"
+    },
+    {
+      "query": "How was WMS 商业金融层服务：BMS 计费费率引擎 billing-rate-engine（阶梯计价/合同模型/多维度组合计费 handled?",
+      "memory_id": "mem_775205cc6af64f20",
+      "query_type": "wh_question"
+    },
+    {
+      "query": "Search memory for marvis.",
+      "memory_id": "mem_f0c472d4dabb4719",
+      "query_type": "keyword"
+    },
+    {
+      "query": "What is Marvis 是运行在 Windows 上的桌面智能助手，基于腾讯混元 Hy3 和 DeepSeek-V4 Pro 模型?",
+      "memory_id": "mem_f0c472d4dabb4719",
+      "query_type": "wh_question"
+    },
+    {
+      "query": "Search memory for crud.",
+      "memory_id": "mem_a24e315236ca4b8a",
+      "query_type": "keyword"
+    },
+    {
+      "query": "What is WMS 客户端重构：对齐旺店通标准，涵盖 11 模块导航（入库/出库/库内/分拣/验货/货品档案/物流对接/员工管理/策?",
+      "memory_id": "mem_a24e315236ca4b8a",
+      "query_type": "wh_question"
+    },
+    {
+      "query": "Search memory for wms.",
+      "memory_id": "mem_7845f83beed649a7",
+      "query_type": "keyword"
+    },
+    {
+      "query": "Where was WMS 功能补齐项目：基于旺店通、京东物流、顺丰供应链三大标杆系统对标，共补齐 108 个微服务，分 14 个阶段（M1 discussed?",
+      "memory_id": "mem_7845f83beed649a7",
+      "query_type": "wh_question"
+    },
+    {
+      "query": "Do you have any memory of secondbrain?",
+      "memory_id": "mem_9df17d8e5e374858",
+      "query_type": "keyword"
+    },
+    {
+      "query": "Why is 三位一体架构由 ChromaDB 向量库、SecondBrain 记忆引擎、Ollama 模型调优器组成 important?",
+      "memory_id": "mem_9df17d8e5e374858",
+      "query_type": "wh_question"
+    },
+    {
+      "query": "Recall anything about trinity.",
+      "memory_id": "mem_6c7bcf017e0441f0",
+      "query_type": "keyword"
+    },
+    {
+      "query": "When did Trinity v6 happen?",
+      "memory_id": "mem_6c7bcf017e0441f0",
+      "query_type": "wh_question"
+    },
+    {
+      "query": "Recall anything about 1kg-0.",
+      "memory_id": "mem_83bf8ea2f8ee",
+      "query_type": "keyword"
+    },
+    {
+      "query": "Why is 彩棠新到重品0 important?",
+      "memory_id": "mem_83bf8ea2f8ee",
+      "query_type": "wh_question"
+    },
+    {
+      "query": "Do you have any memory of test?",
+      "memory_id": "mem_20aed1b904b44a7d",
+      "query_type": "keyword"
+    },
+    {
+      "query": "How was Test memory handled?",
+      "memory_id": "mem_20aed1b904b44a7d",
+      "query_type": "wh_question"
+    },
+    {
+      "query": "Find information related to test.",
+      "memory_id": "mem_05b294b553a14fe2",
+      "query_type": "keyword"
+    },
+    {
+      "query": "Who was involved with Test memory?",
+      "memory_id": "mem_05b294b553a14fe2",
+      "query_type": "wh_question"
+    }
+  ],
+  "contrastive_triplets": [
+    {
+      "query": "Tell me about active.",
+      "positive_id": "evo_0fb98731ad89",
+      "positive_content": "[Trinity Evolution State] Version: 1.0, Total Cycles: 5, Last Cycle: evo_085808c1ab, Active Preferences: 0, Active Patterns: 2",
+      "negative_ids": [
+        "handoff_b9a111307936",
+        "mem_7845f83beed649a7",
+        "pattern_aaec7e26c448"
+      ]
+    },
+    {
+      "query": "Why is Version: 1 important?",
+      "positive_id": "evo_0fb98731ad89",
+      "positive_content": "[Trinity Evolution State] Version: 1.0, Total Cycles: 5, Last Cycle: evo_085808c1ab, Active Preferences: 0, Active Patterns: 2",
+      "negative_ids": [
+        "handoff_77950fa922d4",
+        "skill_42c2894b66fb",
+        "pattern_aaec7e26c448"
+      ]
+    },
+    {
+      "query": "Do you have any memory of file?",
+      "positive_id": "handoff_0a0eeaf15704",
+      "positive_content": "[Trinity Handoff] Module: MetaEvolution, Total Cycles: 4\nInstructions: 1. Read this handoff file to restore evolution state; 2. Continue the Observe-Analyze-Plan-Execute-Certify loop; 3. Write updated state back to this file when done",
+      "negative_ids": [
+        "mem_6c7bcf017e0441f0",
+        "skill_42c2894b66fb",
+        "handoff_42dee3ab48b8"
+      ]
+    },
+    {
+      "query": "Who was involved with Module: MetaEvolution, Total Cycles: 4?",
+      "positive_id": "handoff_0a0eeaf15704",
+      "positive_content": "[Trinity Handoff] Module: MetaEvolution, Total Cycles: 4\nInstructions: 1. Read this handoff file to restore evolution state; 2. Continue the Observe-Analyze-Plan-Execute-Certify loop; 3. Write updated state back to this file when done",
+      "negative_ids": [
+        "mem_6c7bcf017e0441f0",
+        "skill_42c2894b66fb",
+        "handoff_790041998192"
+      ]
+    },
+    {
+      "query": "Find information related to handoff.",
+      "positive_id": "handoff_9648184442c2",
+      "positive_content": "[Trinity Handoff] Module: MetaEvolution, Total Cycles: 3\nInstructions: 1. Read this handoff file to restore evolution state; 2. Continue the Observe-Analyze-Plan-Execute-Certify loop; 3. Write updated state back to this file when done",
+      "negative_ids": [
+        "mem_a24e315236ca4b8a",
+        "mem_ac786d8fe06b4a47",
+        "handoff_b97c201146d2"
+      ]
+    },
+    {
+      "query": "Why is Module: MetaEvolution, Total Cycles: 3 important?",
+      "positive_id": "handoff_9648184442c2",
+      "positive_content": "[Trinity Handoff] Module: MetaEvolution, Total Cycles: 3\nInstructions: 1. Read this handoff file to restore evolution state; 2. Continue the Observe-Analyze-Plan-Execute-Certify loop; 3. Write updated state back to this file when done",
+      "negative_ids": [
+        "skill_42c2894b66fb",
+        "mem_6c7bcf017e0441f0",
+        "handoff_b97c201146d2"
+      ]
+    },
+    {
+      "query": "Tell me about module.",
+      "positive_id": "handoff_42dee3ab48b8",
+      "positive_content": "[Trinity Handoff] Module: MetaEvolution, Total Cycles: 3\nInstructions: 1. Read this handoff file to restore evolution state; 2. Continue the Observe-Analyze-Plan-Execute-Certify loop; 3. Write updated state back to this file when done",
+      "negative_ids": [
+        "mem_83bf8ea2f8ee",
+        "mem_1eeebe3b5b3143a8",
+        "handoff_77950fa922d4"
+      ]
+    },
+    {
+      "query": "Where was Module: MetaEvolution, Total Cycles: 3 discussed?",
+      "positive_id": "handoff_42dee3ab48b8",
+      "positive_content": "[Trinity Handoff] Module: MetaEvolution, Total Cycles: 3\nInstructions: 1. Read this handoff file to restore evolution state; 2. Continue the Observe-Analyze-Plan-Execute-Certify loop; 3. Write updated state back to this file when done",
+      "negative_ids": [
+        "skill_42c2894b66fb",
+        "mem_bb0f876e0d5249bd",
+        "handoff_9648184442c2"
+      ]
+    },
+    {
+      "query": "What do you remember about handoff?",
+      "positive_id": "handoff_b97c201146d2",
+      "positive_content": "[Trinity Handoff] Module: MetaEvolution, Total Cycles: 2\nInstructions: 1. Read this handoff file to restore evolution state; 2. Continue the Observe-Analyze-Plan-Execute-Certify loop; 3. Write updated state back to this file when done",
+      "negative_ids": [
+        "mem_775205cc6af64f20",
+        "mem_05b294b553a14fe2",
+        "handoff_790041998192"
+      ]
+    },
+    {
+      "query": "What is Module: MetaEvolution, Total Cycles: 2?",
+      "positive_id": "handoff_b97c201146d2",
+      "positive_content": "[Trinity Handoff] Module: MetaEvolution, Total Cycles: 2\nInstructions: 1. Read this handoff file to restore evolution state; 2. Continue the Observe-Analyze-Plan-Execute-Certify loop; 3. Write updated state back to this file when done",
+      "negative_ids": [
+        "mem_7845f83beed649a7",
+        "mem_05b294b553a14fe2",
+        "handoff_790041998192"
+      ]
+    },
+    {
+      "query": "Search memory for file.",
+      "positive_id": "handoff_790041998192",
+      "positive_content": "[Trinity Handoff] Module: MetaEvolution, Total Cycles: 2\nInstructions: 1. Read this handoff file to restore evolution state; 2. Continue the Observe-Analyze-Plan-Execute-Certify loop; 3. Write updated state back to this file when done",
+      "negative_ids": [
+        "mem_ac786d8fe06b4a47",
+        "mem_bff8019bd7bc4280",
+        "handoff_b97c201146d2"
+      ]
+    },
+    {
+      "query": "How was Module: MetaEvolution, Total Cycles: 2 handled?",
+      "positive_id": "handoff_790041998192",
+      "positive_content": "[Trinity Handoff] Module: MetaEvolution, Total Cycles: 2\nInstructions: 1. Read this handoff file to restore evolution state; 2. Continue the Observe-Analyze-Plan-Execute-Certify loop; 3. Write updated state back to this file when done",
+      "negative_ids": [
+        "mem_bff8019bd7bc4280",
+        "mem_83bf8ea2f8ee",
+        "handoff_84e307d52725"
+      ]
+    },
+    {
+      "query": "What do you remember about module?",
+      "positive_id": "handoff_77950fa922d4",
+      "positive_content": "[Trinity Handoff] Module: MetaEvolution, Total Cycles: 2\nInstructions: 1. Read this handoff file to restore evolution state; 2. Continue the Observe-Analyze-Plan-Execute-Certify loop; 3. Write updated state back to this file when done",
+      "negative_ids": [
+        "mem_1eeebe3b5b3143a8",
+        "mem_f0c472d4dabb4719",
+        "handoff_0a0eeaf15704"
+      ]
+    },
+    {
+      "query": "Who was involved with Module: MetaEvolution, Total Cycles: 2?",
+      "positive_id": "handoff_77950fa922d4",
+      "positive_content": "[Trinity Handoff] Module: MetaEvolution, Total Cycles: 2\nInstructions: 1. Read this handoff file to restore evolution state; 2. Continue the Observe-Analyze-Plan-Execute-Certify loop; 3. Write updated state back to this file when done",
+      "negative_ids": [
+        "mem_7845f83beed649a7",
+        "mem_1eeebe3b5b3143a8",
+        "handoff_42dee3ab48b8"
+      ]
+    },
+    {
+      "query": "What was recorded regarding file?",
+      "positive_id": "handoff_84e307d52725",
+      "positive_content": "[Trinity Handoff] Module: MetaEvolution, Total Cycles: 1\nInstructions: 1. Read this handoff file to restore evolution state; 2. Continue the Observe-Analyze-Plan-Execute-Certify loop; 3. Write updated state back to this file when done",
+      "negative_ids": [
+        "mem_9df17d8e5e374858",
+        "mem_05b294b553a14fe2",
+        "handoff_0a0eeaf15704"
+      ]
+    },
+    {
+      "query": "Where was Module: MetaEvolution, Total Cycles: 1 discussed?",
+      "positive_id": "handoff_84e307d52725",
+      "positive_content": "[Trinity Handoff] Module: MetaEvolution, Total Cycles: 1\nInstructions: 1. Read this handoff file to restore evolution state; 2. Continue the Observe-Analyze-Plan-Execute-Certify loop; 3. Write updated state back to this file when done",
+      "negative_ids": [
+        "mem_775205cc6af64f20",
+        "mem_7845f83beed649a7",
+        "handoff_790041998192"
+      ]
+    },
+    {
+      "query": "Do you have any memory of handoff?",
+      "positive_id": "handoff_b9a111307936",
+      "positive_content": "[Trinity Handoff] Module: MetaEvolution, Total Cycles: 2\nInstructions: 1. Read this handoff file to restore evolution state; 2. Continue the Observe-Analyze-Plan-Execute-Certify loop; 3. Write updated state back to this file when done",
+      "negative_ids": [
+        "mem_ac786d8fe06b4a47",
+        "mem_20aed1b904b44a7d",
+        "handoff_790041998192"
+      ]
+    },
+    {
+      "query": "Who was involved with Module: MetaEvolution, Total Cycles: 2?",
+      "positive_id": "handoff_b9a111307936",
+      "positive_content": "[Trinity Handoff] Module: MetaEvolution, Total Cycles: 2\nInstructions: 1. Read this handoff file to restore evolution state; 2. Continue the Observe-Analyze-Plan-Execute-Certify loop; 3. Write updated state back to this file when done",
+      "negative_ids": [
+        "mem_775205cc6af64f20",
+        "mem_ac786d8fe06b4a47",
+        "handoff_790041998192"
+      ]
+    },
+    {
+      "query": "What was recorded regarding confirmed?",
+      "positive_id": "skill_42c2894b66fb",
+      "positive_content": "# Self-Improving Memory\n\n## Confirmed Preferences\n- Chinese communication, structured output\n\n## Active Patterns\n- Pattern detected 3+ times\n\n## Recent\n- Updated: 2026-07-15T08:27:59.468906\n",
+      "negative_ids": [
+        "mem_f7beb7203b9b4bcf",
+        "handoff_790041998192",
+        "handoff_77950fa922d4"
+      ]
+    },
+    {
+      "query": "When did # Self-Improving Memory happen?",
+      "positive_id": "skill_42c2894b66fb",
+      "positive_content": "# Self-Improving Memory\n\n## Confirmed Preferences\n- Chinese communication, structured output\n\n## Active Patterns\n- Pattern detected 3+ times\n\n## Recent\n- Updated: 2026-07-15T08:27:59.468906\n",
+      "negative_ids": [
+        "mem_20aed1b904b44a7d",
+        "mem_9df17d8e5e374858",
+        "mem_775205cc6af64f20"
+      ]
+    },
+    {
+      "query": "Find information related to m8-m9.",
+      "positive_id": "mem_1eeebe3b5b3143a8",
+      "positive_content": "WMS M8-M9 阶段补齐（精益与合规层）：M8 补齐增值加工 value-add-processing、任务调度 task-scheduler、促销赠品 promo-gift、智能补货 smart-replenishment、逆向物流增强 reverse-logistics-v2、容器管理 container-management。M9 补齐越库直通 cross-dock、货位优化引擎 slotting-optimizer（ABC-XYZ 分类+关联聚类亲和矩阵）、循环盘点 cycle-count、承运商管理 carrier-management（多物流费率）、碳排放追踪 carbon-tracking（Scope1-3/SBTi）、EDI 数据交换 edi-exchange（EDIFACT 850/856/810 标准报文）。",
+      "negative_ids": [
+        "handoff_0a0eeaf15704",
+        "handoff_9648184442c2",
+        "mem_7845f83beed649a7"
+      ]
+    },
+    {
+      "query": "When did WMS M8-M9 阶段补齐（精益与合规层）：M8 补齐增值加工 value-add-processing、任务调度 t happen?",
+      "positive_id": "mem_1eeebe3b5b3143a8",
+      "positive_content": "WMS M8-M9 阶段补齐（精益与合规层）：M8 补齐增值加工 value-add-processing、任务调度 task-scheduler、促销赠品 promo-gift、智能补货 smart-replenishment、逆向物流增强 reverse-logistics-v2、容器管理 container-management。M9 补齐越库直通 cross-dock、货位优化引擎 slotting-optimizer（ABC-XYZ 分类+关联聚类亲和矩阵）、循环盘点 cycle-count、承运商管理 carrier-management（多物流费率）、碳排放追踪 carbon-tracking（Scope1-3/SBTi）、EDI 数据交换 edi-exchange（EDIFACT 850/856/810 标准报文）。",
+      "negative_ids": [
+        "handoff_0a0eeaf15704",
+        "handoff_84e307d52725",
+        "mem_a24e315236ca4b8a"
+      ]
+    },
+    {
+      "query": "Tell me about wms.",
+      "positive_id": "mem_bb0f876e0d5249bd",
+      "positive_content": "WMS 合规与特色服务：效期管理 expiration-management（FEFO 规则/四级预警）、AI 关务 customs-brokerage（HS 归类/100+国规则引擎）、包材合规 packaging-material（GB 新国标）、拣选设备编排 pick-device-orchestrator（PTL/语音/AR 多模式）、套装 Kitting bundle-kit-assembly、运单面单 manifest-waybill、仓储绩效对标 warehouse-benchmark（5 级成熟度模型）。",
+      "negative_ids": [
+        "handoff_9648184442c2",
+        "pattern_aaec7e26c448",
+        "mem_bff8019bd7bc4280"
+      ]
+    },
+    {
+      "query": "Where was WMS 合规与特色服务：效期管理 expiration-management（FEFO 规则/四级预警）、AI 关务 c discussed?",
+      "positive_id": "mem_bb0f876e0d5249bd",
+      "positive_content": "WMS 合规与特色服务：效期管理 expiration-management（FEFO 规则/四级预警）、AI 关务 customs-brokerage（HS 归类/100+国规则引擎）、包材合规 packaging-material（GB 新国标）、拣选设备编排 pick-device-orchestrator（PTL/语音/AR 多模式）、套装 Kitting bundle-kit-assembly、运单面单 manifest-waybill、仓储绩效对标 warehouse-benchmark（5 级成熟度模型）。",
+      "negative_ids": [
+        "handoff_b9a111307936",
+        "mem_83bf8ea2f8ee",
+        "mem_bff8019bd7bc4280"
+      ]
+    },
+    {
+      "query": "Tell me about cartonization.",
+      "positive_id": "mem_bff8019bd7bc4280",
+      "positive_content": "WMS 算法层服务：上架策略引擎 putaway-engine（多维度分）、智能装箱 cartonization（3D bin packing）、波次引擎 wave-engine（遗传+模拟退火）、拣选路径优化 pick-path-optimizer。属于 M12-M14 阶段产出，是 Tier-1 WMS 核心能力。",
+      "negative_ids": [
+        "skill_42c2894b66fb",
+        "handoff_84e307d52725",
+        "mem_775205cc6af64f20"
+      ]
+    },
+    {
+      "query": "When did WMS 算法层服务：上架策略引擎 putaway-engine（多维度分）、智能装箱 cartonization（3D  happen?",
+      "positive_id": "mem_bff8019bd7bc4280",
+      "positive_content": "WMS 算法层服务：上架策略引擎 putaway-engine（多维度分）、智能装箱 cartonization（3D bin packing）、波次引擎 wave-engine（遗传+模拟退火）、拣选路径优化 pick-path-optimizer。属于 M12-M14 阶段产出，是 Tier-1 WMS 核心能力。",
+      "negative_ids": [
+        "handoff_9648184442c2",
+        "handoff_b97c201146d2",
+        "mem_20aed1b904b44a7d"
+      ]
+    },
+    {
+      "query": "Do you have any memory of ddl?",
+      "positive_id": "mem_ac786d8fe06b4a47",
+      "positive_content": "WMS DDL 审计经验：全量遍历 108 服务 DDL 后，发现表名重复冲突（如 counting 与 cycle-count-service 的 count_plans）、6 个空壳服务（有代码无 DDL）、跨服务依赖无外键约束、billing 缺少组合计费表、inventory 缺少锁库表等问题。每张新表通过 COMMENT 标注对标来源。",
+      "negative_ids": [
+        "handoff_0a0eeaf15704",
+        "skill_42c2894b66fb",
+        "mem_bb0f876e0d5249bd"
+      ]
+    },
+    {
+      "query": "Why is WMS DDL 审计经验：全量遍历 108 服务 DDL 后，发现表名重复冲突（如 counting 与 cycle-c important?",
+      "positive_id": "mem_ac786d8fe06b4a47",
+      "positive_content": "WMS DDL 审计经验：全量遍历 108 服务 DDL 后，发现表名重复冲突（如 counting 与 cycle-count-service 的 count_plans）、6 个空壳服务（有代码无 DDL）、跨服务依赖无外键约束、billing 缺少组合计费表、inventory 缺少锁库表等问题。每张新表通过 COMMENT 标注对标来源。",
+      "negative_ids": [
+        "mem_83bf8ea2f8ee",
+        "handoff_790041998192",
+        "mem_20aed1b904b44a7d"
+      ]
+    },
+    {
+      "query": "Look up sbti in your memory.",
+      "positive_id": "mem_f7beb7203b9b4bcf",
+      "positive_content": "WMS 三方对标源：旺店通 WMS（PDA 操作/货主管理/增值加工/赠品策略/预售/多物流费率）、京东物流 WMS（人力调度/计件工资/任务调度/补货算法/越库/货位优化/盘点/200+API）、顺丰供应链 WMS（仓网规划/IoT 平台/逆向质检闭环/容器循环/碳核算 SBTi/EDI EDIFACT/月台调度）。",
+      "negative_ids": [
+        "handoff_77950fa922d4",
+        "handoff_84e307d52725",
+        "mem_bb0f876e0d5249bd"
+      ]
+    },
+    {
+      "query": "What is WMS 三方对标源：旺店通 WMS（PDA 操作/货主管理/增值加工/赠品策略/预售/多物流费率）、京东物流 WMS（人?",
+      "positive_id": "mem_f7beb7203b9b4bcf",
+      "positive_content": "WMS 三方对标源：旺店通 WMS（PDA 操作/货主管理/增值加工/赠品策略/预售/多物流费率）、京东物流 WMS（人力调度/计件工资/任务调度/补货算法/越库/货位优化/盘点/200+API）、顺丰供应链 WMS（仓网规划/IoT 平台/逆向质检闭环/容器循环/碳核算 SBTi/EDI EDIFACT/月台调度）。",
+      "negative_ids": [
+        "handoff_84e307d52725",
+        "evo_0fb98731ad89",
+        "mem_bff8019bd7bc4280"
+      ]
+    },
+    {
+      "query": "What was recorded regarding trinity?",
+      "positive_id": "pattern_aaec7e26c448",
+      "positive_content": "Trinity Active Patterns: wr=0.3, warehouse=0.3",
+      "negative_ids": [
+        "handoff_84e307d52725",
+        "handoff_b9a111307936",
+        "evo_0fb98731ad89"
+      ]
+    },
+    {
+      "query": "How was Trinity Active Patterns: wr=0 handled?",
+      "positive_id": "pattern_aaec7e26c448",
+      "positive_content": "Trinity Active Patterns: wr=0.3, warehouse=0.3",
+      "negative_ids": [
+        "handoff_0a0eeaf15704",
+        "handoff_84e307d52725",
+        "evo_0fb98731ad89"
+      ]
+    },
+    {
+      "query": "Do you have any memory of billing-rate-engine?",
+      "positive_id": "mem_775205cc6af64f20",
+      "positive_content": "WMS 商业金融层服务：BMS 计费费率引擎 billing-rate-engine（阶梯计价/合同模型/多维度组合计费）、理赔管理 claims-management（区块链存证+AI 定损）。补齐后实现仓储物流全链路商业闭环。",
+      "negative_ids": [
+        "handoff_b9a111307936",
+        "mem_83bf8ea2f8ee",
+        "mem_7845f83beed649a7"
+      ]
+    },
+    {
+      "query": "How was WMS 商业金融层服务：BMS 计费费率引擎 billing-rate-engine（阶梯计价/合同模型/多维度组合计费 handled?",
+      "positive_id": "mem_775205cc6af64f20",
+      "positive_content": "WMS 商业金融层服务：BMS 计费费率引擎 billing-rate-engine（阶梯计价/合同模型/多维度组合计费）、理赔管理 claims-management（区块链存证+AI 定损）。补齐后实现仓储物流全链路商业闭环。",
+      "negative_ids": [
+        "handoff_b9a111307936",
+        "pattern_aaec7e26c448",
+        "mem_7845f83beed649a7"
+      ]
+    },
+    {
+      "query": "Search memory for marvis.",
+      "positive_id": "mem_f0c472d4dabb4719",
+      "positive_content": "Marvis 是运行在 Windows 上的桌面智能助手，基于腾讯混元 Hy3 和 DeepSeek-V4 Pro 模型",
+      "negative_ids": [
+        "evo_0fb98731ad89",
+        "handoff_0a0eeaf15704",
+        "mem_7845f83beed649a7"
+      ]
+    },
+    {
+      "query": "What is Marvis 是运行在 Windows 上的桌面智能助手，基于腾讯混元 Hy3 和 DeepSeek-V4 Pro 模型?",
+      "positive_id": "mem_f0c472d4dabb4719",
+      "positive_content": "Marvis 是运行在 Windows 上的桌面智能助手，基于腾讯混元 Hy3 和 DeepSeek-V4 Pro 模型",
+      "negative_ids": [
+        "handoff_0a0eeaf15704",
+        "handoff_42dee3ab48b8",
+        "mem_7845f83beed649a7"
+      ]
+    },
+    {
+      "query": "Search memory for crud.",
+      "positive_id": "mem_a24e315236ca4b8a",
+      "positive_content": "WMS 客户端重构：对齐旺店通标准，涵盖 11 模块导航（入库/出库/库内/分拣/验货/货品档案/物流对接/员工管理/策略规则/报表/系统设置），每页面强制增删改停用按钮+搜索筛选分页+模态弹窗+深色主题，补齐分拣单/验货/物流对接/员工账号CRUD/库位地图/货品档案等缺失页面。",
+      "negative_ids": [
+        "handoff_77950fa922d4",
+        "mem_83bf8ea2f8ee",
+        "mem_20aed1b904b44a7d"
+      ]
+    },
+    {
+      "query": "What is WMS 客户端重构：对齐旺店通标准，涵盖 11 模块导航（入库/出库/库内/分拣/验货/货品档案/物流对接/员工管理/策?",
+      "positive_id": "mem_a24e315236ca4b8a",
+      "positive_content": "WMS 客户端重构：对齐旺店通标准，涵盖 11 模块导航（入库/出库/库内/分拣/验货/货品档案/物流对接/员工管理/策略规则/报表/系统设置），每页面强制增删改停用按钮+搜索筛选分页+模态弹窗+深色主题，补齐分拣单/验货/物流对接/员工账号CRUD/库位地图/货品档案等缺失页面。",
+      "negative_ids": [
+        "handoff_9648184442c2",
+        "handoff_b97c201146d2",
+        "mem_ac786d8fe06b4a47"
+      ]
+    },
+    {
+      "query": "Search memory for wms.",
+      "positive_id": "mem_7845f83beed649a7",
+      "positive_content": "WMS 功能补齐项目：基于旺店通、京东物流、顺丰供应链三大标杆系统对标，共补齐 108 个微服务，分 14 个阶段（M1-M14）。基础出入库/库存/退货等运营层模块优先覆盖，中后期转向算法密集型、商业金融、专项合规三大深层缺口。",
+      "negative_ids": [
+        "handoff_b9a111307936",
+        "mem_83bf8ea2f8ee",
+        "mem_a24e315236ca4b8a"
+      ]
+    },
+    {
+      "query": "Where was WMS 功能补齐项目：基于旺店通、京东物流、顺丰供应链三大标杆系统对标，共补齐 108 个微服务，分 14 个阶段（M1 discussed?",
+      "positive_id": "mem_7845f83beed649a7",
+      "positive_content": "WMS 功能补齐项目：基于旺店通、京东物流、顺丰供应链三大标杆系统对标，共补齐 108 个微服务，分 14 个阶段（M1-M14）。基础出入库/库存/退货等运营层模块优先覆盖，中后期转向算法密集型、商业金融、专项合规三大深层缺口。",
+      "negative_ids": [
+        "mem_83bf8ea2f8ee",
+        "evo_0fb98731ad89",
+        "mem_1eeebe3b5b3143a8"
+      ]
+    },
+    {
+      "query": "Do you have any memory of secondbrain?",
+      "positive_id": "mem_9df17d8e5e374858",
+      "positive_content": "三位一体架构由 ChromaDB 向量库、SecondBrain 记忆引擎、Ollama 模型调优器组成",
+      "negative_ids": [
+        "handoff_b9a111307936",
+        "evo_0fb98731ad89",
+        "mem_7845f83beed649a7"
+      ]
+    },
+    {
+      "query": "Why is 三位一体架构由 ChromaDB 向量库、SecondBrain 记忆引擎、Ollama 模型调优器组成 important?",
+      "positive_id": "mem_9df17d8e5e374858",
+      "positive_content": "三位一体架构由 ChromaDB 向量库、SecondBrain 记忆引擎、Ollama 模型调优器组成",
+      "negative_ids": [
+        "mem_83bf8ea2f8ee",
+        "handoff_790041998192",
+        "mem_20aed1b904b44a7d"
+      ]
+    },
+    {
+      "query": "Recall anything about trinity.",
+      "positive_id": "mem_6c7bcf017e0441f0",
+      "positive_content": "Trinity v6.37 是 AGI 长期记忆系统，包含 122 模块、50 级守护链、47 检索通道",
+      "negative_ids": [
+        "handoff_9648184442c2",
+        "handoff_b9a111307936",
+        "mem_775205cc6af64f20"
+      ]
+    },
+    {
+      "query": "When did Trinity v6 happen?",
+      "positive_id": "mem_6c7bcf017e0441f0",
+      "positive_content": "Trinity v6.37 是 AGI 长期记忆系统，包含 122 模块、50 级守护链、47 检索通道",
+      "negative_ids": [
+        "handoff_b9a111307936",
+        "handoff_9648184442c2",
+        "mem_f0c472d4dabb4719"
+      ]
+    },
+    {
+      "query": "Recall anything about 1kg-0.",
+      "positive_id": "mem_83bf8ea2f8ee",
+      "positive_content": "彩棠新到重品0.1kg-0.3kg应放第一层货架",
+      "negative_ids": [
+        "handoff_84e307d52725",
+        "mem_7845f83beed649a7",
+        "handoff_9648184442c2"
+      ]
+    },
+    {
+      "query": "Why is 彩棠新到重品0 important?",
+      "positive_id": "mem_83bf8ea2f8ee",
+      "positive_content": "彩棠新到重品0.1kg-0.3kg应放第一层货架",
+      "negative_ids": [
+        "mem_f7beb7203b9b4bcf",
+        "mem_1eeebe3b5b3143a8",
+        "mem_05b294b553a14fe2"
+      ]
+    },
+    {
+      "query": "Do you have any memory of test?",
+      "positive_id": "mem_20aed1b904b44a7d",
+      "positive_content": "Test memory",
+      "negative_ids": [
+        "handoff_b9a111307936",
+        "handoff_9648184442c2",
+        "mem_1eeebe3b5b3143a8"
+      ]
+    },
+    {
+      "query": "How was Test memory handled?",
+      "positive_id": "mem_20aed1b904b44a7d",
+      "positive_content": "Test memory",
+      "negative_ids": [
+        "handoff_0a0eeaf15704",
+        "evo_0fb98731ad89",
+        "mem_1eeebe3b5b3143a8"
+      ]
+    },
+    {
+      "query": "Find information related to test.",
+      "positive_id": "mem_05b294b553a14fe2",
+      "positive_content": "Test memory",
+      "negative_ids": [
+        "handoff_9648184442c2",
+        "handoff_42dee3ab48b8",
+        "mem_1eeebe3b5b3143a8"
+      ]
+    },
+    {
+      "query": "Who was involved with Test memory?",
+      "positive_id": "mem_05b294b553a14fe2",
+      "positive_content": "Test memory",
+      "negative_ids": [
+        "handoff_0a0eeaf15704",
+        "handoff_790041998192",
+        "mem_1eeebe3b5b3143a8"
+      ]
+    }
+  ]
+}
