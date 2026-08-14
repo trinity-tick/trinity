@@ -805,3 +805,28 @@ Remove-Item trinity/daemon/session_state.py, benchmark/channel_attribution_seman
 # benchmark/answer_eval.py 保留（第九轮产物，GEN-1 为增量增强；回滚则 checkout）
 git -C C:\Users\Administrator\trinity checkout -- benchmark/answer_eval.py
 ```
+
+---
+
+### 12.6 环境修复轮（2026-08-14，PG 恢复 / 服务复原 / RBAC 适配）
+
+> 本条目为并行会话的环境修复记录（与上方 12.1-12.5 的 OPT 工作独立）。
+
+#### 12.6.1 原生 PostgreSQL 恢复 ✅
+
+- 现象：原生 PG16 服务 Stopped，5432 被 smartcos-postgres 容器占用 → Trinity 原生栈 PG 后端不可用。
+- 处理：Docker 停止后端口释放，原生 postgres 重新绑定 **127.0.0.1:5432**（PID 52836）；验证 `trinity.memories=1040`、`memory_versions=24` **数据完好**。
+- 连带：**MCP SSE(:8000)** 原被 Docker trinity-mcp 容器占用，Docker 停止后由 supervisor 拉起原生实例（PID 65468）；**API(:8001)** 重启（PID 63856）；**autostart 循环**已重启（PID 33176，15:45 日志确认）。
+- 注：API 的 `/memories/stats` 走 aggregator 的 SQLite 池（设计使然），PG 是后台任务（decay/tiers/归档）存储层。
+
+#### 12.6.2 e2e 测试 RBAC 适配 ✅
+
+- 现象：`test_e2e_multi_agent.py` 失败——POST /agents/memory/write 401（他人新增 RBACMiddleware 默认 default-deny，受保护路由需 `X-Agent-ID`）。
+- 修复：`trinity/tests/conftest.py` 的 `marvis_adapter` fixture 给 session 加 `X-Agent-ID: marvis-main` + `X-Agent-Role: admin`。
+- 说明：RBAC 为并行开发功能（`trinity/api/rbac_middleware.py`，未提交），默认开启属设计；测试客户端适配后不再 401。
+
+#### 12.6.3 已知环境限制（需用户处理）
+
+- **内存压力**：vmmem(Docker/WSL) 8.2GB + node 6.9GB 占满 32GB → 反复出现 OOM/paging-file 错误，e2e（需第二个完整 API 实例）与全量 pytest 不稳定（曾 20/22 e2e 通过、11 failed 疑似他人改动+内存混合）。建议：`wsl --shutdown` 释放 vmmem；排查 6.9GB node 进程（疑似 DSH web 宿主内存泄漏）。
+- **register 500**：`/a2a/agents/register` 在低内存下 500（Trinity() 构造 MemoryError 被 error middleware 转 500），内存充足时需复测确认。
+- **他人并行改动**（a2a_memory/cache/client/hybrid_retriever/rbac/plugins 等未提交）已使 pytest 基线偏离 135/33/0；待内存充足后统一排查回归。

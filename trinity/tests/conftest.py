@@ -121,6 +121,12 @@ def marvis_adapter(trinity_server):
     """Create a MarvisAdapter instance pointed at the test server."""
     from trinity.a2a.adapters.marvis_adapter import MarvisAdapter
     adapter = MarvisAdapter(trinity_base_url=TRINITY_URL, agent_id="marvis-main")
+    # RBAC middleware (default-deny) requires agent identity headers on
+    # protected routes; the test client acts as the marvis orchestrator.
+    adapter._session.headers.update({
+        "X-Agent-ID": "marvis-main",
+        "X-Agent-Role": "admin",
+    })
     # Register the Marvis orchestrator card
     try:
         adapter.register_marvis_agent_card()
