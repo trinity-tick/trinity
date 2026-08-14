@@ -409,6 +409,7 @@ class SQLiteAdapter(StorageAdapter):
         # Ensure default tenant exists
         cursor.execute("INSERT OR IGNORE INTO tenants (tenant_id, name) VALUES (?, ?)",
                       ("default", "default"))
+        self._conn.commit()  # 立即提交，避免未提交写事务长期占用锁（多进程共享大库时导致 database is locked）
 
     def _create_fts5(self) -> None:
         """创建 FTS5 虚拟表及同步触发器。
@@ -573,6 +574,7 @@ class SQLiteAdapter(StorageAdapter):
             audit_id, memory_id, action, agent_id, persona_id, now,
             details_json, chain_checksum,
         ))
+        conn.commit()  # 立即提交，否则每次 search 都会挂一个未提交写事务，永久占用库锁（database is locked）
 
     # ── 向后兼容：旧调用者转发 ───────────────────────────────────
     def _write_audit_log(self, action: str, memory_id: str = None,
