@@ -547,7 +547,7 @@ class PostgreSQLAdapter(StorageAdapter):
 
         with self._get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                cur.execute("SELECT * FROM memories WHERE memory_id = %s::uuid", (memory_id,))
+                cur.execute("SELECT * FROM memories WHERE memory_id = %s", (memory_id,))
                 row = cur.fetchone()
                 return dict(row) if row else None
 
@@ -574,7 +574,7 @@ class PostgreSQLAdapter(StorageAdapter):
         with self._get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "UPDATE memories SET status = 'deleted', updated_at = NOW() WHERE memory_id = %s::uuid",
+                    "UPDATE memories SET status = 'deleted', updated_at = NOW() WHERE memory_id = %s",
                     (memory_id,)
                 )
                 conn.commit()
@@ -594,7 +594,7 @@ class PostgreSQLAdapter(StorageAdapter):
         with self._get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 # Get current memory
-                cur.execute("SELECT * FROM memories WHERE memory_id = %s::uuid", (memory_id,))
+                cur.execute("SELECT * FROM memories WHERE memory_id = %s", (memory_id,))
                 current = cur.fetchone()
                 if not current:
                     return None
@@ -627,7 +627,7 @@ class PostgreSQLAdapter(StorageAdapter):
 
                 params.append(memory_id)
 
-                update_sql = f"UPDATE memories SET {', '.join(updates)} WHERE memory_id = %s::uuid"
+                update_sql = f"UPDATE memories SET {', '.join(updates)} WHERE memory_id = %s"
                 cur.execute(update_sql, params)
 
                 # Version trail
@@ -642,7 +642,7 @@ class PostgreSQLAdapter(StorageAdapter):
                 conn.commit()
 
                 # Return updated memory
-                cur.execute("SELECT * FROM memories WHERE memory_id = %s::uuid", (memory_id,))
+                cur.execute("SELECT * FROM memories WHERE memory_id = %s", (memory_id,))
                 row = cur.fetchone()
                 return dict(row) if row else None
 
@@ -655,7 +655,7 @@ class PostgreSQLAdapter(StorageAdapter):
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 cur.execute("""
                     SELECT * FROM memory_versions
-                    WHERE memory_id = %s::uuid ORDER BY created_at ASC
+                    WHERE memory_id = %s ORDER BY created_at ASC
                 """, (memory_id,))
                 return [dict(row) for row in cur.fetchall()]
 
@@ -695,7 +695,7 @@ class PostgreSQLAdapter(StorageAdapter):
                         SET last_accessed_at = %s::timestamptz,
                             access_count = access_count + 1,
                             updated_at = %s::timestamptz
-                        WHERE memory_id = %s::uuid
+                        WHERE memory_id = %s
                     """, (now, now, memory_id))
                     conn.commit()
                     return cur.rowcount > 0
@@ -856,7 +856,7 @@ class PostgreSQLAdapter(StorageAdapter):
             with self._get_conn() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                     cur.execute("""
-                        SELECT conflict_group_id FROM memories WHERE memory_id = %s::uuid
+                        SELECT conflict_group_id FROM memories WHERE memory_id = %s
                     """, (memory_id,))
                     row = cur.fetchone()
                     if not row or not row["conflict_group_id"]:
@@ -867,7 +867,7 @@ class PostgreSQLAdapter(StorageAdapter):
                         SELECT memory_id, content, content_hash, is_resolved,
                                created_at, updated_at, status
                         FROM memories
-                        WHERE conflict_group_id = %s::uuid
+                        WHERE conflict_group_id = %s
                         ORDER BY created_at ASC
                     """, (str(cgid),))
                     conflicts = [dict(r) for r in cur.fetchall()]
@@ -893,13 +893,13 @@ class PostgreSQLAdapter(StorageAdapter):
                 with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                     cur.execute("""
                         UPDATE memories SET is_resolved = TRUE, updated_at = %s
-                        WHERE memory_id = %s::uuid AND conflict_group_id = %s::uuid
+                        WHERE memory_id = %s AND conflict_group_id = %s
                     """, (now, keep_memory_id, conflict_group_id))
 
                     cur.execute("""
                         SELECT memory_id FROM memories
-                        WHERE conflict_group_id = %s::uuid
-                          AND memory_id != %s::uuid
+                        WHERE conflict_group_id = %s
+                          AND memory_id != %s
                           AND status = 'active'
                     """, (conflict_group_id, keep_memory_id))
                     discard_ids = [r["memory_id"] for r in cur.fetchall()]
@@ -907,7 +907,7 @@ class PostgreSQLAdapter(StorageAdapter):
                     if discard_ids:
                         cur.execute("""
                             UPDATE memories SET status = 'expired', is_resolved = TRUE, updated_at = %s
-                            WHERE memory_id = ANY(%s::uuid[])
+                            WHERE memory_id::text = ANY(%s::text[])
                         """, (now, discard_ids))
 
                     conn.commit()

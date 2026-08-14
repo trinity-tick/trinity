@@ -221,7 +221,7 @@ def run_decay_compress(
         try:
             result = compressor.compress_batch(batch_mems, memory_type)
 
-            if result.status == CompressionStatus.SUCCESS:
+            if result.status.name == "SUCCESS":  # 不引用 CompressionStatus（它只在 main() 局部绑定）
                 stats["compressed_summaries"] += 1
                 stats["archived_memories"] += len(result.archived_ids)
                 c = result.compressed

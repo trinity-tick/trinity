@@ -49,6 +49,10 @@ from .strategies import (
     InterventionLevel,
     create_default_strategies,
 )
+# MetaEvolution（Observe→Analyze→Plan→Execute→Certify 循环引擎）——
+# 此前未在此导出，导致 `from trinity.evolution import MetaEvolution`
+# （trinity_init.py 的用法）报 ImportError。
+from .core import MetaEvolution, EvolutionCycle, EvolutionPhase, EvolutionState
 
 __all__ = [
     # usage_analyzer
@@ -85,4 +89,9 @@ __all__ = [
     "EvolutionStrategy",
     "InterventionLevel",
     "create_default_strategies",
+    # core
+    "MetaEvolution",
+    "EvolutionCycle",
+    "EvolutionPhase",
+    "EvolutionState",
 ]

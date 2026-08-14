@@ -493,13 +493,28 @@ async def rate_limit_middleware(request: Request, call_next):
 
 @app.middleware("http")
 async def request_logging_middleware(request: Request, call_next):
-    """Structured request logging."""
+    """Structured request logging + OpenTelemetry-compatible trace span."""
+    from trinity.telemetry import get_tracer
+
+    tracer = get_tracer()
+    span = tracer.start_span("api.request", attributes={"method": request.method, "path": request.url.path})
     start = time.time()
-    response = await call_next(request)
-    elapsed = (time.time() - start) * 1000
-    # Structured log line (could go to file, stdout for now)
-    print(f'[api] {request.method} {request.url.path} →{response.status_code} ({elapsed:.1f}ms)')
-    return response
+    status = 500
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        return response
+    except Exception as exc:
+        span.error(exc)
+        raise
+    finally:
+        elapsed = (time.time() - start) * 1000
+        print(f'[api] {request.method} {request.url.path} →{status} ({elapsed:.1f}ms)')
+        span.set_attribute("status", status)
+        span.set_attribute("elapsed_ms", round(elapsed, 1))
+        span.ok()
+        span.finish()
+        tracer.end_span(span)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -2929,6 +2944,18 @@ async def dashboard():
     if html_path.exists():
         return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
     return HTMLResponse(content="<h1>Trinity Dashboard</h1><p>Static files not found.</p>")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# GraphQL（strawberry）— 此前 schema 存在但从未挂载，这里接入 FastAPI
+# ═══════════════════════════════════════════════════════════════════════════
+try:
+    from strawberry.fastapi import GraphQLRouter
+    from trinity.api.graphql_schema import schema as _trinity_graphql_schema
+    app.include_router(GraphQLRouter(_trinity_graphql_schema), prefix="/graphql")
+    logger.info("GraphQL router mounted at /graphql")
+except Exception as _gql_err:  # pragma: no cover — 缺依赖时仅降级不阻断
+    logger.warning("GraphQL router not mounted: %s", _gql_err)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

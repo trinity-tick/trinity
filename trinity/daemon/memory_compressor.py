@@ -376,7 +376,7 @@ class MemoryCompressor:
                     with conn.cursor() as cur:
                         cur.execute(
                             "UPDATE memories SET status = 'archived', "
-                            "updated_at = NOW() WHERE memory_id = %s::uuid",
+                            "updated_at = NOW() WHERE memory_id::text = %s",
                             (mem_id,),
                         )
                         conn.commit()

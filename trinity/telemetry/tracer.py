@@ -212,6 +212,17 @@ class Tracer:
         self._enabled = _TELEMETRY_ENABLED
         self._exported_count: int = 0
         self._dropped_count: int = 0
+        self._stop_event = threading.Event()
+        # Start the background OTLP exporter (daemon thread: never blocks exit).
+        # Previously the thread was created but never started, so spans were
+        # buffered forever and telemetry was dead code.
+        if self._enabled:
+            self._export_thread = threading.Thread(
+                target=self._export_loop,
+                name=f"trinity-otel-exporter-{id(self)}",
+                daemon=True,
+            )
+            self._export_thread.start()
 
     # ── Span Lifecycle ──────────────────────────────────────────────
 
@@ -330,16 +341,8 @@ class Tracer:
 
     # ── Export ──────────────────────────────────────────────────────
 
-    def export_spans(self) -> Dict[str, Any]:
-        """Export all completed spans as OTLP-compatible JSON.
-
-        Returns:
-            Dict with resource_spans array for OTLP ingestion.
-        """
-        with self._lock:
-            spans = list(self._spans)
-            self._spans.clear()
-
+    def _build_payload(self, spans: List[Span]) -> Dict[str, Any]:
+        """Build an OTLP-compatible payload from a list of spans."""
         if not spans:
             return {"resourceSpans": []}
 
@@ -359,19 +362,34 @@ class Tracer:
 
         return {"resourceSpans": resource_spans}
 
+    def export_spans(self) -> Dict[str, Any]:
+        """Export all completed spans as OTLP-compatible JSON.
+
+        Returns:
+            Dict with resource_spans array for OTLP ingestion.
+        """
+        with self._lock:
+            spans = list(self._spans)
+            self._spans.clear()
+
+        return self._build_payload(spans)
+
     def flush_to_jaeger(self) -> Dict[str, Any]:
         """Export spans to the configured Jaeger OTLP endpoint.
 
         Uses HTTP POST to the OTLP endpoint. If the endpoint is unreachable,
-        spans are kept in buffer for the next flush attempt.
+        spans are KEPT in the buffer for the next flush attempt (no loss).
 
         Returns:
             Dict with export status.
         """
-        payload = self.export_spans()
+        with self._lock:
+            spans = list(self._spans)
 
-        if not payload["resourceSpans"]:
+        if not spans:
             return {"exported": 0, "status": "empty"}
+
+        payload = self._build_payload(spans)
 
         try:
             import urllib.request
@@ -391,18 +409,40 @@ class Tracer:
                 len(rs.get("scopeSpans", [{}])[0].get("spans", []))
                 for rs in payload["resourceSpans"]
             )
+            # Drop only the spans that were successfully exported.
+            exported_ids = {s.span_id for s in spans}
+            with self._lock:
+                self._spans = [s for s in self._spans if s.span_id not in exported_ids]
             logger.info("Flushed %d spans to Jaeger (HTTP %d)", span_count, status)
             return {"exported": span_count, "status": f"ok_{status}"}
 
         except Exception as exc:
             logger.warning("Failed to flush spans to Jaeger: %s", exc)
-            # Re-queue dropped spans
-            with self._lock:
-                for rs in payload["resourceSpans"]:
-                    for ss in rs.get("scopeSpans", []):
-                        # Reconstruct minimal Span objects for re-queue
-                        pass
+            # Spans remain buffered and will be retried by the exporter thread.
             return {"exported": 0, "status": "error", "error": str(exc)}
+
+    def _export_loop(self) -> None:
+        """Background exporter: flush every interval, back off on failures."""
+        delay = _FLUSH_INTERVAL / 1000.0
+        while not self._stop_event.wait(delay):
+            try:
+                result = self.flush_to_jaeger()
+                if result.get("status") == "error":
+                    delay = min(delay * 2, 60.0)  # exponential backoff, cap 60s
+                else:
+                    delay = _FLUSH_INTERVAL / 1000.0
+            except Exception:
+                delay = min(delay * 2, 60.0)
+
+    def shutdown(self) -> None:
+        """Stop the exporter thread and flush any remaining spans."""
+        self._stop_event.set()
+        if self._export_thread and self._export_thread.is_alive():
+            self._export_thread.join(timeout=5)
+        try:
+            self.flush_to_jaeger()
+        except Exception:
+            pass
 
     # ── Statistics ──────────────────────────────────────────────────
 
@@ -439,6 +479,9 @@ def get_tracer() -> Tracer:
         with _global_tracer_lock:
             if _global_tracer is None:
                 _global_tracer = Tracer()
+                # Flush remaining spans at interpreter exit.
+                import atexit
+                atexit.register(_global_tracer.shutdown)
     return _global_tracer
 
 

@@ -123,3 +123,9 @@ diag_test.txt
 output/
 temp/
 trinity/output/
+
+trinity.yaml
+# 本机 Trinity 配置（含 PG 连接），凭证移入 ~/.dsh/.credentials.yaml 后不入库
+
+*.db-shm
+*.db-wal

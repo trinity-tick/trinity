@@ -51,6 +51,16 @@ _TRINITY_ROOT = os.path.dirname(_SCRIPT_DIR)
 if _TRINITY_ROOT not in sys.path:
     sys.path.insert(0, _TRINITY_ROOT)
 
+# 把内存分层模块的名字绑定为模块级全局：此前只在 main() 里局部解包，
+# 导致 populate_* 等辅助函数引用 MemoryBlock / MemoryTier / BlockType 时
+# 报 NameError（这些名字不在模块级作用域）。路径注入已完成，直接导入即可。
+from trinity.daemon.memory_tiers import (
+    MemoryTier, BlockType, MemoryBlock, CoreMemory,
+    RecallMemory, ArchivalMemory, MemoryTierManager,
+    TierMigrationRecord, create_memory_tier_manager,
+    DEFAULT_CORE_TOKEN_LIMIT,
+)
+
 
 # ── Imports (late, after path injection) ─────────────────────────────
 

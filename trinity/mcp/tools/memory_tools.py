@@ -12,10 +12,12 @@ Tools:
   - memory_tag_search   Search memories by tags
 """
 
+import functools
 import hashlib
 import json
 import logging
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -73,6 +75,39 @@ def get_session_recorder():
     return _session_recorder
 
 
+@asynccontextmanager
+async def _trace_span(name: str, **attributes: Any):
+    """包装 async MCP 工具执行体的遥测 span。
+
+    MCP 工具是 async 函数，不能直接套用同步 @traced 装饰器
+    （同步包装器会在协程创建时就关闭 span），因此用 async 上下文管理器。
+    """
+    from trinity.telemetry import get_tracer
+
+    tracer = get_tracer()
+    span = tracer.start_span(name, attributes=attributes or None)
+    try:
+        yield span
+        span.ok()
+    except Exception as exc:
+        span.error(exc)
+        raise
+    finally:
+        span.finish()
+        tracer.end_span(span)
+
+
+def _traced_tool(name: str):
+    """Async 装饰器：把 async MCP 工具执行包进遥测 span（用于其余 6 个工具）。"""
+    def deco(fn):
+        @functools.wraps(fn)
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+            async with _trace_span(name, tool=fn.__name__):
+                return await fn(*args, **kwargs)
+        return wrapper
+    return deco
+
+
 def register_memory_tools(mcp: FastMCP) -> None:
     """Register all memory tools with the FastMCP instance."""
     _register_memory_search(mcp)
@@ -115,29 +150,30 @@ def _register_memory_search(mcp: FastMCP) -> None:
         Returns:
             List of matching memory entries with scores.
         """
-        engine = _get_engine()
-        result = engine.search(query=query, top_k=top_k)
-        results = result.get("results", result if isinstance(result, list) else [])
+        async with _trace_span("mcp.memory_search", tool="memory_search", query_len=len(query)):
+            engine = _get_engine()
+            result = engine.search(query=query, top_k=top_k)
+            results = result.get("results", result if isinstance(result, list) else [])
 
-        # 如果结果为空，回退到会话全文搜索
-        if not results and _session_recorder is not None:
-            logger.info("memory_search 结果为空，回退到 ChatSessionRecorder.fulltext 搜索。")
-            fallback = _session_recorder.search(query=query, top_k=top_k)
-            if fallback:
-                results = [
-                    {
-                        "session_id": r["session_id"],
-                        "content": r["content"],
-                        "role": r["role"],
-                        "timestamp": r["timestamp"],
-                        "tags": r["tags"],
-                        "score": r["score"],
-                        "source": "session_recorder",
-                    }
-                    for r in fallback
-                ]
+            # 如果结果为空，回退到会话全文搜索
+            if not results and _session_recorder is not None:
+                logger.info("memory_search 结果为空，回退到 ChatSessionRecorder.fulltext 搜索。")
+                fallback = _session_recorder.search(query=query, top_k=top_k)
+                if fallback:
+                    results = [
+                        {
+                            "session_id": r["session_id"],
+                            "content": r["content"],
+                            "role": r["role"],
+                            "timestamp": r["timestamp"],
+                            "tags": r["tags"],
+                            "score": r["score"],
+                            "source": "session_recorder",
+                        }
+                        for r in fallback
+                    ]
 
-        return results
+            return results
 
 
 # ---------------------------------------------------------------------------
@@ -168,33 +204,34 @@ def _register_memory_write(mcp: FastMCP) -> None:
         Returns:
             Dict with memory_id, version_id, sha256_hash, timestamp.
         """
-        engine = _get_engine()
-        result = engine.ingest(
-            content=content,
-            role=metadata.get("role", "user") if metadata else "user",
-            importance=importance,
-            tags=tags or [],
-            category=category,
-            metadata=metadata,
-        )
-
-        # v6.96.0: Dual-write to shared MemoryAggregator
-        try:
-            agg = _get_aggregator()
-            source = metadata.get("source_agent", "mcp-marvis") if metadata else "mcp-marvis"
-            agg.ingest(
+        async with _trace_span("mcp.memory_write", tool="memory_write", content_len=len(content)):
+            engine = _get_engine()
+            result = engine.ingest(
                 content=content,
-                source=source,
+                role=metadata.get("role", "user") if metadata else "user",
                 importance=importance,
-                tags=tags,
+                tags=tags or [],
                 category=category,
                 metadata=metadata,
             )
-            logger.debug("Dual-write to aggregator OK: source=%s", source)
-        except Exception as exc:
-            logger.warning("Dual-write to aggregator failed (non-fatal): %s", exc)
 
-        return result
+            # v6.96.0: Dual-write to shared MemoryAggregator
+            try:
+                agg = _get_aggregator()
+                source = metadata.get("source_agent", "mcp-marvis") if metadata else "mcp-marvis"
+                agg.ingest(
+                    content=content,
+                    source=source,
+                    importance=importance,
+                    tags=tags,
+                    category=category,
+                    metadata=metadata,
+                )
+                logger.debug("Dual-write to aggregator OK: source=%s", source)
+            except Exception as exc:
+                logger.warning("Dual-write to aggregator failed (non-fatal): %s", exc)
+
+            return result
 
 
 # ---------------------------------------------------------------------------
@@ -203,6 +240,7 @@ def _register_memory_write(mcp: FastMCP) -> None:
 def _register_memory_update(mcp: FastMCP) -> None:
 
     @mcp.tool()
+    @_traced_tool("mcp.memory_update")
     async def memory_update(
         memory_id: str,
         new_content: str,
@@ -235,6 +273,7 @@ def _register_memory_update(mcp: FastMCP) -> None:
 def _register_memory_delete(mcp: FastMCP) -> None:
 
     @mcp.tool()
+    @_traced_tool("mcp.memory_delete")
     async def memory_delete(memory_id: str) -> dict[str, Any]:
         """Soft-delete memory (audit chain preserved).
 
@@ -262,6 +301,7 @@ def _register_memory_delete(mcp: FastMCP) -> None:
 def _register_audit_query(mcp: FastMCP) -> None:
 
     @mcp.tool()
+    @_traced_tool("mcp.audit_query")
     async def audit_query(memory_id: str) -> dict[str, Any]:
         """SHA-256 provenance query.
 
@@ -289,6 +329,7 @@ def _register_audit_query(mcp: FastMCP) -> None:
 def _register_trinity_diagnostics(mcp: FastMCP) -> None:
 
     @mcp.tool()
+    @_traced_tool("mcp.trinity_diagnostics")
     async def trinity_diagnostics() -> dict[str, Any]:
         """Run full Trinity system diagnostics.
 
@@ -305,6 +346,7 @@ def _register_trinity_diagnostics(mcp: FastMCP) -> None:
 def _register_memory_chronicle(mcp: FastMCP) -> None:
 
     @mcp.tool()
+    @_traced_tool("mcp.memory_chronicle")
     async def memory_chronicle(
         events: list[dict[str, Any]],
         title: str = "",
@@ -363,6 +405,7 @@ def _register_memory_chronicle(mcp: FastMCP) -> None:
 def _register_memory_tag_search(mcp: FastMCP) -> None:
 
     @mcp.tool()
+    @_traced_tool("mcp.memory_tag_search")
     async def memory_tag_search(
         tags: list[str],
         top_k: int = 10,

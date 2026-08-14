@@ -1,158 +1,170 @@
-# Trinity Memory — A Triune Architecture for AGI Long-Term Memory
+---
+AIGC:
+    Label: "1"
+    ContentProducer: 001191440300708461136T1XGW3
+    ProduceID: 1ed0c9b5065b1819decccf0a8be25f33_55465776963511f1ac84525400f8a581
+    ReservedCode1: T6Zs5aQIQbXYrY63vpU17HOWXH9UPKYV6kFf+yH54Bbv/kWJumqkdUD0QBUUfKQfNi6XpnGeJ3WeYpETaLFqRGhZOADTXx0/QOpLHh+8KWibwlYin3dHi6MtUW4iMdGQIla5OcH0ZoOxRDC7Yix8BUbjfuTVXtNxWh2TzU7OMCCG5BD+EWNwKqtENs4=
+    ContentPropagator: 001191440300708461136T1XGW3
+    PropagateID: 1ed0c9b5065b1819decccf0a8be25f33_55465776963511f1ac84525400f8a581
+    ReservedCode2: T6Zs5aQIQbXYrY63vpU17HOWXH9UPKYV6kFf+yH54Bbv/kWJumqkdUD0QBUUfKQfNi6XpnGeJ3WeYpETaLFqRGhZOADTXx0/QOpLHh+8KWibwlYin3dHi6MtUW4iMdGQIla5OcH0ZoOxRDC7Yix8BUbjfuTVXtNxWh2TzU7OMCCG5BD+EWNwKqtENs4=
+---
 
-[![PyPI version](https://img.shields.io/pypi/v/trinity-memory)](https://pypi.org/project/trinity-memory/)
-[![PyPI downloads](https://img.shields.io/pypi/dm/trinity-memory)](https://pypi.org/project/trinity-memory/)
-[![CI](https://github.com/trinity-tick/trinity/actions/workflows/ci.yml/badge.svg)](https://github.com/trinity-tick/trinity/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![MCP](https://img.shields.io/badge/MCP-1.0-orange)](https://modelcontextprotocol.io)
-[![GitHub release](https://img.shields.io/github/v/release/trinity-tick/trinity)](https://github.com/trinity-tick/trinity/releases)
+# Trinity — Memory Operating System
 
-A high-performance, production-ready persistent memory layer for AI agents. Trinity integrates 12+ state-of-the-art memory approaches into a unified architecture with **50-tier guardian chains**, **47 retrieval channels**, and **multi-modal support**.
+> **v8.2.0** — Multi-Agent Shared Memory with 50-Layer Guardian Chain and Brain-Inspired Architecture
 
-> **中文版 README** → [README.zh.md](README.zh.md)
+Trinity is not a "memory library." It is a **Memory Operating System** — an
+infrastructure layer that any memory store (vector DB, graph DB, SQLite) can
+plug into, with identity, RBAC, auditing, and economic protocols on top.
+
+---
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────┐
+│                    Agent Layer                        │
+│  Multi-Agent • A2A v0.3 • 4 Anchor Identity          │
+├──────────────────────────────────────────────────────┤
+│                  Governance Layer                     │
+│  RBAC (6 roles) • 50-Layer Guardian Chain • DCSA-EJP │
+├──────────────────────────────────────────────────────┤
+│                  Memory Layer                         │
+│  7-channel retrieval • FTS5+jieba • Causal Graph     │
+│  Self-Evolving • Federated • Multimodal              │
+├──────────────────────────────────────────────────────┤
+│                  Storage Layer                        │
+│  SQLite/PostgreSQL • Vector Index • Graph DB          │
+│  Loihi 2 / TrueNorth (neuromorphic)                  │
+├──────────────────────────────────────────────────────┤
+│                  Economic Layer                       │
+│  TrustExchange — Memory Trading Market               │
+└──────────────────────────────────────────────────────┘
+```
+
+**22 sub-packages, 505+ Python files, 227K+ lines, 135+ API endpoints.**
 
 ---
 
 ## Quick Start
 
 ```bash
-pip install trinity-memory
+# Install from source
+cd trinity
+pip install -e .
+
+# Verify
+python -c "import trinity; print(trinity.__version__)"
+# → 8.2.0
+
+# Run all self-tests (208 pass)
+python scripts/run_all_self_tests.py
 ```
 
-```python
-from trinity import Trinity
-
-mem = Trinity()
-mem.ingest("User prefers dark mode", tags=["preference", "ui"])
-results = mem.search("user preference")
-print(results)
-```
-
-### CLI
+### Docker (4 container stack)
 
 ```bash
-python -m trinity search --query "user preference" --top-k 5
-python -m trinity diagnostics
-python -m trinity bench --name mock
-```
-
-### MCP Server
-
-```json
-{
-  "mcpServers": {
-    "trinity-memory": {
-      "command": "trinity-mcp",
-      "args": ["--mode", "stdio"]
-    }
-  }
-}
+docker-compose up -d
+# trinity-mcp  :8000
+# trinity-api  :8005
+# trinity-db   :5430
+# trinity-dash :3000
 ```
 
 ---
 
-## Architecture
+## Key Features
 
-Trinity is built on three core layers, integrating cutting-edge memory research:
-
-| Layer | Component | Alignment |
-|:------|:----------|:----------|
-| **Retrieval** | BEAM-LIGHT (CB53) | ICLR 2026 BEAM Benchmark |
-| | Exabase 3-Stage Retrieval (CB54) | LongMemEval 96.4% SOTA |
-| | Hindsight 4-Network (CB55) | BEAM 10M SOTA 64.1% |
-| | Zikkaron Hopfield (CB56) | Non-LLM SOTA 40.4% |
-| **Memory** | Cascade Extraction (CB45-48) | ByteRover / Mem0 / Graphiti |
-| | Relationship Management (CB49-52) | Supermemory / Mastra / MemMachine |
-| | Self-Optimization (CB57) | SelfMem July 2026 |
-| **Guardian** | 50-Level Guardian Chain | Anti-Forgetting / Compression Audit |
-| **Retrieval** | 47 Fusion Channels | Semantic / Graph / Exact / Hybrid |
-
----
-
-## Benchmarks
-
-| Metric | Mem0 | Trinity | Improvement |
-|:-------|:----:|:-------:|:-----------:|
-| P50 Latency | 110ms | **21ms** | **5.2x faster** |
-| P95 Latency | 280ms | **45ms** | **6.2x faster** |
-| LongMemEval | 72% | **96.4%** | **+24%** |
-| BEAM 10M | 52% | **64.1%** | **+12%** |
+| Feature | Status | Notes |
+|---------|--------|-------|
+| **Multi-Agent Shared Memory** | ✅ | RBAC 6 roles, scope enforcement at write time |
+| **50-Layer Guardian Chain** | ✅ | Injection → Sandbox → Audit → Sanitize → Self-heal |
+| **BM25 + Jieba Chinese Retrieval** | ✅ | CJK auto-detect, FTS5 with COALESCE fallback |
+| **GraphQL API (Strawberry)** | ✅ | Query/Mutation/Subscription, 6/6 integration PASS |
+| **Raft Consensus Cluster** | ✅ | 100/100 writes, 4/4 checks, 3-node local |
+| **Causal Reasoning** | ✅ | CausalGraph + Counterfactual Engine |
+| **Neuromorphic Chip Adapter** | ✅ | Loihi 2 (SNN), TrueNorth (<100mW) |
+| **TrustExchange Market** | ✅ | On-chain hash audit, KYC/AML compliance |
+| **129-Paper Brain Alignment** | ✅ | P1–P129 in `second_brain` (304 modules) |
+| **Self-Evolving Memory** | ✅ | EvolutionScheduler + SelfHealingPipeline |
+| **Federated Memory** | ✅ | FederatedAggregator + PrivacyBudget |
+| **CI/CD Pipeline** | ✅ | GitHub Actions, Makefile, 30s timeout |
+| **SDK (Python / TypeScript / Go)** | ✅ | Three languages, read-only interfaces |
 
 ---
 
-## Features
+## API Overview
 
-- **Multi-Modal**: Text, image, and audio memory in a unified interface
-- **Multi-Tenant**: Three-level isolation (`persona_id` / `session_id` / `tenant_id`)
-- **47 Retrieval Channels**: Progressive cascading from 0.05ms P50
-- **50-Level Guardian Chain**: L1-L50 with reasoning drift detection
-- **MCP Support**: Standard Model Context Protocol (stdio + SSE)
-- **REST API**: FastAPI with 8 endpoints + Web Dashboard
-- **Multiple Backends**: SQLite, PostgreSQL, ChromaDB, Vectile
-- **Self-Evolution**: Auto-curricula, Engram memory, Consolidation sleep
-- **Knowledge Graph**: Semantic / Relational / Temporal graph queries
-- **Docker Ready**: `docker compose up -d` for one-click deployment
+### REST (135+ endpoints)
 
----
-
-## Deployment
-
-### Docker
-
-```bash
-docker build -t trinity-memory .
-docker run -d -p 8100:8100 -p 8000:8000 -v /data:/data trinity-memory
+```
+GET  /health              → {"status": "ok", "version": "8.2.0"}
+POST /memories            → Create memory
+GET  /memories/{id}       → Retrieve memory
+GET  /agents              → List agents
+GET  /dashboard           → Dashboard data
+GET  /benchmark           → Benchmark results
 ```
 
-### Docker Compose
+### GraphQL
 
-```bash
-docker compose up -d
-```
+```graphql
+# Health
+query { health { status version uptimeSeconds componentStatus } }
 
-### REST API
+# Memory Search (BM25 + jieba)
+query { searchMemories(query: "machine learning", topK: 5) { score memory { memoryId content } } }
 
-```bash
-# Write memory
-curl -X POST http://localhost:8100/memories \
-  -H "Content-Type: application/json" \
-  -d '{"content":"User info","importance":0.8}'
+# Agents
+query { agents { agentId name status } }
 
-# Search memory
-curl "http://localhost:8100/search?q=user&top_k=5"
+# Diagnostics
+query { diagnostics { component health latencyMs errorRate } }
 ```
 
 ---
 
-## Commercial
+## Benchmark Scores
 
-| Product | Pricing | Use Case |
-|:--------|:-------:|:---------|
-| **MCP Server** | Free & Open Source | AI Agent integration |
-| **SaaS API** | Pay-as-you-go | Application development |
-| **Enterprise Deployment** | License | Compliance requirements |
+| Benchmark | Score | Dataset | Conditions |
+|-----------|:-----:|---------|------------|
+| LongMemEval (simulated) | R@5 = **0.9818** | 55 questions, self-built | BM25 + jieba, multi-term merge |
+| SQuAD v1.1 (adapted) | R@5 = **35.6%** | 180 questions, 168 contexts | BM25 only, reading comprehension → retrieval |
+| GraphQL Load Test | p50=**2.1ms**, p99=**29ms** | 100 QPS, 20 workers | Strawberry execute_sync, 0 errors |
+| Cluster Stress | **100/100** writes | 3-node Raft, 4 checks | Multi-process, no failures |
+| Self-Test | **208/208** PASS | All 22 sub-packages | 30s timeout per test |
+
+> **Note**: LongMemEval simulated result uses a template-generated 55-question set, NOT the official 500-question LongMemEval-S. The SQuAD score reflects passage-selection difficulty with pure BM25, not end-to-end memory recall. Third-party audit on real LongMemEval-S and LoCoMo datasets is the top priority for the next release.
 
 ---
 
-## Documentation
+## Research Foundation
 
-Full documentation: [https://trinity-tick.github.io/trinity](https://trinity-tick.github.io/trinity)
+Trinity's `second_brain` module aligns with 129 brain-inspired papers:
 
-- [Getting Started](docs/getting-started.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [API Reference](docs/API_REFERENCE.md)
-- [Benchmarks](docs/BENCHMARKS.md)
-- [Deployment](docs/deployment.md)
+- **Memory**: HebbianMemoryGraph, HippocampalComplementaryMemory, OnlineFocusedMemory
+- **Evolution**: SelfOptimizingMemory (EvolM), MetaMemoryOptimizer
+- **Safety**: AdversarialMemoryDefense, PoisonedMemoryAuditor, BackdoorDetector
+- **Causality**: CausalSemanticGraphMemory, CounterfactualReasoningEngine
+- **Economics**: TrustExchange, PrivacyBudget, FederatedAggregator
+
+---
+
+## Requirements
+
+- Python 3.11+
+- Docker Desktop (for containerized deployment)
+- jieba >= 0.42.1 (Chinese word segmentation)
+- strawberry-graphql >= 0.224 (GraphQL API)
+- Optional: Loihi 2 / TrueNorth hardware for neuromorphic mode
 
 ---
 
 ## License
 
-MIT License — free for commercial and non-commercial use.
+MIT — see [pyproject.toml](pyproject.toml) and LICENSE file.
 
 ---
 
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=trinity-tick/trinity&type=Date)](https://star-history.com/#trinity-tick/trinity&Date)
+*Trinity: not a memory library — a memory operating system.*
+*（内容由AI生成，仅供参考）*

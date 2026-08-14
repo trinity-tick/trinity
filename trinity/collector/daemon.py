@@ -28,6 +28,11 @@ _DATA_DIR = _TRINITY_HOME / "data"
 _PID_FILE = _DATA_DIR / "collector.pid"
 _LOG_FILE = _DATA_DIR / "collector.log"
 
+# 守护进程以脚本方式被拉起（python daemon.py），cwd 不会进入 sys.path，
+# 这里显式把项目根注入 sys.path，避免解析到 site-packages 里的旧版 trinity。
+if str(_TRINITY_HOME) not in sys.path:
+    sys.path.insert(0, str(_TRINITY_HOME))
+
 # ── 守护进程配置 ──────────────────────────────────────────────────────────
 WATCHDOG_INTERVAL = 5           # 看门狗检查间隔（秒）
 MAX_RESTART_COUNT = 10          # 一小时内最大自动重启次数

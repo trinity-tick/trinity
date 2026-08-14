@@ -33,10 +33,32 @@ def _get_pid() -> int | None:
 
 
 def _is_process_alive(pid: int) -> bool:
-    """检查指定 PID 的进程是否存活（Windows 兼容）。"""
+    """检查指定 PID 的进程是否存活（Windows 兼容）。
+
+    优先用 ctypes OpenProcess/GetExitCodeProcess 直接查询（不派生子进程、
+    不依赖 tasklist 输出格式）；任何异常回退到原 tasklist 方案。
+    """
     if sys.platform == "win32":
         try:
-            # 使用 tasklist 检查进程是否存在
+            import ctypes
+
+            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            STILL_ACTIVE = 259
+            kernel32 = ctypes.windll.kernel32
+            handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+            if not handle:
+                return False
+            try:
+                code = ctypes.c_ulong()
+                if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                    return False
+                return code.value == STILL_ACTIVE
+            finally:
+                kernel32.CloseHandle(handle)
+        except Exception:
+            pass
+        try:
+            # 回退：使用 tasklist 检查进程是否存在
             result = subprocess.run(
                 ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
                 capture_output=True, text=True, timeout=5,

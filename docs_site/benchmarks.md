@@ -1,242 +1,112 @@
 # Benchmarks
 
-This page presents performance benchmarks for Trinity across different workloads, scales, and configurations. All benchmarks were conducted using the built-in benchmarking suite.
+> **Trinity v8.2.0 · 口径统一版（2026-08-14）**
+> 本页分两部分：**A. 实测结果**（本机 2026-08-14 真实运行产物）与 **B. 官方/社区参考线**（带来源）。
+> 凡无本机实测佐证的历史数字均明确标注，避免与实测混淆。
 
 ---
 
-## Benchmark Environment
+## A. 实测结果（本机 2026-08-14）
 
-All tests were conducted on a standardized environment unless otherwise noted:
+### A.0 环境
 
-| Component | Specification |
+| 项 | 值 |
 |---|---|
-| **CPU** | AMD EPYC 7763 64-Core @ 2.45 GHz |
-| **RAM** | 128 GB DDR4-3200 |
-| **Storage** | NVMe SSD (3.5 GB/s sequential read) |
-| **Database** | PostgreSQL 16 + pgvector 0.7.0 |
-| **Network** | 10 Gbps internal network |
-| **Python** | 3.11.5 |
-| **Trinity** | v1.2.0 |
+| OS / Python | Windows · 系统 Python 3.14（项目 .venv 仅 numpy/jieba） |
+| 存储 | PostgreSQL 16（库 `trinity`，memories=1040）+ SQLite（MCP store，11313 条） |
+| 版本 | v8.2.0（pyproject）；系统 Python editable 安装标签为 6.37.0（仅元数据过期，代码同源） |
 
----
+### A.1 检索质量
 
-## Retrieval Latency
-
-### P50/P99 Latency by Dataset Size
-
-| Dataset Size | P50 (ms) | P99 (ms) | QPS (single node) |
-|---|---|---|---|
-| 10,000 memories | 2.1 | 4.8 | 4,500 |
-| 100,000 memories | 3.4 | 7.2 | 3,200 |
-| 1,000,000 memories | 5.8 | 14.3 | 1,800 |
-| 10,000,000 memories | 12.7 | 38.1 | 850 |
-
-### Latency Breakdown (1M memories)
-
-```
-Total Retrieval:         5.8 ms
-  ├── Query Embedding:   0.8 ms  (14%)
-  ├── Vector Search:     2.9 ms  (50%)
-  ├── Hybrid Search:     1.2 ms  (21%)
-  ├── Re-ranking:        0.6 ms  (10%)
-  └── Serialization:     0.3 ms  ( 5%)
-```
-
----
-
-## Storage Throughput
-
-### Write Performance
-
-| Batch Size | Throughput (ops/s) | P50 Latency (ms) | P99 Latency (ms) |
-|---|---|---|---|
-| 1 (single) | 850 | 1.2 | 3.1 |
-| 10 | 3,200 | 2.8 | 5.4 |
-| 100 | 12,500 | 7.6 | 12.8 |
-| 1,000 | 28,000 | 35.2 | 58.9 |
-
-### Bulk Import (10M memories)
-
-| Method | Time | Throughput |
+| 套件 | 分数 | 口径说明 |
 |---|---|---|
-| Single inserts | 3h 15m | 855 ops/s |
-| Batch inserts (size=100) | 14m 22s | 11,600 ops/s |
-| Batch inserts (size=1000) | 6m 48s | 24,500 ops/s |
-| COPY (PostgreSQL native) | 4m 12s | 39,700 ops/s |
+| LongMemEval (simulated) | R@5 = **0.9818**（55 题 54/55） | 模板生成模拟集，**非官方 500 题 LongMemEval-S**；BM25+jieba 多词合并 |
+| SQuAD v1.1 (adapted) | 35.6%（64/180）**vs** 98.3%（177/180） | **两套口径并存待统一**：35.6% 为 BM25-only passage-selection；98.3% 为 hybrid 端到端。README 与同日 JSON 冲突已披露 |
+| LoCoMo（自建子集） | 最优配置 B.session-aggregate：R@5=**0.88** / MRR=**0.5353**（38 题） | 4 种配置对比：turn-baseline R@5=0.14 / session-aggregate 0.88 / turn+query-expansion 0.14 / session+query-expansion 0.88；temporal-reasoning 类目全 0（短板） |
+| BEAM Scale（1K 档） | R@5 = **1.000**；P50 8.65ms / P99 34.27ms | 仅 1K memories/50 queries；1M-10M 官方档未测 |
+| ANN HNSW | Recall@10 = 1.000 | 向量索引召回 |
+
+### A.2 性能（本机）
+
+| 项 | 实测 |
+|---|---|
+| GraphQL Load | 100 QPS / 20 workers / 0 errors；p50=2.06ms，p99=29.25ms |
+| 写入吞吐 | 383–725 ops/s（按批次） |
+| 检索延迟 | 0.93ms（单查）；混合检索 0.73ms vs 纯向量 0.42ms |
+| Cluster Stress | 99/100 committed；**3 节点全部 elected leader、commit_index=-1（Raft 应单 leader，异常待查）** |
+
+### A.3 测试与自检
+
+| 项 | 结果 |
+|---|---|
+| pytest 全量 | **135 passed / 33 skipped / 0 failed**（2026-08-14 修复 test_core 5 个旧 API 断言后全绿；此前 5 fail/6 error 已解决） |
+| 内部 self_test | 208/208 PASS（内部口径，与 pytest 不同集合） |
+| 进化周期 | 完整周期 3 次（observe→analyze→plan→execute→certify） |
+
+### A.4 已知口径缺口（诚实披露）
+
+- **官方 LongMemEval-S（500 题）、LoCoMo（1982 题）、BEAM 1M/10M 未实测**，尚不能进入官方 SOTA 对比表。
+- 原 README 声称的 1M memories P50 5.8ms 等大规模数字**无本机实测 JSON 佐证**，见下文 B.2 标注为历史数据。
 
 ---
 
-## Concurrent Access
+## B. 官方/社区参考线（带来源）
 
-### Throughput Under Load
+### B.1 检索质量 SOTA（社区公开）
 
-| Concurrent Clients | Throughput (ops/s) | P50 Latency (ms) | P99 Latency (ms) | Error Rate |
-|---|---|---|---|---|
-| 1 | 1,800 | 5.8 | 14.3 | 0.00% |
-| 10 | 8,500 | 8.2 | 22.1 | 0.00% |
-| 50 | 22,000 | 18.5 | 45.7 | 0.01% |
-| 100 | 32,000 | 32.4 | 89.2 | 0.05% |
-| 500 | 41,000 | 128.5 | 412.3 | 0.42% |
+| 基准 | 参考分数 | 来源 |
+|---|---|---|
+| LongMemEval-S | CortexDB Retrieval 栈 **93.8%** | [CortexDB benchmark paper](https://cortexdb.ai/docs/research/benchmark-paper) · [blog](https://cortexdb.ai/blog/longmemeval-93-8-percent) |
+| LongMemEval-S | Engram vs Chronos/Mastra/OMEGA/Zep 排行榜 | [JamJet LongMemEval-S leaderboard](https://jamjet.dev/benchmarks/engram-longmemeval/) |
+| LongMemEval / LoCoMo / BEAM | agentmemory / agentos 等开源 harness 分数 | [agentmemory LONGMEMEVAL.md](https://github.com/rohitg00/agentmemory/blob/main/benchmark/LONGMEMEVAL.md) · [agentos-bench](https://github.com/framerslab/agentos-bench) |
+| LoCoMo 检索 | ConvMemory v2 reranker（Top-10 evidence） | [ConvMemory v2（arXiv 2606.10842）](https://arxiv.org/abs/2606.10842) |
 
-### Connection Pool Scaling
+> 注：BEAM（ICLR 2026）HindsightFourNetwork=64.1%、ZikkaronHopfield=40.4% 为 second_brain 模块的论文对齐值，非本机实测。
 
-```
-Pool Size = 5:    5,200 ops/s  (pool exhaustion at 50 clients)
-Pool Size = 10:  12,800 ops/s  (pool exhaustion at 100 clients)
-Pool Size = 25:  28,500 ops/s  (pool exhaustion at 250 clients)
-Pool Size = 50:  38,200 ops/s  (near-optimal scaling)
-Pool Size = 100: 41,000 ops/s  (diminishing returns)
-```
+### B.2 历史性能数据（无本机佐证，仅供架构参考）
 
----
-
-## Embedding Performance
-
-### Local vs. API-Based Embedding
-
-| Model | Provider | Latency (ms) | Throughput (ops/s) | Quality (MTEB) |
-|---|---|---|---|---|
-| `all-MiniLM-L6-v2` | Local (sentence-transformers) | 0.8 | 12,500 | 58.8 |
-| `all-mpnet-base-v2` | Local (sentence-transformers) | 2.1 | 4,760 | 63.3 |
-| `text-embedding-ada-002` | OpenAI API | 45.2 | 22 | 61.0 |
-| `text-embedding-3-small` | OpenAI API | 38.7 | 26 | 62.3 |
-| `text-embedding-3-large` | OpenAI API | 95.4 | 10 | 64.6 |
-
-!!! tip
-    For high-throughput scenarios, use local embedding models. For maximum accuracy, use API-based models.
-
----
-
-## Multimodal Performance
-
-### Image Encoding
-
-| Model | Image Size | Encoding Time (ms) | Throughput (images/s) |
+| 数据集规模 | P50 (ms) | P99 (ms) | QPS |
 |---|---|---|---|
-| `clip-ViT-B-32` | 224×224 | 4.2 | 238 |
-| `clip-ViT-B-32` | 512×512 | 8.7 | 115 |
-| `clip-ViT-L-14` | 224×224 | 12.8 | 78 |
-| `clip-ViT-L-14` | 512×512 | 28.3 | 35 |
+| 10k memories | 2.1 | 4.8 | 4,500 |
+| 100k memories | 3.4 | 7.2 | 3,200 |
+| 1M memories | 5.8 | 14.3 | 1,800 |
+| 10M memories | 12.7 | 38.1 | 850 |
 
-### Cross-Modal Retrieval Recall@10
-
-| Query Modality → Target | Hybrid Search | Vector Only | Text Only |
-|---|---|---|---|
-| Text → Text | 0.942 | 0.891 | 0.878 |
-| Text → Image | 0.876 | 0.834 | — |
-| Image → Text | 0.891 | 0.852 | — |
-| Image → Image | 0.913 | 0.901 | — |
-| Audio → Text | 0.824 | 0.793 | — |
-| Text → Audio | 0.801 | 0.772 | — |
+> 此表来自早期文档（v1.2.0 时代），本机未复测；如需对外引用请先跑 `benchmark/run_latency_bench.py` 复测。
 
 ---
 
-## Comparison with Industry
-
-### Feature Comparison
+## C. 功能对比（架构层面）
 
 | Feature | Trinity | Memory-1 | Mem0 | LangMem |
 |---|---|---|---|---|
-| **Vector Search** | ✅ pgvector | ✅ Pinecone | ✅ Chroma | ✅ FAISS |
-| **Hybrid Search** | ✅ | ❌ | ✅ | ❌ |
-| **Multi-Tenant** | ✅ Built-in | ❌ | ⚠️ Partial | ❌ |
-| **Multimodal** | ✅ Image/Audio/Text | ❌ | ❌ | ❌ |
-| **MCP Native** | ✅ | ❌ | ❌ | ❌ |
-| **CLI** | ✅ | ❌ | ✅ | ❌ |
-| **Docker** | ✅ | ❌ | ✅ | ✅ |
-| **Open Source** | ✅ Apache 2.0 | ❌ | ✅ Apache 2.0 | ✅ MIT |
-
-### Performance Comparison (1M memories, P50 latency)
-
-```
-Trinity        ████████████████████░░  5.8 ms
-Memory-1       ██████████████████████  4.2 ms  (managed service, no I/O)
-Mem0           ████████████████████░░  6.1 ms  (ChromaDB backend)
-LangMem        ████████████████░░░░░░  8.5 ms  (FAISS + SQLite)
-```
-
-### Cost Comparison (100k memories/day)
-
-| Solution | Monthly Cost | Notes |
-|---|---|---|
-| **Trinity** (self-hosted) | ~$50 | 2 vCPU, 8 GB RAM, 100 GB SSD |
-| **Trinity** (managed) | ~$100 | Includes backup, monitoring, support |
-| Memory-1 | ~$500 | Managed service, per-embedding pricing |
-| Pinecone (Mem0) | ~$300 | Pod-based pricing |
-| FAISS + RDS | ~$200 | AWS RDS + compute costs |
+| Vector Search | ✅ pgvector/FAISS | ✅ Pinecone | ✅ Chroma | ✅ FAISS |
+| Hybrid Search | ✅ | ❌ | ✅ | ❌ |
+| Multi-Tenant | ✅ Built-in | ❌ | ⚠️ Partial | ❌ |
+| Multimodal | ✅ Image/Audio/Text | ❌ | ❌ | ❌ |
+| MCP Native | ✅ | ❌ | ❌ | ❌ |
+| Docker | ✅ | ❌ | ✅ | ✅ |
+| Open Source | ✅ Apache 2.0 | ❌ | ✅ Apache 2.0 | ✅ MIT |
 
 ---
 
-## Benchmark Suite
-
-Trinity includes a comprehensive benchmarking suite to measure performance in your own environment.
-
-### Running Benchmarks
+## D. 运行基准
 
 ```bash
-# Run all benchmarks
-python -m trinity.benchmark.runner
-
-# Run specific benchmark
-python -m trinity.benchmark.runner --benchmark latency
-
-# Custom configuration
-python -m trinity.benchmark.runner \
-    --dataset-size 1000000 \
-    --concurrent-clients 50 \
-    --batch-size 100
-
-# Generate report
-python -m trinity.benchmark.runner --report html
+# 并行基准套件（DSH workflow 或本机）
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\Administrator\trinity\dsh-ops\run-benchmarks.ps1 -Suites latency,concurrency
+# LLM 套件需要 TRINITY_API_KEY（存 ~/.dsh/.credentials.yaml，勿写死在脚本）
+# 单测
+& 'C:\Users\Administrator\AppData\Local\Programs\Python\Python314\python.exe' -m pytest -q --tb=line
 ```
 
-### Included Benchmarks
-
-| Benchmark | Description |
-|---|---|
-| `latency` | End-to-end retrieval and storage latency |
-| `concurrency` | Throughput under concurrent load |
-| `embedding` | Embedding generation throughput |
-| `multimodal` | Image and audio encoding performance |
-| `longmemeval` | Long-term memory retention evaluation |
-| `memsyco` | Memory consistency and hallucination resistance |
-
-### LongMemEval Results
-
-Trinity achieved the following scores on the LongMemEval benchmark suite:
-
-| Task | Score | Description |
-|---|---|---|
-| **Belief Maintenance** | 0.92 | Maintaining consistent user beliefs |
-| **Preference Override** | 0.89 | Correctly overriding outdated preferences |
-| **Recall Accuracy** | 0.94 | Accurate recall of past information |
-| **Source Attribution** | 0.91 | Correctly attributing sources |
-| **Over-generation** | 0.87 | Preventing hallucinated memories |
+> 汇总产物：`.trinity\bench-results\<ts>\summary.md`；核查报告：`.trinity\bench-results\workflow-demo\report.md`。
 
 ---
 
-## Recommendations
+## E. 下一步（按优先级）
 
-### By Use Case
-
-| Use Case | Recommended Configuration |
-|---|---|
-| **Chatbot** (100 users) | 1 vCPU, 4 GB RAM, SQLite (dev) / PostgreSQL (prod) |
-| **Customer Support** (10k users) | 2 vCPU, 8 GB RAM, PostgreSQL + pgvector |
-| **Enterprise Assistant** (100k users) | 4 vCPU, 16 GB RAM, PostgreSQL + PgBouncer |
-| **Multimodal Platform** (1M+ users) | 8 vCPU, 32 GB RAM, Clustered PostgreSQL |
-
-### Optimization Tips
-
-1. **Use local embeddings** for latency-sensitive applications.
-2. **Enable hybrid search** — it outperforms pure vector search by 5-8% in recall.
-3. **Batch writes** — use batch size of 100-1000 for bulk operations.
-4. **Tune pgvector lists** — start with `lists = sqrt(n_rows)` and adjust.
-5. **Monitor P99 latency** — it's the best indicator of user-facing performance.
-
----
-
-## Next Steps
-
-- **[Deployment Guide](deployment.md)** — Capacity planning and deployment configuration.
-- **[Contributing](contributing.md)** — Contribute to Trinity's benchmarking suite.
+1. 跑官方 **LongMemEval-S（500 题）/ LoCoMo（1982 题）**，替换模拟集口径，进入 B.1 对比表。
+2. 统一 **SQuAD 评测入口**（BM25-only 与 hybrid 端到端二选一或并列标注）。
+3. 修复 **Cluster Stress Raft 单 leader 异常**（3 节点全 leader）后重测。
+4. BEAM 补 1M/10M 档；用 B.1 来源核对 second_brain 论文对齐值。
