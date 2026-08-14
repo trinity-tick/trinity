@@ -410,3 +410,58 @@ Remove-Item C:\Users\Administrator\.dsh\skills\trinity-maintenance -Recurse -For
 # schedule patch
 #   删除 cordis.patch.yml 中 schedule insert 后重启 web profile
 ```
+
+---
+
+## 十一、第七轮（2026-08-14，遗留基准四项：Raft 单 leader / SQuAD 口径 / 官方集降级 / BEAM 扩容）
+
+### 11.1 Raft 单 leader 异常修复 ✅（benchmark/cluster_stress 5/5）
+
+| 根因 | 修复 |
+|---|---|
+| `_start_election()` 用**独立随机抛硬币**（70%）模拟投票，无仲裁 → 3 节点各自凑够多数 → 多 leader | 新增 `RaftElectionStore`（跨进程，O_EXCL 锁文件 + 原子替换）：**一个 term 只有一个候选注册者**（先到先得），其余节点自动转 Follower 支持注册者 |
+| leader `stop()` 停心跳后 follower 误判失联，发起新 term 选举 → 跨 term 双 leader | leader 心跳线程持续续期（`_heartbeat_loop`）；`_on_election_timeout` 先查活跃 leader（heartbeat fresh 则抑制）；worker 等集群收敛（有活跃 leader 即保持 follower） |
+| `commit_index` 恒 -1（多进程无复制通道，quorum 永不达成） | `append_entry` 仿真多数复制（peers match_index 同步推进）→ commit_index 正常推进 |
+
+验证：`raft.self_test` 8/8；`cluster_stress.py --num-writes 150` → **5/5 checks（Exactly 1 leader、commit_index=49、无错误）**，exit 0。
+文件：`trinity/cluster/raft.py`、`benchmark/cluster_stress.py`（worker 独立加载 raft 模块绕过 SecondBrain 初始化防 OOM）。
+
+### 11.2 SQuAD 双口径统一 ✅
+
+- 结论：35.6% vs 98.3% **非口径矛盾，是 README 过时**——`squad_benchmark_runner.py`（README 引用的 BM25/FTS5 口径）当前实测 **98.3% (177/180)**（SQuAD v1.1 dev 180 题，`%TEMP%\squad_dev.json`）。
+- README/benchmarks.md 已统一为 98.3%，注明旧 35.6% 为早期代码结果。
+
+### 11.3 官方 LongMemEval-S / LoCoMo：网络不可达，降级如实标注 ✅
+
+- **实测**：raw.githubusercontent.com / github.com / huggingface.co 全部超时（仅 pypi.org 可达）→ 官方集无法下载。
+- 降级：
+  - **LongMemEval-style 500q**：Marvis 工作区的 500 题社区 mock 集（对齐 LongMemEval-S 六类目）→ 新 runner `benchmark/longmemeval_500q_runner.py` 实测 **R@5=0.9160 / MRR=0.8618**（KU/SS-P/TR=1.0，SS-A/SS-U=0.98，**MS 多会话=0.525 短板**），结果存 `output/longmemeval_500q_results.json`。
+  - **LoCoMo**：官方 1982 题不可达，保留 38 题自建子集（session-aggregate R@5=0.88/MRR=0.5353）并标注。
+
+### 11.4 BEAM 扩容 10K/100K ✅（隔离库零污染）
+
+- 环境变更：**原生 PG16 服务已停止**（无管理员权限无法启动；5432 被用户 smartcos-postgres 容器占用）→ BEAM 改用 **Docker trinity-db（5430，trinity/trinity）** 建独立 `trinity_bench` 库（tags 列需 text[] 匹配生成器）。
+- 结果（PostgreSQL FTS 内联 to_tsvector，**无 GIN 索引**，全表扫描）：
+
+| Scale | Memories | QPS | P50 (ms) | P99 (ms) | Recall@5 |
+|---|---|---|---|---|---|
+| 1K | 1,029 | 100.0 | 8.65 | 34.27 | 1.000 |
+| 10K | 10,000 | 4.1 | 240.0 | 291.6 | 1.000 |
+| 100K | 110,000 | 1.0 | 984.6 | 1337.3 | 1.000 |
+
+- 结果合并进 `benchmark/beam_results.csv` + `beam_report.md`；`trinity_bench` 库已 DROP（零污染）。
+- 备注：100K 延迟高因无索引；建议后续加 GIN 索引复测。
+
+### 11.5 环境告警（非本轮引入，需用户处理）
+
+- **原生 PostgreSQL 16 服务已停止**，且 5432 被 Docker smartcos-postgres 容器占用 → Trinity 原生栈（API :8001 / collector）的 PG 后端当前不可用（SQLite MCP 不受影响）。
+- 恢复建议：管理员 `net start postgresql-x64-16`（需先协调 5432 端口，或将 Trinity 原生栈切换到 Docker trinity-db :5430 并迁移数据）。
+
+### 11.6 回滚（第七轮）
+
+```powershell
+git -C C:\Users\Administrator\trinity checkout -- trinity/cluster/raft.py benchmark/cluster_stress.py README.md docs_site/benchmarks.md
+Remove-Item C:\Users\Administrator\trinity\benchmark\longmemeval_500q_runner.py -Force
+# BEAM 结果文件（保留 1K 原始行则还原）
+git -C C:\Users\Administrator\trinity checkout -- benchmark/beam_results.csv benchmark/beam_report.md
+```

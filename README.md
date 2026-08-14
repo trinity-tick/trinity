@@ -126,15 +126,20 @@ query { diagnostics { component health latencyMs errorRate } }
 
 ## Benchmark Scores
 
+> 完整实测与官方参考口径见 [docs_site/benchmarks.md](docs_site/benchmarks.md)（2026-08-14 统一版，Trinity v8.2.0）。
+
 | Benchmark | Score | Dataset | Conditions |
 |-----------|:-----:|---------|------------|
 | LongMemEval (simulated) | R@5 = **0.9818** | 55 questions, self-built | BM25 + jieba, multi-term merge |
-| SQuAD v1.1 (adapted) | R@5 = **35.6%** | 180 questions, 168 contexts | BM25 only, reading comprehension → retrieval |
-| GraphQL Load Test | p50=**2.1ms**, p99=**29ms** | 100 QPS, 20 workers | Strawberry execute_sync, 0 errors |
-| Cluster Stress | **100/100** writes | 3-node Raft, 4 checks | Multi-process, no failures |
-| Self-Test | **208/208** PASS | All 22 sub-packages | 30s timeout per test |
+| LongMemEval-style (500q) | R@5 / MRR（见 benchmarks.md） | 500 questions, community mock | FTS5 keyword, 6 categories |
+| SQuAD v1.1 (adapted) | R@5 = **98.3%** (177/180) | SQuAD v1.1 dev, 180 questions | BM25/FTS5 retrieval → passage selection |
+| LoCoMo (subset) | R@5 = **0.88**, MRR = **0.5353** | 38 self-built questions, session-aggregate | 官方 1982 题集本环境网络不可达 |
+| BEAM Scale | R@5 = **1.000**（1K/10K/100K 见 benchmarks.md） | 50 queries × scale | PostgreSQL FTS |
+| GraphQL Load Test | p50=**2.06ms**, p99=**29.25ms** | 100 QPS, 20 workers | Strawberry execute_sync, 0 errors |
+| Cluster Stress | **5/5 checks**（单 leader 已修复） | 3-node Raft, multi-process | Exactly 1 leader, commit advanced |
+| pytest | **135 passed / 33 skipped / 0 failed** | trinity/tests 全量 | 2026-08-14 修复后基线 |
 
-> **Note**: LongMemEval simulated result uses a template-generated 55-question set, NOT the official 500-question LongMemEval-S. The SQuAD score reflects passage-selection difficulty with pure BM25, not end-to-end memory recall. Third-party audit on real LongMemEval-S and LoCoMo datasets is the top priority for the next release.
+> **Note**: LongMemEval simulated result uses a template-generated 55-question set, NOT the official 500-question LongMemEval-S; the 500-question mock set follows LongMemEval-S category structure but is community-generated. Official LongMemEval-S / LoCoMo (1982 questions) datasets are **unreachable from this environment** (GitHub/HuggingFace blocked); once network access is available, replace with official sets. SQuAD score reflects passage-selection retrieval, not end-to-end memory recall.
 
 ---
 

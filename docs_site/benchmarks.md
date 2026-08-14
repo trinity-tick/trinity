@@ -21,9 +21,10 @@
 | 套件 | 分数 | 口径说明 |
 |---|---|---|
 | LongMemEval (simulated) | R@5 = **0.9818**（55 题 54/55） | 模板生成模拟集，**非官方 500 题 LongMemEval-S**；BM25+jieba 多词合并 |
-| SQuAD v1.1 (adapted) | 35.6%（64/180）**vs** 98.3%（177/180） | **两套口径并存待统一**：35.6% 为 BM25-only passage-selection；98.3% 为 hybrid 端到端。README 与同日 JSON 冲突已披露 |
-| LoCoMo（自建子集） | 最优配置 B.session-aggregate：R@5=**0.88** / MRR=**0.5353**（38 题） | 4 种配置对比：turn-baseline R@5=0.14 / session-aggregate 0.88 / turn+query-expansion 0.14 / session+query-expansion 0.88；temporal-reasoning 类目全 0（短板） |
-| BEAM Scale（1K 档） | R@5 = **1.000**；P50 8.65ms / P99 34.27ms | 仅 1K memories/50 queries；1M-10M 官方档未测 |
+| LongMemEval-style (500q) | R@5 = **0.9160** / MRR = **0.8618** | 500 题社区生成集（对齐 LongMemEval-S 六类目结构，非官方标注集）；FTS5 keyword。分类：KU/SS-P/TR=1.000，SS-A/SS-U=0.980，**MS(多会话)=0.525（短板）** |
+| SQuAD v1.1 (adapted) | R@5 = **98.3%**（177/180） | **统一口径**：`squad_benchmark_runner.py`（BM25/FTS5 retrieval → passage-selection），SQuAD v1.1 dev 180 题。README 旧 35.6% 为早期代码结果，已更新 |
+| LoCoMo（自建子集） | 最优配置 B.session-aggregate：R@5=**0.88** / MRR=**0.5353**（38 题） | 4 种配置对比：turn-baseline R@5=0.14 / session-aggregate 0.88 / turn+query-expansion 0.14 / session+query-expansion 0.88；temporal-reasoning 类目全 0（短板）。**官方 1982 题集网络不可达** |
+| BEAM Scale | 1K：R@5=**1.000**，P50 8.65ms · 10K：R@5=**1.000**，P50 240.0ms · 100K(110K 条)：R@5=**1.000**，P50 984.6ms | PostgreSQL FTS 内联 to_tsvector（**无 GIN 索引，全表扫描**，故延迟随规模线性增长）；隔离库 trinity_bench 实测后已删除；非官方 BEAM 数据集 |
 | ANN HNSW | Recall@10 = 1.000 | 向量索引召回 |
 
 ### A.2 性能（本机）
@@ -33,7 +34,7 @@
 | GraphQL Load | 100 QPS / 20 workers / 0 errors；p50=2.06ms，p99=29.25ms |
 | 写入吞吐 | 383–725 ops/s（按批次） |
 | 检索延迟 | 0.93ms（单查）；混合检索 0.73ms vs 纯向量 0.42ms |
-| Cluster Stress | 99/100 committed；**3 节点全部 elected leader、commit_index=-1（Raft 应单 leader，异常待查）** |
+| Cluster Stress | 5/5 checks；**单 leader 已修复**（3 节点选举注册仲裁 + 心跳抑制；leader commit_index 正常推进） | Raft 单 leader 不变量 |
 
 ### A.3 测试与自检
 
@@ -45,8 +46,9 @@
 
 ### A.4 已知口径缺口（诚实披露）
 
-- **官方 LongMemEval-S（500 题）、LoCoMo（1982 题）、BEAM 1M/10M 未实测**，尚不能进入官方 SOTA 对比表。
+- **官方 LongMemEval-S（500 题）、LoCoMo（1982 题）、BEAM 官方集本环境网络不可达**（实测 GitHub/HuggingFace 全部超时，仅 PyPI 可达）——当前 LongMemEval 采用 500 题社区 mock 集（结构对齐）、LoCoMo 采用 38 题自建子集、BEAM 采用自建话题数据；均已如实标注"非官方集"。
 - 原 README 声称的 1M memories P50 5.8ms 等大规模数字**无本机实测 JSON 佐证**，见下文 B.2 标注为历史数据。
+- SQuAD 双口径矛盾已解决：统一为 BM25/FTS5 口径（98.3%），README 旧 35.6% 系早期代码结果。
 
 ---
 
@@ -106,7 +108,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\Administrator\trini
 
 ## E. 下一步（按优先级）
 
-1. 跑官方 **LongMemEval-S（500 题）/ LoCoMo（1982 题）**，替换模拟集口径，进入 B.1 对比表。
-2. 统一 **SQuAD 评测入口**（BM25-only 与 hybrid 端到端二选一或并列标注）。
-3. 修复 **Cluster Stress Raft 单 leader 异常**（3 节点全 leader）后重测。
-4. BEAM 补 1M/10M 档；用 B.1 来源核对 second_brain 论文对齐值。
+1. 网络可达后跑**官方 LongMemEval-S（500 题）/ LoCoMo（1982 题）**，替换 mock/子集口径，进入 B.1 对比表。
+2. 修复 **LongMemEval MS（多会话）类目 0.525** 短板（多会话检索/过滤优化）。
+3. BEAM 增加 GIN 索引后复测（当前全表扫描导致 100K 延迟 ~1s/query），并视资源跑 1M 档。
+4. LoCoMo temporal-reasoning 类目全 0 需专项调查。

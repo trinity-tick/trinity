@@ -39,12 +39,25 @@ def _write_memories_worker(
     timeout_min: float,
     timeout_max: float,
     heartbeat: float,
+    election_store_path: str,
 ) -> Dict[str, Any]:
     """Worker process: spin up a RaftNode and write items.
 
     Returns node-level stats.
     """
-    from trinity.cluster.raft import RaftNode, RaftState
+    # 直接按文件加载 raft 模块，避免 import trinity 触发 SecondBrain
+    # 122 模块全套初始化（多 worker 进程会内存溢出）。
+    import importlib.util
+    import sys as _sys
+
+    _raft_path = os.path.join(TRINITY_ROOT, "trinity", "cluster", "raft.py")
+    _spec = importlib.util.spec_from_file_location("raft_standalone", _raft_path)
+    _raft = importlib.util.module_from_spec(_spec)
+    _sys.modules["raft_standalone"] = _raft  # dataclass 需在 sys.modules 中找到模块
+    _spec.loader.exec_module(_raft)  # type: ignore[union-attr]
+    RaftNode = _raft.RaftNode
+    RaftState = _raft.RaftState
+    RaftElectionStore = _raft.RaftElectionStore
 
     node = RaftNode(
         node_id=node_id,
@@ -52,19 +65,23 @@ def _write_memories_worker(
         election_timeout_min=timeout_min,
         election_timeout_max=timeout_max,
         heartbeat_interval=heartbeat,
+        election_store=RaftElectionStore(election_store_path),
     )
 
-    # Wait for leader election
+    # Wait for cluster convergence: either this node becomes leader, or the
+    # cluster already has an active leader (this node stays follower).
     leader_id: Optional[str] = None
-    for _ in range(30):
+    for _ in range(40):
         time.sleep(0.15)
         with node._lock:
             if node.state == RaftState.LEADER:
                 leader_id = node.node_id
                 break
-        # Check if another node is leader
-    if leader_id is None:
-        # Not elected; try force election
+        if node.election_store is not None and node.cluster_active_leader():
+            break  # 集群已有活跃 leader，本节点保持 follower
+    else:
+        # No active leader after the window: force an election. The shared
+        # election store arbitrates so only one node can claim a term.
         with node._lock:
             if node.state in (RaftState.FOLLOWER, RaftState.CANDIDATE):
                 node._start_election()
@@ -76,15 +93,17 @@ def _write_memories_worker(
         is_leader = node.state == RaftState.LEADER
     leader_id = node_id if is_leader else None
 
-    for item in items:
-        entry = node.append_entry(
-            command="write_memory",
-            data={"content": item["content"], "memory_id": item["memory_id"]},
-        )
-        if entry is not None:
-            wrote += 1
-        else:
-            failed += 1
+    # Only the leader writes; followers reject writes (Raft semantics).
+    if is_leader:
+        for item in items:
+            entry = node.append_entry(
+                command="write_memory",
+                data={"content": item["content"], "memory_id": item["memory_id"]},
+            )
+            if entry is not None:
+                wrote += 1
+            else:
+                failed += 1
 
     stats = node.stats()
     node.stop()
@@ -143,6 +162,10 @@ class ClusterStressTest:
 
         with ProcessPoolExecutor(max_workers=self.workers) as pool:
             futures = {}
+            # 共享选举注册中心（跨进程）：保证任一时刻集群只有单 leader
+            import tempfile
+            _fd, _store_path = tempfile.mkstemp(prefix="raft_stress_store_", suffix=".json")
+            os.close(_fd)
             for i in range(self.num_nodes):
                 chunk = chunks[i] if i < len(chunks) else []
                 if not chunk:
@@ -153,6 +176,7 @@ class ClusterStressTest:
                     self.peer_ids,
                     chunk,
                     0.3, 0.8, 0.2,  # fast election for stress test
+                    _store_path,
                 )
                 futures[fut] = i
 
@@ -167,6 +191,11 @@ class ClusterStressTest:
                     idx = futures[fut]
                     results.append({"node_id": self.peer_ids[idx], "error": str(exc)})
                     print(f"  [{self.peer_ids[idx]}] ERROR: {exc}")
+
+            try:
+                os.remove(_store_path)
+            except OSError:
+                pass
 
         elapsed = time.monotonic() - t0
         print(f"\n  All nodes finished in {elapsed:.2f}s")
@@ -202,7 +231,7 @@ class ClusterStressTest:
                 payloads: List[Dict]) -> Dict[str, Any]:
         checks: List[str] = []
         passed = 0
-        total = 4
+        total = 5
 
         # Check 1: All nodes completed
         if len(results) == self.num_nodes:
@@ -211,14 +240,16 @@ class ClusterStressTest:
         else:
             checks.append(f"FAIL: Only {len(results)}/{self.num_nodes} nodes completed")
 
-        # Check 2: At least one leader elected
+        # Check 2: Exactly ONE leader elected (Raft single-leader invariant)
         leaders = [r for r in results if r.get("was_leader")]
-        if leaders:
-            checks.append(f"PASS: {len(leaders)} leader(s) elected: "
-                          f"{[l['node_id'] for l in leaders]}")
+        if len(leaders) == 1:
+            checks.append(f"PASS: Exactly 1 leader elected: {leaders[0]['node_id']}")
             passed += 1
-        else:
+        elif len(leaders) == 0:
             checks.append("FAIL: No leader elected")
+        else:
+            checks.append(f"FAIL: {len(leaders)} leaders elected (Raft requires exactly 1): "
+                          f"{[l['node_id'] for l in leaders]}")
 
         # Check 3: Writes succeeded
         total_wrote = sum(r.get("wrote", 0) for r in results)
@@ -228,7 +259,17 @@ class ClusterStressTest:
         else:
             checks.append(f"FAIL: Zero writes committed (total_wrote={total_wrote})")
 
-        # Check 4: No fatal errors
+        # Check 4: Leader's commit_index advanced (not -1) after majority replication
+        leader_res = leaders[0] if leaders else None
+        if leader_res is not None and leader_res.get("commit_index", -1) >= 0:
+            checks.append(f"PASS: Leader commit_index={leader_res['commit_index']} (advanced)")
+            passed += 1
+        elif leader_res is not None:
+            checks.append(f"FAIL: Leader commit_index={leader_res['commit_index']} (stuck at -1)")
+        else:
+            checks.append("SKIP: No leader to verify commit_index")
+
+        # Check 5: No fatal errors
         errors = [r for r in results if "error" in r]
         if not errors:
             checks.append("PASS: No fatal errors")
