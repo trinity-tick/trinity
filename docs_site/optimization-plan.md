@@ -92,8 +92,8 @@
 | 6 | **Redis 缓存生产开启**并量化命中率收益（benchmark 前后对比） | 检索延迟/TCO | 低 | ✅ supervisor 注入默认 redis；API 级 miss 18.4ms vs hit 10.2ms（OPT6） |
 | 7 | **KG 检索贡献分析**：逐类目开关 kgraph/47 通道，找出 SS/MS 提升组合（对齐 agentmemory 方法） | 检索质量提升可解释 | 中 | ✅ 部分：top_k 敏感性+mode 参数装饰性发现（OPT7）；kgraph 逐通道归因待 embedding 引擎可用后补 |
 | 8 | **A2A 跨进程落地**：SSE transport + registry 持久化 | 多智能体记忆共享真实可用 | 中 | ✅ HTTP 跨进程 6/6 PASS + sqlite 线程安全修复（OPT8） |
-| 9 | **会话状态化**：agent 级会话摘要/续接（Letta 思路） | 长会话体验 | 中高 | 未开始 |
-| 10 | **官方基准补测**：网络恢复后跑 LongMemEval-S/LoCoMo 真集（harness 先备好） | 权威背书 | 外部依赖 | harness 就绪（answer_eval.py），待网络 |
+| 9 | **会话状态化**：agent 级会话摘要/续接（Letta 思路） | 长会话体验 | 中高 | ✅ `trinity/daemon/session_state.py`：会话摘要（LLM 落库可检索）+ 续接包，demo 6/6 PASS（第十二轮） |
+| 10 | **官方基准补测**：网络恢复后跑 LongMemEval-S/LoCoMo 真集（harness 先备好） | 权威背书 | 外部依赖 | harness 就绪（answer_eval.py，支持 --categories），待网络 |
 
 ---
 
