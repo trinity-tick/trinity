@@ -1,0 +1,10 @@
+# Trinity v8.0 — Test Dependencies
+pytest>=7.4
+pytest-asyncio>=0.21
+pytest-timeout>=2.1
+httpx>=0.25
+requests>=2.28
+hnswlib  # optional: HNSW ANN index (requires C++ build tools on Windows)
+faiss-cpu  # optional: FAISS HNSW index (pre-built wheel, recommended)
+（内容由AI生成，仅供参考）
+（内容由AI生成，仅供参考）
