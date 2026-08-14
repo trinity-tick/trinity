@@ -1,3 +1,6 @@
+# DEPRECATED: This experimental module (M119) is not registered in __init__.py
+# and has no known internal consumers. It is retained for reference only.
+# Last assessed: 2026-08-08. Remove in a future cleanup cycle if unused.
 
 """
 M119 TrainFreeEngramMemory — 免训练短语语义记忆

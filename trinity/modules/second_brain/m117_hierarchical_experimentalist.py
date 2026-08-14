@@ -1,3 +1,6 @@
+# DEPRECATED: This experimental module (M117) is not registered in __init__.py
+# and has no known internal consumers. It is retained for reference only.
+# Last assessed: 2026-08-08. Remove in a future cleanup cycle if unused.
 #!/usr/bin/env python3
 """
 M117 - Hierarchical Experimentalist (三层实验主义者)

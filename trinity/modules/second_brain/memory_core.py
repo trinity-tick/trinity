@@ -5,6 +5,7 @@ HippocampalComplementaryMemory, IdentityPreservingConsolidator,
 ReasoningDriftAuditor, ContextObjectManager, MultiHeadMemoryPartition,
 ThreeLayerHierarchicalMemory
 """
+from __future__ import annotations
 
 import os, sys, time, math, random, uuid, json, hashlib
 from dataclasses import dataclass, field

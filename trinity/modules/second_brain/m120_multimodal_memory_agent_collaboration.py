@@ -1,3 +1,6 @@
+# DEPRECATED: This experimental module (M120) is not registered in __init__.py
+# and has no known internal consumers. It is retained for reference only.
+# Last assessed: 2026-08-08. Remove in a future cleanup cycle if unused.
 
 """
 M120 MultimodalMemoryAgentCollaboration — 多模态记忆增强Agent协作推荐
@@ -910,19 +913,9 @@ class MultimodalMemoryAgentCollaboration:
 # ============================================================================
 
 
-def run_self_test() -> MultimodalMemoryAgentCollaboration:
-    """Run comprehensive self-test for M120 MultimodalMemoryAgentCollaboration.
 
-    Returns:
-        Fully initialized and tested instance.
-    """
-    print(SEP)
-    print("  M120 MultimodalMemoryAgentCollaboration — 自检")
-    print(f"  Paper: {PAPER_REF}")
-    print(SEP)
-
-    rng = np.random.RandomState(42)
-
+def _test_attribute_and_reinforcement(rng: np.random.RandomState) -> None:
+    """Test steps 1-5: UserAttribute creation, AGGR reinforcement, negative feedback decay, reflection cycle."""
     # ── 1. UserAttribute 创建 ──
     attr = UserAttribute(
         attribute_id="attr_001",
@@ -976,6 +969,9 @@ def run_self_test() -> MultimodalMemoryAgentCollaboration:
           f"drift={report['drift_magnitude']:.6f}, "
           f"needed={report['drift_detected']}")
 
+
+def _test_dual_track_and_matching(rng: np.random.RandomState) -> None:
+    """Test steps 6-10: DualTrackMemoryArchitecture, interaction recording, matching scores, reflection."""
     # ── 6. DualTrackMemoryArchitecture 实例化 ──
     dt = DualTrackMemoryArchitecture(
         user_id="user_001",
@@ -1040,6 +1036,9 @@ def run_self_test() -> MultimodalMemoryAgentCollaboration:
     print(f"[PASS] 10. 双重反思: drift={ref_report['drift_magnitude']:.6f}, "
           f"history={ref_report['historical_attr_count']}/{ref_report['recent_attr_count']}")
 
+
+def _test_rrf_and_fusion() -> None:
+    """Test steps 11-12 + 17: MultimodalWeightedRRF instantiation, fusion, all four fusion modes."""
     # ── 11. MultimodalWeightedRRF 实例化 ──
     rrf = MultimodalWeightedRRF(
         k=60,
@@ -1069,6 +1068,21 @@ def run_self_test() -> MultimodalMemoryAgentCollaboration:
     print(f"[PASS] 12. RRF融合: {len(fused)} items, top={fused[0].item_id} "
           f"(score={fused[0].fused_score:.6f}, visual={fused[0].visual_evidence})")
 
+
+    # ── 17. 四种融合模式 ──
+    for mode in FusionWeightMode:
+        r = MultimodalWeightedRRF(weight_mode=mode)
+        result = r.fuse(r_rank, m_rank)
+        assert len(result) >= 3
+    print(f"[PASS] 17. 融合模式: STATIC/CONFIDENCE/ATTRIBUTE/ADAPTIVE 均通过")
+
+
+def _test_unified_pipeline(rng: np.random.RandomState) -> MultimodalMemoryAgentCollaboration:
+    """Test steps 13-18: MultimodalMemoryAgentCollaboration pipeline, recommend, reflect, diagnostics.
+
+    Returns:
+        MultimodalMemoryAgentCollaboration instance.
+    """
     # ── 13. MultimodalMemoryAgentCollaboration 统一入口 ──
     mmacr = MultimodalMemoryAgentCollaboration(
         user_id="user_001",
@@ -1121,12 +1135,6 @@ def run_self_test() -> MultimodalMemoryAgentCollaboration:
     assert "drift_magnitude" in refl
     print(f"[PASS] 16. 反思: drift={refl['drift_magnitude']:.6f}")
 
-    # ── 17. 四种融合模式 ──
-    for mode in FusionWeightMode:
-        r = MultimodalWeightedRRF(weight_mode=mode)
-        result = r.fuse(r_rank, m_rank)
-        assert len(result) >= 3
-    print(f"[PASS] 17. 融合模式: STATIC/CONFIDENCE/ATTRIBUTE/ADAPTIVE 均通过")
 
     # ── 18. 诊断 ──
     diag = mmacr.diagnostics()
@@ -1137,12 +1145,26 @@ def run_self_test() -> MultimodalMemoryAgentCollaboration:
           f"fusions={diag['rrf']['total_fusions']}, "
           f"reflections={diag['dual_track']['reflection']['total_reflections']}")
 
+    return mmacr
+
+def run_self_test() -> MultimodalMemoryAgentCollaboration:
+    """Run comprehensive self-test for M120 MultimodalMemoryAgentCollaboration.
+
+    Returns:
+        Fully initialized and tested instance.
+    """
+    rng = np.random.RandomState(42)
+    print(SEP)
+    print("  M120 MultimodalMemoryAgentCollaboration — 自检")
+    print(f"  Paper: {PAPER_REF}")
+    print(SEP)
+    _test_attribute_and_reinforcement(rng)
+    _test_dual_track_and_matching(rng)
+    _test_rrf_and_fusion()
+    mmacr = _test_unified_pipeline(rng)
     print(SUB)
     print("  [M120 自检结果] ALL_PASS — 18/18 项通过")
     print(SEP)
-
     return mmacr
-
-
 if __name__ == "__main__":
     run_self_test()
