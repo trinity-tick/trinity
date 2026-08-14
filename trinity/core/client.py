@@ -334,14 +334,64 @@ class Trinity:
         raw_results: List[Dict[str, Any]] = []
 
         if self._adapter:
-            if use_vector and hasattr(self._adapter, "_fts_available") and self._adapter._fts_available():
-                raw_results = self._search_with_vector(
-                    query=query,
-                    persona_id=persona_id or None,
-                    tenant_id=tenant_id or self.tenant_id,
-                    agent_id=agent_id or None,
-                    top_k=top_k,
-                )
+            _mode = (mode or "hybrid").lower()
+            # ── 真实 mode 路由（GEN-2，修复"mode 参数装饰性"）──────────
+            #   keyword/exact → FTS5 关键词（保持默认行为）
+            #   semantic       → 向量检索（可用时）；不可用回退 FTS5
+            #   hybrid         → 47 通道融合（仅当 hybrid retriever 已初始化，
+            #                    否则回退 FTS5 以保持默认路径不变）
+            #   graph          → 图谱检索（adapter 支持时）；否则回退 FTS5
+            _vector_available = (
+                hasattr(self._adapter, "_fts_available")
+                and self._adapter._fts_available()
+            )
+            _use_hybrid = (
+                _mode == "hybrid"
+                and self._hybrid_retriever is not None
+            )
+            _use_graph = (
+                _mode in ("graph", "hybrid")
+                and hasattr(self._adapter, "search_graph")
+            )
+            if _mode == "semantic" and (use_vector or _vector_available):
+                try:
+                    raw_results = self._search_with_vector(
+                        query=query,
+                        persona_id=persona_id or None,
+                        tenant_id=tenant_id or self.tenant_id,
+                        agent_id=agent_id or None,
+                        top_k=top_k,
+                    )
+                except Exception:
+                    # 向量路径不可用 → 回退 FTS5
+                    raw_results = self._adapter.search_memories(
+                        query=query,
+                        persona_id=persona_id or None,
+                        tenant_id=tenant_id or self.tenant_id,
+                        agent_id=agent_id or None,
+                        app_id=app_id,
+                        session_id=session_id,
+                        category=category,
+                        top_k=top_k,
+                    )
+            elif _use_hybrid:
+                try:
+                    raw_results = self.search_hybrid(
+                        query=query, top_k=top_k, strategy="fusion",
+                        agent_id=agent_id, persona_id=persona_id,
+                        tenant_id=tenant_id,
+                    ).get("results", [])
+                except Exception:
+                    raw_results = []
+            elif _use_graph:
+                try:
+                    raw_results = self._adapter.search_graph(
+                        query=query, top_k=top_k,
+                        persona_id=persona_id or None,
+                        tenant_id=tenant_id or self.tenant_id,
+                    )
+                except Exception:
+                    raw_results = []
             else:
                 raw_results = self._adapter.search_memories(
                     query=query,
@@ -1215,6 +1265,13 @@ class Trinity:
     ) -> List[str]:
         """为新写入的记忆自动创建语义关联链接（向量相似度 > 0.85）。
 
+        批量嵌入（单次引擎调用）+ numpy 向量化相似度计算，避免逐条
+        embed 调用导致写入路径超时（11k 记忆库实测 94s → 秒级）。
+
+        可通过环境变量控制：
+          - TRINITY_AUTO_LINK=off  关闭自动关联（写入最快速路径）
+          - TRINITY_AUTO_LINK_MAX=N  候选记忆上限（默认 100）
+
         Args:
             memory_id: 新记忆 ID。
             content: 记忆内容。
@@ -1222,6 +1279,8 @@ class Trinity:
         Returns:
             成功创建链接的目标记忆 ID 列表。
         """
+        if os.environ.get("TRINITY_AUTO_LINK", "on").lower() in ("off", "0", "false"):
+            return []
         linked: List[str] = []
         try:
             if not self._embedding_engine:
@@ -1229,38 +1288,54 @@ class Trinity:
                 self._embedding_engine = create_engine()
             import numpy as np
 
-            # 获取新记忆向量
-            new_vec = np.array(self._embedding_engine.embed(content))
-
-            # 获取已有记忆
+            # 获取已有记忆（候选上限可配置）
             existing = []
             if self._adapter and hasattr(self._adapter, "get_all_memories"):
-                existing = self._adapter.get_all_memories(limit=200)
+                try:
+                    max_candidates = int(os.environ.get("TRINITY_AUTO_LINK_MAX", "100"))
+                except ValueError:
+                    max_candidates = 100
+                existing = self._adapter.get_all_memories(limit=max_candidates)
             if not existing:
                 return linked
 
-            for mem in existing:
-                mid = mem.get("memory_id", "")
-                if mid == memory_id:
-                    continue
-                # 尝试从向量索引查相似度；若无索引则跳过
-                mem_content = mem.get("content", "")
-                if not mem_content:
-                    continue
-                try:
-                    mem_vec = np.array(self._embedding_engine.embed(mem_content))
-                    similarity = float(
-                        np.dot(new_vec, mem_vec)
-                        / (np.linalg.norm(new_vec) * np.linalg.norm(mem_vec))
+            # 候选对齐：仅保留有内容、非自身的记忆
+            candidates = [
+                (mem, mem.get("content", ""))
+                for mem in existing
+                if mem.get("memory_id") and mem.get("memory_id") != memory_id
+                and mem.get("content")
+            ]
+            if not candidates:
+                return linked
+
+            # 批量嵌入：新内容 + 全部候选，单次引擎调用
+            texts = [content] + [c[1] for c in candidates]
+            if hasattr(self._embedding_engine, "embed_batch"):
+                vecs = self._embedding_engine.embed_batch(texts)
+            else:
+                vecs = [self._embedding_engine.embed(t) for t in texts]
+
+            new_vec = np.asarray(vecs[0], dtype=np.float32)
+            new_norm = np.linalg.norm(new_vec)
+            if new_norm > 1e-8:
+                new_vec = new_vec / new_norm
+
+            matrix = np.vstack(
+                [np.asarray(v, dtype=np.float32) for v in vecs[1:]]
+            )
+            norms = np.linalg.norm(matrix, axis=1)
+            norms[norms < 1e-8] = 1.0
+            sims = (matrix @ new_vec) / norms
+
+            for (mem, _), similarity in zip(candidates, sims):
+                sim = float(similarity)
+                if sim > 0.85:
+                    self._adapter.create_memory_link(
+                        memory_id, mem["memory_id"], link_type="semantic",
+                        strength=round(sim, 3),
                     )
-                    if similarity > 0.85:
-                        self._adapter.create_memory_link(
-                            memory_id, mid, link_type="semantic",
-                            strength=round(similarity, 3),
-                        )
-                        linked.append(mid)
-                except Exception:
-                    continue
+                    linked.append(mem["memory_id"])
         except Exception:
             pass
         return linked
@@ -1480,6 +1555,50 @@ class Trinity:
                     pass
             return result
         return True
+
+    def update_memory(
+        self,
+        memory_id: str,
+        new_content: str,
+        importance: Optional[float] = None,
+        tags: Optional[List[str]] = None,
+        category: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Update memory (conflict-preserving versioning).
+
+        Old version rows are retained in the audit chain; the memories row is
+        bumped to version + 1 with a recomputed SHA-256 hash.
+
+        Returns:
+            Dict with memory_id, old_version, new_version, sha256_hash,
+            timestamp and status.
+
+        Raises:
+            ValueError: If memory_id not found or adapter lacks update support.
+        """
+        if not self._adapter or not hasattr(self._adapter, "update_memory"):
+            raise ValueError(
+                f"update_memory not supported by adapter: {type(self._adapter).__name__}"
+            )
+        current = self._adapter.get_memory(memory_id)
+        old_version = current.get("version", 0) if current else 0
+        result = self._adapter.update_memory(
+            memory_id=memory_id,
+            content=new_content,
+            importance=importance,
+            tags=tags,
+            category=category,
+        )
+        if result is None:
+            raise ValueError(f"Memory not found: {memory_id}")
+        return {
+            "memory_id": memory_id,
+            "old_version": old_version,
+            "new_version": result.get("version"),
+            "sha256_hash": result.get("sha256_hash"),
+            "timestamp": result.get("updated_at"),
+            "status": result.get("status"),
+        }
 
     def get_version_chain(self, memory_id: str) -> List[Dict[str, Any]]:
         if self._adapter:

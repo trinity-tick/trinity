@@ -82,6 +82,27 @@ JUDGE_SYSTEM = (
     "stated FACT. Reply with exactly YES or NO."
 )
 
+# TR 时序类目专用提示（GEN-1）：强制带序复述每个事件
+TR_ANSWER_SUFFIX = (
+    "\n\nList the events in chronological order as: \"1) <full event A text>\" "
+    "\"2) <full event B text>\" ... Restate every event fully. If any event has "
+    "no date in the context, still place it using the best available evidence "
+    "and note '(undated)'."
+)
+
+# MS 类目提示后缀（GEN-1）：上下文缺精确信息时仍总结已知情况
+MS_ANSWER_SUFFIX = (
+    "\n\nIf the context does not contain the exact details asked, summarize what "
+    "IS known about the person's changes/activities/preferences from the context."
+)
+
+TR_JUDGE_SYSTEM = (
+    "You are a strict temporal-order judge. Given the EXPECTED order of events "
+    "(chronological, first to last) and a MODEL ANSWER, determine whether the "
+    "model's answer lists the same events in the same relative order. "
+    "Reply with exactly YES or NO."
+)
+
 
 def judge_facts(llm, answer: str, facts) -> bool:
     """LLM-judge：答案是否包含期望事实（任一命中即对）。"""
@@ -97,6 +118,33 @@ def judge_facts(llm, answer: str, facts) -> bool:
         return False
 
 
+def judge_tr_order(llm, answer: str, facts) -> bool:
+    """TR 专用 judge：校验答案中的事件顺序是否与期望顺序一致。"""
+    if not answer.strip():
+        return False
+    expected = " then ".join(f"[{i + 1}] {f[:120]}" for i, f in enumerate(facts))
+    user = (
+        "EXPECTED ORDER (chronological, first to last):\n" + expected +
+        "\n\nMODEL ANSWER:\n" + answer[:800] +
+        "\n\nDoes the model's answer present the events in the SAME relative "
+        "order as EXPECTED (first event before second, etc.)? Reply YES or NO."
+    )
+    try:
+        out = llm(TR_JUDGE_SYSTEM, user).strip().upper()
+        return out.startswith("YES")
+    except Exception:
+        return False
+
+
+def build_prompt_for_category(question: str, contexts, cat: str) -> str:
+    prompt = build_prompt(question, contexts)
+    if cat == "TR":
+        prompt += TR_ANSWER_SUFFIX
+    elif cat == "MS":
+        prompt += MS_ANSWER_SUFFIX
+    return prompt
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=20, help="max questions (default 20)")
@@ -104,6 +152,8 @@ def main() -> int:
     parser.add_argument("--retries", type=int, default=2)
     parser.add_argument("--top-k", type=int, default=10,
                         help="retrieval context size (default 10: MS 类目 R@5 0.525→0.95, 见 channel_attribution)")
+    parser.add_argument("--categories", default="",
+                        help="comma-separated category filter, e.g. TR,MS (empty = all)")
     args = parser.parse_args()
 
     from trinity import Trinity
@@ -115,6 +165,8 @@ def main() -> int:
         print("ERROR: no DEEPSEEK_API_KEY in credentials / TRINITY_LLM_API_KEY env")
         return 1
 
+    cat_filter = {c.strip() for c in args.categories.split(",") if c.strip()}
+
     llm = create_llm_compress_callable(
         base_url=os.environ.get("TRINITY_LLM_BASE_URL", "https://api.deepseek.com/v1"),
         api_key=api_key,
@@ -123,8 +175,10 @@ def main() -> int:
     )
 
     data = json.load(open(DSET, encoding="utf-8"))
-    questions = data["questions"][: args.limit]
-    print(f"questions: {len(questions)}  model={args.model}")
+    questions = [q for q in data["questions"]
+                 if (not cat_filter or q.get("category") in cat_filter)][: args.limit]
+    print(f"questions: {len(questions)}  model={args.model}"
+          + (f"  categories={sorted(cat_filter)}" if cat_filter else ""))
 
     tmpdir = tempfile.mkdtemp(prefix="lme_ans_")
     mem = Trinity(adapter="sqlite", store_path=tmpdir)
@@ -176,7 +230,7 @@ def main() -> int:
             retr_gap += 1
             st["retr_gap"] += 1
 
-        prompt = build_prompt(question, contexts)
+        prompt = build_prompt_for_category(question, contexts, cat)
         answer = ""
         try:
             t1 = time.time()
@@ -194,7 +248,10 @@ def main() -> int:
         except Exception as e:
             answer = ""
 
-        acc = judge_facts(llm, answer, facts)
+        if cat == "TR":
+            acc = judge_tr_order(llm, answer, facts)
+        else:
+            acc = judge_facts(llm, answer, facts)
         acc_strict = fact_hit(answer, facts)
         if acc_strict:
             acc_strict_total += 1

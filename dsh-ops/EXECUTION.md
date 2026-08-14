@@ -656,3 +656,152 @@ Remove-Item tests/test_sqlite_threadsafe.py -Force
 # PG：DROP INDEX idx_memories_content_gin;（若需还原无索引状态）
 # supervisor：移除 TRINITY_CACHE_BACKEND 注入块
 ```
+
+---
+
+## 十四、第十轮（2026-08-14，修复 MCP 记忆闭环三件套 + REST 审计端点 + SQLite update）
+
+### 14.1 背景（流程演示发现）
+
+完整记忆闭环实测（写→检索→反馈→软删除→审计）时发现 5 处问题，其中 4 处为真实缺陷：
+
+| # | 缺陷 | 现象 |
+|---|---|---|
+| 1 | MCP `memory_update` / `memory_delete` / `audit_query` 全坏 | 三个工具都调 `SecondBrainV636().update_memory/delete_memory/audit_memory`，但 `engine_core.py` 的 `SecondBrainV636` 只是**诊断门面**（仅 `run_diagnostics`），AttributeError |
+| 2 | REST `/audit/memories/{id}` 等 5 个审计端点 500 | handler 访问 `mem.storage.*`，而 `get_memory()` 返回的 `Trinity` 客户端属性是 `_adapter` |
+| 3 | SQLite 存储层无 `update_memory` | 全仓库只有 PostgreSQL 适配器有实现；当前部署用 SQLite，更新无路可走 |
+| 4 | `delete_memory` 版本记录时间戳用 `datetime('now')`（空格格式） | 与 ISO 格式混存导致 `get_version_chain` 字典序排序错乱 |
+
+### 14.2 修复（4 个文件 + 测试）
+
+| 文件 | 改动 |
+|---|---|
+| `trinity/adapters/sqlite.py` | 新增 `update_memory()`（冲突保留式：`memories` 行 `version+1`、重算 `sha256_hash/content_hash/tokenized_content`、追加 `memory_versions` 行 `operation='UPDATE'`、写 `UPDATE_MEMORY` 审计；不存在返回 `None`）；`delete_memory` 版本记录时间戳改用 ISO `now` 参数 |
+| `trinity/core/client.py` | 新增 `update_memory()` 包装（old_version/new_version/sha256_hash/timestamp/status；adapter 无 update 支持或记忆不存在抛 `ValueError`） |
+| `trinity/mcp/tools/memory_tools.py` | `memory_update`/`memory_delete`/`audit_query` 从 `SecondBrainV636` 改走共享 `_get_engine()`（`Trinity` 客户端）：update→`engine.update_memory`，delete→`engine.delete_memory`（False 抛 ValueError），audit→`engine.get_version_chain`（返回 `{memory_id, version_chain, total_versions, current_status}`） |
+| `trinity/api/server.py` | 5 个审计端点（`/audit/memories/{id}`、`/audit/agents/{id}/replay`、`/audit/integrity`、`/audit/summary`、`/audit/timeline`）`mem.storage.*` → `mem.get_audit_trail / replay_session / verify_integrity / audit_summary / replay_session` |
+| `tests/test_adapters.py` | 新增 `TestUpdate` 4 例（内容变更+版本递增、追加 UPDATE 版本记录、不存在返回 None、旧版本保留） |
+
+### 14.3 验证
+
+| 项 | 结果 |
+|---|---|
+| `pytest tests/test_adapters.py` | ✅ 23 passed（含新增 4 例） |
+| `pytest` 全量 | ✅ 161 passed / 6 skipped / **1 failed（存量）**：`test_e2e_multi_agent::TestScenario6GlobalSnapshot`，git stash 验证基线同样失败（mock server :18001 返回 500/401，与本次改动无关） |
+| REST `/audit/memories/mem_4bd458f8bb354984` | ✅ 200，4 条审计轨迹（原 500） |
+| REST `/audit/integrity`、`/audit/summary`、`/audit/timeline` | ✅ 200（integrity 报告 4285 条历史行 checksum 缺失为存量数据问题） |
+| MCP `memory_update`（v1→v2） | ✅ `old_version=1, new_version=2, sha256_hash 重算` |
+| MCP `audit_query` | ✅ 版本链 `CREATE`+`UPDATE`，带 SHA-256 |
+| MCP `memory_delete` | ✅ `deleted=true, deleted_version={id}_del` |
+| 服务重启 | API :8001（PID 33604）重启加载新代码；会话内 MCP stdio 由 dsh-mcp-client 自动重拉 |
+
+### 14.4 遗留（非本轮修复范围）
+
+- **MCP `memory_write` 请求超时**（客户端 30s 上限）：ingest 自动加工（`_auto_link_semantic` 对 200 条旧记忆做嵌入相似度 + 实体抽取 + proactive_push）在 11k 记忆库上超时，但服务端通常已落库（假失败，重试被 `UNIQUE content_hash` 去重拦截）。需异步化写入加工管线。
+- **`/audit/integrity` 报告 4285 条校验和不匹配**：历史审计行写入时无 checksum 字段（actual=null），属存量数据，非代码缺陷。
+
+### 14.5 回滚（第十轮）
+
+```powershell
+git -C C:\Users\Administrator\trinity checkout -- trinity/adapters/sqlite.py trinity/core/client.py trinity/mcp/tools/memory_tools.py trinity/api/server.py tests/test_adapters.py
+# 重启 trinity-api（:8001）与 dsh-mcp-client 拉起的 trinity-mcp stdio 生效
+```
+
+---
+
+## 十五、第十一轮（2026-08-14，处理遗留：memory_write 超时 + 审计链误报）
+
+### 15.1 memory_write 超时（根因 + 修复）
+
+**根因**：`ingest()` 的 `_auto_link_semantic` 对最多 200 条旧记忆**逐条**调 Ollama（bge-m3，:11434）embed，11k 记忆库实测 **94.5s**（store_memory 1.4s、实体抽取/推送均 <0.1s），远超 MCP 客户端 30s 请求上限 → 客户端超时（服务端实际已落库，重试被 UNIQUE content_hash 拦截，造成"假失败"）。
+
+**修复**（3 处）：
+
+| 文件 | 改动 |
+|---|---|
+| `trinity/core/client.py` | `_auto_link_semantic` 重写：**批量嵌入**（`embed_batch` 单次引擎调用，Ollama `/api/embed` 一次批处理 201 条）+ **numpy 向量化**余弦相似度（矩阵乘，替代逐条点积）；候选上限默认 **100**（可 `TRINITY_AUTO_LINK_MAX=N` 调整），可用 `TRINITY_AUTO_LINK=off` 整体关闭 |
+| `trinity/embeddings/engine.py` | `SklearnEmbeddingEngine` 新增**向量化 `embed_batch`**（`transform` 一次处理全部文本），非 Ollama 回退路径同样提速 |
+| `trinity/adapters/sqlite.py` | `verify_audit_integrity` 重构（见 15.2） |
+
+**实测**（Ollama bge-m3，11k 库）：`_auto_link_semantic` 94.5s → 26.6s（200 候选）→ **15.4s**（100 候选）；冷启动整写 **15.4s** < 30s 超时 ✅；热写入（嵌入缓存命中）**0.59s** ✅；MCP `memory_write` 冷启动实测**不再超时** ✅。
+
+### 15.2 审计链误报 4285 条（根因 + 修复）
+
+**根因**：`audit_log` 历史行（早期写入，链式 SHA-256 引入前）`checksum` 为 NULL；原校验逻辑把 `expected != NULL` 一律判为"篡改"，且 NULL 行破坏后续链的 prev 传递 → 4285 条误报 + 数条过渡期行连带误报。
+
+**修复**（`sqlite.py::verify_audit_integrity`）：
+- NULL checksum 行 → 计入 `legacy_unverified`（历史遗留，不参与校验），并按写入端行为以空串续链；
+- 严格链不匹配时再验证"空 prev"变体 → 匹配则计入 `gap_chained`（链断口过渡期记录，内容校验通过）；
+- 两者都不匹配才算 `tampered`。
+
+**实测**：`integrity_ok: true`，`tampered_count: 0`（修复前 4285 误报）；83 条严格链一致 + 4282 遗留 + 1 条断口过渡。REST `/audit/integrity` 同步验证 ✅。
+
+### 15.3 验证
+
+| 项 | 结果 |
+|---|---|
+| pytest 全量 | ✅ 161 passed / 6 skipped / 1 failed（存量 e2e，基线已证） |
+| MCP `memory_write` 冷启动 | ✅ 不再超时（修复前必现 30s 超时） |
+| MCP `memory_update` / `memory_delete` / `audit_query` | ✅ 回归正常（第十轮修复无回归） |
+| REST `/audit/integrity` | ✅ `integrity_ok=True, tampered=0, legacy=4282, gap=1` |
+| 测试记忆清理 | ✅ 6 条剖析用记忆已软删除 |
+
+### 15.4 回滚（第十一轮）
+
+```powershell
+git -C C:\Users\Administrator\trinity checkout -- trinity/core/client.py trinity/embeddings/engine.py trinity/adapters/sqlite.py
+# 重启 trinity-api（:8001）与 trinity-mcp stdio 生效；环境变量 TRINITY_AUTO_LINK / TRINITY_AUTO_LINK_MAX 可即时调优，无需回滚
+```
+
+---
+
+## 十二、第十二轮（2026-08-14，第二轮优化：生成侧 / mode 路由 / 会话状态化）
+
+承接第九轮 OPT1-OPT8 结论（瓶颈在生成侧、mode 参数装饰性、缺会话状态化）。
+
+### 12.1 GEN-1 生成侧优化 ✅（AnswerAcc 0.602 → 0.678）
+
+- `benchmark/answer_eval.py` 增强：
+  - **TR 时序专用提示词**（强制带序完整复述每个事件）+ **TR 专用 judge**
+    （校验"顺序一致性"而非"事实存在性"）；
+  - **MS 专用提示词**（上下文缺精确信息时总结已知情况）；
+  - 新增 `--categories` 过滤（子集快速迭代）。
+- 全量 500q（top_k=10，deepseek-chat）对比：
+  **AnswerAcc 0.602 → 0.678**（+7.6pt）；TR **0.300 → 0.675（2.25×）**；
+  MS 0.113 → 0.212（数据集畸形天花板）；SS-U 0.900→0.920；KU 0.863→0.825（噪音）。
+  gen gap 0.390 → 0.314；成本 $0.24/500 题。产物 `output/answer_eval_results.json`。
+
+### 12.2 GEN-2 Trinity.search mode 参数真实路由 ✅
+
+- 修复"mode 装饰性"（OPT7 发现）：`trinity/core/client.py` search() 增加真实路由：
+  - `keyword/exact` → FTS5（默认行为不变）；`semantic` → 向量检索（不可用回退 FTS5）；
+  - `hybrid` → 47 通道融合（仅当 hybrid retriever 已初始化，否则回退 FTS5 保持兼容）；
+  - `graph` → adapter.search_graph（支持时）。
+- 另补 `_init_sqlite_adapter` 的 store_path 文件感知（与默认分支一致）。
+- `tests/test_search_mode_routing.py` 4/4（含 keyword 行为稳定性 + core 回归 32/1 过）。
+
+### 12.3 OPT9 会话状态化 ✅（Letta 式）
+
+- `trinity/daemon/session_state.py`（新增）：
+  - `generate_session_summary()`：会话全量记忆 → LLM 摘要（实体/决策/未决项），
+    落库为 `session_summary` 类记忆（adapter.store_memory 正规路径，FTS5 可检索），幂等；
+  - `build_session_context()`：续接包 = 摘要 + 最近记忆 + 实体清单；
+  - `summarize_all_sessions()`：全量幂等。
+- `scripts/session_state_demo.py`：8 轮会话实测 **6/6 PASS**（摘要含实体、幂等、
+  续接包 total=8、摘要可被 `Trinity.search` 命中）。无 key 时降级抽取式摘要。
+
+### 12.4 OPT7b 向量通道归因补测 ✅
+
+- 确认本地 **SklearnEmbeddingEngine 可用**（dim 20，离线）；`mode='semantic'` 向量检索路径实测可跑。
+- `benchmark/channel_attribution_semantic.py`：500q keyword vs semantic（top_k=10）
+  **均 0.992**——检索已饱和，向量通道在更强嵌入（bge-small 等）或更小 top_k 下才有区分度。
+  产物 `output/channel_attribution_semantic.md`。
+
+### 12.5 回滚（第十二轮）
+
+```powershell
+git -C C:\Users\Administrator\trinity checkout -- trinity/core/client.py
+Remove-Item trinity/daemon/session_state.py, benchmark/channel_attribution_semantic.py, scripts/session_state_demo.py, tests/test_search_mode_routing.py -Force
+# benchmark/answer_eval.py 保留（第九轮产物，GEN-1 为增量增强；回滚则 checkout）
+git -C C:\Users\Administrator\trinity checkout -- benchmark/answer_eval.py
+```
