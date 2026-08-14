@@ -43,7 +43,10 @@ class SQLiteAdapter(StorageAdapter):
     def connect(self) -> None:
         """Connect to SQLite database and create tables if needed."""
         os.makedirs(os.path.dirname(self.db_path) or ".", exist_ok=True)
-        self._conn = sqlite3.connect(self.db_path, timeout=10.0)
+        # check_same_thread=False：允许 FastAPI/HTTP 线程池等跨线程复用同一连接
+        # （SQLite 连接默认线程绑定，多线程服务调用 search/store 会抛
+        #  "SQLite objects created in a thread can only be used in that same thread"）
+        self._conn = sqlite3.connect(self.db_path, timeout=10.0, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._apply_pragmas()
         self._create_tables()
@@ -1207,6 +1210,88 @@ class SQLiteAdapter(StorageAdapter):
         )
         conn.commit()
         return True
+
+    def update_memory(
+        self,
+        memory_id: str,
+        content: Optional[str] = None,
+        importance: Optional[float] = None,
+        tags: Optional[List[str]] = None,
+        category: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Update an existing memory with version tracking (conflict-preserving).
+
+        Old version rows stay in memory_versions untouched; a new version row
+        with operation 'UPDATE' is appended. The memories row is bumped to
+        version + 1 with recomputed sha256/content_hash/tokenized_content.
+        An UPDATE_MEMORY audit log entry is written.
+
+        Returns:
+            The updated memory row as a dict, or None if memory_id not found.
+        """
+        conn = self._conn
+        if not conn:
+            return None
+
+        cursor = conn.execute(
+            "SELECT * FROM memories WHERE memory_id = ?", (memory_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None
+        current = dict(row)
+
+        now = datetime.now(timezone.utc).isoformat()
+        version_id = f"ver_{uuid.uuid4().hex[:12]}"
+
+        new_content = content if content is not None else current.get("content", "")
+        new_importance = (
+            importance if importance is not None
+            else float(current.get("importance", 0.5))
+        )
+        current_tags = current.get("tags") or "[]"
+        new_tags = (
+            tags if tags is not None
+            else (json.loads(current_tags) if isinstance(current_tags, str) else current_tags)
+        )
+        new_category = (
+            category if category is not None
+            else current.get("category", "general")
+        )
+
+        sha256_hash = self._compute_sha256(new_content)
+        tokenized = self._tokenize_content_for_fts(new_content)
+
+        conn.execute("""
+            UPDATE memories
+            SET content = ?, tokenized_content = ?, importance = ?, tags = ?,
+                category = ?, sha256_hash = ?, content_hash = ?,
+                version = version + 1, updated_at = ?
+            WHERE memory_id = ?
+        """, (new_content, tokenized, new_importance,
+              json.dumps(new_tags, ensure_ascii=False),
+              new_category, sha256_hash, sha256_hash, now, memory_id))
+
+        conn.execute("""
+            INSERT INTO memory_versions
+            (version_id, memory_id, content, sha256_hash, operation, created_at)
+            VALUES (?, ?, ?, ?, 'UPDATE', ?)
+        """, (version_id, memory_id, new_content, sha256_hash, now))
+
+        self._write_audit_log(
+            action="UPDATE_MEMORY",
+            memory_id=memory_id,
+            persona_id=current.get("persona_id"),
+            content_hash=sha256_hash,
+            metadata={"old_version": current.get("version", 1)},
+        )
+        conn.commit()
+
+        cursor = conn.execute(
+            "SELECT * FROM memories WHERE memory_id = ?", (memory_id,)
+        )
+        updated = cursor.fetchone()
+        return dict(updated) if updated else None
 
     def get_version_chain(self, memory_id: str) -> List[Dict[str, Any]]:
         conn = self._conn

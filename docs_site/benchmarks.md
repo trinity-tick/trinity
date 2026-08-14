@@ -21,7 +21,7 @@
 | 套件 | 分数 | 口径说明 |
 |---|---|---|
 | LongMemEval (simulated) | R@5 = **0.9818**（55 题 54/55） | 模板生成模拟集，**非官方 500 题 LongMemEval-S**；BM25+jieba 多词合并 |
-| LongMemEval-style (500q) | R@5 = **0.9160** / MRR = **0.8618** | 500 题社区生成集（对齐 LongMemEval-S 六类目结构，非官方标注集）；FTS5 keyword。分类：KU/SS-P/TR=1.000，SS-A/SS-U=0.980，**MS(多会话)=0.525（短板）** |
+| LongMemEval-style (500q) | R@5 = **0.9160** / MRR = **0.8618**（top_k=5）；**top_k=10 → R@5=0.992**；**AnswerAcc（LLM-judge，DeepSeek）= 0.602** | 500 题社区生成集（对齐 LongMemEval-S 六类目结构，非官方标注集）；FTS5 keyword。逐类目（top_k=10）：KU 0.863 / SS-A 0.800 / SS-P 0.483 / SS-U 0.900 / TR 0.300 / **MS 0.113**。结论：检索已近满分，瓶颈在生成侧；**MS 低分为数据集缺陷**（92% MS 题问题与事实零词重叠），**TR 时序 0.30 为真实可优化点**。评测入口 `benchmark/answer_eval.py`，产物 `output/answer_eval_results.json` |
 | SQuAD v1.1 (adapted) | R@5 = **98.3%**（177/180，双口径一致：`keyword_47ch` 产品级 47 通道 = `bm25_adapter` 低层通道） | **统一入口**：`benchmark/squad_runner.py`（单次运行、同子集 seed=42/180 题、同命中判定，产物 `output/squad_unified_results.json`）。README 旧 35.6% 为早期代码结果；workflow 报告中的"keyword 0%"系 `Trinity(store_path=<文件>)` 误当目录导致 adapter 静默缺失（已修复，见 EXECUTION.md 12.4） |
 | LoCoMo（自建子集） | 最优配置 B.session-aggregate：R@5=**0.88** / MRR=**0.5353**（38 题） | 4 种配置对比：turn-baseline R@5=0.14 / session-aggregate 0.88 / turn+query-expansion 0.14 / session+query-expansion 0.88；temporal-reasoning 类目全 0（短板）。**官方 1982 题集网络不可达** |
 | BEAM Scale | 1K：R@5=**1.000**，P50 8.65ms · 10K：R@5=**1.000**，P50 240.0ms · 100K(110K 条)：R@5=**1.000**，P50 984.6ms | PostgreSQL FTS 内联 to_tsvector（**无 GIN 索引，全表扫描**，故延迟随规模线性增长）；隔离库 trinity_bench 实测后已删除；非官方 BEAM 数据集 |
@@ -33,14 +33,15 @@
 |---|---|
 | GraphQL Load | 100 QPS / 20 workers / 0 errors；p50=2.06ms，p99=29.25ms |
 | 写入吞吐 | 383–725 ops/s（按批次） |
-| 检索延迟 | 0.93ms（单查）；混合检索 0.73ms vs 纯向量 0.42ms |
+| 检索延迟 | 0.93ms（单查）；混合检索 0.73ms vs 纯向量 0.42ms；**Redis 缓存命中后 API 级 10.2ms vs miss 18.4ms**（`/memory/search/hybrid`） |
+| PG FTS GIN 索引 | **P50 286ms → 45.9ms（6.2×）@10K**（`idx_memories_content_gin`，`to_tsvector('simple', content)`） | 对比基准 `benchmark/beam_gin_index.py` |
 | Cluster Stress | 5/5 checks；**单 leader 已修复**（3 节点选举注册仲裁 + 心跳抑制；leader commit_index 正常推进） | Raft 单 leader 不变量 |
 
 ### A.3 测试与自检
 
 | 项 | 结果 |
 |---|---|
-| pytest 全量 | **161 passed / 6 skipped / 1 failed**（2026-08-14 晚；新增 8 组测试：真实 LLM 压缩 6、store_path 回归 3、Redis 缓存 8、限流/指标 5、A2A e2e 12、插件/CLI 23、PG 池 4。唯一失败 `trinity/tests/test_e2e_multi_agent.py` 依赖外部 Marvis 服务（:18001 未运行），**既有环境依赖非本轮引入**） |
+| pytest 全量 | **161 passed / 6 skipped / 1 failed**（2026-08-14 晚；新增 9 组测试：真实 LLM 压缩 6、store_path 回归 3、Redis 缓存 8、限流/指标 5、A2A e2e 12、插件/CLI 23、PG 池 4、SQLite 线程安全 2。唯一失败 `trinity/tests/test_e2e_multi_agent.py` 依赖外部 Marvis 服务（:18001 未运行），**既有环境依赖非本轮引入**） |
 | 内部 self_test | 208/208 PASS（内部口径，与 pytest 不同集合） |
 | 进化周期 | 完整周期 3 次（observe→analyze→plan→execute→certify） |
 

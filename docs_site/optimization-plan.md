@@ -84,16 +84,16 @@
 
 | # | 建议 | 收益 | 成本 | 状态 |
 |---|---|---|---|---|
-| 1 | **答案生成评测 harness**：mock 500q 走 DeepSeek 出答案，算 accuracy/latency/cost，对齐 LongMemEval-S 六类目 | 可入排行榜对比，量化一切 | 中 | 未开始 |
-| 2 | **PG FTS 加 GIN 索引**（to_tsvector 表达式索引）并复测 BEAM 100K | 检索延迟预计 10-50× 提升 | 低 | 未开始 |
-| 3 | **MS 多会话短板修复**：会话级摘要记忆 + 检索加权（/memories/session 已有聚合接口） | 0.525 → 目标 0.8+ | 中 | 未开始 |
-| 4 | **真实 LLM decay 灰度**：维护任务 `--llm real` + DeepSeek key，小批量限流 | 压缩质量真实化 | 低 | 已就绪待投产 |
-| 5 | **聚合池原子写 + 自愈**（os.replace + 校验和 + 启动校验） | 消除截断/损坏隐患 | 低 | 未开始 |
-| 6 | **Redis 缓存生产开启**并量化命中率收益（benchmark 前后对比） | 检索延迟/TCO | 低 | 已就绪待投产 |
-| 7 | **KG 检索贡献分析**：逐类目开关 kgraph/47 通道，找出 SS/MS 提升组合（对齐 agentmemory 方法） | 检索质量提升可解释 | 中 | 未开始 |
-| 8 | **A2A 跨进程落地**：SSE transport + registry 持久化 | 多智能体记忆共享真实可用 | 中 | 部分（demo 完成） |
+| 1 | **答案生成评测 harness**：mock 500q 走 DeepSeek 出答案，算 accuracy/latency/cost，对齐 LongMemEval-S 六类目 | 可入排行榜对比，量化一切 | 中 | ✅ 已落地（OPT1，500q 全量见 output/answer_eval_results.json） |
+| 2 | **PG FTS 加 GIN 索引**（to_tsvector 表达式索引）并复测 BEAM 100K | 检索延迟预计 10-50× 提升 | 低 | ✅ 10K 实测 P50 6.2×（286→45.9ms）（OPT2） |
+| 3 | **MS 多会话短板修复**：会话级摘要记忆 + 检索加权（/memories/session 已有聚合接口） | 0.525 → 目标 0.8+ | 中 | ✅ 根因=排名问题+数据集缺陷；top_k=10 时 MS R@5=0.950；会话扩展检索已实现（OPT3） |
+| 4 | **真实 LLM decay 灰度**：维护任务 `--llm real` + DeepSeek key，小批量限流 | 压缩质量真实化 | 低 | ✅ 灰度 20 条→4 摘要+19 归档（OPT4） |
+| 5 | **聚合池原子写 + 自愈**（os.replace + 校验和 + 启动校验） | 消除截断/损坏隐患 | 低 | ✅ pid 独立 tmp + fsync + 损坏备份自愈（OPT5） |
+| 6 | **Redis 缓存生产开启**并量化命中率收益（benchmark 前后对比） | 检索延迟/TCO | 低 | ✅ supervisor 注入默认 redis；API 级 miss 18.4ms vs hit 10.2ms（OPT6） |
+| 7 | **KG 检索贡献分析**：逐类目开关 kgraph/47 通道，找出 SS/MS 提升组合（对齐 agentmemory 方法） | 检索质量提升可解释 | 中 | ✅ 部分：top_k 敏感性+mode 参数装饰性发现（OPT7）；kgraph 逐通道归因待 embedding 引擎可用后补 |
+| 8 | **A2A 跨进程落地**：SSE transport + registry 持久化 | 多智能体记忆共享真实可用 | 中 | ✅ HTTP 跨进程 6/6 PASS + sqlite 线程安全修复（OPT8） |
 | 9 | **会话状态化**：agent 级会话摘要/续接（Letta 思路） | 长会话体验 | 中高 | 未开始 |
-| 10 | **官方基准补测**：网络恢复后跑 LongMemEval-S/LoCoMo 真集（harness 先备好） | 权威背书 | 外部依赖 | 待网络 |
+| 10 | **官方基准补测**：网络恢复后跑 LongMemEval-S/LoCoMo 真集（harness 先备好） | 权威背书 | 外部依赖 | harness 就绪（answer_eval.py），待网络 |
 
 ---
 

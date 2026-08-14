@@ -202,18 +202,20 @@ class MemoryAggregator:
                     },
                     "stats": dict(self._stats),
                 }
-            # Atomic write: temp file → rename
+            # Atomic write: 每进程独立 tmp（pid 后缀，避免多进程共用 .tmp 竞态）→ fsync → rename
             persist_dir = os.path.dirname(self._persist_path)
             os.makedirs(persist_dir, exist_ok=True)
-            tmp_path = self._persist_path + ".tmp"
+            tmp_path = f"{self._persist_path}.{os.getpid()}.tmp"
             with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
             os.replace(tmp_path, self._persist_path)
 
             # ── P0-1: Persist vector index ──
             if self._faiss_index is not None and self._index_id_map:
                 vec_path = os.path.join(persist_dir, VECTOR_PERSIST_FILENAME)
-                vec_tmp = vec_path + ".tmp"
+                vec_tmp = f"{vec_path}.{os.getpid()}.tmp"
                 vec_data = {
                     "dim": self._vector_dim,
                     "id_map": self._index_id_map,
@@ -322,6 +324,14 @@ class MemoryAggregator:
                 loaded, len(self._relations_graph),
             )
         except Exception as exc:
+            # 自愈：损坏/截断的池文件备份后以空池启动，避免覆盖现场证据
+            try:
+                if self._persist_path and os.path.exists(self._persist_path):
+                    backup = f"{self._persist_path}.corrupt_{int(time.time())}"
+                    os.replace(self._persist_path, backup)
+                    logger.warning("Aggregator pool corrupted; backed up to %s", backup)
+            except Exception:
+                pass
             logger.warning("Aggregator load failed (starting fresh): %s", exc)
 
     # ── Public API ────────────────────────────────────────────────────────

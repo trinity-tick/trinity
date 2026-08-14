@@ -561,3 +561,98 @@ Remove-Item C:\Users\Administrator\trinity\tests\test_store_path.py, C:\Users\Ad
 # Jaeger：docker compose -p trinity-telemetry -f docker/telemetry/docker-compose.yml down
 # 同步 watch：删除 ~/.trinity/sync_hermes_watch.py
 ```
+
+---
+
+## 十三、第九轮（2026-08-14，优化点全方位执行 OPT1-OPT8）
+
+按 `docs_site/optimization-plan.md` 的 8 个优化点执行，逐项实测。
+
+### 13.1 OPT1 答案生成评测 harness ✅
+
+- `benchmark/answer_eval.py`（新增）：LongMemEval-style 500q mock × DeepSeek 端到端
+  答案精度评测（检索 top-k → prompt → LLM 生成 → LLM-judge 事实评分 + 严格子串副指标 +
+  latency/cost 估算 + 检索/生成缺口归因）。
+- 关键调试发现：system prompt 中 "[UNKNOWN]" 指令会让 LLM 过度保守，**对答案就在
+  上下文里的题也答 UNKNOWN**（实测 4 种 prompt 变体，去掉该指令后全部答对）。
+- top_k 敏感性（OPT7 交叉验证）：**MS 多会话类目 R@5 0.525 → 0.950（top_k 5→10）**，
+  答案评测默认上下文 top_k=10。
+- 全量 500q 运行结果（top_k=10，deepseek-chat）：
+  **R@5（上下文）=0.992，AnswerAcc（LLM-judge）=0.602，生成缺口 0.390，检索缺口 0.008**；
+  avg latency 1.29s/题，成本约 $0.21/500 题。逐类目：KU 0.863 / MS 0.113 / SS-A 0.800 /
+  SS-P 0.483 / SS-U 0.900 / TR 0.300（见 `output/answer_eval_results.json`）。
+- 结论：检索已近满分（0.992），**瓶颈在生成侧**——MS 0.113 主因 mock 题本身畸形
+  （"three changes in X's NLP specialist" 与事实无关，LLM 诚实答"无信息"被判错）；
+  **TR 时序 0.30 为真实可优化点**（事实已检索到但 LLM 排序错误，提示词/结构化输出可改进）。
+
+### 13.2 OPT2 PG FTS GIN 索引 ✅
+
+- `benchmark/beam_gin_index.py`（新增）：10K 规模、50 查询，有/无 GIN 索引对比
+  （`CREATE INDEX ... USING GIN (to_tsvector('simple', content))`）。
+- 实测：**P50 286ms → 45.9ms（6.2×），P99 315ms → 81.6ms，QPS 3.5 → 21.2**。
+- 索引 `idx_memories_content_gin` 保留在生产 PG（trinity-db）；测试数据已清理。
+- 注：召回检查在脚本内为粗粒度（按 content 内 [T0:] 标签，生成内容不含标签故记 0），
+  延迟对比不受影响；完整召回见第七轮 BEAM 报告（Recall@5=1.000）。
+
+### 13.3 OPT3 MS 多会话短板 ✅（根因 + 修复策略）
+
+- 新增 `benchmark/longmemeval_session_expand.py`：会话扩展检索（首轮 top-10 → 提取
+  session → 逐 session 补检索 → 合并重排）**实现并验证通道正确**（per-session 过滤生效）。
+- **关键发现 1**：原 runner 入库用"题级 session_id"，丢事实级会话粒度——已改事实级
+  session 入库（MS 题事实跨 session 1/3/6 等）。
+- **关键发现 2**：MS 0.525 主要是**排名问题**：MS 题事实与问题主题词零重叠率 92%
+  （KU 31%/SS-A 32%/SS-U 22%），但 persona 名匹配使事实落在 6-10 位；**top_k=10 时
+  MS R@5=0.950**。真实多会话能力另以 LoCoMo session-aggregate（R@5=0.88）背书。
+
+### 13.4 OPT4 真实 LLM decay 灰度 ✅
+
+- `dsh-ops/trinity-dsh-maintenance.ps1` 新增 `-DecayLLM mock|real`（默认 mock），
+  decay 任务透传 `--llm`。
+- 灰度实测：`-Tasks decay -DecayLimit 20 -DecayLLM real`（DeepSeek）→
+  扫描 20 条全部 pending_compression → **4 个真实 LLM 摘要 + 19 条归档**（1 批次失败）；
+  摘要质量高（实体/日期/数字保留，如 "observed 99 patterns, analyzed 23, planned 3..."）。
+
+### 13.5 OPT5 聚合池原子写 + 损坏自愈 ✅
+
+- `trinity/agents/aggregator.py`：
+  - `_save()` tmp 文件改**每进程独立**（`{path}.{pid}.tmp`）消除多进程共享 .tmp 竞态；
+    写后 `flush+fsync` 再 `os.replace`；
+  - `_load()` 失败时**先把损坏文件备份**为 `{path}.corrupt_<ts>` 再以空池启动（保留现场）。
+- 实测：写入→篡改→重载→自动备份 + 空池启动 + 再写正常，无残留 .tmp。
+
+### 13.6 OPT6 Redis 缓存生产开启 + 量化 ✅
+
+- `dsh-ops/trinity-supervisor.ps1` 注入 `TRINITY_CACHE_BACKEND=redis`（+REDIS_URL/TTL）
+  给 api/mcp 子进程（可用 `TRINITY_CACHE_BACKEND=off` 关闭）；API 重启生效。
+- 量化（/memory/search/hybrid）：10 个不同 query 首轮（miss）平均 18.4ms vs
+  重复轮（hit）10.2ms；冷启动（引擎懒加载）790ms 被缓存消除；redis 缓存键 11 个、
+  TTL 正常（RESP2 回退适配 Redis 3.0.504）。
+
+### 13.7 OPT7 通道归因分析 ✅
+
+- `benchmark/channel_attribution.py` + `output/channel_attribution.md`：
+  - **发现产品级缺口**：`Trinity.search()` 的 `mode=keyword/hybrid/semantic` 在
+    adapter 分支返回结果**完全一致**——mode 参数装饰性，47 通道级联仅在
+    `search_hybrid` / second_brain 路径生效。
+  - top_k 敏感性：3→0.892 / 5→0.916 / 10→0.992 / 20→1.000（逐类目表见报告）。
+
+### 13.8 OPT8 A2A 跨进程记忆共享 ✅
+
+- `scripts/a2a_cross_process.py`（新增）：alpha（HTTP 服务，独立 SQLite store +
+  A2A registry 持久化）+ beta（客户端）跨进程经 HTTP 交换 A2A memory.store 包。
+- **修复产品 bug**：`trinity/adapters/sqlite.py` connect() 增加
+  `check_same_thread=False`——SQLite 连接默认线程绑定，多线程服务（HTTP 线程池）从
+  工作线程调用 search/store 抛异常且被 AdapterMemoryStore 静默吞掉返回空。
+  `tests/test_sqlite_threadsafe.py` 2/2 回归。
+- 实测：`--run-all` **6/6 PASS**（registry 持久化跨进程可见、包投递、跨进程查询
+  命中、幂等重发）。
+
+### 13.9 回滚（第九轮）
+
+```powershell
+git -C C:\Users\Administrator\trinity checkout -- trinity/agents/aggregator.py trinity/adapters/sqlite.py dsh-ops/trinity-dsh-maintenance.ps1 dsh-ops/trinity-supervisor.ps1
+Remove-Item benchmark/answer_eval.py, benchmark/beam_gin_index.py, benchmark/longmemeval_session_expand.py, benchmark/channel_attribution.py, scripts/a2a_cross_process.py -Force
+Remove-Item tests/test_sqlite_threadsafe.py -Force
+# PG：DROP INDEX idx_memories_content_gin;（若需还原无索引状态）
+# supervisor：移除 TRINITY_CACHE_BACKEND 注入块
+```

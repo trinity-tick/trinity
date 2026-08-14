@@ -22,6 +22,7 @@ param(
     [switch]$ViaDsh,
     [switch]$DryRun,
     [int]$DecayLimit = 100,
+    [string]$DecayLLM = "mock",
     [string]$LogDir = "C:\Users\Administrator\.trinity\logs"
 )
 
@@ -180,7 +181,7 @@ import sys, json
 sys.path.insert(0, r"$TrinityRoot")
 import runpy
 sys.argv = ["run_decay_compress", "--host", "$PgHost", "--port", "$PgPort", "--user", "$PgUser", "--password", "$PgPass",
-            "--limit", "$DecayLimit",
+            "--limit", "$DecayLimit", "--llm", "$DecayLLM",
             "--output", r"$LogDir\decay_compress_$Timestamp.json"]
 runpy.run_path(r"$TrinityRoot\scripts\run_decay_compress.py", run_name="__main__")
 "@
