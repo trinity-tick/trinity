@@ -77,6 +77,7 @@ out.txt
 t.txt
 test_*.py
 !tests/test_*.py
+!tests/unit/test_*.py
 
 # Local config (not committed)
 .github_token

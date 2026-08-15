@@ -5,6 +5,7 @@
 
 import hashlib
 import json
+import logging
 import os
 import re
 import sqlite3
@@ -17,6 +18,10 @@ from typing import Any, Dict, List, Optional
 
 
 from .base import StorageAdapter
+
+from ..security.crypto import get_storage_cipher, StorageCipher  # type: ignore[attr-defined]
+
+logger = logging.getLogger("trinity.adapters.sqlite")
 
 
 # ── 批量写入常量 ──────────────────────────────────────────────────────
@@ -34,6 +39,15 @@ class SQLiteAdapter(StorageAdapter):
     def __init__(self, db_path: str = "trinity_store.db"):
         self.db_path = db_path
         self._conn: Optional[sqlite3.Connection] = None
+
+        # ── 存储加密（B5, 2026-08-15）──────────────────────────────────
+        # TRINITY_STORAGE_ENCRYPTION=on 时启用 AES-256-GCM：
+        #   - memories.content / memory_versions.content 落盘为密文
+        #   - tokenized_content 保持明文 → FTS5 检索不受影响
+        #   - sha256_hash/content_hash 基于明文计算 → 去重/一致性链不变
+        self._cipher: Optional[StorageCipher] = get_storage_cipher()
+        if self._cipher:
+            logger.info("storage encryption ON (AES-256-GCM) for %s", db_path)
 
         # ── 批量写入缓冲区 ──────────────────────────────────────────
         self._batch_buffer: List[Dict[str, Any]] = []
@@ -451,11 +465,34 @@ class SQLiteAdapter(StorageAdapter):
             except sqlite3.OperationalError:
                 pass  # 列已存在
 
+            # B5 迁移（2026-08-15）：旧库 FTS5 表是 external content
+            # （content='memories'），会忽略触发器写入值、直接索引
+            # memories.content —— 加密后该列是密文 → 检索失效。
+            # 检测到旧结构则 DROP 重建为独立表，并回填索引。
+            try:
+                fts_def = cursor.execute(
+                    "SELECT sql FROM sqlite_master WHERE type='table' AND name='memories_fts'"
+                ).fetchone()
+                if fts_def and "content='memories'" in (fts_def["sql"] or ""):
+                    cursor.execute("DROP TABLE memories_fts")
+                    for trg in ("memories_ai", "memories_ad", "memories_au"):
+                        cursor.execute(f"DROP TRIGGER IF EXISTS {trg}")
+                    cursor.execute("""
+                        CREATE VIRTUAL TABLE memories_fts
+                        USING fts5(content, category, tags)
+                    """)
+                    cursor.execute("""
+                        INSERT INTO memories_fts(rowid, content, category, tags)
+                        SELECT rowid, COALESCE(tokenized_content, content), category, tags
+                        FROM memories
+                    """)
+                    logger.info("B5: external-content memories_fts migrated to standalone")
+            except sqlite3.OperationalError:
+                pass  # 表尚不存在（全新库）
+
             cursor.executescript("""
                 CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts
-                USING fts5(content, category, tags,
-                    content='memories',
-                    content_rowid='rowid');
+                USING fts5(content, category, tags);
 
                 -- INSERT 触发器：使用 tokenized_content（带 content 兜底）
                 CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories
@@ -466,22 +503,16 @@ class SQLiteAdapter(StorageAdapter):
                             new.category, new.tags);
                 END;
 
-                -- DELETE 触发器：同步删除 FTS 索引
+                -- DELETE 触发器：同步删除 FTS 索引（独立表用 DELETE 语法）
                 CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories
                 BEGIN
-                    INSERT INTO memories_fts(memories_fts, rowid, content, category, tags)
-                    VALUES ('delete', old.rowid,
-                            COALESCE(old.tokenized_content, old.content),
-                            old.category, old.tags);
+                    DELETE FROM memories_fts WHERE rowid = old.rowid;
                 END;
 
                 -- UPDATE 触发器：同步更新 FTS 索引
                 CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories
                 BEGIN
-                    INSERT INTO memories_fts(memories_fts, rowid, content, category, tags)
-                    VALUES ('delete', old.rowid,
-                            COALESCE(old.tokenized_content, old.content),
-                            old.category, old.tags);
+                    DELETE FROM memories_fts WHERE rowid = old.rowid;
                     INSERT INTO memories_fts(rowid, content, category, tags)
                     VALUES (new.rowid,
                             COALESCE(new.tokenized_content, new.content),
@@ -497,6 +528,32 @@ class SQLiteAdapter(StorageAdapter):
 
     def _compute_sha256(self, content: str) -> str:
         return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+    # ── 存储加密辅助（B5, 2026-08-15）───────────────────────────────
+
+    def _encrypt_content(self, content: str) -> str:
+        """写入前加密（未启用时原样返回）。"""
+        if self._cipher is None:
+            return content
+        return self._cipher.encrypt(content)
+
+    def _decrypt_content(self, content: str) -> str:
+        """读取后解密（未加密的历史数据原样返回）。"""
+        if self._cipher is None or not content:
+            return content
+        return self._cipher.decrypt(content)
+
+    def _tokenized_for_storage(self, plain_content: str, tokenized: Optional[str]) -> Optional[str]:
+        """确定写入 tokenized_content 列的值。
+
+        - 未加密：保持原逻辑（CJK 分词，非 CJK 为 None 由触发器回退 content）
+        - 加密后：content 列是密文，FTS 触发器 COALESCE(tokenized, content)
+          会回退到密文 → 检索失效。因此加密模式下非 CJK 内容也写入
+          明文 content 作为 tokenized_content，保证 FTS 可搜。
+        """
+        if self._cipher is not None and not tokenized:
+            return plain_content
+        return tokenized
 
     # ── PII 检测与脱敏 ──────────────────────────────────────────────
 
@@ -859,6 +916,10 @@ class SQLiteAdapter(StorageAdapter):
 
             sha256_hash = self._compute_sha256(stored_content)
             tokenized = self._tokenize_content_for_fts(stored_content)
+            plain_content = stored_content
+            # B5 存储加密：content 列写密文；tokenized 明文；hash 基于明文
+            stored_content = self._encrypt_content(stored_content)
+            tokenized = self._tokenized_for_storage(plain_content, tokenized)
 
             self._batch_buffer.append({
                 "memory_id": memory_id,
@@ -1012,8 +1073,11 @@ class SQLiteAdapter(StorageAdapter):
     def _tokenize_fts_query(query: str) -> List[str]:
         """将查询拆分为 FTS5 词组。
 
-        CJK 文字使用 jieba 分词后，多字符词内插入空格以适配 FTS5
-        unicode61 tokenizer（该 tokenizer 将每个 CJK 字拆为单独索引）。
+        CJK 文字使用 jieba 分词后直接作为词组（如 "机密 记忆" 的查询
+        切为 ["机密", "记忆"]）。注意：unicode61 tokenizer 把连续 CJK
+        字符当作单个 token（如 "机密记忆" 是一个 token），因此不能在
+        字间插入空格（"机 密 记 忆" 会变成 4 个单字 token 永远匹配
+        不到索引里的整词 token）。
         非 CJK 文本保持原始空格分词。
         """
         if not SQLiteAdapter._CJK_PATTERN.search(query):
@@ -1030,9 +1094,6 @@ class SQLiteAdapter(StorageAdapter):
             token = token.strip()
             if not token:
                 continue
-            # 多字符 CJK：字间加空格形成 FTS5 短语查询
-            if len(token) > 1 and SQLiteAdapter._CJK_PATTERN.search(token):
-                token = ' '.join(token)
             result.append(token)
         return result
 
@@ -1101,10 +1162,11 @@ class SQLiteAdapter(StorageAdapter):
         for i, row in enumerate(rows):
             # FTS5 rank 是负值（越负越相关），我们翻转成 0-1 分数
             norm_score = 1.0 - (row["score"] - min_rank) / rank_range
+            content = self._decrypt_content(row["content"])
             results.append({
                 "memory_id": row["memory_id"],
-                "content": row["content"],
-                "content_preview": row["content"][:100],
+                "content": content,
+                "content_preview": content[:100],
                 "persona_id": row["persona_id"],
                 "session_id": row["session_id"],
                 "role": row["role"],
@@ -1144,10 +1206,11 @@ class SQLiteAdapter(StorageAdapter):
 
         results = []
         for row in cursor.fetchall():
+            content = self._decrypt_content(row["content"])
             results.append({
                 "memory_id": row["memory_id"],
-                "content": row["content"],
-                "content_preview": row["content"][:100],
+                "content": content,
+                "content_preview": content[:100],
                 "persona_id": row["persona_id"],
                 "session_id": row["session_id"],
                 "role": row["role"],
@@ -1174,7 +1237,10 @@ class SQLiteAdapter(StorageAdapter):
         row = cursor.fetchone()
         if not row:
             return None
-        return dict(row)
+        d = dict(row)
+        if d.get("content"):
+            d["content"] = self._decrypt_content(d["content"])
+        return d
 
     def get_memory_owners(self, memory_ids: List[str]) -> Dict[str, Dict[str, Any]]:
         """批量查询记忆的归属与状态（hybrid 检索隔离后过滤用）。
@@ -1224,7 +1290,11 @@ class SQLiteAdapter(StorageAdapter):
                 ORDER BY created_at DESC
                 LIMIT ?
             """, (persona_id, limit))
-        return [dict(row) for row in cursor.fetchall()]
+        rows = [dict(row) for row in cursor.fetchall()]
+        for r in rows:
+            if r.get("content"):
+                r["content"] = self._decrypt_content(r["content"])
+        return rows
 
     def delete_memory(self, memory_id: str) -> bool:
         with self._write_lock:
@@ -1299,7 +1369,7 @@ class SQLiteAdapter(StorageAdapter):
             now = datetime.now(timezone.utc).isoformat()
             version_id = f"ver_{uuid.uuid4().hex[:12]}"
 
-            new_content = content if content is not None else current.get("content", "")
+            new_content = content if content is not None else self._decrypt_content(current.get("content", ""))
             new_importance = (
                 importance if importance is not None
                 else float(current.get("importance", 0.5))
@@ -1316,6 +1386,10 @@ class SQLiteAdapter(StorageAdapter):
 
             sha256_hash = self._compute_sha256(new_content)
             tokenized = self._tokenize_content_for_fts(new_content)
+            plain_content = new_content
+            # B5 存储加密：content 列写密文；tokenized 明文；hash 基于明文
+            new_content = self._encrypt_content(new_content)
+            tokenized = self._tokenized_for_storage(plain_content, tokenized)
 
             conn.execute("""
                 UPDATE memories
@@ -1346,7 +1420,12 @@ class SQLiteAdapter(StorageAdapter):
                 "SELECT * FROM memories WHERE memory_id = ?", (memory_id,)
             )
             updated = cursor.fetchone()
-            return dict(updated) if updated else None
+            if not updated:
+                return None
+            d = dict(updated)
+            if d.get("content"):
+                d["content"] = self._decrypt_content(d["content"])
+            return d
 
     def archive_memories(self, memory_ids: List[str]) -> int:
         """批量将记忆标记为 archived（衰减压缩回写；与 PostgreSQLAdapter 同接口）。"""
@@ -1376,7 +1455,11 @@ class SQLiteAdapter(StorageAdapter):
             WHERE memory_id = ?
             ORDER BY created_at ASC
         """, (memory_id,))
-        return [dict(row) for row in cursor.fetchall()]
+        rows = [dict(row) for row in cursor.fetchall()]
+        for r in rows:
+            if r.get("content"):
+                r["content"] = self._decrypt_content(r["content"])
+        return rows
 
     def get_all_memories(self, agent_id: Optional[str] = None, limit: int = 200) -> List[Dict[str, Any]]:
         """Get all active memories across all personas/tenants, optionally filtered by agent_id."""
@@ -1398,7 +1481,11 @@ class SQLiteAdapter(StorageAdapter):
                 ORDER BY created_at DESC
                 LIMIT ?
             """, (limit,))
-        return [dict(row) for row in cursor.fetchall()]
+        rows = [dict(row) for row in cursor.fetchall()]
+        for r in rows:
+            if r.get("content"):
+                r["content"] = self._decrypt_content(r["content"])
+        return rows
 
     # ── TTL & 自动老化 ────────────────────────────────────────────────
 
@@ -1589,7 +1676,12 @@ class SQLiteAdapter(StorageAdapter):
             LIMIT 1
         """, (persona_id, agent_id, content_hash))
         row = cursor.fetchone()
-        return dict(row) if row else None
+        if not row:
+            return None
+        d = dict(row)
+        if d.get("content"):
+            d["content"] = self._decrypt_content(d["content"])
+        return d
 
     def get_conflicts(
         self, memory_id: str
@@ -1622,7 +1714,12 @@ class SQLiteAdapter(StorageAdapter):
             WHERE conflict_group_id = ?
             ORDER BY created_at ASC
         """, (conflict_group_id,))
-        conflicts = [dict(r) for r in cursor.fetchall()]
+        conflicts = []
+        for r in cursor.fetchall():
+            d = dict(r)
+            if d.get("content"):
+                d["content"] = self._decrypt_content(d["content"])
+            conflicts.append(d)
 
         return {
             "memory_id": memory_id,

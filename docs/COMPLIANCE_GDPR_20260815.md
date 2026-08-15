@@ -43,7 +43,11 @@
 ## 5. 运维建议
 
 1. 生产启用 `TRINITY_API_KEY`（鉴权）；对外暴露走 Gateway 统一入口。
-2. 敏感正文建议存储加密（roadmap B5 待办）；当前至少保证库文件 ACL 仅管理员。
+2. 敏感正文存储加密（B5 已落地，见 docs/STORAGE_ENCRYPTION_20260815.md）：
+   `TRINITY_STORAGE_ENCRYPTION=on` + 密钥文件 `~/.trinity/secrets/storage.key`（或
+   `TRINITY_STORAGE_KEY` 环境变量）。AES-256-GCM 保护 memories.content /
+   memory_versions.content 落盘；tokenized_content 保持明文供 FTS 检索（见加密文档
+   的取舍说明）。仍建议库文件 ACL 仅管理员。
 3. 定期跑 GDPR dry-run 台账（各 persona 数据量），删除时保留审计（软删符合 GDPR
    "合理期限"精神，注意按当地法规确认硬删需求——`forget_user` 后可在保留期后 purge）。
 4. 三库定位（round34 厘清）：运行时权威=SQLite 大库；PG 仅维护/分析；无服务的遗留

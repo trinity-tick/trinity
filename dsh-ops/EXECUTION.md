@@ -1961,3 +1961,38 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
   离线优先多实例同步；export 7,270B/15 条，自比幂等）。
 - **SKILL.md 手册补充**（坑 15-17）：DSH 结构融合/compaction、Gateway 生产化、性能要点、
   三库→两库。健康巡检：api/gateway/dashboard 200、collector RUNNING。
+
+### 43.1 Phase2 执行续轮（2026-08-15）：B3 治理层 + B5 存储加密 + A4 跨模态闭环
+
+- **B3 多智能体治理层（YAML 策略 + 治理 SDK）**：
+  - `trinity/governance/__init__.py`：`Policy`（match/decide）+ `GovernanceEngine`
+    （load_policy/clear_policies 热切换/check/summary/audit_log）。规则语义
+    isolated|shared|delegated；**最具体规则优先**（subject/target/action 非通配
+    计分，specificity 高的共享/委托规则覆盖通配 isolated，与 YAML 顺序无关）。
+  - 策略文件：`policies/isolation.yaml`（默认全隔离）+ `policies/example.yaml`
+    （隔离+alpha↔beta 共享 read+任意 delegate）。
+  - `scripts/governance_demo.py`：注册 agents→隔离→热切换共享→委托→审计汇总，
+    `RESULT: PASS ✅`；`tests/unit/test_governance.py` 9 例（含特异性/热切换/默认拒绝）。
+  - 修复：首版 demo 步骤3/4 失败——原因①通配 isolated 规则被 match() 首选；
+  ②demo 步骤2/3 误用同一策略文件（隔离阶段应加载 isolation.yaml）。
+- **B5 存储加密（AES-256-GCM 可选）**：
+  - `trinity/security/crypto.py`：StorageCipher（enc:v1:base64(nonce‖ct‖tag)），
+    开关 TRINITY_STORAGE_ENCRYPTION，密钥 env TRINITY_STORAGE_KEY 或自动生成
+    ~/.trinity/secrets/storage.key（0600）。
+  - `SQLiteAdapter` 集成：memories.content / memory_versions.content 密文落盘；
+    tokenized_content 明文（FTS 可搜）；sha256/content_hash 基于明文（去重/一致性链不变）；
+    get/search/version_chain/update/persona_memories 等读取路径全部解密。
+  - **FTS5 独立表迁移**：旧库 external content（content="memories"）会索引密文导致
+    检索失效 → connect 时自动 DROP 重建独立表 + 回填（生产库 11,778 行实测迁移 OK）。
+  - **CJK 分词修复**：_tokenize_fts_query 不再对 CJK 词字间加空格（unicode61 把连续
+    CJK 当单 token，"机 密 记 忆" 永远匹配不到）——顺带修好明文模式中文检索
+    （此前依赖 LIKE 兜底）。
+  - `scripts/storage_encryption_demo.py` 明文/加密双组 PASS；test_storage_encryption.py
+    20 例（含 FTS 迁移/密文落盘/版本链）。
+- **A4 跨模态闭环**：`scripts/cross_modal_demo.py` 合成 3 图（PIL）+ sklearn TF-IDF
+  文本嵌入（离线批量 fit 固定 vocabulary）+ ImageEncoder 轻量图片特征，验证
+  text→image_description / image→text（特征→描述映射）/ image→image 自相似 /
+  API 端点冒烟，`RESULT: PASS ✅`；test_cross_modal.py 4 例。
+- 全量测试：612 passed / 43 skipped / 0 failed（新增 29 例）。
+- 文档：PLANNING_REVIEW（12/15 ✅）、STORAGE_ENCRYPTION_20260815.md（新）、
+  COMPLIANCE_GDPR 运维建议更新、mkdocs.yml 加导航。

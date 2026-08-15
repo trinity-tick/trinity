@@ -1,0 +1,15 @@
+# Trinity 治理示例策略 — 默认全隔离（B3, 2026-08-15）
+# 用法：GovernanceEngine.load_policy("trinity/governance/policies/isolation.yaml")
+policy:
+  name: default-isolation
+  description: 默认记忆隔离：任何 agent 只能读写自己，跨 agent 一律拒绝
+  rules:
+    # 隔离：任何 agent 只能访问自己（同名 target）
+    - scope: isolated
+      subject: "*"
+      target: "*"
+      action: "*"
+      audit: true
+  defaults:
+    audit: true
+    allow: false
