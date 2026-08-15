@@ -20,6 +20,7 @@ Both support the same 6 operations:
   - 默认 use_vector=False 保持向后兼容
 """
 
+import hashlib
 import json
 import os
 import sys
@@ -228,6 +229,9 @@ class Trinity:
         self._embedding_engine = None
         self._vector_index = None
         self._ann_index = None
+        # 性能（2026-08-15）：ANN 索引持久化缓存（版本键：维度+条数+最新updated_at）。
+        # 此前每次 use_ann 搜索都全量编码+重建索引——缓存后首次构建、后续直查。
+        self._ann_cache = None
 
         # ── ANN 配置 ──────────────────────────────────────────────
         self.use_ann: bool = use_ann  # 启用 hnswlib/FAISS HNSW ANN 索引
@@ -1039,22 +1043,37 @@ class Trinity:
             if self._embedding_engine is None:
                 return []
 
-            # 编码查询
-            query_vec = self._embedding_engine.embed(query)
+            # 编码查询（进程内向量缓存：同 query 免重复编码，2026-08-15）
+            if not hasattr(self, "_query_vec_cache"):
+                self._query_vec_cache = {}
+            qhash = hashlib.sha256(query.encode("utf-8")).hexdigest()[:16]
+            query_vec = self._query_vec_cache.get(qhash)
+            if query_vec is None:
+                query_vec = self._embedding_engine.embed(query)
+                if len(self._query_vec_cache) > 200:
+                    self._query_vec_cache.clear()
+                self._query_vec_cache[qhash] = query_vec
 
             # 用 adapter 中所有记忆构建向量索引（实时索引）
             if self._adapter:
-                all_memories = self._adapter.get_all_memories(limit=5000)
-                if not all_memories:
-                    return []
-
                 dim = self._embedding_engine.embedding_dim()
 
-                # ── ANN 路径 ──────────────────────────────────────
+                # ── ANN 路径（持久缓存 + 后台预热，2026-08-15）──
                 if self.use_ann:
-                    return self._vector_search_ann(
-                        query_vec, all_memories, top_k, dim
-                    )
+                    if self._ann_cache is not None:
+                        return self._vector_search_ann(query_vec, top_k, dim)
+                    # 首次：后台线程构建索引，本次降级走 FTS（避免 30s+ 首查阻塞）
+                    self._ensure_ann_background()
+                    return self._adapter.search_memories(
+                        query=query, top_k=top_k,
+                    ) if self._adapter else []
+
+                # 非 ANN 路径才在此拉全量
+                # 2026-08-15：上限 5000 只覆盖 11.7k 大库的 42%——提到全量，
+                # 避免向量召回盲区（11.7k 规模全量编码/建索引仍在可接受范围）。
+                all_memories = self._adapter.get_all_memories(limit=20000)
+                if not all_memories:
+                    return []
 
                 # ── 传统 vector_index 路径 ─────────────────────────
                 if self._vector_index is None:
@@ -1129,30 +1148,81 @@ class Trinity:
             )
         return self._ann_index
 
+    def _ensure_ann_background(self) -> None:
+        """后台线程预热 ANN 索引（2026-08-15）：首次构建约 30s（全量编码），
+        放后台避免首查阻塞；构建完成前 use_ann 查询降级走 FTS。"""
+        if getattr(self, "_ann_building", False):
+            return
+        self._ann_building = True
+        import threading
+        t = threading.Thread(target=self._build_ann_in_background, daemon=True)
+        t.start()
+
+    def _build_ann_in_background(self) -> None:
+        import time as _time
+        try:
+            if self._embedding_engine is None:
+                self._embedding_engine = _get_embedding_engine()
+            if self._embedding_engine is None:
+                return
+            all_memories = self._adapter.get_all_memories(limit=20000) if self._adapter else []
+            if not all_memories:
+                return
+            dim = self._embedding_engine.embedding_dim()
+            ann = self._get_ann_index(dim)
+            texts = [m["content"] for m in all_memories]
+            vectors = self._embedding_engine.embed_batch(texts)
+            mem_ids = [m["memory_id"] for m in all_memories]
+            ann.add_vectors(mem_ids, vectors)
+            mem_map = {m["memory_id"]: m for m in all_memories}
+            max_upd = max((str(m.get("updated_at") or "") for m in all_memories), default="")
+            self._ann_cache = ((dim, len(all_memories), max_upd), mem_map, _time.time())
+        except Exception as exc:  # noqa: BLE001 构建失败则下次查询再试
+            logger = sys.modules.get("logging", None)
+            if logger:
+                logging.getLogger(__name__).warning("ANN background build failed: %s", exc)
+        finally:
+            self._ann_building = False
+
     def _vector_search_ann(
         self,
         query_vec: Any,  # np.ndarray
-        all_memories: List[Dict[str, Any]],
         top_k: int,
         dim: int,
     ) -> List[Dict[str, Any]]:
-        """使用 ANNIndex 执行向量语义搜索。"""
+        """使用 ANNIndex 执行向量语义搜索（索引持久化缓存，2026-08-15）。
+
+        版本键 = (dim, 记忆条数, 最新 updated_at)，TTL=60s：
+          - 缓存命中且未过期 → 直接 ANN 搜索（不再拉全量/编码/重建）；
+          - 未命中/过期 → 拉全量 + 编码 + 重建索引 + 写缓存。
+        此前每次 use_ann 搜索都全量编码+重建（毫秒级查询 → 秒级）。
+        """
+        import time as _time
+
         ann = self._get_ann_index(dim)
+        ttl = 60.0
 
-        # 批量编码记忆
-        texts = [m["content"] for m in all_memories]
-        vectors = self._embedding_engine.embed_batch(texts)
-
-        # 批量添加到 ANN 索引
-        mem_ids = [m["memory_id"] for m in all_memories]
-        ann.add_vectors(mem_ids, vectors)
+        if self._ann_cache is not None and (_time.time() - self._ann_cache[2]) < ttl:
+            mem_map = self._ann_cache[1]
+        else:
+            all_memories = self._adapter.get_all_memories(limit=20000) if self._adapter else []
+            if not all_memories:
+                return []
+            # 重建干净索引（旧索引含过期向量，置 None 强制新实例）
+            self._ann_index = None
+            ann = self._get_ann_index(dim)
+            texts = [m["content"] for m in all_memories]
+            vectors = self._embedding_engine.embed_batch(texts)
+            mem_ids = [m["memory_id"] for m in all_memories]
+            ann.add_vectors(mem_ids, vectors)
+            mem_map = {m["memory_id"]: m for m in all_memories}
+            max_upd = max((str(m.get("updated_at") or "") for m in all_memories), default="")
+            self._ann_cache = ((dim, len(all_memories), max_upd), mem_map, _time.time())
 
         # 搜索
         results = ann.search(query_vec, k=top_k, ef=50)
 
-        # 构建结果映射
-        mem_map = {m["memory_id"]: m for m in all_memories}
-
+        # 构建结果映射（mem_map 来自缓存/构建分支）
         vector_results = []
         for mem_id, score in results:
             mem = mem_map.get(mem_id, {})

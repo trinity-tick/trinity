@@ -58,6 +58,18 @@ class SQLiteAdapter(StorageAdapter):
         self._conn.row_factory = sqlite3.Row
         self._apply_pragmas()
         self._create_tables()
+        # 性能（2026-08-15）：jieba 词典冷启动约 1.4s（首查被拖慢）——
+        # 后台线程预热，把开销移到进程启动而非首次搜索。
+        threading.Thread(target=self._prewarm_tokenizer, daemon=True).start()
+
+    def _prewarm_tokenizer(self) -> None:
+        """后台预热 jieba 分词词典（非阻塞；失败静默）。"""
+        try:
+            import jieba
+            jieba.initialize()
+            list(jieba.cut("Trinity 记忆系统分词预热"))
+        except Exception:  # noqa: BLE001
+            pass
 
     def _apply_pragmas(self) -> None:
         """应用性能优化 PRAGMA。"""
