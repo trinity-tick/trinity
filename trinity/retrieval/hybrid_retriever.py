@@ -157,6 +157,7 @@ class HybridRetriever:
         query: str,
         top_k: int = 10,
         strategy: str = "fusion",
+        cache_scope: str = "",
     ) -> Dict[str, Any]:
         """Hybrid search entry point.
 
@@ -168,6 +169,9 @@ class HybridRetriever:
             Max results.
         strategy : str
             ``fusion`` | ``rrf`` | ``cascade``.
+        cache_scope : str
+            可选隔离维度（如 agent/persona/tenant 过滤的规范化串），折入缓存
+            key——防止带不同过滤的查询共享同一缓存项（多租户隔离）。
 
         Returns
         -------
@@ -187,7 +191,9 @@ class HybridRetriever:
         cache = _get_configured_cache()
         cache_key = None
         if cache is not None:
-            cache_key = cache.make_text_key(query, top_k=top_k, strategy=strategy)
+            cache_key = cache.make_text_key(
+                query, top_k=top_k, strategy=strategy, extra=cache_scope,
+            )
             try:
                 cached = cache.get(cache_key)
             except Exception:

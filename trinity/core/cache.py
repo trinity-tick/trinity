@@ -263,6 +263,7 @@ class SemanticCache:
         query_text: str,
         top_k: Optional[int] = None,
         strategy: Optional[str] = None,
+        extra: str = "",
     ) -> str:
         """Build a cache key from the raw query text (exact-match, SHA-256).
 
@@ -275,6 +276,8 @@ class SemanticCache:
             top_k: Optional result count, folded into the key.
             strategy: Optional retrieval strategy (e.g. ``"fusion"`` /
                 ``"rrf"`` / ``"cascade"``), folded into the key.
+            extra: Optional isolation/scope dimension (agent/persona/tenant
+                filters) folded into the hash — 防止带过滤查询命中无过滤缓存。
 
         Returns:
             SHA-256 hex digest (optionally suffixed with ``_k<top_k>`` and
@@ -285,6 +288,8 @@ class SemanticCache:
             fp = f"{fp}_k{top_k}"
         if strategy:
             fp = f"{fp}_{strategy}"
+        if extra:
+            fp = f"{fp}_{hashlib.sha256(extra.encode('utf-8')).hexdigest()[:8]}"
         return fp
 
     # ── Get / Set ─────────────────────────────────────────────────

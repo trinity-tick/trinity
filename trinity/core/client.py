@@ -31,18 +31,21 @@ from trinity.telemetry import traced
 
 # ── Locate output directory ──────────────────────────────────────────────
 def _find_trinity_store() -> Optional[str]:
-    """Find the Trinity output directory."""
-    candidates = [
-        os.environ.get("TRINITY_STORE"),
-        str(Path.home() / ".trinity" / "store"),
-        str(Path.home() / "AppData" / "Roaming" / "Tencent" / "Marvis" /
-            "User" / "oAN1i2S25HdLeBcp7ZJM0HU3JDc8" / "workspace" /
-            "conv_19f49996244_37d75ffae4a6" / "output"),
-    ]
-    for c in candidates:
-        if c and os.path.isdir(c):
-            return c
-    return os.getcwd()
+    """Find the Trinity output directory（权威大库统一解析）。
+
+    统一规则（2026-08-15，修复双库口径）：
+      1. 显式 TRINITY_STORE 环境变量（最高优先）；
+      2. 否则固定权威路径 ~/.trinity/store（唯一生产存储）；
+      3. 不再回退 cwd —— 曾导致 cwd 不在权威路径时创建
+         data/trinity_store.db / <cwd>/trinity_store.db 等小库，
+         与权威大库（11k+ 记忆）双库并存、口径不一致（压测暴露）。
+    """
+    env_store = os.environ.get("TRINITY_STORE")
+    if env_store and os.path.isdir(env_store):
+        return env_store
+    home_store = str(Path.home() / ".trinity" / "store")
+    os.makedirs(home_store, exist_ok=True)
+    return home_store
 
 
 _TRINITY_STORE = _find_trinity_store()
@@ -254,7 +257,10 @@ class Trinity:
                 elif _TRINITY_STORE:
                     _db_path = os.path.join(_TRINITY_STORE, "trinity_store.db")
                 else:
-                    _db_path = "trinity_store.db"
+                    # 2026-08-15：不再用相对路径（曾落到 cwd 小库），固定权威路径
+                    _db_path = os.path.join(
+                        str(Path.home() / ".trinity" / "store"), "trinity_store.db"
+                    )
             try:
                 self._adapter = SQLiteAdapter(db_path=_db_path)
                 self._adapter.connect()
@@ -266,7 +272,9 @@ class Trinity:
     def _init_sqlite_adapter(self):
         from trinity.adapters.sqlite import SQLiteAdapter
         global _TRINITY_STORE
-        _store_dir = os.path.join(_TRINITY_STORE, "data") if _TRINITY_STORE else os.path.join(
+        # 统一到权威大库（~/.trinity/store/trinity_store.db），不再拼 data/ 子目录
+        # （2026-08-15：曾生成 ~/.trinity/store/data/trinity_store.db 等小库，双库并存）
+        _store_dir = _TRINITY_STORE or os.path.join(
             os.path.dirname(os.path.dirname(__file__)), "data"
         )
         os.makedirs(_store_dir, exist_ok=True)
@@ -1180,6 +1188,7 @@ class Trinity:
         ttl_seconds: Optional[int] = None,
         modality: str = "text",
         source_uri: Optional[str] = None,
+        postprocess: bool = True,
     ) -> Dict[str, Any]:
         """Write memory (CRDT versioned, SHA-256 audited).
 
@@ -1232,21 +1241,8 @@ class Trinity:
                 ) if self._adapter else {"memory_id": "", "error": "no adapter"}
             )
 
-        # 自动创建语义关联链接
+        # 自动审计日志（同步：核心写入 + 审计链即时落账，保证可信链完整）
         memory_id = result.get("memory_id", "")
-        linked_ids = []
-        if memory_id and self._adapter and hasattr(self._adapter, "create_memory_link"):
-            linked_ids = self._auto_link_semantic(memory_id, content)
-
-        # 自动实体提取与图谱构建
-        entity_ids = self._auto_extract_entities(memory_id, content)
-
-        # 主动推送
-        all_ids = [memory_id] + linked_ids if memory_id else linked_ids
-        result["pushed_memories"] = self.proactive_push(all_ids)
-        result["extracted_entities"] = len(entity_ids)
-
-        # 自动审计日志
         if self._adapter and hasattr(self._adapter, "write_audit_log"):
             try:
                 self._adapter.write_audit_log(
@@ -1258,7 +1254,51 @@ class Trinity:
             except Exception:
                 pass
 
+        # 加工管线（语义关联 + 实体提取 + 主动推送）
+        # postprocess=False 时跳过，交由调用方后台异步执行（memory_write 异步化，
+        # 写入即时返回、加工后台完成，消除嵌入引擎冷启动导致的写入超时）。
+        if postprocess and memory_id:
+            self._postprocess_memory(memory_id, content, result)
+        else:
+            result["pushed_memories"] = []
+            result["extracted_entities"] = 0
+            result["postprocess"] = "pending" if memory_id else "skipped"
+
         return result
+
+    def _postprocess_memory(
+        self, memory_id: str, content: str,
+        result: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """新写入记忆的后台加工：语义关联 + 实体提取 + 主动推送。
+
+        从 ingest 同步路径分离，供 memory_write 异步化调用（写入即时返回，
+        加工后台完成）。幂等：内部各步骤均有异常保护，失败不抛出。
+
+        Args:
+            memory_id: 已写入的记忆 ID。
+            content:   记忆内容。
+            result:    可选，回填加工结果到已返回的 result 字典。
+
+        Returns:
+            Dict with linked_ids / extracted_entities / pushed_memories.
+        """
+        linked_ids: List[str] = []
+        if self._adapter and hasattr(self._adapter, "create_memory_link"):
+            linked_ids = self._auto_link_semantic(memory_id, content)
+        entity_ids = self._auto_extract_entities(memory_id, content)
+        all_ids = [memory_id] + linked_ids if memory_id else linked_ids
+        pushed = self.proactive_push(all_ids)
+        if result is not None:
+            result["pushed_memories"] = pushed
+            result["extracted_entities"] = len(entity_ids)
+            result["linked_ids"] = linked_ids
+            result["postprocess"] = "done"
+        return {
+            "linked_ids": linked_ids,
+            "extracted_entities": len(entity_ids),
+            "pushed_memories": pushed,
+        }
 
     def _auto_link_semantic(
         self, memory_id: str, content: str,
@@ -2128,7 +2168,9 @@ class Trinity:
         """
         hr = self.hybrid_retriever
 
-        # 如有 agent/persona/tenant 过滤，在向量侧 wrap search_fn
+        # 如有 agent/persona/tenant 过滤，在向量侧 wrap search_fn；
+        # 同时把隔离维度折入 retriever 语义缓存 key，防止跨租户缓存串扰。
+        cache_scope = f"a={agent_id or ''}:p={persona_id or ''}:t={tenant_id or ''}"
         if agent_id or persona_id or tenant_id:
             _orig_fn = hr._search_fn
 
@@ -2142,11 +2184,42 @@ class Trinity:
 
             hr._search_fn = _filtered_fn
             try:
-                result = hr.search(query=query, top_k=top_k, strategy=strategy)
+                result = hr.search(query=query, top_k=top_k, strategy=strategy, cache_scope=cache_scope)
             finally:
                 hr._search_fn = _orig_fn
         else:
-            result = hr.search(query=query, top_k=top_k, strategy=strategy)
+            result = hr.search(query=query, top_k=top_k, strategy=strategy, cache_scope=cache_scope)
+
+        # 修复(2026-08-14): 融合后统一后过滤——
+        #  1) 隔离：带 agent/persona/tenant 过滤时只保留归属匹配的记忆
+        #  2) 状态：引擎库中 status != active（软删/过期）的记忆剔除，防泄漏与幽灵
+        #  3) 不在引擎库的结果（聚合池记忆）保留（设计内的池通道）
+        if self._adapter is not None and hasattr(self._adapter, "get_memory_owners"):
+            mids = [r.get("memory_id") for r in result.get("results", []) if r.get("memory_id")]
+            if mids:
+                owners = self._adapter.get_memory_owners(mids)
+                keep = set()
+                for mid, own in owners.items():
+                    if own.get("status") and own.get("status") != "active":
+                        continue  # 软删/非活跃记忆剔除
+                    if agent_id and own.get("agent_id") != agent_id:
+                        continue
+                    if persona_id and own.get("persona_id") != persona_id:
+                        continue
+                    if tenant_id and own.get("tenant_id") != tenant_id:
+                        continue
+                    keep.add(mid)
+                # 存在于引擎库的按上述规则过滤；不在库的（池记忆/幽灵）：
+                # 带隔离过滤时保守排除，无过滤时保留（避免误伤池通道）
+                if agent_id or persona_id or tenant_id:
+                    result["results"] = [
+                        r for r in result["results"] if r.get("memory_id") in keep
+                    ]
+                else:
+                    result["results"] = [
+                        r for r in result["results"]
+                        if r.get("memory_id") in keep or r.get("memory_id") not in owners
+                    ]
 
         # 审计日志
         if self._adapter and hasattr(self._adapter, "write_audit_log"):
@@ -2168,12 +2241,52 @@ class Trinity:
     # ── 跨模态检索（文字 ↔ 图片记忆）─────────────────────────────
 
     def _ensure_cross_modal_retriever(self):
-        """Lazy-initialize the CrossModalRetriever."""
+        """Lazy-initialize the CrossModalRetriever.
+
+        回归修复(2026-08-14): 首次构造可能因离线导入 torch/transformers 耗时 60s+，
+        用后台线程 + 15s 上限，超时立即返回降级对象（客户端不阻塞），
+        线程完成后下次调用自动换装完整检索器。
+        """
         if self._cross_modal_retriever is None:
+            import os as _os
+            import threading
+            from types import SimpleNamespace
             from trinity.retrieval.cross_modal import CrossModalRetriever
-            self._cross_modal_retriever = CrossModalRetriever(
-                trinity_instance=self,
-            )
+
+            prev = {k: _os.environ.get(k)
+                    for k in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")}
+            _os.environ.setdefault("HF_HUB_OFFLINE", "1")
+            _os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+            holder: dict = {}
+
+            def _build() -> None:
+                try:
+                    holder["cm"] = CrossModalRetriever(trinity_instance=self)
+                except Exception as exc:  # noqa: BLE001
+                    holder["err"] = exc
+                finally:
+                    for k, v in prev.items():
+                        if v is None:
+                            _os.environ.pop(k, None)
+                        else:
+                            _os.environ[k] = v
+
+            t = threading.Thread(target=_build, daemon=True)
+            t.start()
+            t.join(timeout=15)
+            if "cm" in holder:
+                self._cross_modal_retriever = holder["cm"]
+            else:
+                # 降级占位：文本/CLIP 编码器均不可用；后台线程完成后下次请求换装
+                self._cross_modal_retriever = SimpleNamespace(
+                    _text_encoder=None, use_clip=False, _PIL_Image=None)
+                self._cross_modal_pending_holder = holder
+        elif getattr(self, "_cross_modal_pending_holder", None):
+            # 后台线程已完成 → 换装完整检索器
+            holder = self._cross_modal_pending_holder
+            if "cm" in holder:
+                self._cross_modal_retriever = holder["cm"]
+            self._cross_modal_pending_holder = None
         return self._cross_modal_retriever
 
     def search_image_by_text(
@@ -2309,7 +2422,7 @@ class Trinity:
             import os
 
             db_path = os.environ.get("TRINITY_DB_PATH") or os.path.join(
-                _TRINITY_STORE or os.getcwd(), "trinity_store.db"
+                _TRINITY_STORE or str(Path.home() / ".trinity" / "store"), "trinity_store.db"
             )
             adapter = SQLiteAdapter(db_path=db_path)
             adapter.connect()

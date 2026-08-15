@@ -551,6 +551,29 @@ class PostgreSQLAdapter(StorageAdapter):
                 row = cur.fetchone()
                 return dict(row) if row else None
 
+    def get_memory_owners(self, memory_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+        """批量查询记忆的归属与状态（hybrid 检索隔离后过滤用；与 SQLiteAdapter 同接口）。"""
+        if not memory_ids:
+            return {}
+        import psycopg2.extras
+
+        with self._get_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                cur.execute(
+                    "SELECT memory_id, status, agent_id, persona_id, tenant_id "
+                    "FROM memories WHERE memory_id::text = ANY(%s)",
+                    ([str(m) for m in memory_ids],),
+                )
+                return {
+                    str(r["memory_id"]): {
+                        "status": r["status"],
+                        "agent_id": r["agent_id"],
+                        "persona_id": r["persona_id"],
+                        "tenant_id": r["tenant_id"],
+                    }
+                    for r in cur.fetchall()
+                }
+
     def get_persona_memories(self, persona_id: str, agent_id: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
         import psycopg2.extras
 

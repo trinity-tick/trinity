@@ -1164,6 +1164,33 @@ class SQLiteAdapter(StorageAdapter):
             return None
         return dict(row)
 
+    def get_memory_owners(self, memory_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+        """批量查询记忆的归属与状态（hybrid 检索隔离后过滤用）。
+
+        返回 {memory_id: {status, agent_id, persona_id, tenant_id}}；
+        不在库中的 id 不出现（调用方据此区分"池记忆/幽灵"）。
+        """
+        if not memory_ids:
+            return {}
+        conn = self._conn
+        if not conn:
+            return {}
+        placeholders = ",".join("?" * len(memory_ids))
+        rows = conn.execute(
+            f"SELECT memory_id, status, agent_id, persona_id, tenant_id "
+            f"FROM memories WHERE memory_id IN ({placeholders})",
+            list(memory_ids),
+        ).fetchall()
+        return {
+            r["memory_id"]: {
+                "status": r["status"],
+                "agent_id": r["agent_id"],
+                "persona_id": r["persona_id"],
+                "tenant_id": r["tenant_id"],
+            }
+            for r in rows
+        }
+
     def get_persona_memories(
         self, persona_id: str, agent_id: Optional[str] = None, limit: int = 50
     ) -> List[Dict[str, Any]]:
