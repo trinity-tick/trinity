@@ -370,19 +370,23 @@ class SQLiteAdapter(StorageAdapter):
                 ON relations(object_id);
             CREATE INDEX IF NOT EXISTS idx_relations_predicate
                 ON relations(predicate);
-            CREATE INDEX IF NOT EXISTS idx_relations_valid
-                ON relations(valid_from, valid_to);
         """)
         self._conn.commit()
 
         # ── relations 时序列迁移（2026-08-15, R2 edge bi-temporal）──
         # 旧库 relations 无 valid_from/valid_to，幂等补列。
+        # 注意：索引必须在补列之后创建（旧库 executescript 内建索引会
+        # 因列不存在报 OperationalError）。
         try:
             cols = [r[1] for r in self._conn.execute("PRAGMA table_info(relations)").fetchall()]
             if "valid_from" not in cols:
                 self._conn.execute("ALTER TABLE relations ADD COLUMN valid_from TEXT")
             if "valid_to" not in cols:
                 self._conn.execute("ALTER TABLE relations ADD COLUMN valid_to TEXT")
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_relations_valid "
+                "ON relations(valid_from, valid_to)"
+            )
             self._conn.commit()
         except sqlite3.OperationalError:
             pass

@@ -2020,3 +2020,22 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
   tests/unit/test_r2_extract_temporal.py 10 例；全量 626 passed / 43 skipped / 0 failed。
 - **文档**：COMPARISON_VS_2026_SOTA_R2.md（新增+执行结果）、TRINITY_SUMMARY 更新。
 - **A1**：HF 网络仍不可达，官方基准维持阻塞标记。
+
+
+### 45.1 文档融合能力（2026-08-15）：方案/实际文档入库 + 可检索可溯源
+
+- **能力验证**：Trinity 能把方案规划与实际文档（Markdown）融合进记忆库。
+  `scripts/fuse_docs.py`：章节级切分（##/### 标题）、source_uri 溯源、幂等指纹
+  （sha256(path|mtime|title)）、类型归类（doc:plan/summary/ops/benchmark/protocol/general）、
+  可选 LLM 图谱抽取（TRINITY_LLM_EXTRACT=on）。
+- **实测**：docs/ 42 文件 → 382 章节入库（plan 42/summary 95/ops 34/benchmark 42/
+  protocol 18/general 151），persona=trinity-docs 隔离；重跑幂等全跳过；
+  跨文档语义检索命中正确来源（"多智能体治理 B3"→PLANNING_REVIEW、"存储加密 AES"→
+  STORAGE_ENCRYPTION、"MCP v2"→MCP_STATUS）。
+- **修复**：①relations 时序列索引迁移顺序 bug——旧库 executescript 内建
+  idx_relations_valid 因列未补报 OperationalError，索引移到补列后（生产库触发）；
+  ②engine_worker 悬挂未提交写事务致生产库持续锁（database is locked）——
+  系此前 trinity_write 两次超时遗留，kill 后 DSH host 自动重启恢复，锁释放；
+  ③fuse_docs GBK 控制台打印 ✅ 崩溃 → ASCII PASS/FAIL。
+- **测试**：tests/unit/test_doc_fusion.py 5 例（切分/分类/幂等指纹）；
+  文档：DOC_FUSION_20260815.md（融合手册）+ mkdocs 导航。

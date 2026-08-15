@@ -36,6 +36,7 @@ nav:
 - "Anti Loop Self Check": anti_loop_self_check.md
 - "Contributing": contributing.md
 - "Deployment": deployment.md
+- "Doc Fusion 20260815": DOC_FUSION_20260815.md
 - "Getting Started": getting-started.md
 - "Multi Tenant": multi-tenant.md
 - "Multimodal": multimodal.md
