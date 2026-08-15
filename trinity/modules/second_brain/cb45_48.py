@@ -232,6 +232,73 @@ class TemporalValidity:
                 results.append({"entity_id": eid, **ent})
         return results
 
+    def query_edges_at_time(self, query_time: float, source_id: str = None,
+                            target_id: str = None, relation: str = None) -> list[dict]:
+        """edge 级时点查询（P1-1，2026-08-15）：返回在 query_time 有效的边。
+
+        与 query_at_time（entity 级）互补，支持"某时刻谁与谁有什么关系"。
+        """
+        results = []
+        for e in self.edges:
+            if source_id and e["source"] != source_id:
+                continue
+            if target_id and e["target"] != target_id:
+                continue
+            if relation and e["relation"] != relation:
+                continue
+            if e["valid_from"] <= query_time <= e["valid_to"]:
+                results.append(dict(e))
+        return results
+
+    def query_edge_validity_window(self, source_id: str, target_id: str,
+                                   relation: str = None) -> list[dict]:
+        """查询指定边的时间窗（valid_from/valid_to）。"""
+        windows = []
+        for e in self.edges:
+            if e["source"] != source_id or e["target"] != target_id:
+                continue
+            if relation and e["relation"] != relation:
+                continue
+            windows.append({
+                "source": e["source"], "target": e["target"],
+                "relation": e["relation"],
+                "valid_from": e["valid_from"], "valid_to": e["valid_to"],
+            })
+        return windows
+
+    def merge_entities(self, entity_id_keep: str, entity_id_drop: str) -> int:
+        """实体合并（P1-1）：把被合并实体的边迁到保留实体，合并时间线。
+
+        Returns:
+            迁移的边数。
+        """
+        if entity_id_keep == entity_id_drop or entity_id_drop not in self.entities:
+            return 0
+        # 迁移边：source/target 指向被合并实体 → 保留实体
+        migrated = 0
+        for e in self.edges:
+            if e["source"] == entity_id_drop:
+                e["source"] = entity_id_keep
+                migrated += 1
+            if e["target"] == entity_id_drop:
+                e["target"] = entity_id_keep
+                migrated += 1
+        # 合并时间线：保留实体 valid_from 取更早，valid_to 取更晚
+        keep = self.entities[entity_id_keep]
+        drop = self.entities[entity_id_drop]
+        keep["valid_from"] = min(keep["valid_from"], drop["valid_from"])
+        if keep["valid_to"] == float("inf") or drop["valid_to"] == float("inf"):
+            keep["valid_to"] = float("inf")
+        else:
+            keep["valid_to"] = max(keep["valid_to"], drop["valid_to"])
+        # 被合并实体进入 invalidated（可审计）
+        self.invalidated.append({
+            "entity_id": entity_id_drop, "merged_into": entity_id_keep,
+            "timestamp": time.time(),
+        })
+        del self.entities[entity_id_drop]
+        return migrated
+
     def query_validity_window(self, entity_id: str) -> Optional[dict]:
         ent = self.entities.get(entity_id)
         if not ent:

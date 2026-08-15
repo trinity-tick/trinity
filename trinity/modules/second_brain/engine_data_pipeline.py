@@ -851,6 +851,75 @@ class TemporalValidity:
         return self._query_engine.query_validity_window(
             self._entity_edge_mgr.entities, entity_id)
 
+    # ── P1-1（2026-08-15）：edge 级双时态查询 + 实体合并 ──────────
+    def query_edges_at_time(self, query_time: float, source_id: str = None,
+                            target_id: str = None, relation: str = None) -> list[dict]:
+        """edge 级时点查询：返回 query_time 时有效的边（Graphiti edge 双时态对齐）。"""
+        results = []
+        mgr = self._entity_edge_mgr
+        for (s, t, rel), e in mgr.edges.items():
+            if source_id and s != source_id:
+                continue
+            if target_id and t != target_id:
+                continue
+            if relation and rel != relation:
+                continue
+            until = e["valid_until"] if e.get("valid_until") is not None else float("inf")
+            if e["valid_from"] <= query_time <= until:
+                results.append({"source": s, "target": t, "relation": rel, **e})
+        return results
+
+    def query_edge_validity_window(self, source_id: str, target_id: str,
+                                   relation: str = None) -> list[dict]:
+        """查询指定边的时间窗（valid_from/valid_until）。"""
+        windows = []
+        mgr = self._entity_edge_mgr
+        for (s, t, rel), e in mgr.edges.items():
+            if s != source_id or t != target_id:
+                continue
+            if relation and rel != relation:
+                continue
+            windows.append({
+                "source": s, "target": t, "relation": rel,
+                "valid_from": e["valid_from"], "valid_until": e["valid_until"],
+            })
+        return windows
+
+    def merge_entities(self, entity_id_keep: str, entity_id_drop: str) -> int:
+        """实体合并：迁移边引用到保留实体 + 合并时间线 + 审计（P1-1）。"""
+        import time
+        mgr = self._entity_edge_mgr
+        if entity_id_keep == entity_id_drop or entity_id_drop not in mgr.entities:
+            return 0
+        migrated = 0
+        new_edges: dict = {}
+        for (s, t, rel), e in mgr.edges.items():
+            ns, nt = s, t
+            if s == entity_id_drop:
+                ns = entity_id_keep
+                migrated += 1
+            if t == entity_id_drop:
+                nt = entity_id_keep
+                migrated += 1
+            new_edges[(ns, nt, rel)] = e
+        mgr.edges = new_edges
+        # 合并时间线：valid_from 取更早，valid_until 取更晚（None=永久）
+        keep_ts = mgr.entities[entity_id_keep]["timestamps"]
+        drop_ts = mgr.entities[entity_id_drop]["timestamps"]
+        keep_ts["valid_from"] = min(keep_ts["valid_from"], drop_ts["valid_from"])
+        if keep_ts.get("valid_until") is None or drop_ts.get("valid_until") is None:
+            keep_ts["valid_until"] = None
+        elif drop_ts.get("valid_until") is not None:
+            keep_ts["valid_until"] = max(keep_ts["valid_until"], drop_ts["valid_until"])
+        self.audit_trail.append({
+            "action": "entity_merged", "keep": entity_id_keep,
+            "dropped": entity_id_drop, "migrated_edges": migrated,
+            "timestamp": time.time(),
+        })
+        del mgr.entities[entity_id_drop]
+        mgr.total_entities -= 1
+        return migrated
+
     # ── 冲突处理 ──
     def detect_and_resolve_conflict(self, entity_id: str, new_properties: dict) -> dict:
         return self._conflict_mgr.detect_and_resolve_conflict(

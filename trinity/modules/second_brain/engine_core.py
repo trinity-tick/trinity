@@ -432,6 +432,15 @@ class _RecallOrchestrator:
         results["CB46_communities"] = comm_count > 0
         stats_46 = cb46.get_stats()
         results["CB46_stats"] = stats_46["entities"] == 3
+        # P1-1（2026-08-15）：edge 级 bi-temporal 查询 + 实体合并时间线迁移
+        q_edge_ts = time.time()
+        edge_now = cb46.query_edges_at_time(q_edge_ts, source_id="user_1")
+        results["CB46_edge_temporal_query"] = isinstance(edge_now, list) and len(edge_now) > 0
+        vw_edge = cb46.query_edge_validity_window("user_1", "user_2", relation="BELONGS_TO")
+        results["CB46_edge_validity_window"] = len(vw_edge) > 0 and vw_edge[0]["valid_from"] is not None
+        migrated = cb46.merge_entities("user_1", "user_2")
+        results["CB46_entity_merge"] = migrated >= 1 and "user_2" not in cb46._entity_edge_mgr.entities
+        results["CB46_entity_merge_migrated"] = migrated
         cb47 = p.cb47
         test_messages = [
             {"role": "user", "content": "I need to configure the deployment pipeline for the AI memory system"},
