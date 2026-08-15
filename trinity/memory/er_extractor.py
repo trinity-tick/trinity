@@ -197,7 +197,13 @@ class EntityRelationExtractor:
     ) -> Dict[str, Any]:
         prompt = _EXTRACTION_SYSTEM + "\n\n" + _build_extraction_prompt(memories)
         try:
-            response = self._llm(prompt)
+            # 兼容双参 callable (system, user) 与单参 callable (prompt)：
+            # create_llm_compress_callable 返回 (system_prompt, user_prompt) -> str，
+            # 其余调用方可能传入 (prompt) -> str。
+            try:
+                response = self._llm(_EXTRACTION_SYSTEM, _build_extraction_prompt(memories))
+            except TypeError:
+                response = self._llm(prompt)
             return json.loads(response)
         except Exception as exc:
             logger.warning("LLM extraction failed: %s, falling back to regex", exc)

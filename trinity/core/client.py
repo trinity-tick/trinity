@@ -1575,6 +1575,10 @@ class Trinity:
     ) -> List[str]:
         """为新写入的记忆自动提取实体并创建 mentions 关系。
 
+        LLM 驱动（2026-08-15, R2 优化）：TRINITY_LLM_EXTRACT=on 时改用
+        EntityRelationExtractor（LLM 提取实体+关系谓词 → 写入 relations 表，
+        对齐 Mem0/Zep 的写入即抽取）；未开启/失败时回退规则提取（原行为）。
+
         Args:
             memory_id: 新记忆 ID。
             content: 记忆内容。
@@ -1585,6 +1589,24 @@ class Trinity:
         entity_ids: List[str] = []
         if not self._adapter or not hasattr(self._adapter, "upsert_entity"):
             return entity_ids
+
+        # ── LLM 驱动分支（env 开关，默认关）──────────────────────────
+        if os.environ.get("TRINITY_LLM_EXTRACT", "").strip().lower() in ("1", "on", "true", "yes"):
+            try:
+                from trinity.daemon.memory_compressor import create_llm_compress_callable
+                from trinity.memory.er_extractor import EntityRelationExtractor
+                llm = create_llm_compress_callable()
+                extractor = EntityRelationExtractor(self._adapter, llm_call=llm)
+                summary = extractor.extract_from_memories([memory_id])
+                for ent in summary.get("entities", []):
+                    eid = ent.get("id", "")
+                    if eid:
+                        entity_ids.append(eid)
+                return entity_ids
+            except Exception:
+                # LLM 不可用/失败 → 静默回退规则提取
+                pass
+
         try:
             from trinity.core.entity_extractor import EntityExtractor
             extractor = EntityExtractor()

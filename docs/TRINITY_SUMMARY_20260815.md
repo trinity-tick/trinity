@@ -1,4 +1,4 @@
-﻿# Trinity 结构与情况汇总（2026-08-15 最终版）
+# Trinity 结构与情况汇总（2026-08-15 最终版）
 
 > 本会话（round34-43）全面梳理 + 优化后的现状快照。版本 v8.2.0，113 commits。
 
@@ -36,11 +36,12 @@
 |---|---|
 | 数据 | 记忆 11,778（active 1,534）· 实体 11,141 · 关系 28,329 · dsh_events 2,112 · 74.6MB |
 | 服务 | api :8001 · mcp :8000(SSE) · **mcp :8003(MCP v2 streamable-http)** · gateway :8002 · dashboard :3005 · PG :5430 · collector RUNNING |
-| 测试 | **583 passed / 43 skipped / 0 failed** |
+| 测试 | **626 passed / 43 skipped / 0 failed**（+B3 治理 9 · B5 加密 20 · A4 跨模态 4 · R2 抽取/时序 10） |
 | 性能 | FTS 热查 ~3ms · hybrid E2E 命中 ~5ms · ANN 热查 9ms · 通道零降级 |
 | 基准 | LoCoMo 0.88 · **LongMemEval 500q top_k=10 整体 R@5=0.992**（MS 0.525→0.95 已优化）· SQuAD 98.3% · MemSyco 0.88 |
 | 融合 | DSH 结构 6/6 自动（身份/事件/todo/header/**goal/schedule**） |
 | 运维 | 监督循环 5min · compaction 控 dsh_events 增长 · 三库→两库 · git 干净 |
+| R2 新增 | **写路径 LLM 事实抽取**（TRINITY_LLM_EXTRACT，对齐 Mem0/Zep 写入即抽取）· **edge 级 bi-temporal**（relations valid_from/valid_to + query_relations_at） |
 
 ## 三、与网络最优方案对比（优化后）
 
@@ -63,4 +64,6 @@
 - **定位**：架构覆盖最宽 + 治理/性能/融合深度已达业界 2026 方案对齐水平。
 - **已消化的差距**（相对 round35 首次对比）：语义缓存、ANN 持久化、真实 LLM 整合、
   多因子遗忘、edge 时序、实体去重、Gateway、融合 6/6、两库收敛——全部落地。
-- **剩余**：官方基准（HF 阻塞）、SaaS/Console、SDK 生态扩展（LangChain 依赖）、存储加密。MCP v2 已实现。规划完成度见 PLANNING_REVIEW_20260815.md（9/15 ✅）。
+- **剩余**：官方基准（HF 阻塞）、SaaS/Console、SDK 生态扩展（LangChain 依赖）、prompt cache 感知。
+  MCP v2 已实现。规划完成度见 PLANNING_REVIEW_20260815.md（12/15 ✅）。
+  2026 Q3 再对比与剩余空间见 COMPARISON_VS_2026_SOTA_R2.md。

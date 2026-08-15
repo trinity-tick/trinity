@@ -360,7 +360,9 @@ class SQLiteAdapter(StorageAdapter):
                 predicate   TEXT NOT NULL DEFAULT 'related_to',
                 object_id   TEXT NOT NULL,
                 properties  TEXT DEFAULT '{}',
-                created_at  TEXT DEFAULT CURRENT_TIMESTAMP
+                created_at  TEXT DEFAULT CURRENT_TIMESTAMP,
+                valid_from  TEXT,
+                valid_to    TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_relations_subject
                 ON relations(subject_id);
@@ -368,8 +370,22 @@ class SQLiteAdapter(StorageAdapter):
                 ON relations(object_id);
             CREATE INDEX IF NOT EXISTS idx_relations_predicate
                 ON relations(predicate);
+            CREATE INDEX IF NOT EXISTS idx_relations_valid
+                ON relations(valid_from, valid_to);
         """)
         self._conn.commit()
+
+        # ── relations 时序列迁移（2026-08-15, R2 edge bi-temporal）──
+        # 旧库 relations 无 valid_from/valid_to，幂等补列。
+        try:
+            cols = [r[1] for r in self._conn.execute("PRAGMA table_info(relations)").fetchall()]
+            if "valid_from" not in cols:
+                self._conn.execute("ALTER TABLE relations ADD COLUMN valid_from TEXT")
+            if "valid_to" not in cols:
+                self._conn.execute("ALTER TABLE relations ADD COLUMN valid_to TEXT")
+            self._conn.commit()
+        except sqlite3.OperationalError:
+            pass
 
         # ── 身份锚点表 ─────────────────────────────────────────────
         cursor.executescript("""
@@ -2159,7 +2175,9 @@ class SQLiteAdapter(StorageAdapter):
 
     def create_relation(self, subject_id: str, predicate: str,
                         object_id: str,
-                        properties: Optional[Dict] = None) -> Dict[str, Any]:
+                        properties: Optional[Dict] = None,
+                        valid_from: Optional[str] = None,
+                        valid_to: Optional[str] = None) -> Dict[str, Any]:
         """创建关系（幂等：按 subject+predicate+object 去重）。
 
         Args:
@@ -2167,6 +2185,8 @@ class SQLiteAdapter(StorageAdapter):
             predicate: 谓词。
             object_id: 客体实体 ID。
             properties: 附加属性 JSON。
+            valid_from: 边生效起始时间（ISO8601，缺省=now；edge bi-temporal）。
+            valid_to: 边失效时间（ISO8601，缺省 None=仍有效）。
 
         Returns:
             关系字典。
@@ -2185,13 +2205,16 @@ class SQLiteAdapter(StorageAdapter):
             ).hexdigest()[:32]
             conn.execute("""
                 INSERT OR IGNORE INTO relations
-                    (id, subject_id, predicate, object_id, properties, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (rel_id, subject_id, predicate, object_id, props_json, now))
+                    (id, subject_id, predicate, object_id, properties, created_at,
+                     valid_from, valid_to)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (rel_id, subject_id, predicate, object_id, props_json, now,
+                  valid_from or now, valid_to))
             conn.commit()
             return {"id": rel_id, "subject_id": subject_id, "predicate": predicate,
                     "object_id": object_id, "properties": (properties or {}),
-                    "created_at": now}
+                    "created_at": now, "valid_from": valid_from or now,
+                    "valid_to": valid_to}
 
     def query_relations(self, subject_id: Optional[str] = None,
                         predicate: Optional[str] = None,
@@ -2213,6 +2236,43 @@ class SQLiteAdapter(StorageAdapter):
             return []
         sql = "SELECT * FROM relations WHERE 1=1"
         params: list = []
+        if subject_id:
+            sql += " AND subject_id = ?"
+            params.append(subject_id)
+        if predicate:
+            sql += " AND predicate = ?"
+            params.append(predicate)
+        if object_id:
+            sql += " AND object_id = ?"
+            params.append(object_id)
+        sql += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        cursor = conn.execute(sql, params)
+        return [dict(row) for row in cursor.fetchall()]
+
+    def query_relations_at(self, at_time: str,
+                           subject_id: Optional[str] = None,
+                           predicate: Optional[str] = None,
+                           object_id: Optional[str] = None,
+                           limit: int = 50) -> List[Dict[str, Any]]:
+        """时点查询：返回指定时间点有效的边（edge bi-temporal）。
+
+        valid_from <= at_time AND (valid_to IS NULL OR valid_to > at_time)。
+
+        Args:
+            at_time: 查询时间点（ISO8601）。
+            subject_id / predicate / object_id: 可选过滤。
+            limit: 返回数量。
+
+        Returns:
+            该时点有效的关系列表。
+        """
+        conn = self._conn
+        if not conn:
+            return []
+        sql = ("SELECT * FROM relations WHERE valid_from <= ? "
+               "AND (valid_to IS NULL OR valid_to > ?)")
+        params: list = [at_time, at_time]
         if subject_id:
             sql += " AND subject_id = ?"
             params.append(subject_id)

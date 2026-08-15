@@ -1996,3 +1996,27 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
 - 全量测试：612 passed / 43 skipped / 0 failed（新增 29 例）。
 - 文档：PLANNING_REVIEW（12/15 ✅）、STORAGE_ENCRYPTION_20260815.md（新）、
   COMPLIANCE_GDPR 运维建议更新、mkdocs.yml 加导航。
+
+
+### 44.1 R2 再对比执行（2026-08-15）：写路径 LLM 事实抽取 + edge 级 bi-temporal
+
+- **依据**：2026 Q3 网络再对比（COMPARISON_VS_2026_SOTA_R2.md）。新情报：Synap
+  LongMemEval 92%/LoCoMo 93.2%（最高公开数字）；"Storage Is Not Memory" 检索中心论文；
+  Anthropic prompt cache 平台标配。判定剩余空间：B 写路径 LLM 事实抽取（追平 Mem0/Zep
+  写入即抽取）、C edge 级 bi-temporal（追平 Graphiti）。
+- **B 写路径 LLM 事实抽取**：
+  - `client._auto_extract_entities` 增加 LLM 分支：`TRINITY_LLM_EXTRACT=on` 时用
+    `EntityRelationExtractor` + `create_llm_compress_callable`（DeepSeek），提取实体+关系
+    谓词 → relations 表；未开启/失败静默回退规则提取（原行为不变）。
+  - `er_extractor._extract_with_llm` 兼容双参 (system,user) 与单参 (prompt) callable。
+  - 实测（LLM on）：3 实体（Alice/Bob/Trinity）+ 2 条 `works_on` 语义关系入库。
+- **C edge 级 bi-temporal**：
+  - `relations` 表补 `valid_from`/`valid_to` 列（幂等 ALTER 迁移 + 索引），
+    替代从未写入的死表 `relationships`（遗留 schema）。
+  - `create_relation` 支持 valid_from/valid_to 参数；新增 `query_relations_at(时点)`
+    只返回该时点有效边（valid_from<=t AND (valid_to IS NULL OR valid_to>t)）。
+  - 实测：过期边当前不可见、15 天前可见、无 TTL 边默认 now 生效。
+- **验证**：scripts/r2_extract_temporal_demo.py 规则/LLM 双模式 PASS；
+  tests/unit/test_r2_extract_temporal.py 10 例；全量 626 passed / 43 skipped / 0 failed。
+- **文档**：COMPARISON_VS_2026_SOTA_R2.md（新增+执行结果）、TRINITY_SUMMARY 更新。
+- **A1**：HF 网络仍不可达，官方基准维持阻塞标记。
