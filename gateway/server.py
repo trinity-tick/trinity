@@ -23,11 +23,14 @@
     uvicorn server:app --host 0.0.0.0 --port 8002
 """
 import os
+import time as _time
+import threading as _threading
 from typing import Any, Dict, List, Optional
 
 import requests
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 TRINITY_API = os.environ.get("TRINITY_API_URL", "http://127.0.0.1:8001").rstrip("/")
@@ -39,15 +42,88 @@ UPSTREAM_KEY = os.environ.get("UPSTREAM_API_KEY", "") or os.environ.get("OPENAI_
 DEFAULT_MODEL = os.environ.get("DEFAULT_MODEL", "gpt-4o-mini")
 MEMORY_K = int(os.environ.get("MEMORY_CONTEXT_K", "5"))
 
+# ── 生产化（2026-08-15）─────────────────────────────────────────────
+# 上游模型名映射：MODEL_ALIASES="gpt-4o-mini:deepseek-v4-flash,deepseek-chat:deepseek-v4-flash"
+# 上游为 DeepSeek 时自动把 OpenAI 默认名映射到 v4 系列。
+MODEL_ALIASES: Dict[str, str] = {}
+for pair in os.environ.get("MODEL_ALIASES", "").split(","):
+    if ":" in pair:
+        k, v = pair.split(":", 1)
+        MODEL_ALIASES[k.strip()] = v.strip()
+if "deepseek" in UPSTREAM_BASE:
+    MODEL_ALIASES.setdefault("gpt-4o-mini", "deepseek-v4-flash")
+    MODEL_ALIASES.setdefault("gpt-4o", "deepseek-v4-pro")
+    MODEL_ALIASES.setdefault("deepseek-chat", "deepseek-v4-flash")
+
+def _resolve_model(model: Optional[str]) -> str:
+    m = model or DEFAULT_MODEL
+    return MODEL_ALIASES.get(m, m)
+
+# 网关自身鉴权：设置 GATEWAY_API_KEY 后所有请求需 Bearer 匹配（未设置=开放）
+GATEWAY_KEY = os.environ.get("GATEWAY_API_KEY", "")
+# 简单限流：GATEWAY_RATE_LIMIT 次/分钟/客户端 IP（0=关闭）
+RATE_LIMIT = int(os.environ.get("GATEWAY_RATE_LIMIT", "0"))
+_RATE: Dict[str, List[float]] = {}
+_RATE_LOCK = _threading.Lock()
+
+# 监控计数（/metrics，Prometheus 文本格式）
+_METRICS_LOCK = _threading.Lock()
+_METRICS = {"requests_total": 0, "errors_total": 0, "start_time": _time.time()}
+
 _HEADERS = {"Authorization": f"Bearer {TRINITY_API_KEY}"} if TRINITY_API_KEY else {}
 # RBAC：受保护路由要求 X-Agent-ID（缺失 → 401），显式角色 admin 获得全量权限
 _HEADERS.update({"X-Agent-ID": GATEWAY_AGENT_ID, "X-Agent-Role": GATEWAY_AGENT_ROLE})
 
 app = FastAPI(
     title="Trinity Memory Gateway",
-    version="0.1.0",
+    version="0.2.0",
     description="OpenAI/Mem0-compatible memory API backed by Trinity Memory OS.",
 )
+
+
+@app.middleware("http")
+async def _gateway_middleware(request: Request, call_next):
+    """鉴权 + 限流 + 监控（生产化，2026-08-15）。"""
+    client_ip = request.client.host if request.client else "unknown"
+    # 鉴权
+    if GATEWAY_KEY:
+        auth = request.headers.get("Authorization", "")
+        if auth != f"Bearer {GATEWAY_KEY}":
+            with _METRICS_LOCK:
+                _METRICS["errors_total"] += 1
+            return JSONResponse(status_code=401, content={"error": "invalid gateway api key"})
+    # 限流（窗口 60s 滑动）
+    if RATE_LIMIT > 0:
+        now = _time.time()
+        with _RATE_LOCK:
+            win = [t for t in _RATE.get(client_ip, []) if now - t < 60.0]
+            if len(win) >= RATE_LIMIT:
+                with _METRICS_LOCK:
+                    _METRICS["errors_total"] += 1
+                return JSONResponse(status_code=429, content={"error": "rate limit exceeded"})
+            win.append(now)
+            _RATE[client_ip] = win
+    with _METRICS_LOCK:
+        _METRICS["requests_total"] += 1
+    try:
+        return await call_next(request)
+    except Exception:
+        with _METRICS_LOCK:
+            _METRICS["errors_total"] += 1
+        raise
+
+
+@app.get("/metrics")
+def metrics() -> Dict[str, Any]:
+    """Prometheus 文本格式基础指标。"""
+    with _METRICS_LOCK:
+        uptime = _time.time() - _METRICS["start_time"]
+        return {
+            "status": "ok",
+            "requests_total": _METRICS["requests_total"],
+            "errors_total": _METRICS["errors_total"],
+            "uptime_seconds": round(uptime, 1),
+        }
 
 
 # ── 请求模型 ────────────────────────────────────────────────────────────
@@ -254,7 +330,7 @@ def chat_completions(body: ChatIn) -> Dict[str, Any]:
     upstream_messages.extend(m.model_dump() for m in body.messages)
 
     payload: Dict[str, Any] = {
-        "model": body.model or DEFAULT_MODEL,
+        "model": _resolve_model(body.model),
         "messages": upstream_messages,
     }
     if body.temperature is not None:
