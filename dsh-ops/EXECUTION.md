@@ -1905,3 +1905,19 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
   验证：OpenAI SDK 1.55.3 端到端——指令写记忆、检索返回完整 content、
   记忆注入聊天以上游 DeepSeek 记忆片段作答。
 - 全量测试 580 passed / 0 failed。
+
+### 39.1 优化续轮（2026-08-15）：Gateway 生产化 + LongMemEval 基准 + Harvester 插件生态
+
+- **①Gateway 生产化**（8bd732d）：GATEWAY_API_KEY Bearer 鉴权（未设开放）、
+  GATEWAY_RATE_LIMIT 每 IP 60s 滑动窗口限流（429）、MODEL_ALIASES 上游模型名映射
+  （DeepSeek 上游自动 gpt-4o-mini→deepseek-v4-flash）、/metrics 计数端点。
+  验证：无 key 401 / 带 key 200 / 429 限流 / 模型映射 chat 200。
+- **②LongMemEval 基准**（d9358ce）：本地 55 题模拟集 BM25 检索 **R@5=1.0**（55/55，
+  single-session/knowledge-update/multi-session 各 1.0），结果入 leaderboard（标注本地口径）。
+- **③Harvester 插件生态**（a3fb423）：harvesters/plugins/file_harvester.py（目录扫描
+  .md/.txt/.log→记忆，按 path/mtime/size 幂等去重）+ harvesters/registry.json +
+  scripts/run_harvesters.py（加载 registry→harvest→写入大库，--plugin/--dry-run/--config；
+  UNIQUE(persona,agent,content_hash) 自然防重复）。验证：写入→可检索→重跑 0 新增。
+- **④Dashboard**：:3000 Flask 监控验证可运行（/api/stats 200，stats/kgraph/memories/
+  agents/heatmap 端点齐全）。
+- 全量测试 580 passed / 0 failed。
