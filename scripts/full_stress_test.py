@@ -13,6 +13,10 @@ Trinity — 全量压力测试（2026-08-15）
 用法：
     python scripts/full_stress_test.py                     # 默认（写 500 / 读 500 / 混合 200）
     python scripts/full_stress_test.py --writes 1000 --reads 1000 --mixed 500
+    python scripts/full_stress_test.py --db ~/.trinity/store/trinity_store.db
+                                                           # 加阶段6：生产库副本并发检索+一致性
+    python scripts/full_stress_test.py --api http://127.0.0.1:8001
+                                                           # 加阶段7：API 并发检索（全链路）
     python scripts/full_stress_test.py --json              # JSON 报告
 
 产出：~/.trinity/logs/full_stress_report.json + 控制台摘要
@@ -24,13 +28,16 @@ import argparse
 import json
 import os
 import random
+import re
+import shutil
 import statistics
 import sys
 import tempfile
 import threading
 import time
+import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 _TRINITY_ROOT = Path(__file__).resolve().parent.parent
 if str(_TRINITY_ROOT) not in sys.path:
@@ -212,6 +219,101 @@ def monitor_resources(duration_s: float) -> Dict[str, Any]:
     return peaks
 
 
+def _load_api_token() -> Optional[str]:
+    """从 ~/.dsh/.credentials.yaml 读取 TRINITY_API_KEY（API 压测鉴权）。"""
+    try:
+        p = Path.home() / ".dsh" / ".credentials.yaml"
+        if not p.exists():
+            return None
+        for line in p.read_text(encoding="utf-8").splitlines():
+            m = re.match(r"^\s*TRINITY_API_KEY\s*[:=]\s*[\"']?([^\"'\s]+)", line)
+            if m:
+                return m.group(1).strip()
+    except Exception:
+        pass
+    return None
+
+
+def copy_db_snapshot(db_path: str) -> Optional[str]:
+    """复制生产库到临时文件（含 WAL），压测只读副本、零污染权威库。"""
+    src = Path(db_path)
+    if not src.is_file():
+        return None
+    tmp = Path(tempfile.mkdtemp(prefix="trinity_dbstress_")) / src.name
+    shutil.copy2(src, tmp)
+    for suffix in ("-wal", "-shm"):
+        if Path(str(src) + suffix).is_file():
+            shutil.copy2(str(src) + suffix, str(tmp) + suffix)
+    return str(tmp)
+
+
+def run_db_read_stress(db_path: str, reads: int, threads: int = 8,
+                       queries: Optional[List[str]] = None) -> StressResult:
+    """生产库副本并发 hybrid 检索（真实 SQLite I/O + FTS + jieba + 向量）。"""
+    result = StressResult()
+    from trinity.core.client import Trinity
+    mem = Trinity(store_path=db_path)
+    if not queries:
+        queries = [c.split()[0] for c in _CORPUS]
+    barrier = threading.Barrier(threads)
+
+    def worker(wid: int) -> None:
+        barrier.wait()
+        for i in range(reads // threads):
+            q = random.choice(queries)
+            t0 = _now_ms()
+            try:
+                mem.search_hybrid(query=q, top_k=10, strategy="rrf")
+                result.add(_now_ms() - t0)
+            except Exception as e:
+                result.add(_now_ms() - t0, str(e)[:80])
+
+    ts = [threading.Thread(target=worker, args=(i,)) for i in range(threads)]
+    t0 = time.time()
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    result.stats()["total_s"] = round(time.time() - t0, 2)
+    return result
+
+
+def run_api_read_stress(base: str, reads: int, threads: int = 8,
+                        token: Optional[str] = None) -> StressResult:
+    """API 并发检索（真实 HTTP → 引擎全链路）。"""
+    result = StressResult()
+    url = base.rstrip("/") + "/memory/search/hybrid"
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    barrier = threading.Barrier(threads)
+
+    def worker(wid: int) -> None:
+        barrier.wait()
+        for i in range(reads // threads):
+            q = random.choice(_CORPUS)
+            body = json.dumps({"query": q[:40], "top_k": 5,
+                               "strategy": "rrf"}).encode("utf-8")
+            req = urllib.request.Request(url, data=body, headers=headers,
+                                         method="POST")
+            t0 = _now_ms()
+            try:
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    resp.read()
+                result.add(_now_ms() - t0)
+            except Exception as e:
+                result.add(_now_ms() - t0, str(e)[:120])
+
+    ts = [threading.Thread(target=worker, args=(i,)) for i in range(threads)]
+    t0 = time.time()
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    result.stats()["total_s"] = round(time.time() - t0, 2)
+    return result
+
+
 def consistency_check(db_path: str, expected_delta: int = 0) -> Dict[str, Any]:
     """压力后一致性校验：计数 + 审计 + 哈希链。"""
     import sqlite3
@@ -252,15 +354,32 @@ def main() -> int:
     parser.add_argument("--mixed", type=int, default=200)
     parser.add_argument("--threads", type=int, default=8)
     parser.add_argument("--json", action="store_true")
-    parser.add_argument("--db", default=os.path.expanduser("~/.trinity/store/trinity_store.db"))
+    parser.add_argument("--db", default=None,
+                        help="生产库路径（默认自动探测）；传参时对副本做真实 I/O 检索压测")
+    parser.add_argument("--api", default=None,
+                        help="API base（如 http://127.0.0.1:8001）；传参时并发打 /memory/search/hybrid")
     args = parser.parse_args()
 
     from trinity.agents.aggregator import MemoryAggregator
+    from trinity.core.client import Trinity  # 预热段 + run_db_read_stress 共用
 
     print(f"== Trinity 全量压力测试 (writes={args.writes} reads={args.reads} "
           f"mixed={args.mixed} threads={args.threads}) ==")
     agg = MemoryAggregator(persist_path=None)
     report: Dict[str, Any] = {"config": vars(args)}
+    # 0. 预热（计时外）：等 embedding 就绪 + 触发一次检索（BM25/索引冷启动
+    #    不算入压测指标——压测衡量稳定态吞吐，冷启动成本单独记录）
+    print("[0] 预热 (embedding fit / BM25 / ANN index)...")
+    t0 = time.time()
+    agg._embedding_ready.wait(timeout=60)
+    agg.ingest("预热记忆 embedding ready", "prewarm", {"category": "db"})
+    agg._rebuild_index()
+    try:
+        agg.query({}, limit=3, mode="hybrid", query_text="预热")
+    except Exception:
+        pass
+    report["warmup_s"] = round(time.time() - t0, 2)
+    print(f"    预热完成: {report['warmup_s']}s")
 
     # 1. 并发写入
     print("\n[1] 并发写入...")
@@ -332,9 +451,74 @@ def main() -> int:
     print(f"    池大小 {len(agg._pool)}, agents {len(agg._agent_index)}, "
           f"锁错误 {lock_errors}")
 
-    # 通过判定：无错误 + 无锁冲突
+    # 6. 生产库副本并发检索（真实 SQLite I/O，零污染）
+    db_result = None
+    db_snapshot = None
+    db_consistency: Dict[str, Any] = {}
+    if args.db:
+        db_snapshot = copy_db_snapshot(args.db)
+        if db_snapshot:
+            print(f"[6] 生产库副本并发检索 ({args.db})...")
+            # 预热（计时外）：首次 search_hybrid 会惰性构建 BM25 索引（12k 记忆
+            # ~1-2s），属冷启动成本，不计入稳定态指标。
+            t0 = time.time()
+            _warm = Trinity(store_path=db_snapshot)
+            try:
+                _warm.search_hybrid(query="数据库", top_k=3, strategy="rrf")
+            except Exception:
+                pass
+            report["db"] = {"source": args.db,
+                            "bm25_warmup_s": round(time.time() - t0, 2)}
+            t0 = time.time()
+            db_result = run_db_read_stress(db_snapshot, args.reads, args.threads)
+            db_stats = db_result.stats()
+            db_stats["elapsed_s"] = round(time.time() - t0, 2)
+            print(f"    生产库检索 {db_stats['count']} 次, "
+                  f"QPS={db_stats['qps']}, p50={db_stats['p50_ms']}ms, "
+                  f"p99={db_stats['p99_ms']}ms, errors={db_stats['errors']}")
+            db_consistency = consistency_check(db_snapshot)
+            report["db"].update({"read": db_stats, "consistency": db_consistency})
+            print(f"    一致性: memories={db_consistency.get('memories_total')}, "
+                  f"active={db_consistency.get('memories_active')}, "
+                  f"audit={db_consistency.get('audit_entries')}")
+        else:
+            print(f"[6] 跳过：库不存在 {args.db}")
+
+    # 7. API 并发检索（真实 HTTP → 引擎全链路）
+    api_result = None
+    if args.api:
+        token = _load_api_token()
+        print(f"[7] API 并发检索 ({args.api}, auth={'on' if token else 'off'})...")
+        # 预热（计时外）：API 进程首次检索构建 BM25 索引
+        try:
+            _warm_body = json.dumps({"query": "数据库", "top_k": 3,
+                                     "strategy": "rrf"}).encode("utf-8")
+            _warm_headers = {"Content-Type": "application/json"}
+            if token:
+                _warm_headers["Authorization"] = f"Bearer {token}"
+            _warm_req = urllib.request.Request(
+                args.api.rstrip("/") + "/memory/search/hybrid",
+                data=_warm_body, headers=_warm_headers, method="POST")
+            with urllib.request.urlopen(_warm_req, timeout=30) as _wr:
+                _wr.read()
+        except Exception:
+            pass
+        t0 = time.time()
+        api_result = run_api_read_stress(args.api, args.reads, args.threads, token)
+        api_stats = api_result.stats()
+        api_stats["elapsed_s"] = round(time.time() - t0, 2)
+        print(f"    API 检索 {api_stats['count']} 次, "
+              f"QPS={api_stats['qps']}, p50={api_stats['p50_ms']}ms, "
+              f"p99={api_stats['p99_ms']}ms, errors={api_stats['errors']}")
+        report["api"] = {"base": args.api, "read": api_stats}
+
+    # 通过判定：无错误 + 无锁冲突（内存池 + 生产库 + API）
     ok = (w.stats()["errors"] == 0 and r.stats()["errors"] == 0
           and m.stats()["errors"] == 0 and lock_errors == 0)
+    if db_result is not None:
+        ok = ok and db_result.stats()["errors"] == 0
+    if api_result is not None:
+        ok = ok and api_result.stats()["errors"] == 0
     report["pass"] = ok
 
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
@@ -342,6 +526,15 @@ def main() -> int:
     out.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"\n报告: {out}")
     print(f"RESULT: {'PASS ✅' if ok else 'FAIL ❌'}")
+
+    # 清理临时副本
+    if db_snapshot:
+        try:
+            Path(db_snapshot).unlink(missing_ok=True)
+            for suffix in ("-wal", "-shm"):
+                Path(db_snapshot + suffix).unlink(missing_ok=True)
+        except Exception:
+            pass
 
     agg.shutdown()
     return 0 if ok else 1

@@ -181,11 +181,13 @@ def test_rate_limit_env_defaults_and_predicate(monkeypatch):
     assert is_rate_limited_request("/memories", "POST")
     assert is_rate_limited_request("/memories/session", "POST")
     assert is_rate_limited_request("/memories/abc/touch", "POST")
-    assert is_rate_limited_request("/memory/search/hybrid", "POST")
     assert is_rate_limited_request("/agents/register", "POST")
     assert is_rate_limited_request("/agents/memory/write", "PUT")
     assert is_rate_limited_request("/agents/register", "DELETE")
-    # Not limited: reads, other routes, /metrics.
+    # Not limited: reads, other routes, /metrics,
+    # and /memory/search/* (read-only search endpoints even though they POST).
+    assert not is_rate_limited_request("/memory/search/hybrid", "POST")
+    assert not is_rate_limited_request("/memory/search/cross-modal", "POST")
     assert not is_rate_limited_request("/memories", "GET")
     assert not is_rate_limited_request("/memories/abc", "HEAD")
     assert not is_rate_limited_request("/agents/memory/search", "GET")

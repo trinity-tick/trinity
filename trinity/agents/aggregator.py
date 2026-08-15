@@ -253,6 +253,13 @@ class MemoryAggregator:
         threading.Thread(target=self._prewarm_embedding, daemon=True,
                          name="agg-embed-prewarm").start()
 
+        # ── 2026-08-15 (压测优化)：ANN 索引预热线程 ──────────────────
+        # embedding 就绪后自动 rebuild 向量索引（懒调 _rebuild_index 只被
+        # demo/测试触发，生产路径索引可能一直空 → 首次检索冷启动 2.4s 尾巴）。
+        # 启动预热让首次检索索引就绪，收敛 p99 尾部延迟。
+        threading.Thread(target=self._prewarm_ann_index, daemon=True,
+                         name="agg-ann-prewarm").start()
+
         self._stats = {
             "total_ingested": 0,
             "total_merged": 0,
@@ -1390,6 +1397,28 @@ class MemoryAggregator:
         logger.warning("Capacity enforced: pruned %d low-priority memories", prune_count)
 
     # ── P0-1: Vector Search ──────────────────────────────────────────────
+
+    def _prewarm_ann_index(self) -> None:
+        """后台预热 ANN 向量索引（embedding 就绪后 rebuild）。
+
+        2026-08-15 (压测优化)：生产路径索引靠 ingest 增量加，但预热期间
+        ingest 跳过索引 → 首次检索可能索引空/冷启动。此线程在 embedding
+        ready 后全量 rebuild（池空时短暂重试），让首次检索索引就绪。
+        幂等、失败静默。
+        """
+        try:
+            if not self._embedding_ready.wait(timeout=60):
+                return
+            # 池可能尚未填充：短暂等待后重试（最多 ~10s）
+            for _ in range(10):
+                if self._pool:
+                    break
+                time.sleep(1.0)
+            if self._pool:
+                self._rebuild_index()
+                logger.info("ANN index prewarmed (%d vectors)", len(self._index_id_map))
+        except Exception:
+            pass
 
     def _prewarm_embedding(self) -> None:
         """后台预热 embedding 引擎（sklearn 首次 fit 较慢，移到启动期）。

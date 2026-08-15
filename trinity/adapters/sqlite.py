@@ -637,44 +637,48 @@ class SQLiteAdapter(StorageAdapter):
         """向 audit_log 表写入一条审计记录（链式 SHA-256 防篡改）。
 
         每条记录的 checksum = SHA-256(本条数据 JSON + 前一条记录的 checksum)。
+
+        2026-08-15（压测修复）：加 _write_lock —— search_hybrid 并发路径
+        每查询写审计，单连接必须串行化（SELECT prev + INSERT + commit）。
         """
-        conn = self._conn
-        if not conn:
-            return
-        audit_id = str(uuid.uuid4())
-        now = datetime.now(timezone.utc).isoformat()
-        details_json = json.dumps(details or {}, ensure_ascii=False)
+        with self._write_lock:
+            conn = self._conn
+            if not conn:
+                return
+            audit_id = str(uuid.uuid4())
+            now = datetime.now(timezone.utc).isoformat()
+            details_json = json.dumps(details or {}, ensure_ascii=False)
 
-        # 获取上一条审计记录的 checksum 用于链式哈希
-        prev_checksum = ""
-        cursor = conn.execute(
-            "SELECT checksum FROM audit_log ORDER BY timestamp DESC, id DESC LIMIT 1"
-        )
-        prev_row = cursor.fetchone()
-        if prev_row and prev_row["checksum"]:
-            prev_checksum = prev_row["checksum"]
+            # 获取上一条审计记录的 checksum 用于链式哈希
+            prev_checksum = ""
+            cursor = conn.execute(
+                "SELECT checksum FROM audit_log ORDER BY timestamp DESC, id DESC LIMIT 1"
+            )
+            prev_row = cursor.fetchone()
+            if prev_row and prev_row["checksum"]:
+                prev_checksum = prev_row["checksum"]
 
-        # 计算链式哈希
-        payload = json.dumps({
-            "id": audit_id,
-            "memory_id": memory_id,
-            "action": action,
-            "agent_id": agent_id,
-            "persona_id": persona_id,
-            "timestamp": now,
-            "details": details,
-            "prev_checksum": prev_checksum,
-        }, sort_keys=True, ensure_ascii=False)
-        chain_checksum = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+            # 计算链式哈希
+            payload = json.dumps({
+                "id": audit_id,
+                "memory_id": memory_id,
+                "action": action,
+                "agent_id": agent_id,
+                "persona_id": persona_id,
+                "timestamp": now,
+                "details": details,
+                "prev_checksum": prev_checksum,
+            }, sort_keys=True, ensure_ascii=False)
+            chain_checksum = hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
-        conn.execute("""
-            INSERT INTO audit_log (id, memory_id, action, agent_id, persona_id, timestamp, details, checksum)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            audit_id, memory_id, action, agent_id, persona_id, now,
-            details_json, chain_checksum,
-        ))
-        conn.commit()  # 立即提交，否则每次 search 都会挂一个未提交写事务，永久占用库锁（database is locked）
+            conn.execute("""
+                INSERT INTO audit_log (id, memory_id, action, agent_id, persona_id, timestamp, details, checksum)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                audit_id, memory_id, action, agent_id, persona_id, now,
+                details_json, chain_checksum,
+            ))
+            conn.commit()  # 立即提交，否则每次 search 都会挂一个未提交写事务，永久占用库锁（database is locked）
 
     # ── 向后兼容：旧调用者转发 ───────────────────────────────────
     def _write_audit_log(self, action: str, memory_id: str = None,
@@ -1031,59 +1035,64 @@ class SQLiteAdapter(StorageAdapter):
 
         优先使用 FTS5 全文搜索，如果不可用则回退到 LIKE 模糊搜索。
         支持 agent_id / persona_id / session_id / app_id / category 的任意 AND 组合。
+
+        2026-08-15（压测修复）：整段加 _write_lock —— 本方法含 FTS SELECT +
+        _touch_batch UPDATE，且 SQLite 单连接多线程并发 execute 会产生游标
+        竞态（bad parameter / 行错位），必须串行化连接访问。
         """
-        conn = self._conn
-        if not conn:
-            return []
+        with self._write_lock:
+            conn = self._conn
+            if not conn:
+                return []
 
-        conditions = ["status = 'active'"]
-        params: List[Any] = []
+            conditions = ["status = 'active'"]
+            params: List[Any] = []
 
-        if persona_id:
-            conditions.append("persona_id = ?")
-            params.append(persona_id)
-        if tenant_id:
-            conditions.append("tenant_id = ?")
-            params.append(tenant_id)
-        if agent_id:
-            conditions.append("agent_id = ?")
-            params.append(agent_id)
-        if app_id:
-            conditions.append("app_id = ?")
-            params.append(app_id)
-        if session_id:
-            conditions.append("session_id = ?")
-            params.append(session_id)
-        if category:
-            conditions.append("category = ?")
-            params.append(category)
+            if persona_id:
+                conditions.append("persona_id = ?")
+                params.append(persona_id)
+            if tenant_id:
+                conditions.append("tenant_id = ?")
+                params.append(tenant_id)
+            if agent_id:
+                conditions.append("agent_id = ?")
+                params.append(agent_id)
+            if app_id:
+                conditions.append("app_id = ?")
+                params.append(app_id)
+            if session_id:
+                conditions.append("session_id = ?")
+                params.append(session_id)
+            if category:
+                conditions.append("category = ?")
+                params.append(category)
 
-        where = " AND ".join(conditions)
+            where = " AND ".join(conditions)
 
-        results: List[Dict[str, Any]] = []
+            results: List[Dict[str, Any]] = []
 
-        # 尝试 FTS5 搜索
-        if self._fts_available():
-            try:
-                fts_results = self._search_fts(query, params, where, top_k)
-                # FTS5 可能对 CJK 文字分词不完整，返回空结果，
-                # 此时仍应回退到 LIKE 搜索
-                if fts_results:
-                    results = fts_results
-            except Exception:
-                # FTS5 搜索失败，回退到 LIKE
-                pass
+            # 尝试 FTS5 搜索
+            if self._fts_available():
+                try:
+                    fts_results = self._search_fts(query, params, where, top_k)
+                    # FTS5 可能对 CJK 文字分词不完整，返回空结果，
+                    # 此时仍应回退到 LIKE 搜索
+                    if fts_results:
+                        results = fts_results
+                except Exception:
+                    # FTS5 搜索失败，回退到 LIKE
+                    pass
 
-        if not results:
-            # 回退：LIKE 模糊搜索
-            results = self._search_like(query, params, where, top_k)
+            if not results:
+                # 回退：LIKE 模糊搜索
+                results = self._search_like(query, params, where, top_k)
 
-        # ── 自动 touch：更新搜索命中记忆的访问时间和计数 ────────
-        if results:
-            memory_ids = [r["memory_id"] for r in results]
-            self._touch_batch(memory_ids)
+            # ── 自动 touch：更新搜索命中记忆的访问时间和计数 ────────
+            if results:
+                memory_ids = [r["memory_id"] for r in results]
+                self._touch_batch(memory_ids)
 
-        return results
+            return results
 
     # ── 中英混合分词辅助方法 ───────────────────────────────────────
 
@@ -1138,9 +1147,15 @@ class SQLiteAdapter(StorageAdapter):
     def _search_fts(
         self, query: str, params: List[Any], where: str, top_k: int
     ) -> List[Dict[str, Any]]:
-        """使用 FTS5 全文搜索（支持词间空格分词和 jieba 中文分词）。"""
+        """使用 FTS5 全文搜索（支持词间空格分词和 jieba 中文分词）。
+
+        调用方（search_memories）已持 _write_lock，本方法不再重复加锁。
+        """
         terms = self._tokenize_fts_query(query)
-        fts_query = " OR ".join(f'"{t}"*' for t in terms)
+        # 2026-08-15（压测修复）：转义 FTS5 查询特殊字符（" 引号等），
+        # 防止 MATCH 语法错误导致 "bad parameter or other API misuse"。
+        safe_terms = [t.replace('"', '""') for t in terms if t.strip()]
+        fts_query = " OR ".join(f'"{t}"*' for t in safe_terms)
         if not fts_query:
             return []
 
@@ -1173,15 +1188,16 @@ class SQLiteAdapter(StorageAdapter):
         if not rows:
             return []
 
-        # 提取 rank 值用于归一化
-        raw_scores = [row["score"] for row in rows]
+        # 提取 rank 值用于归一化（防御：并发错位/异常数据时 rank 可能为 None）
+        raw_scores = [r for r in (row["score"] for row in rows) if r is not None]
         min_rank = min(raw_scores) if raw_scores else 0
         max_rank = max(raw_scores) if raw_scores else 1
         rank_range = max_rank - min_rank if max_rank != min_rank else 1.0
 
         for i, row in enumerate(rows):
             # FTS5 rank 是负值（越负越相关），我们翻转成 0-1 分数
-            norm_score = 1.0 - (row["score"] - min_rank) / rank_range
+            rank = row["score"] if row["score"] is not None else min_rank
+            norm_score = 1.0 - (rank - min_rank) / rank_range
             content = self._decrypt_content(row["content"])
             results.append({
                 "memory_id": row["memory_id"],
@@ -1247,47 +1263,52 @@ class SQLiteAdapter(StorageAdapter):
     # ── 单条查询 ─────────────────────────────────────────────────────
 
     def get_memory(self, memory_id: str) -> Optional[Dict[str, Any]]:
-        conn = self._conn
-        if not conn:
-            return None
+        """查询单条记忆（2026-08-15 压测修复：加 _write_lock，API 并发路径）。"""
+        with self._write_lock:
+            conn = self._conn
+            if not conn:
+                return None
 
-        cursor = conn.execute(
-            "SELECT * FROM memories WHERE memory_id = ?", (memory_id,)
-        )
-        row = cursor.fetchone()
-        if not row:
-            return None
-        d = dict(row)
-        if d.get("content"):
-            d["content"] = self._decrypt_content(d["content"])
-        return d
+            cursor = conn.execute(
+                "SELECT * FROM memories WHERE memory_id = ?", (memory_id,)
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            d = dict(row)
+            if d.get("content"):
+                d["content"] = self._decrypt_content(d["content"])
+            return d
 
     def get_memory_owners(self, memory_ids: List[str]) -> Dict[str, Dict[str, Any]]:
         """批量查询记忆的归属与状态（hybrid 检索隔离后过滤用）。
 
         返回 {memory_id: {status, agent_id, persona_id, tenant_id}}；
         不在库中的 id 不出现（调用方据此区分"池记忆/幽灵"）。
+
+        2026-08-15（压测修复）：加 _write_lock —— search_hybrid 并发过滤路径。
         """
         if not memory_ids:
             return {}
-        conn = self._conn
-        if not conn:
-            return {}
-        placeholders = ",".join("?" * len(memory_ids))
-        rows = conn.execute(
-            f"SELECT memory_id, status, agent_id, persona_id, tenant_id "
-            f"FROM memories WHERE memory_id IN ({placeholders})",
-            list(memory_ids),
-        ).fetchall()
-        return {
-            r["memory_id"]: {
-                "status": r["status"],
-                "agent_id": r["agent_id"],
-                "persona_id": r["persona_id"],
-                "tenant_id": r["tenant_id"],
+        with self._write_lock:
+            conn = self._conn
+            if not conn:
+                return {}
+            placeholders = ",".join("?" * len(memory_ids))
+            rows = conn.execute(
+                f"SELECT memory_id, status, agent_id, persona_id, tenant_id "
+                f"FROM memories WHERE memory_id IN ({placeholders})",
+                list(memory_ids),
+            ).fetchall()
+            return {
+                r["memory_id"]: {
+                    "status": r["status"],
+                    "agent_id": r["agent_id"],
+                    "persona_id": r["persona_id"],
+                    "tenant_id": r["tenant_id"],
+                }
+                for r in rows
             }
-            for r in rows
-        }
 
     def get_persona_memories(
         self, persona_id: str, agent_id: Optional[str] = None, limit: int = 50
@@ -1482,30 +1503,34 @@ class SQLiteAdapter(StorageAdapter):
         return rows
 
     def get_all_memories(self, agent_id: Optional[str] = None, limit: int = 200) -> List[Dict[str, Any]]:
-        """Get all active memories across all personas/tenants, optionally filtered by agent_id."""
-        conn = self._conn
-        if not conn:
-            return []
+        """Get all active memories across all personas/tenants, optionally filtered by agent_id.
 
-        if agent_id:
-            cursor = conn.execute("""
-                SELECT * FROM memories
-                WHERE status = 'active' AND agent_id = ?
-                ORDER BY created_at DESC
-                LIMIT ?
-            """, (agent_id, limit))
-        else:
-            cursor = conn.execute("""
-                SELECT * FROM memories
-                WHERE status = 'active'
-                ORDER BY created_at DESC
-                LIMIT ?
-            """, (limit,))
-        rows = [dict(row) for row in cursor.fetchall()]
-        for r in rows:
-            if r.get("content"):
-                r["content"] = self._decrypt_content(r["content"])
-        return rows
+        2026-08-15（压测修复）：加 _write_lock —— BM25 构建/全量读取并发路径。
+        """
+        with self._write_lock:
+            conn = self._conn
+            if not conn:
+                return []
+
+            if agent_id:
+                cursor = conn.execute("""
+                    SELECT * FROM memories
+                    WHERE status = 'active' AND agent_id = ?
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                """, (agent_id, limit))
+            else:
+                cursor = conn.execute("""
+                    SELECT * FROM memories
+                    WHERE status = 'active'
+                    ORDER BY created_at DESC
+                    LIMIT ?
+                """, (limit,))
+            rows = [dict(row) for row in cursor.fetchall()]
+            for r in rows:
+                if r.get("content"):
+                    r["content"] = self._decrypt_content(r["content"])
+            return rows
 
     # ── TTL & 自动老化 ────────────────────────────────────────────────
 
@@ -2152,30 +2177,33 @@ class SQLiteAdapter(StorageAdapter):
 
         Returns:
             实体列表。
+
+        2026-08-15（压测修复）：加 _write_lock —— hybrid 图通道并发路径。
         """
-        conn = self._conn
-        if not conn:
-            return []
-        sql = "SELECT * FROM entities WHERE 1=1"
-        params: list = []
-        if name:
-            sql += " AND name LIKE ?"
-            params.append(f"%{name}%")
-        if etype:
-            sql += " AND type = ?"
-            params.append(etype)
-        sql += " ORDER BY first_seen DESC LIMIT ?"
-        params.append(limit)
-        cursor = conn.execute(sql, params)
-        results = []
-        for row in cursor.fetchall():
-            d = dict(row)
-            d.pop("embedding", None)
-            d["id"] = d.get("entity_id")
-            d["properties"] = self._parse_entity_properties(d.get("summary"))
-            d["created_at"] = d.get("first_seen")
-            results.append(d)
-        return results
+        with self._write_lock:
+            conn = self._conn
+            if not conn:
+                return []
+            sql = "SELECT * FROM entities WHERE 1=1"
+            params: list = []
+            if name:
+                sql += " AND name LIKE ?"
+                params.append(f"%{name}%")
+            if etype:
+                sql += " AND type = ?"
+                params.append(etype)
+            sql += " ORDER BY first_seen DESC LIMIT ?"
+            params.append(limit)
+            cursor = conn.execute(sql, params)
+            results = []
+            for row in cursor.fetchall():
+                d = dict(row)
+                d.pop("embedding", None)
+                d["id"] = d.get("entity_id")
+                d["properties"] = self._parse_entity_properties(d.get("summary"))
+                d["created_at"] = d.get("first_seen")
+                results.append(d)
+            return results
 
     def create_relation(self, subject_id: str, predicate: str,
                         object_id: str,
@@ -2234,25 +2262,28 @@ class SQLiteAdapter(StorageAdapter):
 
         Returns:
             关系列表。
+
+        2026-08-15（压测修复）：加 _write_lock —— hybrid 图通道并发路径。
         """
-        conn = self._conn
-        if not conn:
-            return []
-        sql = "SELECT * FROM relations WHERE 1=1"
-        params: list = []
-        if subject_id:
-            sql += " AND subject_id = ?"
-            params.append(subject_id)
-        if predicate:
-            sql += " AND predicate = ?"
-            params.append(predicate)
-        if object_id:
-            sql += " AND object_id = ?"
-            params.append(object_id)
-        sql += " ORDER BY created_at DESC LIMIT ?"
-        params.append(limit)
-        cursor = conn.execute(sql, params)
-        return [dict(row) for row in cursor.fetchall()]
+        with self._write_lock:
+            conn = self._conn
+            if not conn:
+                return []
+            sql = "SELECT * FROM relations WHERE 1=1"
+            params: list = []
+            if subject_id:
+                sql += " AND subject_id = ?"
+                params.append(subject_id)
+            if predicate:
+                sql += " AND predicate = ?"
+                params.append(predicate)
+            if object_id:
+                sql += " AND object_id = ?"
+                params.append(object_id)
+            sql += " ORDER BY created_at DESC LIMIT ?"
+            params.append(limit)
+            cursor = conn.execute(sql, params)
+            return [dict(row) for row in cursor.fetchall()]
 
     def query_relations_at(self, at_time: str,
                            subject_id: Optional[str] = None,
@@ -2301,55 +2332,59 @@ class SQLiteAdapter(StorageAdapter):
 
         Returns:
             {"nodes": [...], "edges": [...]}
+
+        2026-08-15（压测修复）：加 _write_lock —— hybrid 图通道并发路径
+        （query_graph 内调用，RLock 重入安全）。
         """
-        conn = self._conn
-        if not conn:
-            return {"nodes": [], "edges": []}
-        max_hops = max(1, min(max_hops, 5))
+        with self._write_lock:
+            conn = self._conn
+            if not conn:
+                return {"nodes": [], "edges": []}
+            max_hops = max(1, min(max_hops, 5))
 
-        visited: set = set()
-        node_ids: set = {start_id}
-        edges: list = []
+            visited: set = set()
+            node_ids: set = {start_id}
+            edges: list = []
 
-        for hop in range(max_hops):
-            if not node_ids:
-                break
-            visited |= node_ids
-            next_ids: set = set()
-            for nid in node_ids:
-                for direction in ("subject", "object"):
-                    col = f"{direction}_id"
-                    cursor = conn.execute(
-                        f"SELECT * FROM relations WHERE {col} = ?", (nid,)
-                    )
-                    for row in cursor.fetchall():
-                        r = dict(row)
-                        other = r["object_id"] if direction == "subject" else r["subject_id"]
-                        edges.append(r)
-                        if other not in visited:
-                            next_ids.add(other)
-            node_ids = next_ids - visited
+            for hop in range(max_hops):
+                if not node_ids:
+                    break
+                visited |= node_ids
+                next_ids: set = set()
+                for nid in node_ids:
+                    for direction in ("subject", "object"):
+                        col = f"{direction}_id"
+                        cursor = conn.execute(
+                            f"SELECT * FROM relations WHERE {col} = ?", (nid,)
+                        )
+                        for row in cursor.fetchall():
+                            r = dict(row)
+                            other = r["object_id"] if direction == "subject" else r["subject_id"]
+                            edges.append(r)
+                            if other not in visited:
+                                next_ids.add(other)
+                node_ids = next_ids - visited
 
-        all_nodes = set()
-        for e in edges:
-            all_nodes.add(e["subject_id"])
-            all_nodes.add(e["object_id"])
-        all_nodes.add(start_id)
+            all_nodes = set()
+            for e in edges:
+                all_nodes.add(e["subject_id"])
+                all_nodes.add(e["object_id"])
+            all_nodes.add(start_id)
 
-        # 批量查询实体
-        node_list: list = []
-        for nid in all_nodes:
-            cursor = conn.execute("SELECT * FROM entities WHERE entity_id = ?", (nid,))
-            row = cursor.fetchone()
-            if row:
-                n = dict(row)
-                n.pop("embedding", None)
-                n["id"] = n.get("entity_id")
-                n["properties"] = self._parse_entity_properties(n.get("summary"))
-                n["created_at"] = n.get("first_seen")
-                node_list.append(n)
+            # 批量查询实体
+            node_list: list = []
+            for nid in all_nodes:
+                cursor = conn.execute("SELECT * FROM entities WHERE entity_id = ?", (nid,))
+                row = cursor.fetchone()
+                if row:
+                    n = dict(row)
+                    n.pop("embedding", None)
+                    n["id"] = n.get("entity_id")
+                    n["properties"] = self._parse_entity_properties(n.get("summary"))
+                    n["created_at"] = n.get("first_seen")
+                    node_list.append(n)
 
-        return {"nodes": node_list, "edges": edges}
+            return {"nodes": node_list, "edges": edges}
 
     def create_entity(self, name: str, etype: str = "concept",
                       properties: Optional[Dict] = None) -> Dict[str, Any]:
@@ -2438,8 +2473,12 @@ class SQLiteAdapter(StorageAdapter):
         Returns:
             {"match_entities": [...], "nodes": [...], "edges": [...]}
             所有匹配实体及其 1-hop 邻居合并去重的完整子图。
+
+        2026-08-15（压测修复）：加 _write_lock —— hybrid 图通道并发路径
+        （内部 traverse/search_entities 均为 RLock 重入，安全）。
         """
-        matches = self.search_entities(name=query, limit=limit)
+        with self._write_lock:
+            matches = self.search_entities(name=query, limit=limit)
         if not matches:
             return {"match_entities": [], "nodes": [], "edges": []}
 

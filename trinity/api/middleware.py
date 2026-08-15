@@ -73,10 +73,15 @@ def is_rate_limited_request(path: str, method: str) -> bool:
         ``/agents/*`` are limited (write endpoints).
       - Read endpoints (GET/HEAD) are never limited.
       - ``/metrics`` is always exempt (no rate limiting, no counting loop).
+      - ``/memory/search/*`` are read-only search endpoints even though they
+        use POST (the body carries the query), so they are exempt
+        (2026-08-15 stress fix: 8-thread concurrent search was 429-throttled).
     """
     if method not in RATE_LIMITED_METHODS:
         return False
     if path == "/metrics" or path.startswith("/metrics/"):
+        return False
+    if path.startswith("/memory/search/"):
         return False
     return path.startswith(RATE_LIMITED_PREFIXES)
 

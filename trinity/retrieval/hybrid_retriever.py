@@ -623,12 +623,14 @@ def _minmax_normalise(
     """Normalise scores to [0, 1] in-place; return original list."""
     if not items:
         return items
-    scores = [it.get(score_key, 0) for it in items]
+    # 2026-08-15（压测修复）：score 可能为 None（并发错位/通道缺分），
+    # 统一兜底为 0，避免 min()/max() 抛 TypeError。
+    scores = [it.get(score_key) or 0 for it in items]
     mn, mx = min(scores), max(scores)
     rng = mx - mn
     out_key = raw_key or score_key
     for it in items:
-        raw = it.get(score_key, 0)
+        raw = it.get(score_key) or 0
         it[out_key] = round((raw - mn) / rng, 6) if rng > 1e-9 else 1.0
     return items
 

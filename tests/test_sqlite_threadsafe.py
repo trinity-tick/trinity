@@ -65,3 +65,36 @@ class TestSqliteThreadSafe:
             assert len(hits) >= 1
         finally:
             adapter.disconnect()
+
+    def test_concurrent_search_no_cursor_corruption(self):
+        """Regression (2026-08-15): 8-thread concurrent search_memories on one
+        connection used to corrupt cursors → "bad parameter or other API misuse"
+        and None scores. search_memories now holds _write_lock (single SQLite
+        connection must serialize all statements)."""
+        tmp = tempfile.mkdtemp()
+        db = os.path.join(tmp, "threadsafe3.db")
+        adapter = SQLiteAdapter(db_path=db)
+        adapter.connect()
+        try:
+            for i in range(30):
+                adapter.store_memory(
+                    f"并发检索回归测试记忆 {i} 数据库优化", persona_id="default")
+            errors = []
+            barrier = threading.Barrier(8)
+
+            def worker(wid):
+                barrier.wait()
+                for j in range(25):
+                    try:
+                        adapter.search_memories("数据库", top_k=10)
+                    except Exception as e:  # pragma: no cover
+                        errors.append(f"w{wid}-{j}: {e}")
+
+            threads = [threading.Thread(target=worker, args=(i,)) for i in range(8)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(timeout=60)
+            assert not errors, f"concurrent search errors: {errors[:5]}"
+        finally:
+            adapter.disconnect()
