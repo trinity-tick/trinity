@@ -1,77 +1,45 @@
-site_name: Trinity Documentation
-site_description: A persistent memory layer for AI agents with multi-modal, multi-tenant capabilities
-site_author: Agentic AI Foundation
-site_url: https://trinity-tick.github.io/trinity
-repo_url: https://github.com/trinity-tick/trinity
-repo_name: trinity-tick/trinity
-edit_uri: blob/main/docs/
-
+site_name: Trinity Memory OS
+site_description: 智能记忆体基础设施 — 架构/基准/合规/运维/协议文档
 theme:
   name: material
-  palette:
-    - scheme: default
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
-    - scheme: slate
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/brightness-4
-        name: Switch to light mode
-  features:
-    - navigation.tabs
-    - navigation.sections
-    - navigation.expand
-    - navigation.top
-    - search.highlight
-    - search.suggest
-    - content.code.copy
-    - content.code.annotate
-  icon:
-    repo: fontawesome/brands/github
-  logo: https://raw.githubusercontent.com/trinity-tick/trinity/main/docs/assets/logo.png
-  favicon: https://raw.githubusercontent.com/trinity-tick/trinity/main/docs/assets/favicon.png
-
-extra:
-  social:
-    - icon: fontawesome/brands/github
-      link: https://github.com/trinity-tick/trinity
-    - icon: fontawesome/brands/python
-      link: https://pypi.org/project/trinity-memory/
-
-markdown_extensions:
-  - admonition
-  - pymdownx.details
-  - pymdownx.superfences
-  - pymdownx.highlight:
-      anchor_linenums: true
-  - pymdownx.tabbed:
-      alternate_style: true
-  - pymdownx.emoji:
-      emoji_index: !!python/name:material.extensions.emoji.twemoji
-      emoji_generator: !!python/name:material.extensions.emoji.to_svg
-  - toc:
-      permalink: true
-  - tables
-  - footnotes
-  - def_list
-
+  language: zh
 nav:
-  - Home: index.md
-  - Getting Started: getting-started.md
-  - Architecture: ARCHITECTURE.md
-  - API Reference: API_REFERENCE.md
-  - Multi-Tenant: multi-tenant.md
-  - Multimodal: multimodal.md
-  - Benchmarks: BENCHMARKS.md
-  - Knowledge Graph: KGRAPH_USAGE.md
-  - Cross Window: CROSS_WINDOW.md
-  - Evolution: EVOLUTION.md
-  - Security: SECURITY.md
-  - Deployment: deployment.md
-  - Contributing: contributing.md
-
-copyright: Copyright &copy; 2025-2026 trinity-tick
+- Home: index.md
+- "Api Reference": API_REFERENCE.md
+- "Architecture": ARCHITECTURE.md
+- "Benchmarks": BENCHMARKS.md
+- "Best Practices": BEST_PRACTICES.md
+- "Capability Map 20260814": CAPABILITY_MAP_20260814.md
+- "Comparison Vs 2026 Sota": COMPARISON_VS_2026_SOTA.md
+- "Compliance Gdpr 20260815": COMPLIANCE_GDPR_20260815.md
+- "Cross Window": CROSS_WINDOW.md
+- "Dsh Integration Status 20260815": DSH_INTEGRATION_STATUS_20260815.md
+- "Evolution": EVOLUTION.md
+- "Function Summary 20260814": FUNCTION_SUMMARY_20260814.md
+- "Fusion Plan 20260814": FUSION_PLAN_20260814.md
+- "Joint Capability Map 20260814": JOINT_CAPABILITY_MAP_20260814.md
+- "Kgraph Usage": KGRAPH_USAGE.md
+- "Mcp Status 20260815": MCP_STATUS_20260815.md
+- "Memory Market Protocol": MEMORY_MARKET_PROTOCOL.md
+- "Migration Guide": MIGRATION_GUIDE.md
+- "New Modules": NEW_MODULES.md
+- "Ops Notes 20260815": OPS_NOTES_20260815.md
+- "Optimization Directions 20260815": OPTIMIZATION_DIRECTIONS_20260815.md
+- "Perf Notes 20260815": PERF_NOTES_20260815.md
+- "Planning Review 20260815": PLANNING_REVIEW_20260815.md
+- "Quickstart Gateway": QUICKSTART_GATEWAY.md
+- "Security": SECURITY.md
+- "Trinity Summary 20260815": TRINITY_SUMMARY_20260815.md
+- "Wms Integration Plan": WMS_INTEGRATION_PLAN.md
+- "Anti Loop Self Check": anti_loop_self_check.md
+- "Contributing": contributing.md
+- "Deployment": deployment.md
+- "Getting Started": getting-started.md
+- "Multi Tenant": multi-tenant.md
+- "Multimodal": multimodal.md
+- "Wms Execution Check": wms_execution_check.md
+- "Wms Execution Check V3": wms_execution_check_v3.md
+- "Wms Five Dimension Design": wms_five_dimension_design.md
+- "Wms Five Dimension Summary": wms_five_dimension_summary.md
+- "Wms Gap Analysis V2": wms_gap_analysis_v2.md
+- "Wms Progress Report": wms_progress_report.md

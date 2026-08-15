@@ -1,36 +1,52 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<title>Trinity MemBench Leaderboard</title>
-<style>
-  body { font-family:"Microsoft YaHei",system-ui,sans-serif; background:#0f1420; color:#dbe4f0; padding:24px; }
-  h1 { font-size:20px; } h1 small { color:#7d8aa0; }
-  table { border-collapse:collapse; width:100%; margin-top:12px; font-size:13px; }
-  th,td { border-bottom:1px solid #26304a; padding:8px 10px; text-align:left; }
-  th { color:#8fb3ff; }
-  .rank1 { color:#ffd700; } .rank2 { color:#c0c0c0; } .rank3 { color:#cd7f32; }
-  .bar { display:inline-block; height:10px; background:#2f7dff; vertical-align:middle; border-radius:3px; }
-  code { background:#182036; padding:1px 6px; border-radius:4px; }
-  .note { color:#7d8aa0; font-size:12px; }
-</style>
-</head>
-<body>
-<h1>Trinity MemBench Leaderboard <small>公开评测基准 · 自动生成于 2026-08-14 18:36</small></h1>
-<table>
-  <thead><tr><th>#</th><th>提交者</th><th>版本</th><th>日期</th><th>SQuAD R@5</th><th>LoCoMo Recall@5</th><th>MemSyco Composite</th><th>端到端 P50(ms)</th><th>QPS@200</th><th>谄媚率</th></tr></thead>
-  <tbody><tr><td class='rank1'>1</td><td>trinity-tick</td><td>v8.2.0</td><td>2026-08-14</td><td>0.983</td><td>0.880</td><td>0.880</td><td>41.0</td><td>2,431.3</td><td>0.1</td></tr></tbody>
-</table>
-<h2 style="font-size:15px;margin-top:24px">提交方式</h2>
-<pre style="background:#182036;padding:12px;border-radius:8px;font-size:12px;overflow:auto">{
-  "submitter": "your-name",
-  "trinity_version": "v8.2.0",
-  "date": "2026-08-14",
-  "results": [
-    {"suite": "squad", "metric": "r_at_5", "value": 0.9833},
-    {"suite": "memsyco", "metric": "composite_judge", "value": 0.88}
-  ]
-}</pre>
-<p class="note">校验：<code>python benchmark/leaderboard/validate.py</code>（固定数据集、固定 top_k、禁用缓存预热）。</p>
-</body>
-</html>
+<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8"><title>Trinity Leaderboard</title>
+<style>body{font-family:system-ui;max-width:1000px;margin:24px auto;padding:0 16px;color:#1a1a2e;}
+table{border-collapse:collapse;width:100%;margin:12px 0;}th,td{border:1px solid #ccc;padding:6px 10px;text-align:left;font-size:14px;}
+th{background:#f0f4ff;}h1,h2{color:#0f3460;}code{background:#f4f4f4;padding:1px 4px;}</style></head><body>
+<h1>Trinity Leaderboard（2026-08-15）</h1>
+<p>> 生成时间：2026-08-15T08:15:17.884520+00:00；版本 v8.2.0；环境 Windows / Python 3.14 / API :8001</p>
+<h2>一、BEAM 规模延迟（本地模拟 50 查询）</h2>
+<table><thead><tr><th>规模</th><th>记忆数</th><th>QPS</th><th>P50</th><th>P95</th><th>P99</th><th>Mean</th><th>Recall@5</th></tr></thead><tbody>
+<p>|---|---|---|---|---|---|---|---|</p>
+<table><thead><tr><th>1K</th><th>1029</th><th>100.01</th><th>8.65ms</th><th>13.7ms</th><th>34.27ms</th><th>9.97ms</th><th>1.0</th></tr></thead><tbody>
+<tr><td>10K</td><td>10000</td><td>4.12</td><td>240.0ms</td><td>273.85ms</td><td>291.56ms</td><td>242.47ms</td><td>1.0</td></tr>
+<table><thead><tr><th>100K</th><th>110000</th><th>0.99</th><th>984.6ms</th><th>1224.79ms</th><th>1337.35ms</th><th>1005.77ms</th><th>1.0</th></tr></thead><tbody>
+<h2>二、LoCoMo 长程召回（50 题真实评测，B.session-aggregate 代表配置）</h2>
+<table><thead><tr><th>指标</th><th>值</th></tr></thead><tbody>
+<p>|---|---|</p>
+<table><thead><tr><th>Recall@5</th><th>0.88</th></tr></thead><tbody>
+<tr><td>MRR</td><td>0.5633</td></tr>
+<table><thead><tr><th>Precision@5</th><th>0.184</th></tr></thead><tbody>
+<h3>按类别</h3>
+<h2>三、LongMemEval（本地 55 题模拟集，BM25 检索）</h2>
+<table><thead><tr><th>指标</th><th>值</th></tr></thead><tbody>
+<p>|---|---|</p>
+<table><thead><tr><th>Recall@5（整体）</th><th>1.0</th></tr></thead><tbody>
+<tr><td>single-session-user</td><td>1.0</td></tr>
+<table><thead><tr><th>knowledge-update</th><th>1.0</th></tr></thead><tbody>
+<tr><td>multi-session</td><td>1.0</td></tr>
+<table><thead><tr><th>题数</th><th>55</th></tr></thead><tbody>
+<h3>LongMemEval 500q（本地 mock 集，6 分类；top_k=10 召回窗口）</h3>
+<table><thead><tr><th>分类</th><th>n</th><th>R@5</th><th>MRR</th></tr></thead><tbody>
+<p>|---|---|---|---|</p>
+<table><thead><tr><th>KU</th><th></th><th>1.0</th><th>0.9771</th></tr></thead><tbody>
+<tr><td>MS</td><td></td><td>0.85</td><td>0.3207</td></tr>
+<table><thead><tr><th>SS-A</th><th></th><th>0.98</th><th>0.967</th></tr></thead><tbody>
+<tr><td>SS-P</td><td></td><td>1.0</td><td>1.0</td></tr>
+<table><thead><tr><th>SS-U</th><th></th><th>0.98</th><th>0.965</th></tr></thead><tbody>
+<tr><td>TR</td><td></td><td>1.0</td><td>1.0</td></tr>
+<h2>四、MemBench v1.0 核心指标（2026-08-14 实测，来源 benchmark/MEMBENCH_REPORT.md）</h2>
+<table><thead><tr><th>维度</th><th>指标</th><th>结果</th></tr></thead><tbody>
+<p>|---|---|---|</p>
+<table><thead><tr><th>延迟</th><th>E2E P50 / P99</th><th>41ms / 49ms</th></tr></thead><tbody>
+<tr><td>吞吐</td><td>200 并发 QPS</td><td>2,431（内存稳定 ~27MB）</td></tr>
+<table><thead><tr><th>检索质量</th><th>SQuAD R@5（80 题）</th><th>98.3%</th></tr></thead><tbody>
+<tr><td>长程记忆</td><td>LoCoMo Recall@5（会话聚合）</td><td>0.88</td></tr>
+<table><thead><tr><th>抗幻觉</th><th>MemSyco Composite（LLM judge）</th><th>0.88（幻觉率 10%）</th></tr></thead><tbody>
+<tr><td>压缩经济</td><td>记忆压缩 token 节省</td><td>~21%</td></tr>
+<table><thead><tr><th>规模</th><th>大库 / 图</th><th>11.7k 记忆 / 11.1k 实体 / 28.3k 关系</th></tr></thead><tbody>
+<h2>四、口径说明</h2>
+<p>- BEAM 为本地 1K/10K/100K 模拟规模（beam_gin_index），非官方 BEAM 10M token 口径；</p>
+<p>  Hindsight/Exabase 在官方 BEAM 上的 SOTA（64.1%）为不同基准，不可直接比较。</p>
+<p>- LoCoMo 为中文 50 题本地集（locomo_test_set.json），与公开 LoCoMo 英文集口径不同。</p>
+<p>- 如需对外宣称，建议后续跑官方 LongMemEval / BEAM 同口径（P2 待办）。</p>
+</body></html>
