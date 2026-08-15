@@ -252,6 +252,12 @@ $mirrorPrompt = "在 C:\Users\Administrator\trinity 运行 python scripts/sqlite
 $selftestCmd = @"
 import sys
 sys.path.insert(0, r"$TrinityRoot")
+# 冒烟：引擎诊断全通过（防重构回归，2026-08-15）
+from trinity.core.client import TrinityClient
+_d = TrinityClient().diagnostics()
+_e = _d.get("engine", {})
+assert _e.get("ALL_PASS"), "engine diagnostics not ALL_PASS: %s" % _e.get("status", "?")
+print("SMOKE diagnostics ALL_PASS OK (modules=%s)" % _e.get("total_modules"))
 import runpy
 sys.argv = ["run_all_self_tests"]
 runpy.run_path(r"$TrinityRoot\scripts\run_all_self_tests.py", run_name="__main__")
