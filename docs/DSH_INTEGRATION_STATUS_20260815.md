@@ -1,4 +1,4 @@
-# Trinity × DSH 融合现状（2026-08-15 实测）
+﻿# Trinity × DSH 融合现状（2026-08-15 实测）
 
 ## 一、融合架构（双通道）
 
@@ -43,3 +43,20 @@ DSH 会话 (web profile)
 - 短期：goal/schedule 自动同步（待 DSH 事件源支持）；结构层工具已满足审计/回放。
 - 中期：F5 移除 MCP 双通道冗余（原生已覆盖）；trajectory 可加 goal 时间线视图。
 - 长期：结构层 compaction（会话事件聚合为摘要，控制 dsh_events 增长）。
+
+---
+
+## 五、DSH 结构 → Trinity 融入矩阵（2026-08-15 补充实测）
+
+| DSH 结构 | 融入通道 | 状态 | 数据 |
+|---|---|---|---|
+| 会话身份（F4） | 自动（session/created → dsh_sessions，agent_id=dsh-<sid>） | ✅ | 2 会话 |
+| 事件流（消息/工具/turn） | 自动（session/event → dsh_events，8 类事件） | ✅ 实时 | 2,460 条（当前会话 1,815） |
+| todos | 自动（todo/write 事件 → dsh_todos） | ✅ | 11 |
+| headers | 自动（request/header → dsh_headers） | ✅ | 4 |
+| **goals** | **显式工具**（trinity_goal/trinity_goals → dsh_goals）；DSH 事件流无 goal 类型，goal 变更内嵌于会话消息源（dsh-goal 为纯协议层，无可订阅事件） | 🟡 显式可用（已验证 probe 落库） | 0（测试已清） |
+| **schedules** | **显式工具**（trinity_schedule/trinity_schedules → dsh_schedules） | 🟡 显式可用 | 0 |
+
+**结论**：DSH 结构层 4/6 自动融入（身份/事件/todo/header），goal/schedule 走显式工具通道
+（非自动）。自动化的前置条件是 DSH 侧对 goal/schedule 变更 emit 结构事件；替代方案是
+插件解析 goal change 记录（当前不可靠——消息为自然语言）。
