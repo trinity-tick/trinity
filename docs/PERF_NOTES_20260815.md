@@ -1,4 +1,4 @@
-# Trinity 性能优化记录（2026-08-15，round37）
+﻿# Trinity 性能优化记录（2026-08-15，round37）
 
 > 依据：真实路径 profiling（非 stub）+ 网络方案对照
 > （[Mem0 向量延迟 70x](https://mem0.ai/blog/how-we-cut-vector-search-latency-by-70x)、
@@ -37,7 +37,7 @@
 
 ## 四、下一轮候选（按收益）
 
-1. **向量索引落盘持久化**：启动加载、写入增量更新（对齐 pgvector HNSW；11.7k 规模
+1. **向量索引落盘持久化**（2026-08-15 ✅ 已落地 6334063）：启动加载、写入增量更新（对齐 pgvector HNSW；11.7k 规模
    收益中等，100K+ 规模收益大）。
 2. **embed 批量化/缓存外置**：查询嵌入可入 Redis（跨进程复用）。
 3. **自适应预算路由**（P2）：query-aware 分层路由（高频简单查询走 FTS、复杂走

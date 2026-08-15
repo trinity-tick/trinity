@@ -1888,3 +1888,20 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
 - **P0-1c RRF 并行化评估**：不采纳——重复查询已被语义缓存覆盖（实测 305x），
   并行化引入 SQLite 跨线程读与 aggregator 线程安全风险，收益不匹配。
 - 全量测试：580 passed / 43 skipped / 0 failed（P1-1 改动无回归）。
+
+### 38.1 优化续轮（2026-08-15）：向量索引落盘 + 自适应路由 + Gateway 硬化
+
+- **①向量索引落盘持久化**（6334063）：ANN 索引 save/load 到 ~/.trinity/data/ann_index.bin
+  （npz 向量 + native 缓存 + meta）；新进程首查从"30s 全量编码重建"→"磁盘加载 ~0.6s、热查 7ms"；
+  ingest/update/delete 后台增量维护索引（脏计数阈值触发 save），索引随写保持新鲜。
+- **②自适应预算路由**（68b4b2f）：search_hybrid 加 routing=auto|light|full——
+  短查询（≤8 字符）走 FTS 轻通道（~3ms），长/复杂查询走 5 通道全融合；
+  TRINITY_ADAPTIVE_ROUTING=on 启用（默认 off 保持兼容，A/B 可测）；
+  对齐 Query-Aware Budget-Tier Routing 论文思路。
+- **③Gateway 硬化**（4350163）：/v1/chat/completions 本地拦截 __memory_write__ 指令
+  （README 承诺但实现缺失，此前伪消息被上游拒绝）；_hybrid 按 id 回填 content
+  （rrf 结果仅含 content_preview，旧守卫在 preview 存在时跳过回填→结果缺正文）；
+  README 修正 OpenAI SDK base_url 需 /v1。
+  验证：OpenAI SDK 1.55.3 端到端——指令写记忆、检索返回完整 content、
+  记忆注入聊天以上游 DeepSeek 记忆片段作答。
+- 全量测试 580 passed / 0 failed。
