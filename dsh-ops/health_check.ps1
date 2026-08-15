@@ -1,4 +1,4 @@
-# Trinity × DSH 集成链路健康检查脚本
+﻿# Trinity × DSH 集成链路健康检查脚本
 # 用法: powershell -ExecutionPolicy Bypass -File dsh-ops\health_check.ps1
 # 检查: Trinity API(8001) / MCP(8000) / Collector / DSH Web(3080) / engine_worker
 

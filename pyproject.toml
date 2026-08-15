@@ -65,7 +65,8 @@ include = ["trinity*"]
 "trinity" = ["py.typed", "api/static/*"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+# 与 pytest.ini 保持一致（pytest.ini 优先）；此前写 ["tests"] 造成 testpaths 二义性
+testpaths = ["trinity/tests"]
 python_files = ["test_*.py"]
 addopts = "-v --tb=short"
 

@@ -8,6 +8,27 @@ Exported modules: 29 (6 originals + 23 newly activated from engine facade)
 Version: sourced from trinity.version (single source of truth)
 """
 
+# ── 导入噪音门控（2026-08-15）──────────────────────────────────────────
+# 各模块模块级有 60 处 print("[Pxxx] ... initialized") 横幅，import trinity 时
+# 刷屏。设 TRINITY_QUIET_IMPORT=1 时过滤这些横幅（在导入本包子模块前打补丁，
+# 单点覆盖全部模块）。未设置时行为不变。
+import builtins as _builtins
+import os as _os
+
+if _os.environ.get("TRINITY_QUIET_IMPORT") == "1":
+    _orig_print = _builtins.print
+
+    def _quiet_import_print(*args, **kwargs):
+        first = args[0] if args else ""
+        if isinstance(first, str) and (
+            first.startswith("[P") or first.startswith("[Second Brain")
+        ):
+            return
+        _orig_print(*args, **kwargs)
+
+    _builtins.print = _quiet_import_print
+
+
 from trinity.modules.second_brain.engine import (
     SecondBrainV636 as Engine,
     VERSION,

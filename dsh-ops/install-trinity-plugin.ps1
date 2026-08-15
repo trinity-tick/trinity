@@ -1,4 +1,4 @@
-# install-trinity-plugin.ps1 — 同步 dsh-trinity 插件源码到 web profile
+﻿# install-trinity-plugin.ps1 — 同步 dsh-trinity 插件源码到 web profile
 # 用法: powershell -NoProfile -ExecutionPolicy Bypass -File dsh-ops\install-trinity-plugin.ps1
 # 说明: 源码在 trinity\dsh-plugin\dsh-trinity（git 管理），node_modules 副本是安装产物。
 

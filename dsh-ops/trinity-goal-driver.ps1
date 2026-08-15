@@ -28,7 +28,10 @@ param(
 )
 
 $ErrorActionPreference = "Continue"
-$OpsDir = Split-Path -Parent $PSScriptRoot
+# 本脚本与 maintenance/benchmarks 同处 dsh-ops，必须用 $PSScriptRoot 定位；
+# 此前误用父目录（trinity 根），解析出 trinity\trinity-dsh-maintenance.ps1 导致
+# 子进程 -File 路径不存在、退出码恒为 -196608。
+$OpsDir = $PSScriptRoot
 $Maintenance = Join-Path $OpsDir "trinity-dsh-maintenance.ps1"
 $Benchmarks = Join-Path $OpsDir "run-benchmarks.ps1"
 $SysPy = "C:\Users\Administrator\AppData\Local\Programs\Python\Python314\python.exe"
@@ -67,7 +70,7 @@ $exit = 0
 
 switch ($Phase) {
     "evolution" {
-        & powershell -NoProfile -ExecutionPolicy Bypass -File $Maintenance -Tasks "health,evolution" *>&1 | Out-Null
+        $null = & powershell -NoProfile -ExecutionPolicy Bypass -File $Maintenance -Tasks "health,evolution" 2>&1
         $exit = $LASTEXITCODE
         $state.totalEvolutionCycles = Get-EvolutionCycles
         $state.checkpoint = @{
@@ -76,17 +79,17 @@ switch ($Phase) {
         }
     }
     "maintenance" {
-        & powershell -NoProfile -ExecutionPolicy Bypass -File $Maintenance -Tasks "decay,tiers,sync" -DecayLimit $DecayLimit *>&1 | Out-Null
+        $null = & powershell -NoProfile -ExecutionPolicy Bypass -File $Maintenance -Tasks "decay,tiers,sync" -DecayLimit $DecayLimit 2>&1
         $exit = $LASTEXITCODE
         $state.checkpoint = @{ decayLimit = $DecayLimit; lastFullMaintenance = $state.lastRunAt }
     }
     "benchmark" {
-        & powershell -NoProfile -ExecutionPolicy Bypass -File $Benchmarks -Suites "latency,concurrency" *>&1 | Out-Null
+        $null = & powershell -NoProfile -ExecutionPolicy Bypass -File $Benchmarks -Suites "latency,concurrency" 2>&1
         $exit = $LASTEXITCODE
         $state.checkpoint = @{ suites = "latency,concurrency"; benchResults = "C:\Users\Administrator\.trinity\bench-results" }
     }
     "sync" {
-        & powershell -NoProfile -ExecutionPolicy Bypass -File $Maintenance -Tasks "sync" *>&1 | Out-Null
+        $null = & powershell -NoProfile -ExecutionPolicy Bypass -File $Maintenance -Tasks "sync" 2>&1
         $exit = $LASTEXITCODE
         $state.checkpoint = @{ lastSync = $state.lastRunAt }
     }
