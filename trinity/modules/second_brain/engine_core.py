@@ -36,6 +36,22 @@ from datetime import datetime
 
 from trinity.version import VERSION_STRING as _VERSION_SOURCE; SEP = "=" * 80; SUB = "-" * 60; VERSION = _VERSION_SOURCE
 
+
+def discover_latest_version(subsystem: str) -> dict:
+    """优先级回退链: v6.15→v6.14→v6.13→v6.12（重构后由 engine_core 内联恢复）。"""
+    versions = {
+        "second_brain": ["v6.36", "v6.34", "v6.32", "v6.30", "v6.28"],
+        "chromadb": ["v6.15", "v6.14", "v6.13", "v6.12"],
+        "auto_daemon": ["v1.7.0", "v1.6.0", "v1.5.0", "v1.4.0"],
+    }
+    chain = versions.get(subsystem, ["v6.15", "v6.14", "v6.13", "v6.12"])
+    return {
+        "subsystem": subsystem,
+        "current": VERSION,
+        "fallback_chain": chain,
+        "primary": chain[0],
+    }
+
 PAPERS = {
     "P16":{"title":"Self-GC: Self-Governing Context","source":"arXiv:2607.00692"},
     "P17":{"title":"Managed Autonomy at Runtime: Gear-Based Safety","source":"arXiv:2607.00334"},
@@ -411,7 +427,7 @@ class _RecallOrchestrator:
         results["CB46_validity_window"] = vw is not None and vw["valid_time"]["valid_from"] is not None
         conflict_res = cb46.detect_and_resolve_conflict("user_1", {"role": "senior_engineer", "level": "L5"})
         results["CB46_conflict_resolution"] = conflict_res["status"] == "conflict_resolved"
-        results["CB46_invalidated_facts"] = len(cb46.invalidated_facts) > 0
+        results["CB46_invalidated_facts"] = len(cb46.get_invalidated_facts()) > 0
         comm_count = cb46.build_communities(iterations=3)
         results["CB46_communities"] = comm_count > 0
         stats_46 = cb46.get_stats()

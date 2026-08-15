@@ -20,11 +20,18 @@ param(
 )
 
 $ErrorActionPreference = "Continue"
-$OpsDir = Split-Path -Parent $PSScriptRoot
-$Supervisor = Join-Path $OpsDir "trinity-supervisor.ps1"
-$Maintenance = Join-Path $OpsDir "trinity-dsh-maintenance.ps1"
+# 路径修复（2026-08-15）：本脚本与 supervisor/maintenance 同处 dsh-ops，
+# 必须用 $PSScriptRoot 定位；此前用父目录 $OpsDir=trinity 解析成
+# trinity\trinity-supervisor.ps1（实际在 trinity\dsh-ops\），Test-Path 恒 False，
+# 循环自 2026-08-14 20:23 起静默空转、从不执行监督/维护。
+$Supervisor = Join-Path $PSScriptRoot "trinity-supervisor.ps1"
+$Maintenance = Join-Path $PSScriptRoot "trinity-dsh-maintenance.ps1"
 $LogFile = Join-Path $LogDir "dsh-autostart.log"
 if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
+
+# 存储统一（EXECUTION 31，双库修复双保险）：显式锚定权威大库路径，
+# 由 Invoke-Script 拉起的维护脚本子进程继承，杜绝 cwd 兜底产生小库。
+$env:TRINITY_STORE = Join-Path $env:USERPROFILE ".trinity\store"
 
 function Write-Log {
     param([string]$Message, [string]$Level = "INFO")
@@ -35,8 +42,23 @@ function Write-Log {
 function Invoke-Script {
     param([string]$Path, [string[]]$ArgsList, [string]$Label)
     try {
-        $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $Path @ArgsList 2>&1
-        Write-Log "$Label done (exit $LASTEXITCODE): $($out | Select-Object -Last 1)"
+        # 2026-08-15 修复：改用文件重定向 + Wait-Process 超时，
+        # 避免 `& ... 2>&1` 管道被孙进程句柄持有导致父循环永久卡死
+        # （实测：循环自 2026-08-14 20:23 起卡在首轮监督，15h 未迭代）。
+        $stamp = Get-Date -Format "yyyyMMdd_HHmmss"
+        $outFile = Join-Path $LogDir "invoke-$Label-$stamp.out.log"
+        $errFile = Join-Path $LogDir "invoke-$Label-$stamp.err.log"
+        # 注意：$ArgsList 可能为 null（如 supervisor 无参数），直接拼进数组会产生
+        # null 元素，Start-Process -ArgumentList 校验会抛错——先过滤再拼接。
+        $argList = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$Path`"")
+        if ($ArgsList -and $ArgsList.Count -gt 0) { $argList += $ArgsList }
+        $child = Start-Process -FilePath "powershell.exe" -ArgumentList $argList -WindowStyle Hidden -RedirectStandardOutput $outFile -RedirectStandardError $errFile -PassThru
+        try { Wait-Process -Id $child.Id -Timeout 600 -ErrorAction Stop } catch {
+            Write-Log "$Label timed out (600s) — killing" "WARN"
+            Stop-Process -Id $child.Id -Force -ErrorAction SilentlyContinue
+        }
+        $tail = if (Test-Path $outFile) { Get-Content $outFile -Tail 1 -ErrorAction SilentlyContinue } else { $null }
+        Write-Log "$Label done: $tail"
     } catch {
         Write-Log "$Label error: $_" "WARN"
     }
