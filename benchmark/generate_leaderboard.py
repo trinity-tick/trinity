@@ -125,6 +125,21 @@ def main() -> int:
             lines.append("（读取 longmemeval_results.json 失败）")
             lines.append("")
 
+    lme500 = os.path.join(HERE, "..", "output", "longmemeval_500q_results.json")
+    if os.path.exists(lme500):
+        try:
+            with open(lme500, encoding="utf-8") as f:
+                d5 = json.load(f)
+            lines.append("### LongMemEval 500q（本地 mock 集，6 分类）")
+            lines.append("")
+            lines.append("| 分类 | n | R@5 | MRR |")
+            lines.append("|---|---|---|---|")
+            for cat, v in (d5.get("by_category") or {}).items():
+                lines.append(f"| {cat} | {v.get('n', '')} | {v.get('R@5', '')} | {v.get('MRR', '')} |")
+            lines.append("")
+        except Exception:
+            pass
+
     lines.append("## 四、MemBench v1.0 核心指标（2026-08-14 实测，来源 benchmark/MEMBENCH_REPORT.md）")
     lines.append("")
     lines.append("| 维度 | 指标 | 结果 |")
