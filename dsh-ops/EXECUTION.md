@@ -2286,3 +2286,16 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
   实测 chain_len=2 修订链 + consolidate schema 归纳。
 - **测试**：test_r5_reserves.py 5 例；全量通过。
 - **效果**：261 储备中 3 个高价值模块接入运行路径（检索探索/图自进化/信念一致性）。
+
+
+### 59.1 R6 储备接入（2026-08-15）：RL 记忆决策（MemRL 对齐）
+
+- **episodic_rl 接入**：MemoryAggregator 加 _rl_scorer（EpisodicRLScorer 惰性实例化，
+  TRINITY_RL_SCORER=off 可关）。hybrid 融合后按 RL Q 值微调排序（语义 × Q 权重，
+  bonus 映射 ±0.15；未尝试记忆 UCB=inf 视为 default 防污染）。
+- **feedback_loop 接入**：agg.rl_feedback(memory_id, positive) —— 记录强化信号
+  （TASK_SUCCESS/TASK_FAILURE）+ 更新 Q 值。
+- **验证**：纯 Q 值 0.8 → 5 次正反馈升至 1.0（clip）→ 1 次负反馈降至 0.939
+  （Q-learning 正确收敛）；hybrid 排序微调不崩溃。
+- **修复**：aggregator 编辑误合并两行致语法错误（849 行）——已修。
+- **测试**：test_rl_scorer.py 5 例（初始化/Q 升降/接口/hybrid 不崩溃）。

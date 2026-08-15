@@ -217,6 +217,19 @@ class MemoryAggregator:
             self._serendipity = None
             logger.info("Serendipity channel disabled: %s", exc)
 
+        # ── R6 P0: RL 记忆决策（2026-08-15, MemRL 对齐）──────────────
+        # EpisodicRLScorer：Q 值记忆打分 + UCB 探索 + 在线更新。
+        # hybrid 融合后按 RL 分数微调排序（语义 × Q 权重）。
+        # env TRINITY_RL_SCORER=off 可关闭（默认 on）。
+        self._rl_scorer: Any = None
+        try:
+            from trinity.modules.second_brain.episodic_rl import EpisodicRLScorer
+            self._rl_scorer = EpisodicRLScorer()
+            logger.info("RL memory decision active (MemRL aligned)")
+        except Exception as exc:
+            self._rl_scorer = None
+            logger.info("RL scorer disabled: %s", exc)
+
         # ── P1-4: Degradation Policy ─────────────────────────────────
         from trinity.agents.degradation import DegradationManager, ServiceTier
         self._degradation = DegradationManager()
@@ -814,12 +827,56 @@ class MemoryAggregator:
                 except Exception as exc:
                     logger.debug("SecondBrain rerank skipped: %s", exc)
 
+            # ── R6: RL 记忆决策排序微调（2026-08-15, MemRL 对齐）────
+            # 用 Q 值对融合结果微调：优先级 × (1 + rl_bonus)，rl_bonus 来自
+            # 历史反馈成功率。冷启动时 Q≈default，排序基本不变。
+            if (self._rl_scorer is not None and merged
+                    and os.environ.get("TRINITY_RL_SCORER", "on") != "off"):
+                try:
+                    import math as _math
+                    ids = [r.memory_id for r in merged]
+                    rl_scores = self._rl_scorer.score_memories(ids)
+                    for r in merged:
+                        q = rl_scores.get(r.memory_id, 0.5)
+                        # 未尝试记忆 UCB=inf（探索）→ 视为 default_q，避免排序污染
+                        if not _math.isfinite(q):
+                            q = 0.5
+                        # bonus: 相对 default(0.5) 的偏移，映射到 ±0.15
+                        bonus = (q - 0.5) * 0.3
+                        r.priority = min(1.0, r.priority + max(0.0, bonus))
+                    merged.sort(key=lambda x: x.priority, reverse=True)
+                except Exception as exc:
+                    logger.debug("RL rerank skipped: %s", exc)
+
             logger.debug("query hybrid → %d results (RRF, limiting to %d)", len(merged), limit)
             # ── v7.1.0: Tracing end ──
             if self._tracer:
                 self._tracer.end_span("query")
             self._observability.record_memory_op("query")
             return merged[:limit]
+
+    def rl_feedback(self, memory_id: str, positive: bool = True) -> Dict[str, Any]:
+        """记录 RL 强化信号（用户确认/纠正 → 更新 Q 值）。
+
+        Args:
+            memory_id: 目标记忆。
+            positive: True=用户确认（TASK_SUCCESS），False=纠正（TASK_FAILURE）。
+
+        Returns:
+            {"rl": bool, "q_value": float}
+        """
+        if self._rl_scorer is None:
+            return {"rl": False, "q_value": 0.5}
+        try:
+            from trinity.modules.second_brain.episodic_rl import FeedbackSignal
+            signal = FeedbackSignal.TASK_SUCCESS if positive else FeedbackSignal.TASK_FAILURE
+            self._rl_scorer.record_feedback(memory_id, signal)
+            self._rl_scorer.update_q_values()
+            q = self._rl_scorer.score_memory(memory_id)
+            return {"rl": True, "q_value": round(q, 4)}
+        except Exception as exc:
+            logger.debug("rl_feedback failed: %s", exc)
+            return {"rl": False, "q_value": 0.5}
 
     def get_by_agent(
         self,
