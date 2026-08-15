@@ -1872,3 +1872,19 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
 - **每日链现状**：`mirror,decay,tiers,sync`——mirror 先对齐维护 PG（供批处理/分析），decay/tiers 治理运行时大库。
 - **遗留**：decay 用 mock LLM（非真实摘要）且阈值默认 0.15（数据驱动，可能 0 归档）；如需更强治理可调
   DecayLimit / --threshold 或接真实 LLM。
+
+### 36.1 优化执行续轮（2026-08-15）：P1-1 时序图谱 + P1-3 合规 + P2 leaderboard
+
+- **P1-1 edge 级 bi-temporal**（4e96bd0）：`engine_data_pipeline.TemporalValidity`（Engine 实际使用的类）
+  补 `query_edges_at_time`（edge 时点查询）/ `query_edge_validity_window` / `merge_entities`
+  （边引用迁移 + 时间线合并 + 审计 + invalidated）；cb45_48 standalone 类镜像。
+  engine_core 诊断新增 CB46_edge_* 三项，`Engine.run_diagnostics` ALL_PASS 保持 True。
+- **P1-3 合规**（9a2f118）：`docs/COMPLIANCE_GDPR_20260815.md`（资产地图/GDPR 权利落地/隔离最小化/
+  审计可证明/运维建议）+ `docs/OPS_NOTES_20260815.md`（双通道语义/三库拓扑/collector 结论/安全修复）。
+- **P2 leaderboard**（9a2f118）：`benchmark/generate_leaderboard.py` + `LEADERBOARD.md`；
+  重跑 LoCoMo v2 真实评测（B.session-aggregate Recall@5=0.88 / MRR 0.5633）；
+  汇总 BEAM 规模延迟（1K/10K/100K 本地模拟）与 MemBench 核心指标；口径注明（本地集，
+  官方 LongMemEval/BEAM 需外部数据集——已明确标记为外部依赖项）。
+- **P0-1c RRF 并行化评估**：不采纳——重复查询已被语义缓存覆盖（实测 305x），
+  并行化引入 SQLite 跨线程读与 aggregator 线程安全风险，收益不匹配。
+- 全量测试：580 passed / 43 skipped / 0 failed（P1-1 改动无回归）。
