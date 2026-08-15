@@ -2256,3 +2256,17 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
   （手机/邮箱→[PHONE]/[EMAIL]）→ 跨实例拆包（隔离 persona）→ 幂等；与 TrustExchange
   市场衔接（/market/estimate 估价）。实测脱敏生效 + 2 imported/重导幂等；5 单测。
 - **验证**：全量测试通过。
+
+
+### 57.1 goal 防回归兜底（2026-08-15）：projcache 同步纳入 supervisor
+
+- **验证结论**：web profile 重启后，插件 goal/change 分支已部署（源文件含
+  goal/change + goal/write 输出），但 DSH goal 事件在 web 部署中不落盘、
+  session/event 通道收不到 → goal 仍不自动落库。
+- **务实兜底**：projcache（session_projcache.json）是 goal 快照的可靠来源
+  （每次变更实时更新，含完整 objective）。把 scripts/sync_dsh_goals.py
+  （projcache → dsh_goals 幂等回填）挂进 supervisor 每轮执行。
+- **验证**：supervisor 日志 "dsh-goals sync: 回填 0 / 跳过 6, 27 total 100%"；
+  goal-eb9c90b2（重启后创建）经 projcache 自动补全 objective。
+- **结果**：dsh_goals 27/27 100% 完整，且**今后每轮 supervisor 自动兜底**
+  （不再依赖插件事件通道，也不需手工回填）。

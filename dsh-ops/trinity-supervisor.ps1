@@ -229,5 +229,20 @@ if (Test-Path $SysPy) {
     Write-Log "collector check skipped (system python not found at $SysPy)" "WARN"
 }
 
+# ── 4. DSH goal 同步（2026-08-15, V2 兜底）────────────────────────────
+# 插件 goal/change 事件通道在 web 部署中不可靠（不落盘），projcache 是
+# 可靠来源（每次 goal 变更实时更新）。supervisor 每轮同步一次，保证
+# dsh_goals objective 不丢（幂等：已存在跳过）。
+if (Test-Path $SysPy) {
+    $gs = & $SysPy scripts\sync_dsh_goals.py 2>&1 | Out-String
+    if ($gs -match "回填: (\d+)") {
+        Write-Log "dsh-goals sync: $($Matches[0])"
+    } else {
+        Write-Log "dsh-goals sync: $($gs.Trim())" "WARN"
+    }
+} else {
+    Write-Log "dsh-goals sync skipped (system python not found)" "WARN"
+}
+
 Save-State $state
 Write-Log "supervisor pass complete"
