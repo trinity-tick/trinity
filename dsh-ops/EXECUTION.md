@@ -2139,3 +2139,19 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
 - **剩余缺口（数据上限）**：13 个 completed goal objective 为空——其 create/edit
   事件已被历史 compaction 清出事件流，无法从 Trinity 侧恢复（信息源缺失，非实现缺陷）。
 - **测试**：test_structure_sync.py 扩至 8 例（edit 带 objective / edit→complete 合并）。
+
+
+### 51.1 DSH goal 数据恢复（2026-08-15）：从 projcache 回填
+
+- **调查结论**：DSH 会话 jsonl（.jsonl.zstd）只存会话头（48 文件全为 header-only，
+  web 部署事件不落盘）；goal 数据唯一可恢复来源是 session_projcache.json
+  （48 槽位，7 个有值）——每个含完整 GoalSnapshot（goal_id/objective/phase/
+  maxGoalRounds）。
+- **实现**：scripts/sync_dsh_goals.py——从 projcache 提取 goal → 幂等回填
+  dsh_goals（phase→status 映射；已有 objective 跳过）。dry-run 支持。
+- **回填结果**：7 个 goal 补全 objective（含 goal-6e27cbd5 R3 本会话 goal），
+  完整率 50%→63%（19/30）。其余 11 个无 objective 的 completed goal 是更早
+  会话（goal 已从 projcache 淘汰为 null 槽位，不可恢复——信息源上限）。
+- **测试**：test_sync_dsh_goals.py 4 例（提取/幂等/phase 映射/空缓存）。
+- **未来通道**：DSH goal/change 事件在会话事件流（插件采集）或 projcache
+  （快照）——前者需 DSH 持久化事件到 jsonl，后者已利用。
