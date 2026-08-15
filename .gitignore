@@ -81,6 +81,7 @@ test_*.py
 # Debug residue (2026-08-15): aggregator/jieba/e2e scratch output
 agg*.txt
 _jieba*.txt
+_jieba*.py
 _fv*.txt
 _c.txt
 _e2e_out.txt
