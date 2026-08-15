@@ -2333,26 +2333,51 @@ class Trinity:
         agent_id: Optional[str] = None,
         persona_id: Optional[str] = None,
         tenant_id: Optional[str] = None,
+        routing: str = "auto",
     ) -> Dict[str, Any]:
         """混合检索（向量 + BM25 + 图谱融合）。
 
-        Parameters
-        ----------
-        query : str
-            搜索查询字符串。
-        top_k : int
-            返回结果数量（默认 10）。
-        strategy : str
-            融合策略：``fusion``（加权求和）、``rrf``（倒数排序融合）、
-            ``cascade``（级联精排）。
-        agent_id / persona_id / tenant_id : Optional[str]
-            可选的过滤维度，传递给向量/FTS 源。BM25 和 Graph 源
-            当前为全量检索。
-
-        Returns
-        -------
-        dict with results / strategy / query / breakdown.
+        ②自适应预算路由（2026-08-15，对齐 Query-Aware Budget-Tier Routing）：
+          routing="auto"：按 query 特征分层——短查询走 light（FTS 快路径），
+            长/复杂查询走 full（5 通道融合）。
+          routing="light"/"full"：强制指定。
+          环境变量 TRINITY_ADAPTIVE_ROUTING=on 时 auto 生效；off 默认全走 full
+          （行为兼容，A/B 可测）。
         """
+        env = os.environ.get("TRINITY_ADAPTIVE_ROUTING", "off").strip().lower()
+        if routing == "auto":
+            if env != "on":
+                routing = "full"
+            else:
+                # 特征规则：短查询（≤8 字符）走轻通道
+                routing = "light" if len(query.strip()) <= 8 else "full"
+
+        # ── light 路径：FTS 快通道（~3ms），天然支持过滤 ──────────
+        if routing == "light" and self._adapter is not None:
+            results = self._adapter.search_memories(
+                query=query, top_k=top_k,
+                agent_id=agent_id or None,
+                persona_id=persona_id or None,
+                tenant_id=tenant_id or None,
+            )
+            result = {
+                "results": results,
+                "strategy": "light",
+                "query": query,
+                "breakdown": {"routing": "light", "channels": ["fts"]},
+            }
+            if hasattr(self._adapter, "write_audit_log"):
+                try:
+                    self._adapter.write_audit_log(
+                        memory_id=None, action="search_hybrid",
+                        agent_id=agent_id, persona_id=persona_id,
+                        details={"query": query, "top_k": top_k, "strategy": "light",
+                                 "hits": len(results)},
+                    )
+                except Exception:
+                    pass
+            return result
+
         hr = self.hybrid_retriever
 
         # 如有 agent/persona/tenant 过滤，在向量侧 wrap search_fn；
@@ -2422,6 +2447,9 @@ class Trinity:
                 )
             except Exception:
                 pass
+
+        # ②自适应路由：full 路径标记
+        result.setdefault("breakdown", {})["routing"] = "full"
 
         return result
 
