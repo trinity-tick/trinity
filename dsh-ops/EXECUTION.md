@@ -2299,3 +2299,20 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
   （Q-learning 正确收敛）；hybrid 排序微调不崩溃。
 - **修复**：aggregator 编辑误合并两行致语法错误（849 行）——已修。
 - **测试**：test_rl_scorer.py 5 例（初始化/Q 升降/接口/hybrid 不崩溃）。
+
+
+### 60.1 压测优化（2026-08-15）：写入路径 246x 提速
+
+- **根因**：_get_embedding_fn 用 backend="auto" → 每次 embed 先探测 Ollama
+  （本机未开，等 ~300ms 超时）→ 单条 ingest 361ms、并发 p50 2s。
+- **① sklearn 化**：backend "auto"→"sklearn"（TF-IDF 确定性、毫秒级），
+  单条 ingest 361ms→5ms（~70x）。
+- **② 预热 + 非阻塞**：启动后台预热线程（sklearn 首次 fit 约 10s 移到启动期，
+  _embedding_ready 标记）；_add_to_index 未 ready 时跳过索引不阻塞写入
+  （后续 _rebuild_index 全量补齐）。
+- **复测**（800 写/800 读/400 混合/12 线程）：
+  - 写入 QPS 166→18,479（111x），p50 2032→8.27ms（246x），p99 4707→45ms
+  - 混合 QPS 112→23,401（209x）
+  - 检索 QPS 234→333，p50 12ms 稳定
+  - 锁错误 0，RESULT PASS
+- **遗留**：检索 p99 尾部延迟（2376ms，ANN/冷启动相关）待 ANN 预热优化。

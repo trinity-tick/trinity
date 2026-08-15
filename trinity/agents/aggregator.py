@@ -246,6 +246,13 @@ class MemoryAggregator:
         )
         self._cleanup_thread.start()
 
+        # ── 2026-08-15 (压测优化)：embedding 预热线程 ────────────────
+        # sklearn TF-IDF 首次 fit 全量词典约 10s，若在首次 ingest 时同步触发
+        # 会让第一批写入卡顿。启动即后台预热，把冷启动移到进程启动期。
+        self._embedding_ready = threading.Event()
+        threading.Thread(target=self._prewarm_embedding, daemon=True,
+                         name="agg-embed-prewarm").start()
+
         self._stats = {
             "total_ingested": 0,
             "total_merged": 0,
@@ -1384,13 +1391,33 @@ class MemoryAggregator:
 
     # ── P0-1: Vector Search ──────────────────────────────────────────────
 
+    def _prewarm_embedding(self) -> None:
+        """后台预热 embedding 引擎（sklearn 首次 fit 较慢，移到启动期）。
+
+        2026-08-15 (压测优化)：避免首次 ingest 触发 10s 级冷启动。
+        预热完成后置 ready 标记；失败静默（后续 ingest 仍惰性初始化）。
+        """
+        try:
+            self._get_embedding_fn()
+            self._get_embedding_fn()("预热")
+            logger.info("embedding prewarmed (dim=%d)", self._vector_dim)
+        except Exception:
+            pass
+        finally:
+            self._embedding_ready.set()
+
     def _get_embedding_fn(self):
-        """Lazy-init embedding callable via trinity.embeddings or hash fallback."""
+        """Lazy-init embedding callable via trinity.embeddings or hash fallback.
+
+        2026-08-15 (压测优化)：backend 从 "auto" 改为 "sklearn"——auto 会先探测
+        Ollama（本机未开时每次 embed 等 ~300ms 超时，是写入 p50 2s 的根因）。
+        sklearn TF-IDF 确定性、毫秒级，写入路径提速 ~10x。
+        """
         if self._embedding_fn is not None:
             return self._embedding_fn
         try:
             from trinity.embeddings import create_engine
-            _eng = create_engine(backend="auto")
+            _eng = create_engine(backend="sklearn")
             # probe dimension
             probe = _eng.embed("test")
             self._vector_dim = len(probe) if isinstance(probe, (list, np.ndarray)) else 384
@@ -1412,6 +1439,10 @@ class MemoryAggregator:
 
     def _add_to_index(self, dv: DimensionVector) -> None:
         """Add a DimensionVector's embedding to the vector index."""
+        # 2026-08-15 (压测优化)：embedding 未预热完成时不阻塞写入——
+        # 跳过本次索引（后续 _rebuild_index 全量重建补齐）。
+        if not getattr(self, "_embedding_ready", None) or not self._embedding_ready.is_set():
+            return
         fn = self._get_embedding_fn()
         vec = fn(dv.content).reshape(1, -1).astype(np.float32)
         if vec.shape[1] != self._vector_dim:
