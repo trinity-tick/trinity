@@ -1,5 +1,6 @@
 """
-# status: orphan (2026-08-15 audit, not in runtime path)
+# status: experimental (2026-08-15 audit: lazy-loader for SecondBrain; pairs with
+#   registry.py, not wired into runtime path - engine facade is the active path)
 Optimized SecondBrain loader with lazy module loading.
 Replaces the monolithic SecondBrainV636 constructor.
 """
