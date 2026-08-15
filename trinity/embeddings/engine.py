@@ -273,6 +273,21 @@ class SklearnEmbeddingEngine(EmbeddingEngine):
         self._total_embeddings += 1
         return vec
 
+    def embed_batch(self, texts: List[str]) -> List[np.ndarray]:
+        """Vectorized batch embedding — transform all texts in one call."""
+        if not texts:
+            return []
+        self._lazy_init(texts)
+        rows = self._vectorizer.transform(texts).toarray().astype(np.float32)
+        result = []
+        for v in rows:
+            norm = np.linalg.norm(v)
+            if norm > 1e-8:
+                v = v / norm
+            result.append(v)
+        self._total_embeddings += len(result)
+        return result
+
     def embedding_dim(self) -> int:
         return self._max_features
 

@@ -2,16 +2,16 @@
 AIGC:
     Label: "1"
     ContentProducer: 001191440300708461136T1XGW3
-    ProduceID: 1ed0c9b5065b1819decccf0a8be25f33_be573025918611f1a102525400826444
-    ReservedCode1: dMNjPx3K7adXHtlm+36K4143UQaWcZEotYRnNKINgGtitR7sdJT9eUzTGndK72RmEOXHoT3oPnxcLpVBbnQuCiiyScJBIG9SjdsQZvbH2Ds04bYxI9vpnXA3sWFDCWSBORG9fnHIGIOYaYwgM/w8h5HGuNRl3mPY+aQZFt4345UYDUNOb6i23/njEkE=
+    ProduceID: 1ed0c9b5065b1819decccf0a8be25f33_f3660ba7985111f1a98a525400f8a581
+    ReservedCode1: 7yqQ9YaIU62+2QwvalRQv0T2yRxMQ7myc/f9DhoNrrqQhoef0Hew6vYULN9vesuJetz3t5ls4t7UXjo5OCDp3aZFxjoYZT3Ql4rxABN5x55DKVAtwQFR6zy7YQ9FW5dkM6fVF9BPFmlDhrFaGaJEvpb+VQJI4/z8MhNFGZgRMVcTbUz0Z0/Wkm1wFrg=
     ContentPropagator: 001191440300708461136T1XGW3
-    PropagateID: 1ed0c9b5065b1819decccf0a8be25f33_be573025918611f1a102525400826444
-    ReservedCode2: dMNjPx3K7adXHtlm+36K4143UQaWcZEotYRnNKINgGtitR7sdJT9eUzTGndK72RmEOXHoT3oPnxcLpVBbnQuCiiyScJBIG9SjdsQZvbH2Ds04bYxI9vpnXA3sWFDCWSBORG9fnHIGIOYaYwgM/w8h5HGuNRl3mPY+aQZFt4345UYDUNOb6i23/njEkE=
+    PropagateID: 1ed0c9b5065b1819decccf0a8be25f33_f3660ba7985111f1a98a525400f8a581
+    ReservedCode2: 7yqQ9YaIU62+2QwvalRQv0T2yRxMQ7myc/f9DhoNrrqQhoef0Hew6vYULN9vesuJetz3t5ls4t7UXjo5OCDp3aZFxjoYZT3Ql4rxABN5x55DKVAtwQFR6zy7YQ9FW5dkM6fVF9BPFmlDhrFaGaJEvpb+VQJI4/z8MhNFGZgRMVcTbUz0Z0/Wkm1wFrg=
 ---
 
 # LoCoMo Benchmark 评测报告
 
-**生成时间**: 2026-08-06 17:52:14
+**生成时间**: 2026-08-15 10:23:43
 **评测集**: `C:\Users\Administrator\trinity\benchmark\locomo_test_set.json`
 **问题总数**: 50
 **Top-K**: 5

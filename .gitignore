@@ -125,7 +125,11 @@ temp/
 trinity/output/
 
 trinity.yaml
-# ±¾»ú Trinity ÅäÖÃ£¨º¬ PG Á¬½Ó£©£¬Æ¾Ö¤ÒÆÈë ~/.dsh/.credentials.yaml ºó²»Èë¿â
+# ï¿½ï¿½ï¿½ï¿½ Trinity ï¿½ï¿½ï¿½Ã£ï¿½ï¿½ï¿½ PG ï¿½ï¿½ï¿½Ó£ï¿½ï¿½ï¿½Æ¾Ö¤ï¿½ï¿½ï¿½ï¿½ ~/.dsh/.credentials.yaml ï¿½ï¿½ï¿½ï¿½ï¿½
 
 *.db-shm
 *.db-wal
+# å¤‡ä»½/ä¸´æ—¶ç›®å½•ï¼ˆ2026-08-15 housekeepingï¼‰
+backup/
+__pycache__/
+*.pyc

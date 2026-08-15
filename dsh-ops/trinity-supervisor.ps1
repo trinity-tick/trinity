@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Trinity 进程监督器 — 确保 trinity-api / trinity-mcp(SSE) / collector 常驻。
 
@@ -26,6 +26,9 @@ $TrinityRoot = Split-Path -Parent $PSScriptRoot
 $Py = Join-Path $TrinityRoot ".venv\Scripts\python.exe"
 $ApiExe = Join-Path $TrinityRoot ".venv\Scripts\trinity-api.exe"
 $SysPy = "C:\Users\Administrator\AppData\Local\Programs\Python\Python314\python.exe"
+# api/mcp 统一使用系统 Python 3.14（fastapi/strawberry/psycopg2 等依赖齐全，
+# 与本机实际运行实例一致；EXECUTION 第五轮已确认）。.venv 仅含 numpy/jieba，
+# 缺 fastapi/strawberry，无法拉起 API（2026-08-15 实测 .venv 起服务失败）。
 $ApiPy = $SysPy
 $McpPy = $SysPy
 $StateFile = Join-Path $LogDir "dsh-supervisor-state.json"
@@ -33,7 +36,7 @@ $StateFile = Join-Path $LogDir "dsh-supervisor-state.json"
 # ── 凭证注入：从 ~/.dsh/.credentials.yaml 注入敏感环境变量（未设置时），
 #    供 Start-Process 拉起的 api/mcp 子进程继承（继承当前进程环境）。
 . (Join-Path $PSScriptRoot "dsh-credentials.ps1")
-foreach ($cred in @("TRINITY_PG_HOST", "TRINITY_PG_PORT", "TRINITY_PG_DB", "TRINITY_PG_USER", "TRINITY_PG_PASSWORD", "TRINITY_API_KEY")) {
+foreach ($cred in @("TRINITY_PG_HOST", "TRINITY_PG_PORT", "TRINITY_PG_DB", "TRINITY_PG_USER", "TRINITY_PG_PASSWORD", "TRINITY_API_KEY", "TRINITY_STORE")) {
     if (-not [Environment]::GetEnvironmentVariable($cred, "Process")) {
         $v = Get-DshCredential $cred
         if ($v) { [Environment]::SetEnvironmentVariable($cred, $v, "Process") }
@@ -46,6 +49,13 @@ foreach ($cache in @("TRINITY_CACHE_BACKEND", "TRINITY_REDIS_URL", "TRINITY_CACH
         elseif ($cache -eq "TRINITY_REDIS_URL") { [Environment]::SetEnvironmentVariable($cache, "redis://127.0.0.1:6379/0", "Process") }
         else { [Environment]::SetEnvironmentVariable($cache, "300", "Process") }
     }
+}
+# 存储统一（EXECUTION 31，双库修复双保险）：显式锚定权威大库路径，
+# 子进程（api/mcp）继承后不再依赖 _find_trinity_store() 的 cwd 兜底。
+$TrinityStore = Join-Path $env:USERPROFILE ".trinity\store"
+if (-not [Environment]::GetEnvironmentVariable("TRINITY_STORE", "Process")) {
+    [Environment]::SetEnvironmentVariable("TRINITY_STORE", $TrinityStore, "Process")
+    Write-Output "TRINITY_STORE -> $TrinityStore"
 }
 
 if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
@@ -78,6 +88,22 @@ function Test-Tcp {
     } catch { return $false }
 }
 
+function Test-McpAlive {
+    # MCP SSE 探测：端口 8000 必须通，且监听进程必须属于 Trinity 原生进程。
+    # 防止 Docker（wslrelay/com.docker.backend，trinity-mcp 容器曾占 8000）抢占
+    # 端口造成"假 OK"——端口开着但 mcp 其实没在跑，supervisor 永不拉起。
+    if (-not (Test-Tcp -Port 8000)) { return $false }
+    try {
+        $pids = Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction Stop |
+                Select-Object -ExpandProperty OwningProcess -Unique
+        foreach ($procId in $pids) {
+            $cmdLine = (Get-CimInstance Win32_Process -Filter "ProcessId=$procId" -ErrorAction SilentlyContinue).CommandLine
+            if ($cmdLine -and $cmdLine -match 'trinity') { return $true }
+        }
+        return $false
+    } catch { return $false }
+}
+
 function Test-ApiHealth {
     try {
         $r = Invoke-WebRequest -Uri "http://127.0.0.1:8001/health" -TimeoutSec 3 -UseBasicParsing -ErrorAction Stop
@@ -97,7 +123,13 @@ function Start-WithLogs {
 }
 
 $state = Read-State
-if (-not $state.restartedAt) { $state.restartedAt = @{} }
+# 修复：JSON 反序列化后 restartedAt 是 PSCustomObject，无法添加新键（曾致
+# $state.restartedAt.collector 赋值报错、60s 重启间隔保护失效）。统一转成 hashtable。
+$rt = @{}
+if ($state.restartedAt) {
+    foreach ($prop in $state.restartedAt.PSObject.Properties) { $rt[$prop.Name] = $prop.Value }
+}
+$state.restartedAt = $rt
 $now = Get-Date
 
 function Should-Restart {
@@ -122,16 +154,18 @@ if (-not (Test-ApiHealth)) {
 }
 
 # ── 2. MCP (SSE) ──────────────────────────────────────────────────────────
-if (-not (Test-Tcp -Port 8000)) {
+if (-not (Test-McpAlive)) {
+    $portHeld = Test-Tcp -Port 8000
+    $reason = if ($portHeld) { "port 8000 held by non-trinity process (e.g. Docker)" } else { "port 8000 closed" }
     if (Should-Restart "mcp") {
-        Write-Log "mcp DOWN (port 8000 closed) — restarting" "WARN"
+        Write-Log "mcp DOWN ($reason) — restarting" "WARN"
         Start-WithLogs -Name "mcp" -Exe $McpPy -ArgList @("-m", "trinity.mcp.server", "--mode", "sse", "--port", "8000", "--host", "127.0.0.1")
         $state.restartedAt.mcp = $now.ToString("o")
     } else {
-        Write-Log "mcp DOWN but within restart interval — skipped" "WARN"
+        Write-Log "mcp DOWN ($reason) but within restart interval — skipped" "WARN"
     }
 } else {
-    Write-Log "mcp OK (port 8000 open)"
+    Write-Log "mcp OK (port 8000 open, trinity process)"
 }
 
 # ── 3. Collector ──────────────────────────────────────────────────────────

@@ -88,7 +88,7 @@ export class TrinityClient {
   private async request<T>(
     method: string,
     path: string,
-    body?: Record<string, unknown>
+    body?: unknown
   ): Promise<T> {
     const url = `${this.endpoint}${path}`;
     const controller = new AbortController();
@@ -325,7 +325,7 @@ export function selfTest(): SelfTestResult {
     const proto = TrinityClient.prototype;
     let ok = true;
     for (const m of methods) {
-      if (typeof (proto as Record<string, unknown>)[m] !== 'function') ok = false;
+      if (typeof (proto as unknown as Record<string, unknown>)[m] !== 'function') ok = false;
     }
     if (ok) pass('Method signatures');
     else fail('Method signatures', 'missing method');
@@ -363,4 +363,97 @@ export function selfTest(): SelfTestResult {
 if (require.main === module) {
   const r = selfTest();
   console.log(JSON.stringify(r, null, 2));
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// TrinityGatewayClient — Memory Gateway 兼容客户端 (V3-2b, 2026-08-14)
+// 面向 OpenAI/Mem0 兼容网关 (:8002) 的轻量记忆客户端。
+//   const g = new TrinityGatewayClient({ baseUrl: 'http://localhost:8002' });
+//   await g.add('用户偏好深色主题', { tags: ['preference'] });
+//   const hits = await g.search('用户偏好');
+//   const reply = await g.chat([{ role: 'user', content: '我的偏好？' }]);
+// ═══════════════════════════════════════════════════════════════════════
+
+export interface GatewayMemory {
+  memory_id?: string;
+  content: string;
+  tags?: string[];
+  category?: string;
+  importance?: number;
+}
+
+export interface GatewayChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+export interface GatewayConfig {
+  baseUrl: string;
+  apiKey?: string;
+  timeoutMs?: number;
+}
+
+export class TrinityGatewayClient {
+  private baseUrl: string;
+  private apiKey: string;
+  private timeoutMs: number;
+
+  constructor(config: GatewayConfig) {
+    this.baseUrl = config.baseUrl.replace(/\/$/, '');
+    this.apiKey = config.apiKey || '';
+    this.timeoutMs = config.timeoutMs || 30000;
+  }
+
+  private async req<T>(method: string, path: string, body?: unknown): Promise<T> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (this.apiKey) headers['Authorization'] = `Bearer ${this.apiKey}`;
+    try {
+      const resp = await fetch(`${this.baseUrl}${path}`, {
+        method,
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal: controller.signal,
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${await resp.text()}`);
+      return (await resp.json()) as T;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async health(): Promise<{ status: string }> {
+    return this.req('GET', '/health');
+  }
+
+  async add(content: string, opts: { tags?: string[]; category?: string; importance?: number } = {}): Promise<GatewayMemory> {
+    return this.req('POST', '/v1/memories', { content, ...opts });
+  }
+
+  async search(query: string, topK = 5): Promise<GatewayMemory[]> {
+    const data = await this.req<{ results: GatewayMemory[] }>('POST', '/v1/memory/search', {
+      query,
+      top_k: topK,
+      strategy: 'rrf',
+    });
+    return data.results || [];
+  }
+
+  async get(memoryId: string): Promise<GatewayMemory> {
+    return this.req('GET', `/v1/memories/${memoryId}`);
+  }
+
+  async delete(memoryId: string): Promise<{ deleted: boolean }> {
+    return this.req('DELETE', `/v1/memories/${memoryId}`);
+  }
+
+  async chat(messages: GatewayChatMessage[], model?: string, memoryK = 5): Promise<string> {
+    const data = await this.req<{ choices: Array<{ message: { content: string } }> }>(
+      'POST',
+      '/v1/chat/completions',
+      { messages, model, memory_k: memoryK },
+    );
+    return data.choices?.[0]?.message?.content ?? '';
+  }
 }

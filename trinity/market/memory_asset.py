@@ -97,8 +97,12 @@ def create_asset(
     MemoryAsset
     """
     content = memory.get("content", "")
+    # C1 修复：API 挂单请求不带 memory_id 时，按内容哈希生成确定性 asset_id（不再为空）
+    raw_mid = memory.get("memory_id") or ""
+    if not raw_mid:
+        raw_mid = f"ast_{_hash_content(content)[:12]}"
     return MemoryAsset(
-        memory_id=memory.get("memory_id", ""),
+        memory_id=raw_mid,
         owner_agent=owner,
         content_hash=_hash_content(content),
         modality=memory.get("category", "text"),

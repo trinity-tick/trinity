@@ -1,0 +1,18 @@
+{
+  "submitter": "trinity-tick",
+  "trinity_version": "v8.2.0",
+  "date": "2026-08-14",
+  "environment": "Windows, system Python 3.14, API :8001",
+  "results": [
+    {"suite": "latency", "metric": "e2e_p50_ms", "value": 41.0, "unit": "ms"},
+    {"suite": "latency", "metric": "e2e_p99_ms", "value": 48.7, "unit": "ms"},
+    {"suite": "concurrency", "metric": "max_qps", "value": 2431.3, "unit": "qps"},
+    {"suite": "concurrency", "metric": "p50_ms", "value": 45.3, "unit": "ms"},
+    {"suite": "concurrency", "metric": "errors", "value": 0, "unit": ""},
+    {"suite": "squad", "metric": "r_at_5", "value": 0.9833, "unit": ""},
+    {"suite": "locomo", "metric": "recall_at_5_session", "value": 0.88, "unit": ""},
+    {"suite": "memsyco", "metric": "composite_judge", "value": 0.88, "unit": ""},
+    {"suite": "memsyco", "metric": "sycophancy_rate", "value": 0.10, "unit": ""},
+    {"suite": "compress", "metric": "token_savings_pct", "value": 0.21, "unit": ""}
+  ]
+}

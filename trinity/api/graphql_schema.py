@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import threading
 import time
 import uuid
@@ -444,6 +445,133 @@ _resolver = _TrinityResolver()
 
 # ── Queries ──────────────────────────────────────────────────────────────
 
+# ── DSH 结构层类型（结构融合：Trinity 承载 DSH 会话事件流/goal/schedule）─
+
+@strawberry.type
+class StructureStats:
+    sessions: int
+    events: int
+    goals: int
+    todos: int
+    headers: int
+    schedules: int
+    event_types: str
+
+
+@strawberry.type
+class StructureSession:
+    session_id: str
+    agent_id: str
+    persona_id: str = ""
+    parent_session: Optional[str] = None
+    created_at: float
+    updated_at: float
+    status: str = "active"
+    title: Optional[str] = None
+
+
+@strawberry.type
+class StructureEvent:
+    session_id: str
+    seq: int
+    type: str
+    turn: Optional[int] = None
+    step: Optional[int] = None
+    time: float
+    data: str
+
+
+@strawberry.type
+class StructureGoal:
+    goal_id: str
+    objective: str
+    status: str = "active"
+    phase: Optional[str] = None
+    round: int = 0
+    max_rounds: Optional[int] = None
+    created_at: float
+    updated_at: float
+
+
+@strawberry.type
+class StructureSchedule:
+    schedule_id: str
+    prompt: str
+    target: Optional[str] = None
+    status: str = "active"
+    created_at: float
+    updated_at: float
+
+
+from trinity.structure_store import (  # noqa: E402
+    structure_stats as _store_stats,
+    structure_sessions as _store_sessions,
+    structure_query as _store_query,
+    goal_list as _store_goals,
+    schedule_list as _store_schedules,
+)
+
+
+def _structure_stats() -> Optional[StructureStats]:
+    try:
+        s = _store_stats()
+        return StructureStats(
+            sessions=s.get("sessions", 0), events=s.get("events", 0),
+            goals=s.get("goals", 0), todos=s.get("todos", 0),
+            headers=s.get("headers", 0), schedules=s.get("schedules", 0),
+            event_types=json.dumps(s.get("event_types", {}), ensure_ascii=False),
+        )
+    except Exception as exc:
+        logger.warning("structure_stats failed: %s", exc)
+        return None
+
+
+def _structure_sessions(limit: int = 200) -> List[StructureSession]:
+    try:
+        data = _store_sessions()
+        return [StructureSession(**s) for s in data.get("sessions", [])[: min(limit, 1000)]]
+    except Exception as exc:
+        logger.warning("structure_sessions failed: %s", exc)
+        return []
+
+
+def _structure_events(session_id: Optional[str], event_type: Optional[str],
+                      agent_id: Optional[str], limit: int = 200) -> List[StructureEvent]:
+    try:
+        data = _store_query({
+            "session_id": session_id, "type": event_type,
+            "agent_id": agent_id, "limit": limit,
+        })
+        return [
+            StructureEvent(
+                session_id=e["session_id"], seq=e["seq"], type=e["type"],
+                turn=e.get("turn"), step=e.get("step"), time=e["time"],
+                data=json.dumps(e.get("data", {}), ensure_ascii=False),
+            ) for e in data.get("events", [])
+        ]
+    except Exception as exc:
+        logger.warning("structure_events failed: %s", exc)
+        return []
+
+
+def _structure_goals(limit: int = 100) -> List[StructureGoal]:
+    try:
+        data = _store_goals()
+        return [StructureGoal(**g) for g in data.get("goals", [])[: min(limit, 500)]]
+    except Exception as exc:
+        logger.warning("structure_goals failed: %s", exc)
+        return []
+
+
+def _structure_schedules(limit: int = 100) -> List[StructureSchedule]:
+    try:
+        data = _store_schedules()
+        return [StructureSchedule(**s) for s in data.get("schedules", [])[: min(limit, 500)]]
+    except Exception as exc:
+        logger.warning("structure_schedules failed: %s", exc)
+        return []
+
+
 @strawberry.type
 class Query:
 
@@ -491,6 +619,30 @@ class Query:
     @strawberry.field
     def memory_timeline(self, persona_id: str, limit: int = 20) -> List[TimelinePoint]:
         return _resolver.memory_timeline(persona_id, limit)
+
+    # ── DSH 结构层（结构融合：Trinity 承载 DSH 会话事件流/goal/schedule）──
+    @strawberry.field
+    def structure_stats(self) -> Optional[StructureStats]:
+        return _structure_stats()
+
+    @strawberry.field
+    def structure_sessions(self, limit: int = 200) -> List[StructureSession]:
+        return _structure_sessions(limit)
+
+    @strawberry.field
+    def structure_events(self, session_id: Optional[str] = None,
+                         event_type: Optional[str] = None,
+                         agent_id: Optional[str] = None,
+                         limit: int = 200) -> List[StructureEvent]:
+        return _structure_events(session_id, event_type, agent_id, limit)
+
+    @strawberry.field
+    def structure_goals(self, limit: int = 100) -> List[StructureGoal]:
+        return _structure_goals(limit)
+
+    @strawberry.field
+    def structure_schedules(self, limit: int = 100) -> List[StructureSchedule]:
+        return _structure_schedules(limit)
 
 
 # ── Mutations ────────────────────────────────────────────────────────────

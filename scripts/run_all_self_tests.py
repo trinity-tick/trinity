@@ -28,13 +28,29 @@ TIMEOUT_SECONDS = 30
 
 
 def discover_self_test_modules(target_package: str = "trinity") -> List[str]:
-    """Walk trinity package tree and return module names that define self_test()."""
+    """Walk trinity package tree and return module names that define self_test().
+
+    支持两种 target：
+      - 包名（如 trinity / trinity.adapters）→ 递归发现子模块
+      - 模块名（如 trinity.adapters.sqlite）→ 直接返回该模块（若含 self_test）
+    """
     sys.path.insert(0, str(TRINITY_ROOT))
     try:
         root_module = importlib.import_module(target_package)
     except Exception as exc:
         print(f"[ERROR] Cannot import {target_package}: {exc}")
         sys.exit(1)
+
+    # 修复(2026-08-14): target 是模块（无 __path__）时直接判定
+    if not hasattr(root_module, "__path__"):
+        try:
+            origin = Path(root_module.__file__)
+            if origin.exists() and "def self_test" in origin.read_text(encoding="utf-8", errors="ignore"):
+                return [target_package]
+        except Exception:
+            pass
+        print(f"[!] {target_package} 是模块但无 self_test() 或无 __file__")
+        return []
 
     candidates = []
     package_path = Path(root_module.__path__[0])
@@ -103,16 +119,39 @@ def run_all(target: str) -> None:
     for i, mod in enumerate(modules, 1):
         print(f"  [{i:3d}/{len(modules)}] {mod} … ", end="", flush=True)
         start = time.monotonic()
+        # 修复(2026-08-14): 改用 subprocess 逐模块跑，超时直接杀进程——
+        # 原 ProcessPoolExecutor 在模块挂死时 shutdown(wait=True) 会无限等待（曾挂 17 分钟）
+        import subprocess as _sp
+        _code = (
+            "import sys; sys.path.insert(0, sys.argv[2]); "
+            "import json, importlib; "
+            "m = importlib.import_module(sys.argv[1]); "
+            "r = m.self_test(); "
+            "print(json.dumps({'module': sys.argv[1], 'result': 'PASS' if r else 'FAIL', 'raw': repr(r)[:300]}))"
+        )
         try:
-            with ProcessPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(_run_single, mod, str(TRINITY_ROOT))
-                res = future.result(timeout=TIMEOUT_SECONDS)
+            proc = _sp.run(
+                [sys.executable, "-c", _code, mod, str(TRINITY_ROOT)],
+                capture_output=True, text=True, timeout=TIMEOUT_SECONDS,
+                encoding="utf-8", errors="replace",
+            )
             elapsed = time.monotonic() - start
+            if proc.returncode == 0 and proc.stdout.strip():
+                import json as _json
+                try:
+                    res = _json.loads(proc.stdout.strip().splitlines()[-1])
+                except Exception:
+                    res = {"module": mod, "result": "PASS", "reason": proc.stdout.strip()[:200]}
+            else:
+                err = (proc.stderr or "").strip().splitlines()
+                res = {"module": mod, "result": "FAIL",
+                       "reason": (err[-1] if err else f"exit={proc.returncode}")[:300]}
             res["elapsed"] = f"{elapsed:.2f}s"
             print(f"{res['result']:>7s}  ({res['elapsed']})")
-        except FuturesTimeoutError:
+        except _sp.TimeoutExpired:
             elapsed = time.monotonic() - start
-            res = {"module": mod, "result": "TIMEOUT", "reason": f">{TIMEOUT_SECONDS}s", "elapsed": f"{elapsed:.2f}s"}
+            res = {"module": mod, "result": "TIMEOUT", "reason": f">{TIMEOUT_SECONDS}s (进程已强杀)",
+                   "elapsed": f"{elapsed:.2f}s"}
             print(f"{res['result']:>7s}  ({res['elapsed']})")
         except Exception as exc:
             elapsed = time.monotonic() - start

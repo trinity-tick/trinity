@@ -271,6 +271,11 @@ class ConversationScanner:
                 stats["errors"] += 1
                 continue
 
+            # 批量收集（2026-08-15：一次 bulk 推送替代逐条 push_raw 异步，
+            # 根治同步守护并发写风暴导致的引擎库写锁，见 EXECUTION 33）
+            batch: List[Dict[str, Any]] = []
+            batch_conv_ids: List[str] = []
+
             for conv in convs:
                 stats["convs_scanned"] += 1
 
@@ -282,12 +287,12 @@ class ConversationScanner:
                     summary = self._extract_summary(db_path, conv)
                     agent_id = self._route_agent(conv)
 
-                    self.bridge.push_raw(
-                        agent_id=agent_id,
-                        content=summary,
-                        category="episodic",
-                        tags=["marvis_conversation", "auto_sync"],
-                        metadata={
+                    batch.append({
+                        "agent_id": agent_id,
+                        "content": summary,
+                        "category": "episodic",
+                        "tags": ["marvis_conversation", "auto_sync"],
+                        "metadata": {
                             "conversation_id": conv["conversation_id"],
                             "title": conv.get("title", "")[:200],
                             "user_id": user_id,
@@ -296,12 +301,8 @@ class ConversationScanner:
                             "status": conv.get("status"),
                             "synced_at": datetime.now(timezone.utc).isoformat(),
                         },
-                    )
-                    stats["convs_synced"] += 1
-
-                    # 追踪已同步 ID
-                    self._state.synced_conv_ids.append(conv["conversation_id"])
-                    self._state.total_synced += 1
+                    })
+                    batch_conv_ids.append(conv["conversation_id"])
 
                     # 更新最大时间戳
                     updated = conv.get("updated_at", "")
@@ -311,6 +312,26 @@ class ConversationScanner:
                 except Exception as e:
                     logger.error("Failed to sync conv %s: %s", conv.get("conversation_id"), e)
                     stats["errors"] += 1
+
+            # 一次批量推送（同步，单请求多条目）
+            if batch:
+                try:
+                    result = self.bridge.push_raw_bulk(batch)
+                    stats["convs_synced"] += result.written
+                    stats["errors"] += result.failed
+                    if result.failed:
+                        logger.warning(
+                            "bulk push partial: written=%d failed=%d%s",
+                            result.written, result.failed,
+                            f" ({result.error})" if result.error else "",
+                        )
+                    # 批量成功后统一追踪已同步 ID
+                    for conv_id in batch_conv_ids:
+                        self._state.synced_conv_ids.append(conv_id)
+                    self._state.total_synced += result.written
+                except Exception as e:
+                    logger.error("bulk push failed: %s", e)
+                    stats["errors"] += len(batch)
 
             # 更新该用户的同步时间
             self._state.user_dirs[user_id] = max_ts

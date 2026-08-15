@@ -96,6 +96,19 @@ MS_ANSWER_SUFFIX = (
     "IS known about the person's changes/activities/preferences from the context."
 )
 
+# KU 类目专用提示（GEN-3）：强制"before / later"两段式回答
+KU_ANSWER_SUFFIX = (
+    "\n\nAnswer in two labeled parts: \"BEFORE: <what was true before>\" and "
+    "\"LATER: <what changed or the update>\". Use the facts marked 'direct' for "
+    "BEFORE and 'update' for LATER when present."
+)
+
+# SS-P 类目专用提示（GEN-3）：trait 即偏好表述
+SSP_ANSWER_SUFFIX = (
+    "\n\nNote: the context may record the preference as \"<name> has the trait: "
+    "<X>\". In that case report the preference as X (e.g., 'lives in Seattle')."
+)
+
 TR_JUDGE_SYSTEM = (
     "You are a strict temporal-order judge. Given the EXPECTED order of events "
     "(chronological, first to last) and a MODEL ANSWER, determine whether the "
@@ -142,6 +155,10 @@ def build_prompt_for_category(question: str, contexts, cat: str) -> str:
         prompt += TR_ANSWER_SUFFIX
     elif cat == "MS":
         prompt += MS_ANSWER_SUFFIX
+    elif cat == "KU":
+        prompt += KU_ANSWER_SUFFIX
+    elif cat == "SS-P":
+        prompt += SSP_ANSWER_SUFFIX
     return prompt
 
 
@@ -154,6 +171,12 @@ def main() -> int:
                         help="retrieval context size (default 10: MS 类目 R@5 0.525→0.95, 见 channel_attribution)")
     parser.add_argument("--categories", default="",
                         help="comma-separated category filter, e.g. TR,MS (empty = all)")
+    parser.add_argument("--ctx-n", type=int, default=0,
+                        help="how many retrieved contexts go into the LLM prompt "
+                             "(0 = use top_k; smaller = context pruning / noise cut)")
+    parser.add_argument("--min-overlap", type=int, default=0,
+                        help="only evaluate questions whose topic words overlap >=N facts "
+                             "(filters malformed/mismatched questions; EVAL-1 clean subset)")
     args = parser.parse_args()
 
     from trinity import Trinity
@@ -175,10 +198,27 @@ def main() -> int:
     )
 
     data = json.load(open(DSET, encoding="utf-8"))
+    _stop = {"what", "are", "the", "three", "most", "significant", "changes", "over",
+             "first", "half", "how", "many", "did", "person", "work", "on", "their",
+             "main", "focus", "career", "since", "before", "after", "year", "and",
+             "what", "regarding", "is", "this", "that", "with", "for"}
+
+    def _overlap(q) -> int:
+        """问题主题词（去人名与停用词）与任一期望事实的词重叠数。"""
+        qt = set(re.findall(r"[a-zA-Z]{4,}", q.get("question", "").lower()))
+        qt -= set(re.findall(r"[a-zA-Z]{4,}", (q.get("persona_name") or "").lower()))
+        qt -= _stop
+        ft = set()
+        for f in q.get("context_facts", []):
+            ft |= set(re.findall(r"[a-zA-Z]{4,}", (f.get("fact") or "").lower()))
+        return len(qt & ft)
+
     questions = [q for q in data["questions"]
-                 if (not cat_filter or q.get("category") in cat_filter)][: args.limit]
+                 if (not cat_filter or q.get("category") in cat_filter)
+                 and (args.min_overlap == 0 or _overlap(q) >= args.min_overlap)][: args.limit]
     print(f"questions: {len(questions)}  model={args.model}"
-          + (f"  categories={sorted(cat_filter)}" if cat_filter else ""))
+          + (f"  categories={sorted(cat_filter)}" if cat_filter else "")
+          + (f"  min_overlap={args.min_overlap}" if args.min_overlap else ""))
 
     tmpdir = tempfile.mkdtemp(prefix="lme_ans_")
     mem = Trinity(adapter="sqlite", store_path=tmpdir)
@@ -222,6 +262,8 @@ def main() -> int:
         results = mem.search(query=question, mode="keyword", top_k=args.top_k,
                              persona_id=q.get("persona_name") or None).get("results", [])
         contexts = [r.get("content", "") for r in results]
+        if args.ctx_n and args.ctx_n < len(contexts):
+            contexts = contexts[: args.ctx_n]
         r5 = fact_hit("\n".join(contexts), facts)
         if r5:
             r5_total += 1

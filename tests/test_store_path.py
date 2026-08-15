@@ -15,7 +15,13 @@ from trinity import Trinity
 
 
 class TestStorePathFile:
-    def test_file_path_initializes_adapter(self):
+    def _clear_env(self, monkeypatch) -> None:
+        # 回归修复(2026-08-14): 隔离 TRINITY_DB_PATH，避免被其它测试污染（全量套件偶发失败根因）
+        monkeypatch.delenv("TRINITY_DB_PATH", raising=False)
+        monkeypatch.delenv("TRINITY_STORE", raising=False)
+
+    def test_file_path_initializes_adapter(self, monkeypatch):
+        self._clear_env(monkeypatch)
         tmp = tempfile.mkdtemp()
         db = os.path.join(tmp, "store_path_test.db")
         t = Trinity(store_path=db)
@@ -29,7 +35,8 @@ class TestStorePathFile:
         finally:
             t._adapter.disconnect() if t._adapter else None
 
-    def test_directory_path_still_works(self):
+    def test_directory_path_still_works(self, monkeypatch):
+        self._clear_env(monkeypatch)
         tmp = tempfile.mkdtemp()
         t = Trinity(store_path=tmp)
         try:
@@ -38,7 +45,8 @@ class TestStorePathFile:
         finally:
             t._adapter.disconnect() if t._adapter else None
 
-    def test_no_store_path_defaults_to_cwd_db(self):
+    def test_no_store_path_defaults_to_cwd_db(self, monkeypatch):
+        self._clear_env(monkeypatch)
         t = Trinity()
         try:
             # 默认路径：相对 trinity_store.db（或 TRINITY_DB_PATH）

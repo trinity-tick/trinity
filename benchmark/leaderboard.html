@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Trinity MemBench Leaderboard</title>
+<style>
+  body { font-family:"Microsoft YaHei",system-ui,sans-serif; background:#0f1420; color:#dbe4f0; padding:24px; }
+  h1 { font-size:20px; } h1 small { color:#7d8aa0; }
+  table { border-collapse:collapse; width:100%; margin-top:12px; font-size:13px; }
+  th,td { border-bottom:1px solid #26304a; padding:8px 10px; text-align:left; }
+  th { color:#8fb3ff; }
+  .rank1 { color:#ffd700; } .rank2 { color:#c0c0c0; } .rank3 { color:#cd7f32; }
+  .bar { display:inline-block; height:10px; background:#2f7dff; vertical-align:middle; border-radius:3px; }
+  code { background:#182036; padding:1px 6px; border-radius:4px; }
+  .note { color:#7d8aa0; font-size:12px; }
+</style>
+</head>
+<body>
+<h1>Trinity MemBench Leaderboard <small>公开评测基准 · 自动生成于 2026-08-14 18:36</small></h1>
+<table>
+  <thead><tr><th>#</th><th>提交者</th><th>版本</th><th>日期</th><th>SQuAD R@5</th><th>LoCoMo Recall@5</th><th>MemSyco Composite</th><th>端到端 P50(ms)</th><th>QPS@200</th><th>谄媚率</th></tr></thead>
+  <tbody><tr><td class='rank1'>1</td><td>trinity-tick</td><td>v8.2.0</td><td>2026-08-14</td><td>0.983</td><td>0.880</td><td>0.880</td><td>41.0</td><td>2,431.3</td><td>0.1</td></tr></tbody>
+</table>
+<h2 style="font-size:15px;margin-top:24px">提交方式</h2>
+<pre style="background:#182036;padding:12px;border-radius:8px;font-size:12px;overflow:auto">{
+  "submitter": "your-name",
+  "trinity_version": "v8.2.0",
+  "date": "2026-08-14",
+  "results": [
+    {"suite": "squad", "metric": "r_at_5", "value": 0.9833},
+    {"suite": "memsyco", "metric": "composite_judge", "value": 0.88}
+  ]
+}</pre>
+<p class="note">校验：<code>python benchmark/leaderboard/validate.py</code>（固定数据集、固定 top_k、禁用缓存预热）。</p>
+</body>
+</html>

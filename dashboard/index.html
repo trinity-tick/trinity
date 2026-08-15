@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Trinity Memory Observability Dashboard (B2 MVP)</title>
+<style>
+  body { font-family: "Microsoft YaHei", system-ui, sans-serif; background:#0f1420; color:#dbe4f0; margin:0; padding:24px; }
+  h1 { font-size:20px; margin:0 0 4px; } h1 small { color:#7d8aa0; font-weight:normal; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:16px; margin-top:16px; }
+  .card { background:#182036; border:1px solid #26304a; border-radius:10px; padding:14px 16px; }
+  .card h2 { font-size:14px; color:#8fb3ff; margin:0 0 10px; border-bottom:1px solid #26304a; padding-bottom:6px; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th,td { text-align:left; padding:4px 6px; border-bottom:1px solid #222c44; }
+  th { color:#7d8aa0; font-weight:normal; }
+  .num { color:#6fe3a0; font-family:Consolas,monospace; }
+  .err { color:#ff7b7b; }
+  #status { color:#6fe3a0; font-size:12px; }
+</style>
+</head>
+<body>
+<h1>Trinity Memory Observability <small>B2 MVP · 数据源: API :8001</small></h1>
+<div id="status">loading…</div>
+<div class="grid">
+  <div class="card"><h2>库规模</h2><table id="t-stats"></table></div>
+  <div class="card"><h2>聚合池</h2><table id="t-pool"></table></div>
+  <div class="card"><h2>图谱</h2><table id="t-graph"></table></div>
+  <div class="card"><h2>进化引擎</h2><table id="t-evo"></table></div>
+  <div class="card"><h2>热度热力图 (evolution/heatmap)</h2><div id="heatmap"></div></div>
+  <div class="card"><h2>实体类型分布</h2><table id="t-entities"></table></div>
+  <div class="card" style="grid-column:1/-1"><h2>图谱子图 (graph/traverse 示例: 彩棠派样仓)</h2><pre id="graph-sub" style="font-size:11px;max-height:280px;overflow:auto;"></pre></div>
+</div>
+<script>
+const API = "http://127.0.0.1:8001";
+const H = { "X-Agent-ID": "dashboard", "X-Agent-Role": "admin" };
+const $ = (id) => document.getElementById(id);
+function fillTbl(el, rows){ el.innerHTML = rows.map(([k,v]) => `<tr><td>${k}</td><td class="num">${v}</td></tr>`).join(""); }
+function jget(path, params){ const u = new URL(API + path); if(params) Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,v)); return fetch(u, {headers:H}).then(r=>r.json()); }
+async function main(){
+  const results = await Promise.allSettled([
+    jget("/memories/stats"), jget("/agents/memory/pool"), jget("/api/stats"),
+    jget("/evolution/heatmap"), jget("/graph/entities/search", {limit:20}), jget("/graph/traverse", {start_id:"ent_03c8ac9932c2", max_hops:1}),
+  ]);
+  const [stats, pool, apiStats, heatmap, entities, subgraph] = results.map(r => r.status==="fulfilled" ? r.value : {__err: String(r.reason)});
+  if(stats.__err){ $("status").className="err"; $("status").textContent = "部分端点失败: " + results.filter(r=>r.status==="rejected").map(r=>String(r.reason)).join(" | "); }
+  else $("status").textContent = "connected · " + new Date().toLocaleTimeString();
+  if(stats && !stats.__err) fillTbl($("t-stats"), [["记忆总数", stats.total_memories], ["活跃", stats.active_memories], ["过期", stats.expired_memories], ["平均访问", stats.avg_access_count]]);
+  if(pool && !pool.__err) fillTbl($("t-pool"), [["池记忆", pool.total_memories], ["来源数", Object.keys(pool.source_distribution||{}).length], ["向量索引", pool.engine_stats?.total_indexed ?? "n/a"], ["检索通道", Object.keys(pool.retrieval_channels||{}).filter(k=>pool.retrieval_channels[k]).join(", ")]]);
+  if(apiStats && !apiStats.__err){
+    const a = apiStats.adapter||{};
+    fillTbl($("t-graph"), [["实体", a.entity_count ?? "n/a"], ["关系", a.relation_count ?? "n/a"], ["审计记录", a.audit_log_count ?? "n/a"], ["FTS5", a.fts5_enabled]]);
+    const e = apiStats.evolution||{};
+    fillTbl($("t-evo"), [["版本", apiStats.trinity_version], ["进化轮次", e.total_cycles], ["偏好", e.preferences_count], ["模式", e.patterns_count]]);
+  }
+  if(entities && !entities.__err){
+    const byType = {}; entities.forEach(e => byType[e.type] = (byType[e.type]||0)+1);
+    fillTbl($("t-entities"), Object.entries(byType).sort((a,b)=>b[1]-a[1]).slice(0,10));
+  }
+  if(heatmap && !heatmap.__err) $("heatmap").textContent = JSON.stringify(heatmap, null, 1).slice(0,600);
+  if(subgraph && !subgraph.__err) $("graph-sub").textContent = JSON.stringify(subgraph, null, 1).slice(0,2000);
+}
+main();
+</script>
+</body>
+</html>

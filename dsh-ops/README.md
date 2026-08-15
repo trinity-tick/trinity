@@ -1,7 +1,8 @@
 # dsh-ops — DSH × Trinity 运维工具集
 
 本目录是 DSH（DeepSeek Harness）优化 trinity 的执行产物。完整说明见
-[EXECUTION.md](EXECUTION.md)（含回滚）。
+[EXECUTION.md](EXECUTION.md)（含回滚）。联合架构整体能力盘点见
+[`../docs/JOINT_CAPABILITY_MAP_20260814.md`](../docs/JOINT_CAPABILITY_MAP_20260814.md)。
 
 | 文件 | 说明 |
 |---|---|

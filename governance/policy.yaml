@@ -1,0 +1,38 @@
+# Trinity 多智能体记忆治理策略 (B3)
+# 规则: isolation(隔离) / shared(共享) / arbitration(仲裁) / audit(审计)
+# 策略引擎: governance/governance.py 读取本文件并通过 API 执行
+
+version: "1.0"
+
+agents:
+  - id: agent-alpha
+    memory_scope: private      # private: 只读写自己的记忆 (隔离)
+    role: operator
+    allowed_categories: [general, insight]
+  - id: agent-beta
+    memory_scope: shared       # shared: 可读写共享池
+    role: operator
+    allowed_categories: [general, task]
+  - id: agent-gamma
+    memory_scope: private
+    role: viewer              # viewer: 只读
+    allowed_categories: []
+
+policies:
+  isolation:
+    # 私有 agent 的检索必须带上自身 agent_id 过滤，防止读到他人记忆
+    enforce_agent_filter: true
+    # 私有 agent 的写入禁止共享 category
+    block_shared_categories: [sync, marvis]
+  shared:
+    shared_categories: [general, task, insight]
+    # 共享池检索不限制 agent
+    allow_cross_agent_read: true
+  arbitration:
+    # 冲突处理: 优先重要性高的记忆（importance 排序仲裁）
+    conflict_resolution: importance
+    min_importance_to_override: 0.7
+  audit:
+    # 每次写操作后写入审计（调用 audit 端点，尽力而为）
+    audit_writes: true
+    audit_replay_available: true

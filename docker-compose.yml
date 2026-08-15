@@ -33,7 +33,7 @@ services:
       dockerfile: Dockerfile
     container_name: trinity-mcp
     ports:
-      - "8000:8000"
+      - "8006:8000"
     volumes:
       - trinity-data:/app/data
     environment:

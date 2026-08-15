@@ -907,9 +907,10 @@ async def hybrid_search(request: HybridSearchRequest):
       - cascade: 向量粗排 →BM25 精排 →图谱扩充
 
     返回:
-      results 中每条含 hybrid_score / vector_score / bm25_score / graph_score 明细。    """
+      results 中每条含 hybrid_score / vector_score / bm25_score / graph_score 明细，
+      引擎库可查到的记忆附 content_preview（聚合池专属 id 保持仅分数，见 A1 评测修复）。    """
     mem = get_memory()
-    return mem.search_hybrid(
+    data = mem.search_hybrid(
         query=request.query,
         top_k=request.top_k,
         strategy=request.strategy,
@@ -917,6 +918,19 @@ async def hybrid_search(request: HybridSearchRequest):
         persona_id=request.persona_id,
         tenant_id=request.tenant_id,
     )
+    # A1 修复：为引擎库记忆回填 content_preview，避免调用方二次请求
+    results = data.get("results", data if isinstance(data, list) else [])
+    adapter = getattr(mem, "_adapter", None)
+    for r in results:
+        mid = r.get("memory_id")
+        if mid and not r.get("content_preview") and adapter is not None:
+            try:
+                detail = adapter.get_memory(mid)
+                if detail and detail.get("content"):
+                    r["content_preview"] = detail["content"][:200]
+            except Exception:
+                pass
+    return data
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -948,6 +962,10 @@ async def cross_modal_search(request: CrossModalSearchRequest):
       - combined: 联合检索（需 [text, image_path] 格式）    """
     mem = get_memory()
     cm = mem._ensure_cross_modal_retriever()
+    # A4 修复：无可用编码器（离线/模型缺失）时返回明确的降级响应，而非 500/挂起
+    if getattr(cm, "_text_encoder", None) is None and not getattr(cm, "use_clip", False):
+        return {"results": [], "query_type": request.query_type, "degraded": True,
+                "detail": "CLIP/文本编码器不可用（离线或模型未缓存）；配置本地模型后可启用"}
     return cm.search_cross_modal(
         query=request.query,
         query_type=request.query_type,
@@ -960,6 +978,9 @@ async def image_by_text(request: ImageByTextRequest):
     """文搜图—用自然语言描述检索相关图片记忆。
     在image_description 模态记忆中做语义检索，返回最相关的图片描述    及其关联的图片文件路径。    """
     mem = get_memory()
+    cm = mem._ensure_cross_modal_retriever()
+    if getattr(cm, "_text_encoder", None) is None and not getattr(cm, "use_clip", False):
+        return {"results": [], "degraded": True, "detail": "文本编码器不可用（离线/模型未缓存）"}
     return mem.search_image_by_text(text=request.text, top_k=request.top_k)
 
 
@@ -969,6 +990,9 @@ async def text_by_image(request: TextByImageRequest):
     对传入的图片进行编码后，在text 模态记忆中做语义检索，
     返回与图片语义最相近的文字记忆。    """
     mem = get_memory()
+    cm = mem._ensure_cross_modal_retriever()
+    if getattr(cm, "_text_encoder", None) is None and not getattr(cm, "use_clip", False):
+        return {"results": [], "degraded": True, "detail": "CLIP/文本编码器不可用（离线/模型未缓存）"}
     return mem.search_text_by_image(image_path=request.image_path, top_k=request.top_k)
 
 
@@ -1147,14 +1171,19 @@ async def traverse_graph(
 async def get_memory_by_id(memory_id: str):
     """Get a single memory by ID."""
     mem = get_memory()
-    result = mem.get_memory(memory_id) if hasattr(mem, 'get_memory') else None
+    result = None
+    try:
+        result = mem.get_memory(memory_id) if hasattr(mem, 'get_memory') else None
+    except Exception:
+        result = None
     if result is None:
         try:
             result = mem._adapter.get_memory(memory_id)
         except Exception:
             pass
     if result is None:
-        raise HTTPException(status_code=404, detail="Memory not found")
+        # 聚合池记忆（mem_vid_*/mem_wms_* 等）不在引擎库时给出明确 404 提示
+        raise HTTPException(status_code=404, detail="Memory not found (pool-only ids may not be fetchable here)")
     return result
 
 
@@ -1162,9 +1191,24 @@ async def get_memory_by_id(memory_id: str):
 async def delete_memory(memory_id: str):
     """Soft-delete a memory."""
     mem = get_memory()
+    deleted = False
     if hasattr(mem, 'delete_memory'):
-        return {"deleted": mem.delete_memory(memory_id), "memory_id": memory_id}
-    raise HTTPException(status_code=501, detail="delete_memory not implemented")
+        deleted = mem.delete_memory(memory_id)
+    # 修复(2026-08-14): 删除需三方同步——引擎软删 + 聚合池移除 + BM25 索引移除，
+    # 否则已删记忆仍会经聚合/BM25 通道被检索到（隐私泄漏）
+    try:
+        aggr = get_aggregator()
+        if hasattr(aggr, "_remove_from_pool"):
+            aggr._remove_from_pool(memory_id)
+    except Exception:
+        pass
+    try:
+        hr = getattr(mem, "_hybrid_retriever", None)
+        if hr is not None and getattr(hr, "_bm25", None) is not None:
+            hr._bm25.remove_document(memory_id)
+    except Exception:
+        pass
+    return {"deleted": deleted, "memory_id": memory_id}
 
 
 @app.get("/memories/{memory_id}/versions")
@@ -1619,7 +1663,8 @@ async def agent_memory_export(format: str = Query("readable", pattern="^(readabl
             content = aggr.export_readable()
             return PlainTextResponse(content, media_type="text/plain; charset=utf-8")
         else:
-            return JSONResponse({"memories": [vars(dv) for dv in aggr._pool.values()]})
+            # B4 修复: vars(dv) 含 set 等不可序列化属性 → 用 to_dict(full=True)
+            return JSONResponse({"memories": [dv.to_dict(full=True) for dv in aggr._pool.values()]})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1703,7 +1748,7 @@ async def agent_bridge_extract(
 async def audit_memory_trail(memory_id: str):
     """查看某条记忆的完整审计轨迹。"""
     mem = get_memory()
-    trail = mem.storage.get_audit_trail(memory_id)
+    trail = mem.get_audit_trail(memory_id)
     return {"memory_id": memory_id, "audit_trail": trail, "total_entries": len(trail)}
 
 
@@ -1715,7 +1760,7 @@ async def audit_agent_replay(
 ):
     """回放某Agent 在时间段内的所有操作。"""
     mem = get_memory()
-    session = mem.storage.replay_agent_session(agent_id, start_time, end_time)
+    session = mem.replay_session(agent_id, start_time, end_time)
     return {
         "agent_id": agent_id,
         "time_range": {"start": start_time, "end": end_time},
@@ -1728,7 +1773,7 @@ async def audit_agent_replay(
 async def audit_integrity():
     """审计链完整性验证报告。"""
     mem = get_memory()
-    result = mem.storage.verify_audit_integrity()
+    result = mem.verify_integrity()
     return result
 
 
@@ -1739,7 +1784,7 @@ async def audit_summary(
 ):
     """审计摘要：各操作计数、活跃Agent、峰值时段。"""
     mem = get_memory()
-    result = mem.storage.get_audit_summary(start_time, end_time)
+    result = mem.audit_summary(start_time, end_time)
     return result
 
 
@@ -1753,7 +1798,7 @@ async def audit_timeline(
     # 使用 replay_agent_session 或直接查 audit_log
     results = []
     if agent_id:
-        session = mem.storage.replay_agent_session(agent_id)
+        session = mem.replay_session(agent_id)
         results = session[-limit:]
     return {"agent_id": agent_id, "timeline": results, "total_displayed": len(results)}
 
@@ -2070,7 +2115,10 @@ async def dcsa_metrics():
 # ═══════════════════════════════════════════════════════════════
 # A2A Protocol Endpoints (Google A2A v0.3)
 # ═══════════════════════════════════════════════════════════════
-# 全局 A2A 实例（惰性初始化）_a2a_task_manager = None
+# 全局 A2A 实例（惰性初始化）——修复(2026-08-14): 原初始化语句被注释吞掉
+# （`# 全局 A2A 实例（惰性初始化）_a2a_task_manager = None`），
+# 导致 _get_a2a_task_manager() 首次访问 NameError → dispatch/tasks 等端点 500。
+_a2a_task_manager = None
 _a2a_capability_registry = None
 _a2a_protocol = None
 
@@ -3048,6 +3096,75 @@ try:
     logger.info("GraphQL router mounted at /graphql")
 except Exception as _gql_err:  # pragma: no cover — 缺依赖时仅降级不阻断
     logger.warning("GraphQL router not mounted: %s", _gql_err)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DSH 结构层（structure）— DSH 结构框架原生承载于 Trinity（FUSION F5/F6）
+# 读写端点：DSH 会话事件流（可回放轨迹）、会话清单、目标、结构统计。
+# 数据由 @deepseek-ai/dsh-trinity 插件的 session/event 订阅自动写入，
+# 或经 POST /structure/* 外部写入；存储统一走 trinity/structure_store.py
+# （worker / API / GraphQL 三方共用同一实现，无 stdout 副作用）。
+# ═══════════════════════════════════════════════════════════════════════════
+try:
+    from trinity.structure_store import (
+        structure_stats as _api_structure_stats,
+        structure_sessions as _api_structure_sessions,
+        structure_query as _api_structure_query,
+        structure_sync as _api_structure_sync,
+        goal_upsert as _api_goal_upsert,
+        goal_list as _api_goal_list,
+        schedule_upsert as _api_schedule_upsert,
+        schedule_list as _api_schedule_list,
+    )
+
+    @app.get("/structure/stats", tags=["Structure"])
+    def structure_stats():
+        return _api_structure_stats()
+
+    @app.get("/structure/sessions", tags=["Structure"])
+    def structure_sessions(limit: int = 200):
+        return _api_structure_sessions()
+
+    @app.get("/structure/events", tags=["Structure"])
+    def structure_events(
+        session_id: str = "", type: str = "", agent_id: str = "",
+        limit: int = 200,
+    ):
+        """查询 DSH 会话事件流（可回放轨迹）。"""
+        return _api_structure_query({
+            "session_id": session_id or None,
+            "type": type or None,
+            "agent_id": agent_id or None,
+            "limit": limit,
+        })
+
+    @app.get("/structure/goals", tags=["Structure"])
+    def structure_goals(limit: int = 100):
+        return _api_goal_list()
+
+    @app.get("/structure/schedules", tags=["Structure"])
+    def structure_schedules(limit: int = 100):
+        return _api_schedule_list()
+
+    @app.post("/structure/sync", tags=["Structure"])
+    def structure_sync(body: dict):
+        """写入 DSH 结构（会话 + 事件流 + todos + headers）——与 worker
+        structure_sync 同语义，供外部系统/脚本直接同步结构。"""
+        return _api_structure_sync(body)
+
+    @app.post("/structure/goals", tags=["Structure"])
+    def structure_goal_upsert(body: dict):
+        """写入/更新一个结构 goal。"""
+        return _api_goal_upsert(body)
+
+    @app.post("/structure/schedules", tags=["Structure"])
+    def structure_schedule_upsert(body: dict):
+        """写入/更新一个结构 schedule。"""
+        return _api_schedule_upsert(body)
+
+    logger.info("Structure endpoints mounted at /structure/* (DSH structure layer)")
+except Exception as _struct_err:  # pragma: no cover
+    logger.warning("Structure endpoints not mounted: %s", _struct_err)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

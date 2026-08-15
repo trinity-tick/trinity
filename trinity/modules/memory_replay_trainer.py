@@ -227,9 +227,10 @@ class MemoryReplayTrainer:
         """
         path = db_path or self._db_path
         if not path:
-            # Try default Trinity path
-            default = Path(__file__).resolve().parent.parent.parent / "trinity_store.db"
-            if default.exists():
+            # 统一权威大库（2026-08-15，双库修复；不再回退仓库根小库）
+            from trinity.core.client import _find_trinity_store
+            default = os.path.join(_find_trinity_store(), "trinity_store.db")
+            if os.path.exists(default):
                 path = str(default)
             else:
                 raise ValueError(

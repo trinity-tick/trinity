@@ -206,6 +206,8 @@ def _register_memory_write(mcp: FastMCP) -> None:
         """
         async with _trace_span("mcp.memory_write", tool="memory_write", content_len=len(content)):
             engine = _get_engine()
+            # 异步化：核心写入 + SHA-256 审计同步完成（即时返回），
+            # 语义关联 / 实体提取 / 主动推送交由后台线程（消除嵌入引擎冷启动阻塞写入）。
             result = engine.ingest(
                 content=content,
                 role=metadata.get("role", "user") if metadata else "user",
@@ -213,7 +215,19 @@ def _register_memory_write(mcp: FastMCP) -> None:
                 tags=tags or [],
                 category=category,
                 metadata=metadata,
+                postprocess=False,
             )
+
+            memory_id = result.get("memory_id", "")
+            if memory_id:
+                import threading
+                threading.Thread(
+                    target=engine._postprocess_memory,
+                    args=(memory_id, content),
+                    kwargs={"result": result},
+                    daemon=True,
+                ).start()
+                logger.debug("memory_write 后台加工已调度: memory_id=%s", memory_id)
 
             # v6.96.0: Dual-write to shared MemoryAggregator
             try:
@@ -260,11 +274,9 @@ def _register_memory_update(mcp: FastMCP) -> None:
         Raises:
             ValueError: If memory_id not found.
         """
-        # Delegate to engine's internal update mechanism
-        from trinity.modules.second_brain.engine import SecondBrainV636
-        engine = SecondBrainV636()
-        result = engine.update_memory(memory_id=memory_id, new_content=new_content)
-        return result
+        # Delegate to the shared engine (Trinity core client, adapter-backed).
+        engine = _get_engine()
+        return engine.update_memory(memory_id=memory_id, new_content=new_content)
 
 
 # ---------------------------------------------------------------------------
@@ -289,10 +301,16 @@ def _register_memory_delete(mcp: FastMCP) -> None:
         Raises:
             ValueError: If memory_id not found.
         """
-        from trinity.modules.second_brain.engine import SecondBrainV636
-        engine = SecondBrainV636()
-        result = engine.delete_memory(memory_id=memory_id)
-        return result
+        engine = _get_engine()
+        deleted = engine.delete_memory(memory_id=memory_id)
+        if not deleted:
+            raise ValueError(f"Memory not found: {memory_id}")
+        return {
+            "memory_id": memory_id,
+            "deleted": True,
+            "deleted_version": f"{memory_id}_del",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -317,10 +335,16 @@ def _register_audit_query(mcp: FastMCP) -> None:
         Raises:
             ValueError: If memory_id not found.
         """
-        from trinity.modules.second_brain.engine import SecondBrainV636
-        engine = SecondBrainV636()
-        result = engine.audit_memory(memory_id=memory_id)
-        return result
+        engine = _get_engine()
+        chain = engine.get_version_chain(memory_id=memory_id)
+        if not chain:
+            raise ValueError(f"Memory not found: {memory_id}")
+        return {
+            "memory_id": memory_id,
+            "version_chain": chain,
+            "total_versions": len(chain),
+            "current_status": chain[-1].get("operation", ""),
+        }
 
 
 # ---------------------------------------------------------------------------
