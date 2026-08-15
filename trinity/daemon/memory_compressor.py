@@ -360,7 +360,7 @@ class MemoryCompressor:
             return None
 
     def _archive_originals(self, memory_ids: List[str]) -> int:
-        """将原始记忆标记为 archived 状态。"""
+        """将原始记忆标记为 archived 状态（存储无关：adapter 提供 archive_memories）。"""
         if not self.pg_adapter:
             return 0
 
@@ -371,16 +371,9 @@ class MemoryCompressor:
                     memory_id=mem_id,
                     tags=["archived", "compressed"],
                 )
-                # Also update status via raw query since update_memory may not support 'status'
-                with self.pg_adapter._get_conn() as conn:
-                    with conn.cursor() as cur:
-                        cur.execute(
-                            "UPDATE memories SET status = 'archived', "
-                            "updated_at = NOW() WHERE memory_id::text = %s",
-                            (mem_id,),
-                        )
-                        conn.commit()
-                        count += 1
+                # 状态翻转走 adapter 统一接口（SQLite/PostgreSQL 各自实现），
+                # 不再依赖 PG 专属裸 SQL。
+                count += self.pg_adapter.archive_memories([mem_id]) or 0
             except Exception as e:
                 logger.error("Failed to archive memory %s: %s", mem_id, e)
 

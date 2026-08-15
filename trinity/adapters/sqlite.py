@@ -8,6 +8,7 @@ import json
 import os
 import re
 import sqlite3
+import threading
 import time
 import uuid
 from datetime import datetime, timezone
@@ -37,6 +38,13 @@ class SQLiteAdapter(StorageAdapter):
         # ── 批量写入缓冲区 ──────────────────────────────────────────
         self._batch_buffer: List[Dict[str, Any]] = []
         self._batch_last_flush = time.time()
+
+        # ── 写锁（2026-08-15，根治 mcp-stdio 持锁）──────────────────
+        # SQLite 单连接同一时刻只能有一个写事务；ingest 主线程与
+        # _postprocess_memory 后台线程并发写同一 conn，交错会导致
+        # 未提交写事务悬挂、永久占库锁（database is locked）。
+        # RLock：同一线程可重入（嵌套写方法），跨线程 serialize。
+        self._write_lock = threading.RLock()
 
     # ── 连接 / 断开 ──────────────────────────────────────────────────
 
@@ -742,28 +750,30 @@ class SQLiteAdapter(StorageAdapter):
         Returns:
             每条记录的写入结果列表。
         """
-        results = []
-        for rec in records:
-            content = rec.get("content", "")
-            result = self.store_memory(
-                content=content,
-                persona_id=rec.get("persona_id", "default"),
-                session_id=rec.get("session_id"),
-                tenant_id=rec.get("tenant_id", "default"),
-                agent_id=rec.get("agent_id", "default"),
-                role=rec.get("role", "user"),
-                importance=rec.get("importance", 0.5),
-                tags=rec.get("tags"),
-                category=rec.get("category", "general"),
-                ttl_seconds=rec.get("ttl_seconds"),
-                modality=rec.get("modality", "text"),
-                metadata=rec.get("metadata"),
-            )
-            results.append(result)
+        with self._write_lock:
 
-        # 检查是否需要 flush
-        self._maybe_flush()
-        return results
+            results = []
+            for rec in records:
+                content = rec.get("content", "")
+                result = self.store_memory(
+                    content=content,
+                    persona_id=rec.get("persona_id", "default"),
+                    session_id=rec.get("session_id"),
+                    tenant_id=rec.get("tenant_id", "default"),
+                    agent_id=rec.get("agent_id", "default"),
+                    role=rec.get("role", "user"),
+                    importance=rec.get("importance", 0.5),
+                    tags=rec.get("tags"),
+                    category=rec.get("category", "general"),
+                    ttl_seconds=rec.get("ttl_seconds"),
+                    modality=rec.get("modality", "text"),
+                    metadata=rec.get("metadata"),
+                )
+                results.append(result)
+
+            # 检查是否需要 flush
+            self._maybe_flush()
+            return results
 
     def _maybe_flush(self) -> None:
         """如果达到批量条件则 flush。同时确保每次写入后立即 commit。"""
@@ -812,102 +822,104 @@ class SQLiteAdapter(StorageAdapter):
         metadata: Optional[Dict[str, Any]] = None,
         source_uri: Optional[str] = None,
     ) -> Dict[str, Any]:
-        conn = self._conn
-        if not conn:
-            raise RuntimeError("Not connected. Call connect() first.")
+        with self._write_lock:
 
-        memory_id = f"mem_{uuid.uuid4().hex[:16]}"
-        version_id = f"ver_{uuid.uuid4().hex[:12]}"
-        if not session_id:
-            session_id = f"sess_{uuid.uuid4().hex[:12]}"
-        tags_json = json.dumps(tags or [])
-        now = datetime.now(timezone.utc).isoformat()
+            conn = self._conn
+            if not conn:
+                raise RuntimeError("Not connected. Call connect() first.")
 
-        # ── PII 检测与脱敏 ──────────────────────────────────────────
-        pii_info = None
-        stored_content = content
-        if auto_redact_pii:
-            result = self._detect_pii(content)
-            stored_content = result["redacted"]
-            pii_found = {k: v for k, v in result["found"].items() if v}
-            if pii_found:
-                pii_info = pii_found
+            memory_id = f"mem_{uuid.uuid4().hex[:16]}"
+            version_id = f"ver_{uuid.uuid4().hex[:12]}"
+            if not session_id:
+                session_id = f"sess_{uuid.uuid4().hex[:12]}"
+            tags_json = json.dumps(tags or [])
+            now = datetime.now(timezone.utc).isoformat()
 
-        sha256_hash = self._compute_sha256(stored_content)
-        tokenized = self._tokenize_content_for_fts(stored_content)
+            # ── PII 检测与脱敏 ──────────────────────────────────────────
+            pii_info = None
+            stored_content = content
+            if auto_redact_pii:
+                result = self._detect_pii(content)
+                stored_content = result["redacted"]
+                pii_found = {k: v for k, v in result["found"].items() if v}
+                if pii_found:
+                    pii_info = pii_found
 
-        self._batch_buffer.append({
-            "memory_id": memory_id,
-            "session_id": session_id,
-            "persona_id": persona_id,
-            "tenant_id": tenant_id,
-            "agent_id": agent_id,
-            "app_id": app_id,
-            "content": stored_content,
-            "role": role,
-            "importance": importance,
-            "tags_json": tags_json,
-            "category": category,
-            "memory_layer": memory_layer,
-            "sha256_hash": sha256_hash,
-            "now": now,
-            "ttl_seconds": ttl_seconds,
-            "modality": modality,
-            "metadata_json": json.dumps(metadata or {}, ensure_ascii=False),
-            "source_uri": source_uri,
-        })
+            sha256_hash = self._compute_sha256(stored_content)
+            tokenized = self._tokenize_content_for_fts(stored_content)
 
-        conn.execute("""
-            INSERT INTO memories
-            (memory_id, session_id, persona_id, tenant_id, agent_id, app_id, content,
-             tokenized_content, role,
-             importance, tags, category, memory_layer, sha256_hash, status, version,
-             ttl_seconds, last_accessed_at, access_count, importance_score,
-             content_hash, conflict_group_id, is_resolved,
-             modality, metadata, source_uri,
-             created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 1, ?, ?, 0, 0.0,
-                    ?, NULL, 0, ?, ?, ?, ?, ?)
-        """, (memory_id, session_id, persona_id, tenant_id, agent_id, app_id, stored_content,
-              tokenized, role,
-              importance, tags_json, category, memory_layer, sha256_hash, ttl_seconds, now,
-              sha256_hash, modality, json.dumps(metadata or {}, ensure_ascii=False),
-              source_uri, now, now))
-
-        conn.execute("""
-            INSERT INTO memory_versions
-            (version_id, memory_id, content, sha256_hash, operation, created_at)
-            VALUES (?, ?, ?, ?, 'CREATE', ?)
-        """, (version_id, memory_id, stored_content, sha256_hash, now))
-
-        # ── 审计日志（只写一次） ────────────────────────────────────
-        self._write_audit_log(
-            action="STORE_MEMORY",
-            memory_id=memory_id,
-            persona_id=persona_id,
-            content_hash=sha256_hash,
-            metadata={
-                "has_pii": pii_info is not None,
-                "pii_types": list(pii_info.keys()) if pii_info else [],
-                "auto_redacted": auto_redact_pii,
+            self._batch_buffer.append({
+                "memory_id": memory_id,
                 "session_id": session_id,
-            },
-        )
+                "persona_id": persona_id,
+                "tenant_id": tenant_id,
+                "agent_id": agent_id,
+                "app_id": app_id,
+                "content": stored_content,
+                "role": role,
+                "importance": importance,
+                "tags_json": tags_json,
+                "category": category,
+                "memory_layer": memory_layer,
+                "sha256_hash": sha256_hash,
+                "now": now,
+                "ttl_seconds": ttl_seconds,
+                "modality": modality,
+                "metadata_json": json.dumps(metadata or {}, ensure_ascii=False),
+                "source_uri": source_uri,
+            })
 
-        # 批量提交管理：加入缓冲区，达到条件再 commit
-        self._maybe_flush()
+            conn.execute("""
+                INSERT INTO memories
+                (memory_id, session_id, persona_id, tenant_id, agent_id, app_id, content,
+                 tokenized_content, role,
+                 importance, tags, category, memory_layer, sha256_hash, status, version,
+                 ttl_seconds, last_accessed_at, access_count, importance_score,
+                 content_hash, conflict_group_id, is_resolved,
+                 modality, metadata, source_uri,
+                 created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 1, ?, ?, 0, 0.0,
+                        ?, NULL, 0, ?, ?, ?, ?, ?)
+            """, (memory_id, session_id, persona_id, tenant_id, agent_id, app_id, stored_content,
+                  tokenized, role,
+                  importance, tags_json, category, memory_layer, sha256_hash, ttl_seconds, now,
+                  sha256_hash, modality, json.dumps(metadata or {}, ensure_ascii=False),
+                  source_uri, now, now))
 
-        return {
-            "memory_id": memory_id,
-            "version_id": version_id,
-            "sha256_hash": sha256_hash,
-            "timestamp": now,
-            "persona_id": persona_id,
-            "session_id": session_id,
-            "app_id": app_id,
-            "auto_redacted": auto_redact_pii and pii_info is not None,
-            "pii_redacted_types": list(pii_info.keys()) if pii_info else [],
-        }
+            conn.execute("""
+                INSERT INTO memory_versions
+                (version_id, memory_id, content, sha256_hash, operation, created_at)
+                VALUES (?, ?, ?, ?, 'CREATE', ?)
+            """, (version_id, memory_id, stored_content, sha256_hash, now))
+
+            # ── 审计日志（只写一次） ────────────────────────────────────
+            self._write_audit_log(
+                action="STORE_MEMORY",
+                memory_id=memory_id,
+                persona_id=persona_id,
+                content_hash=sha256_hash,
+                metadata={
+                    "has_pii": pii_info is not None,
+                    "pii_types": list(pii_info.keys()) if pii_info else [],
+                    "auto_redacted": auto_redact_pii,
+                    "session_id": session_id,
+                },
+            )
+
+            # 批量提交管理：加入缓冲区，达到条件再 commit
+            self._maybe_flush()
+
+            return {
+                "memory_id": memory_id,
+                "version_id": version_id,
+                "sha256_hash": sha256_hash,
+                "timestamp": now,
+                "persona_id": persona_id,
+                "session_id": session_id,
+                "app_id": app_id,
+                "auto_redacted": auto_redact_pii and pii_info is not None,
+                "pii_redacted_types": list(pii_info.keys()) if pii_info else [],
+            }
 
     # ── 搜索 ─────────────────────────────────────────────────────────
 
@@ -1176,40 +1188,42 @@ class SQLiteAdapter(StorageAdapter):
         return [dict(row) for row in cursor.fetchall()]
 
     def delete_memory(self, memory_id: str) -> bool:
-        conn = self._conn
-        if not conn:
-            return False
+        with self._write_lock:
 
-        cursor = conn.execute(
-            "SELECT memory_id, persona_id, sha256_hash FROM memories WHERE memory_id = ?",
-            (memory_id,)
-        )
-        row = cursor.fetchone()
-        if not row:
-            return False
+            conn = self._conn
+            if not conn:
+                return False
 
-        persona_id = row["persona_id"]
-        content_hash = row["sha256_hash"]
+            cursor = conn.execute(
+                "SELECT memory_id, persona_id, sha256_hash FROM memories WHERE memory_id = ?",
+                (memory_id,)
+            )
+            row = cursor.fetchone()
+            if not row:
+                return False
 
-        conn.execute(
-            "UPDATE memories SET status = 'deleted', updated_at = datetime('now') WHERE memory_id = ?",
-            (memory_id,)
-        )
-        conn.execute("""
-            INSERT INTO memory_versions (version_id, memory_id, content, sha256_hash, operation, created_at)
-            SELECT ? || '_del', memory_id, content, sha256_hash, 'DELETE', datetime('now')
-            FROM memories WHERE memory_id = ?
-        """, (memory_id, memory_id))
+            persona_id = row["persona_id"]
+            content_hash = row["sha256_hash"]
 
-        # ── 审计日志 ────────────────────────────────────────────────
-        self._write_audit_log(
-            action="DELETE_MEMORY",
-            memory_id=memory_id,
-            persona_id=persona_id,
-            content_hash=content_hash,
-        )
-        conn.commit()
-        return True
+            conn.execute(
+                "UPDATE memories SET status = 'deleted', updated_at = datetime('now') WHERE memory_id = ?",
+                (memory_id,)
+            )
+            conn.execute("""
+                INSERT INTO memory_versions (version_id, memory_id, content, sha256_hash, operation, created_at)
+                SELECT ? || '_del', memory_id, content, sha256_hash, 'DELETE', datetime('now')
+                FROM memories WHERE memory_id = ?
+            """, (memory_id, memory_id))
+
+            # ── 审计日志 ────────────────────────────────────────────────
+            self._write_audit_log(
+                action="DELETE_MEMORY",
+                memory_id=memory_id,
+                persona_id=persona_id,
+                content_hash=content_hash,
+            )
+            conn.commit()
+            return True
 
     def update_memory(
         self,
@@ -1229,69 +1243,89 @@ class SQLiteAdapter(StorageAdapter):
         Returns:
             The updated memory row as a dict, or None if memory_id not found.
         """
-        conn = self._conn
-        if not conn:
-            return None
+        with self._write_lock:
 
-        cursor = conn.execute(
-            "SELECT * FROM memories WHERE memory_id = ?", (memory_id,)
-        )
-        row = cursor.fetchone()
-        if not row:
-            return None
-        current = dict(row)
+            conn = self._conn
+            if not conn:
+                return None
 
-        now = datetime.now(timezone.utc).isoformat()
-        version_id = f"ver_{uuid.uuid4().hex[:12]}"
+            cursor = conn.execute(
+                "SELECT * FROM memories WHERE memory_id = ?", (memory_id,)
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            current = dict(row)
 
-        new_content = content if content is not None else current.get("content", "")
-        new_importance = (
-            importance if importance is not None
-            else float(current.get("importance", 0.5))
-        )
-        current_tags = current.get("tags") or "[]"
-        new_tags = (
-            tags if tags is not None
-            else (json.loads(current_tags) if isinstance(current_tags, str) else current_tags)
-        )
-        new_category = (
-            category if category is not None
-            else current.get("category", "general")
-        )
+            now = datetime.now(timezone.utc).isoformat()
+            version_id = f"ver_{uuid.uuid4().hex[:12]}"
 
-        sha256_hash = self._compute_sha256(new_content)
-        tokenized = self._tokenize_content_for_fts(new_content)
+            new_content = content if content is not None else current.get("content", "")
+            new_importance = (
+                importance if importance is not None
+                else float(current.get("importance", 0.5))
+            )
+            current_tags = current.get("tags") or "[]"
+            new_tags = (
+                tags if tags is not None
+                else (json.loads(current_tags) if isinstance(current_tags, str) else current_tags)
+            )
+            new_category = (
+                category if category is not None
+                else current.get("category", "general")
+            )
 
-        conn.execute("""
-            UPDATE memories
-            SET content = ?, tokenized_content = ?, importance = ?, tags = ?,
-                category = ?, sha256_hash = ?, content_hash = ?,
-                version = version + 1, updated_at = ?
-            WHERE memory_id = ?
-        """, (new_content, tokenized, new_importance,
-              json.dumps(new_tags, ensure_ascii=False),
-              new_category, sha256_hash, sha256_hash, now, memory_id))
+            sha256_hash = self._compute_sha256(new_content)
+            tokenized = self._tokenize_content_for_fts(new_content)
 
-        conn.execute("""
-            INSERT INTO memory_versions
-            (version_id, memory_id, content, sha256_hash, operation, created_at)
-            VALUES (?, ?, ?, ?, 'UPDATE', ?)
-        """, (version_id, memory_id, new_content, sha256_hash, now))
+            conn.execute("""
+                UPDATE memories
+                SET content = ?, tokenized_content = ?, importance = ?, tags = ?,
+                    category = ?, sha256_hash = ?, content_hash = ?,
+                    version = version + 1, updated_at = ?
+                WHERE memory_id = ?
+            """, (new_content, tokenized, new_importance,
+                  json.dumps(new_tags, ensure_ascii=False),
+                  new_category, sha256_hash, sha256_hash, now, memory_id))
 
-        self._write_audit_log(
-            action="UPDATE_MEMORY",
-            memory_id=memory_id,
-            persona_id=current.get("persona_id"),
-            content_hash=sha256_hash,
-            metadata={"old_version": current.get("version", 1)},
-        )
-        conn.commit()
+            conn.execute("""
+                INSERT INTO memory_versions
+                (version_id, memory_id, content, sha256_hash, operation, created_at)
+                VALUES (?, ?, ?, ?, 'UPDATE', ?)
+            """, (version_id, memory_id, new_content, sha256_hash, now))
 
-        cursor = conn.execute(
-            "SELECT * FROM memories WHERE memory_id = ?", (memory_id,)
-        )
-        updated = cursor.fetchone()
-        return dict(updated) if updated else None
+            self._write_audit_log(
+                action="UPDATE_MEMORY",
+                memory_id=memory_id,
+                persona_id=current.get("persona_id"),
+                content_hash=sha256_hash,
+                metadata={"old_version": current.get("version", 1)},
+            )
+            conn.commit()
+
+            cursor = conn.execute(
+                "SELECT * FROM memories WHERE memory_id = ?", (memory_id,)
+            )
+            updated = cursor.fetchone()
+            return dict(updated) if updated else None
+
+    def archive_memories(self, memory_ids: List[str]) -> int:
+        """批量将记忆标记为 archived（衰减压缩回写；与 PostgreSQLAdapter 同接口）。"""
+        if not memory_ids:
+            return 0
+        with self._write_lock:
+            conn = self._conn
+            if not conn:
+                return 0
+            now = datetime.now(timezone.utc).isoformat()
+            placeholders = ",".join("?" * len(memory_ids))
+            cur = conn.execute(
+                f"UPDATE memories SET status = 'archived', updated_at = ? "
+                f"WHERE memory_id IN ({placeholders})",
+                [now] + list(memory_ids),
+            )
+            conn.commit()
+            return cur.rowcount
 
     def get_version_chain(self, memory_id: str) -> List[Dict[str, Any]]:
         conn = self._conn
@@ -1338,20 +1372,22 @@ class SQLiteAdapter(StorageAdapter):
         Returns:
             是否成功更新。
         """
-        conn = self._conn
-        if not conn:
-            return False
+        with self._write_lock:
 
-        now = datetime.now(timezone.utc).isoformat()
-        cursor = conn.execute("""
-            UPDATE memories
-            SET last_accessed_at = ?,
-                access_count = access_count + 1,
-                updated_at = ?
-            WHERE memory_id = ?
-        """, (now, now, memory_id))
-        conn.commit()
-        return cursor.rowcount > 0
+            conn = self._conn
+            if not conn:
+                return False
+
+            now = datetime.now(timezone.utc).isoformat()
+            cursor = conn.execute("""
+                UPDATE memories
+                SET last_accessed_at = ?,
+                    access_count = access_count + 1,
+                    updated_at = ?
+                WHERE memory_id = ?
+            """, (now, now, memory_id))
+            conn.commit()
+            return cursor.rowcount > 0
 
     def _touch_batch(self, memory_ids: List[str]) -> None:
         """批量更新搜索命中的记忆访问时间（内部方法，不抛异常）。"""
@@ -1569,42 +1605,44 @@ class SQLiteAdapter(StorageAdapter):
         Returns:
             操作结果，含 resolved_count 与 discarded_ids。
         """
-        conn = self._conn
-        if not conn:
-            return {"error": "Not connected", "resolved_count": 0}
+        with self._write_lock:
 
-        now = datetime.now(timezone.utc).isoformat()
+            conn = self._conn
+            if not conn:
+                return {"error": "Not connected", "resolved_count": 0}
 
-        # 标记保留版本为已解决
-        conn.execute("""
-            UPDATE memories SET is_resolved = 1, updated_at = ?
-            WHERE memory_id = ? AND conflict_group_id = ?
-        """, (now, keep_memory_id, conflict_group_id))
+            now = datetime.now(timezone.utc).isoformat()
 
-        # 软删除同组其他活跃版本
-        cursor = conn.execute("""
-            SELECT memory_id FROM memories
-            WHERE conflict_group_id = ?
-              AND memory_id != ?
-              AND status = 'active'
-        """, (conflict_group_id, keep_memory_id))
-        discard_ids = [r["memory_id"] for r in cursor.fetchall()]
+            # 标记保留版本为已解决
+            conn.execute("""
+                UPDATE memories SET is_resolved = 1, updated_at = ?
+                WHERE memory_id = ? AND conflict_group_id = ?
+            """, (now, keep_memory_id, conflict_group_id))
 
-        if discard_ids:
-            placeholders = ",".join("?" for _ in discard_ids)
-            conn.execute(f"""
-                UPDATE memories SET status = 'expired', is_resolved = 1, updated_at = ?
-                WHERE memory_id IN ({placeholders})
-            """, [now] + discard_ids)
+            # 软删除同组其他活跃版本
+            cursor = conn.execute("""
+                SELECT memory_id FROM memories
+                WHERE conflict_group_id = ?
+                  AND memory_id != ?
+                  AND status = 'active'
+            """, (conflict_group_id, keep_memory_id))
+            discard_ids = [r["memory_id"] for r in cursor.fetchall()]
 
-        conn.commit()
+            if discard_ids:
+                placeholders = ",".join("?" for _ in discard_ids)
+                conn.execute(f"""
+                    UPDATE memories SET status = 'expired', is_resolved = 1, updated_at = ?
+                    WHERE memory_id IN ({placeholders})
+                """, [now] + discard_ids)
 
-        return {
-            "conflict_group_id": conflict_group_id,
-            "kept_memory_id": keep_memory_id,
-            "discarded_ids": discard_ids,
-            "resolved_count": len(discard_ids),
-        }
+            conn.commit()
+
+            return {
+                "conflict_group_id": conflict_group_id,
+                "kept_memory_id": keep_memory_id,
+                "discarded_ids": discard_ids,
+                "resolved_count": len(discard_ids),
+            }
 
     def dedup_stats(self) -> Dict[str, Any]:
         """返回去重统计信息。
@@ -1659,17 +1697,19 @@ class SQLiteAdapter(StorageAdapter):
         Returns:
             操作结果。
         """
-        conn = self._conn
-        if not conn:
-            return {"error": "Not connected"}
-        now = datetime.now(timezone.utc).isoformat()
-        conn.execute("""
-            INSERT INTO agent_weights (agent_id, weight, updated_at)
-            VALUES (?, ?, ?)
-            ON CONFLICT(agent_id) DO UPDATE SET weight = excluded.weight, updated_at = excluded.updated_at
-        """, (agent_id, weight, now))
-        conn.commit()
-        return {"agent_id": agent_id, "weight": weight, "updated_at": now}
+        with self._write_lock:
+
+            conn = self._conn
+            if not conn:
+                return {"error": "Not connected"}
+            now = datetime.now(timezone.utc).isoformat()
+            conn.execute("""
+                INSERT INTO agent_weights (agent_id, weight, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(agent_id) DO UPDATE SET weight = excluded.weight, updated_at = excluded.updated_at
+            """, (agent_id, weight, now))
+            conn.commit()
+            return {"agent_id": agent_id, "weight": weight, "updated_at": now}
 
     def get_agent_weights(self) -> Dict[str, float]:
         """获取所有 Agent 权重配置。
@@ -1715,25 +1755,27 @@ class SQLiteAdapter(StorageAdapter):
         Returns:
             创建结果。
         """
-        conn = self._conn
-        if not conn:
-            return {"error": "Not connected"}
-        if source_id == target_id:
-            return {"error": "Cannot link memory with itself"}
-        link_id = hashlib.sha256(
-            f"{source_id}:{target_id}:{link_type}".encode()
-        ).hexdigest()[:32]
-        now = datetime.now(timezone.utc).isoformat()
-        conn.execute("""
-            INSERT OR IGNORE INTO memory_links
-                (id, source_id, target_id, link_type, strength, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (link_id, source_id, target_id, link_type, strength, now))
-        conn.commit()
-        return {
-            "id": link_id, "source_id": source_id, "target_id": target_id,
-            "link_type": link_type, "strength": strength, "created_at": now,
-        }
+        with self._write_lock:
+
+            conn = self._conn
+            if not conn:
+                return {"error": "Not connected"}
+            if source_id == target_id:
+                return {"error": "Cannot link memory with itself"}
+            link_id = hashlib.sha256(
+                f"{source_id}:{target_id}:{link_type}".encode()
+            ).hexdigest()[:32]
+            now = datetime.now(timezone.utc).isoformat()
+            conn.execute("""
+                INSERT OR IGNORE INTO memory_links
+                    (id, source_id, target_id, link_type, strength, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (link_id, source_id, target_id, link_type, strength, now))
+            conn.commit()
+            return {
+                "id": link_id, "source_id": source_id, "target_id": target_id,
+                "link_type": link_type, "strength": strength, "created_at": now,
+            }
 
     def get_linked_memories(self, memory_id: str,
                             min_strength: float = 0.0) -> List[Dict[str, Any]]:
@@ -1879,33 +1921,35 @@ class SQLiteAdapter(StorageAdapter):
         Returns:
             实体字典。
         """
-        conn = self._conn
-        if not conn:
-            return {"error": "Not connected"}
-        props_json = json.dumps(properties or {}, ensure_ascii=False)
-        now = datetime.now(timezone.utc).isoformat()
+        with self._write_lock:
 
-        # 按 name + type 查找已有（entities 表主键为 entity_id）
-        cursor = conn.execute(
-            "SELECT entity_id FROM entities WHERE name = ? AND type = ?", (name, etype)
-        )
-        row = cursor.fetchone()
-        if row:
-            entity_id = row["entity_id"]
-            conn.execute(
-                "UPDATE entities SET summary = ?, first_seen = ? WHERE entity_id = ?",
-                (props_json, now, entity_id),
+            conn = self._conn
+            if not conn:
+                return {"error": "Not connected"}
+            props_json = json.dumps(properties or {}, ensure_ascii=False)
+            now = datetime.now(timezone.utc).isoformat()
+
+            # 按 name + type 查找已有（entities 表主键为 entity_id）
+            cursor = conn.execute(
+                "SELECT entity_id FROM entities WHERE name = ? AND type = ?", (name, etype)
             )
-        else:
-            entity_id = f"ent_{uuid.uuid4().hex[:12]}"
-            conn.execute(
-                "INSERT INTO entities (entity_id, name, type, summary, first_seen) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (entity_id, name, etype, props_json, now),
-            )
-        conn.commit()
-        return {"id": entity_id, "name": name, "type": etype,
-                "properties": (properties or {}), "created_at": now}
+            row = cursor.fetchone()
+            if row:
+                entity_id = row["entity_id"]
+                conn.execute(
+                    "UPDATE entities SET summary = ?, first_seen = ? WHERE entity_id = ?",
+                    (props_json, now, entity_id),
+                )
+            else:
+                entity_id = f"ent_{uuid.uuid4().hex[:12]}"
+                conn.execute(
+                    "INSERT INTO entities (entity_id, name, type, summary, first_seen) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (entity_id, name, etype, props_json, now),
+                )
+            conn.commit()
+            return {"id": entity_id, "name": name, "type": etype,
+                    "properties": (properties or {}), "created_at": now}
 
     def get_entity(self, entity_id: str) -> Optional[Dict[str, Any]]:
         """查询实体详情（含关联记忆与关系）。
@@ -1991,25 +2035,27 @@ class SQLiteAdapter(StorageAdapter):
         Returns:
             关系字典。
         """
-        conn = self._conn
-        if not conn:
-            return {"error": "Not connected"}
-        if subject_id == object_id:
-            return {"error": "Cannot create self-referencing relation"}
-        props_json = json.dumps(properties or {}, ensure_ascii=False)
-        now = datetime.now(timezone.utc).isoformat()
-        rel_id = hashlib.sha256(
-            f"{subject_id}:{predicate}:{object_id}".encode()
-        ).hexdigest()[:32]
-        conn.execute("""
-            INSERT OR IGNORE INTO relations
-                (id, subject_id, predicate, object_id, properties, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (rel_id, subject_id, predicate, object_id, props_json, now))
-        conn.commit()
-        return {"id": rel_id, "subject_id": subject_id, "predicate": predicate,
-                "object_id": object_id, "properties": (properties or {}),
-                "created_at": now}
+        with self._write_lock:
+
+            conn = self._conn
+            if not conn:
+                return {"error": "Not connected"}
+            if subject_id == object_id:
+                return {"error": "Cannot create self-referencing relation"}
+            props_json = json.dumps(properties or {}, ensure_ascii=False)
+            now = datetime.now(timezone.utc).isoformat()
+            rel_id = hashlib.sha256(
+                f"{subject_id}:{predicate}:{object_id}".encode()
+            ).hexdigest()[:32]
+            conn.execute("""
+                INSERT OR IGNORE INTO relations
+                    (id, subject_id, predicate, object_id, properties, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (rel_id, subject_id, predicate, object_id, props_json, now))
+            conn.commit()
+            return {"id": rel_id, "subject_id": subject_id, "predicate": predicate,
+                    "object_id": object_id, "properties": (properties or {}),
+                    "created_at": now}
 
     def query_relations(self, subject_id: Optional[str] = None,
                         predicate: Optional[str] = None,

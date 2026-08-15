@@ -110,6 +110,41 @@ def connect_postgresql(
 
 # ── Memory Fetch ──────────────────────────────────────────────────────
 
+def fetch_all_memories_sqlite(adapter: Any, limit: int = 500) -> List[Dict[str, Any]]:
+    """Fetch active memories from the SQLite runtime store（分层用，含 version_count）。"""
+    conn = getattr(adapter, "_conn", None)
+    if conn is None:
+        return []
+    rows = conn.execute("""
+        SELECT m.memory_id, m.session_id, m.persona_id, m.tenant_id,
+               m.content, m.role, m.importance, m.tags, m.category,
+               m.sha256_hash, m.status, m.version, m.created_at, m.updated_at,
+               (SELECT COUNT(*) FROM memory_versions v WHERE v.memory_id = m.memory_id) AS version_count
+        FROM memories m
+        WHERE m.status = 'active'
+        ORDER BY m.created_at ASC
+        LIMIT ?
+    """, (limit,)).fetchall()
+    results = []
+    for row in rows:
+        d = dict(row)
+        for k in ("created_at", "updated_at"):
+            v = d.get(k)
+            if v is not None and hasattr(v, "isoformat"):
+                d[k] = v.isoformat()
+        results.append(d)
+    return results
+
+
+def connect_sqlite(db_path: str) -> Any:
+    """Connect to the SQLite runtime store (权威大库) and return adapter."""
+    from trinity.adapters.sqlite import SQLiteAdapter
+    adapter = SQLiteAdapter(db_path=db_path)
+    adapter.connect()
+    logger.info("Connected to SQLite store: %s", db_path)
+    return adapter
+
+
 def fetch_all_memories(adapter: Any, limit: int = 500) -> List[Dict[str, Any]]:
     """Fetch all active memories from PostgreSQL.
 
@@ -264,6 +299,7 @@ def run_memory_tiers(
     core_threshold: float = 0.55,
     recall_threshold: float = 0.20,
     output_file: str = "",
+    store: str = "pg",
 ) -> Dict[str, Any]:
     """执行完整三层记忆分层守护任务。
 
@@ -295,8 +331,11 @@ def run_memory_tiers(
 
     # ── Step 1: Fetch memories ─────────────────────────────────
     logger.info("=" * 60)
-    logger.info("Step 1/4: Fetching active memories from PostgreSQL ...")
-    memories = fetch_all_memories(adapter, limit=limit)
+    logger.info("Step 1/4: Fetching active memories from %s ...", store)
+    if store == "sqlite":
+        memories = fetch_all_memories_sqlite(adapter, limit=limit)
+    else:
+        memories = fetch_all_memories(adapter, limit=limit)
     stats["total_memories"] = len(memories)
     logger.info("  Fetched %d active memories", len(memories))
 
@@ -507,6 +546,10 @@ def main():
     parser.add_argument("--w-access", type=float, default=0.25,
                         help="Access weight in tier score (default: 0.25)")
     parser.add_argument("--output", default="", help="Save stats JSON to file")
+    parser.add_argument("--store", choices=["pg", "sqlite"], default="pg",
+                        help="目标存储：pg=PostgreSQL（默认）；sqlite=SQLite 运行时大库（权威，Option A 方向）")
+    parser.add_argument("--sqlite-path", default=os.path.expanduser("~/.trinity/store/trinity_store.db"),
+                        help="SQLite 大库路径（--store sqlite 时使用）")
     args = parser.parse_args()
 
     # ── Import modules ────────────────────────────────────────
@@ -517,11 +560,14 @@ def main():
         DEFAULT_CORE_TOKEN_LIMIT,
     ) = _import_modules()
 
-    # ── Connect to PostgreSQL ─────────────────────────────────
-    adapter = connect_postgresql(
-        host=args.host, port=args.port, dbname=args.dbname,
-        user=args.user, password=args.password,
-    )
+    # ── Connect to store ──────────────────────────────────────
+    if args.store == "sqlite":
+        adapter = connect_sqlite(args.sqlite_path)
+    else:
+        adapter = connect_postgresql(
+            host=args.host, port=args.port, dbname=args.dbname,
+            user=args.user, password=args.password,
+        )
 
     # ── Build MemoryTierManager ───────────────────────────────
     manager = MemoryTierManager(
@@ -545,6 +591,7 @@ def main():
             core_threshold=args.core_threshold,
             recall_threshold=args.recall_threshold,
             output_file=args.output,
+            store=args.store,
         )
 
         if not args.output:

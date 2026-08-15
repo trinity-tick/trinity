@@ -648,6 +648,26 @@ class PostgreSQLAdapter(StorageAdapter):
 
     # ── Version Chain ─────────────────────────────────────────────
 
+    def archive_memories(self, memory_ids: List[str]) -> int:
+        """批量将记忆标记为 archived（衰减压缩回写；与 SQLiteAdapter 同接口）。
+
+        镜像 memory_compressor._archive_originals 的历史裸 SQL 行为。
+        """
+        if not memory_ids:
+            return 0
+        count = 0
+        with self._get_conn() as conn:
+            with conn.cursor() as cur:
+                for mid in memory_ids:
+                    cur.execute(
+                        "UPDATE memories SET status = 'archived', "
+                        "updated_at = NOW() WHERE memory_id::text = %s",
+                        (str(mid),),
+                    )
+                    count += cur.rowcount
+            conn.commit()
+        return count
+
     def get_version_chain(self, memory_id: str) -> List[Dict[str, Any]]:
         import psycopg2.extras
 

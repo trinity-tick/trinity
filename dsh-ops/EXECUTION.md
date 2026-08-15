@@ -1856,3 +1856,19 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
   ③原生 PG :5432=恢复后遗留（此前 skill 手册误写"5432 主存储"已修正）。
   遗留决策：decay/tiers 结果只落维护 PG，运行时 SQLite 大库的衰减仍无维护路径（建议后续将
   decay/tiers 直接指向 SQLite 大库，或明确分层设计）。
+
+### 34.8 跟进执行（2026-08-15 晚）：Option A 落地——decay/tiers 直接治理 SQLite 运行时大库
+
+- **方案**：maintenance 的 decay/tiers 由 PostgreSQL 切到 `--store sqlite`（SQLite 运行时大库，权威）。
+- **改动**：
+  - `adapters/sqlite.py` / `adapters/postgresql.py`：新增 `archive_memories(memory_ids)`（幂等状态翻转，接口一致）；
+  - `daemon/memory_compressor.py`：`_archive_originals` 弃用 PG 专属裸 SQL，改走 adapter.archive_memories（存储无关）；
+  - `scripts/run_decay_compress.py` / `run_memory_tiers.py`：新增 `--store {pg,sqlite}`（默认 pg 保持兼容）+
+    `--sqlite-path`（默认大库路径）与 SQLite 取数函数；
+  - `dsh-ops/trinity-dsh-maintenance.ps1`：decay/tiers 任务传 `--store sqlite`。
+- **验证**：decay dry-run（200 条扫描）✓；真实 limit=3（3 条最旧 active 归档 + 1 条 COMPRESSED SUMMARY 创建，
+  状态翻转确认）✓；tiers（500 条分层 core=169/recall=331）✓；maintenance 集成跑通 ✓；api /health 200 ✓；
+  原生 trinity_search 恢复（默认按会话身份隔离，显式 agent_id=default 可搜全库）✓。
+- **每日链现状**：`mirror,decay,tiers,sync`——mirror 先对齐维护 PG（供批处理/分析），decay/tiers 治理运行时大库。
+- **遗留**：decay 用 mock LLM（非真实摘要）且阈值默认 0.15（数据驱动，可能 0 归档）；如需更强治理可调
+  DecayLimit / --threshold 或接真实 LLM。

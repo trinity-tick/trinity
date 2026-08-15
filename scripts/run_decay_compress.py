@@ -55,10 +55,11 @@ def _import_modules():
         create_llm_compress_callable,
     )
     from trinity.adapters.postgresql import PostgreSQLAdapter
+    from trinity.adapters.sqlite import SQLiteAdapter
     return (
         DecayConfig, DecayStatus, MemoryDecayEngine, DecayResult, DecayScanReport,
         MemoryCompressor, CompressionStatus, CompressionReport, mock_llm_compress,
-        create_llm_compress_callable, PostgreSQLAdapter,
+        create_llm_compress_callable, PostgreSQLAdapter, SQLiteAdapter,
     )
 
 
@@ -91,6 +92,40 @@ def connect_postgresql(
 
 
 # ── Memory Fetch ──────────────────────────────────────────────────────
+
+def fetch_active_memories_sqlite(adapter: Any, limit: int = 500) -> List[Dict[str, Any]]:
+    """Fetch active (non-archived) memories from the SQLite runtime store."""
+    conn = getattr(adapter, "_conn", None)
+    if conn is None:
+        return []
+    rows = conn.execute("""
+        SELECT memory_id, session_id, persona_id, tenant_id,
+               content, role, importance, tags, category,
+               sha256_hash, status, version, created_at, updated_at
+        FROM memories
+        WHERE status = 'active'
+        ORDER BY created_at ASC
+        LIMIT ?
+    """, (limit,)).fetchall()
+    results = []
+    for row in rows:
+        d = dict(row)
+        for k in ("created_at", "updated_at"):
+            v = d.get(k)
+            if v is not None and hasattr(v, "isoformat"):
+                d[k] = v.isoformat()
+        results.append(d)
+    return results
+
+
+def connect_sqlite(db_path: str) -> Any:
+    """Connect to the SQLite runtime store (权威大库) and return adapter."""
+    from trinity.adapters.sqlite import SQLiteAdapter
+    adapter = SQLiteAdapter(db_path=db_path)
+    adapter.connect()
+    logger.info("Connected to SQLite store: %s", db_path)
+    return adapter
+
 
 def fetch_active_memories(adapter: Any, limit: int = 500) -> List[Dict[str, Any]]:
     """Fetch all active (non-archived) memories from PostgreSQL."""
@@ -130,6 +165,7 @@ def run_decay_compress(
     compressor: Any,    # MemoryCompressor
     dry_run: bool = False,
     limit: int = 500,
+    store: str = "pg",
 ) -> Dict[str, Any]:
     """Execute full decay scan + compression pipeline.
 
@@ -152,8 +188,11 @@ def run_decay_compress(
 
     # ── Step 1: Fetch active memories ──────────────────────────
     logger.info("=" * 60)
-    logger.info("Step 1/4: Fetching active memories from PostgreSQL ...")
-    memories = fetch_active_memories(adapter, limit=limit)
+    logger.info("Step 1/4: Fetching active memories from %s ...", store)
+    if store == "sqlite":
+        memories = fetch_active_memories_sqlite(adapter, limit=limit)
+    else:
+        memories = fetch_active_memories(adapter, limit=limit)
     stats["total_active_memories"] = len(memories)
     logger.info("  Fetched %d active memories", len(memories))
 
@@ -277,6 +316,11 @@ def main():
     parser.add_argument("--lambda-knowledge", type=float, default=0.01, help="Knowledge decay rate")
     parser.add_argument("--lambda-general", type=float, default=0.02, help="General decay rate")
     parser.add_argument("--output", default="", help="Save stats JSON to file")
+    parser.add_argument("--store", choices=["pg", "sqlite"], default="pg",
+                        help="目标存储：pg=PostgreSQL（默认，维护/批处理层）；"
+                             "sqlite=SQLite 运行时大库（权威，Option A 方向）")
+    parser.add_argument("--sqlite-path", default=os.path.expanduser("~/.trinity/store/trinity_store.db"),
+                        help="SQLite 大库路径（--store sqlite 时使用）")
     parser.add_argument("--llm", choices=["mock", "real"], default="mock",
                         help="压缩器 LLM：mock（默认，离线抽取式摘要）或 real（OpenAI 兼容 API，"
                              "需 TRINITY_LLM_API_KEY 环境变量）")
@@ -288,7 +332,7 @@ def main():
     (
         DecayConfig, DecayStatus, MemoryDecayEngine, DecayResult, DecayScanReport,
         MemoryCompressor, CompressionStatus, CompressionReport, mock_llm_compress,
-        create_llm_compress_callable, PostgreSQLAdapter,
+        create_llm_compress_callable, PostgreSQLAdapter, SQLiteAdapter,
     ) = _import_modules()
 
     # ── Build decay config ────────────────────────────────────
@@ -304,11 +348,14 @@ def main():
     engine = MemoryDecayEngine(config=decay_config)
     logger.info("Decay engine initialized: %s", json.dumps(engine.summary(), indent=2))
 
-    # ── Connect to PostgreSQL ─────────────────────────────────
-    adapter = connect_postgresql(
-        host=args.host, port=args.port, dbname=args.dbname,
-        user=args.user, password=args.password,
-    )
+    # ── Connect to store ──────────────────────────────────────
+    if args.store == "sqlite":
+        adapter = connect_sqlite(args.sqlite_path)
+    else:
+        adapter = connect_postgresql(
+            host=args.host, port=args.port, dbname=args.dbname,
+            user=args.user, password=args.password,
+        )
 
     # ── Build compressor ─────────────────────────────────────
     if args.llm == "real":
@@ -331,6 +378,7 @@ def main():
             compressor=compressor,
             dry_run=args.dry_run,
             limit=args.limit,
+            store=args.store,
         )
 
         if args.output:

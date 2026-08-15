@@ -170,9 +170,7 @@ print(json.dumps({"phases": phases, "cycle_complete": last.get("cycle_complete")
 "@
 $evoPrompt = "在 C:\Users\Administrator\trinity 用 Python 执行一次完整的 Trinity 进化周期：from trinity.evolution import MetaEvolution; evo=MetaEvolution(); 在同一进程内连续 tick 直至 cycle_complete（最多 5 次）; evo.save_state()。然后读取 evo.diagnostics() 汇报执行的相位序列、是否完成周期、总周期数、偏好与模式数量。"
 
-# 记忆衰减 + 压缩（需要 PostgreSQL 运行；可用 --dry-run 预览）
-# 注意：必须显式 --host 127.0.0.1 —— 脚本 argparse 默认 "localhost" 会解析到
-# IPv6 ::1，而本机 PG 仅对 IPv4 放行（PGHOST 环境变量被 argparse 默认值覆盖，无效）。
+# 记忆衰减 + 压缩（Option A，2026-08-15：--store sqlite 直接作用于 SQLite 运行时大库）
 # 注意：脚本按创建时间取最旧的 N 条（N=--limit），compressor 默认用 mock_llm_compress
 # （非真实 LLM 摘要）。为控制每次运行的影响面，默认限制 DecayLimit=100 条，
 # 并建议接入真实 LLM（MemoryCompressor(llm_callable=...)）后再放开。
@@ -180,23 +178,23 @@ $decayCmd = @"
 import sys, json
 sys.path.insert(0, r"$TrinityRoot")
 import runpy
-sys.argv = ["run_decay_compress", "--host", "$PgHost", "--port", "$PgPort", "--user", "$PgUser", "--password", "$PgPass",
+sys.argv = ["run_decay_compress", "--store", "sqlite",
             "--limit", "$DecayLimit", "--llm", "$DecayLLM",
             "--output", r"$LogDir\decay_compress_$Timestamp.json"]
 runpy.run_path(r"$TrinityRoot\scripts\run_decay_compress.py", run_name="__main__")
 "@
-$decayPrompt = "在 C:\Users\Administrator\trinity 运行 python scripts/run_decay_compress.py --host 127.0.0.1（连接本地 PostgreSQL 执行记忆衰减扫描与 LLM 压缩，结果写入 .trinity\logs），汇报扫描与压缩统计；若 PostgreSQL 不可用请明确报告失败原因。"
+$decayPrompt = "在 C:\Users\Administrator\trinity 运行 python scripts/run_decay_compress.py --store sqlite（直接对 SQLite 运行时大库 ~/.trinity/store/trinity_store.db 执行记忆衰减扫描与 LLM 压缩，结果写入 .trinity\logs），汇报扫描与压缩统计；库不可用请明确报告失败原因。"
 
-# 记忆分层（Core/Recall/Archival，需要 PostgreSQL）
+# 记忆分层（Core/Recall/Archival，Option A：--store sqlite 扫描 SQLite 运行时大库）
 $tiersCmd = @"
 import sys, json
 sys.path.insert(0, r"$TrinityRoot")
 import runpy
-sys.argv = ["run_memory_tiers", "--host", "$PgHost", "--port", "$PgPort", "--user", "$PgUser", "--password", "$PgPass",
+sys.argv = ["run_memory_tiers", "--store", "sqlite",
             "--output", r"$LogDir\memory_tiers_$Timestamp.json"]
 runpy.run_path(r"$TrinityRoot\scripts\run_memory_tiers.py", run_name="__main__")
 "@
-$tiersPrompt = "在 C:\Users\Administrator\trinity 运行 python scripts/run_memory_tiers.py --host 127.0.0.1（连接本地 PostgreSQL 执行记忆分层），汇报分层统计；PostgreSQL 不可用则报告失败。"
+$tiersPrompt = "在 C:\Users\Administrator\trinity 运行 python scripts/run_memory_tiers.py --store sqlite（对 SQLite 运行时大库执行三层记忆分层 Core/Recall/Archival），汇报分层统计；库不可用则报告失败。"
 
 # 双向同步：Hermes ↔ Trinity + Marvis 一次性同步
 $syncCmd = @"
