@@ -2155,3 +2155,36 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
 - **测试**：test_sync_dsh_goals.py 4 例（提取/幂等/phase 映射/空缓存）。
 - **未来通道**：DSH goal/change 事件在会话事件流（插件采集）或 projcache
   （快照）——前者需 DSH 持久化事件到 jsonl，后者已利用。
+
+---
+
+## 二十九（补）、本轮补全（2026-08-15，goal 结构与收尾）
+
+承接"补全 trinity 里 DSH 结构的 goal"：
+1. **goal-8752aebd 在 dsh_goals 标记 completed**（此前 active；phase=complete, round=8）。
+   其 8 项：sqlite-vec 恢复向量通道 ✅（v0.1.9，vectile _HAS_SQLITE_VEC=True）；
+   keyword 检索 FTS5 多词 bug 修复 ✅（trinity/adapters/sqlite.py 双形态查询，
+   多词 0→5 条，过滤组合同修复）；DSH 会话记忆桥 ✅（结构层会话/事件自动同步覆盖）；
+   pytest 配置统一 + xdist ✅（pyproject testpaths 对齐 trinity/tests，pytest-xdist 已装）；
+   SQuAD 口径 ✅（goal-8303d35e）；CI 真实基准 ✅（.github/workflows/benchmarks.yml）；
+   导入噪音门控 ✅（trinity/modules/second_brain/__init__.py 顶部
+   TRINITY_QUIET_IMPORT=1 过滤 60 处 [Pxxx] 横幅，quiet 导入 0 行）；
+   代码卫生 ✅（trinity_work.py 已由后续轮次移除）。
+2. **goal-driver 路径 bug 修复**：trinity-goal-driver.ps1 的 $OpsDir 误用父目录
+   （trinity 根）→ 兄弟脚本路径不存在 → 子进程退出码恒 -196608。改为
+   $OpsDir = $PSScriptRoot 后验证 status=OK exit=0（round 5，进化周期 13）。
+   同类 bug 已在 trinity-autostart.ps1 由后续轮次修复过。
+3. **trinity_goal 工具中文 objective 传输编码问题**：长中文文本经该工具路径报
+   surrogate 错误；英文 objective 正常。已用英文回填。
+
+
+### 52.1 dsh_goals objective 100% 补全（2026-08-15）
+
+- **用户提示核查**："应该已经补全了"——验证后发现确实可补全。
+- **根因**：此前全量重放时用编造的 UUID 后缀 UPDATE 未命中，导致 11 个 goal
+  objective 仍空；哈希行（create_goal 事件派生）与 UUID 行（DSH harness 真实 id）
+  是同一批 goal 的两份记录。
+- **修复**：①用库里真实 UUID（按 update_goal 事件 seq 配对 create_goal objective）
+  回填 11 个 → 30/30（100%）；②清理 9 个重复哈希行（objective 与 UUID 行相同），
+  保留权威 UUID 行 + 2 个唯一哈希行 → 最终 21 条全部带 objective。
+- **结论**：dsh_goals 从 63% → 100% 完整；DSH 结构融合档案完整可审计。
