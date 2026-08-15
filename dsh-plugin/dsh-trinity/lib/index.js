@@ -321,7 +321,7 @@ function registerTools(ctx, worker) {
 		tool("trinity_trajectory", "Query the DSH session event stream stored in Trinity (replayable trajectory: turns, messages, tool calls, results).",
 			{
 				session_id: { type: "string", description: "Filter by DSH session id." },
-				type: { type: "string", enum: ["turn/start", "turn/end", "user/message", "assistant/message", "tool/call", "tool/result", "todo/write", "request/header"], description: "Filter by event type." },
+				type: { type: "string", enum: ["turn/start", "turn/end", "user/message", "assistant/message", "tool/call", "tool/result", "todo/write", "request/header", "goal/write", "schedule/create", "compacted_turn"], description: "Filter by event type." },
 				agent_id: { type: "string", description: "Filter by agent (dsh-<session>)." },
 				limit: { type: "integer", description: "Max events (default 200, max 2000)." }
 			}, jsonSchema, (a) => worker.call("structure_query", a)),

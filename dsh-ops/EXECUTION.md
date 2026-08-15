@@ -1933,3 +1933,19 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
   订单簿 count=1→撤单 200）。协议文档 `docs/MEMORY_MARKET_PROTOCOL.md`。
 - **①官方 LongMemEval/BEAM 数据集**：HF 网络不可达（连接失败）——下载阻塞，明确标记；
   本地 55 题模拟集结果（R@5=1.0）已在 leaderboard（本地口径）。
+
+### 41.1 融合优化续轮（2026-08-15）：结构层 compaction + goal 同步阻塞标记 + F5 文档
+
+- **结构层 compaction**（compact_structure.py）：已结束/过期会话的 dsh_events 按 turn 聚合为
+  compacted_turn 摘要（event/tool/message 计数 + 助手段落摘要），删明细、标记会话 compacted；
+  幂等（跳过已压缩会话）、--dry-run/--min-days/--force/--session。实测：旧会话 633 明细→10 摘要，
+  全库事件 2,460→1,871。已接入 maintenance "compact" 任务与每日链
+  （mirror,decay,tiers,consolidate,dedup,sync,compact）。
+- **goal/schedule 自动同步：阻塞标记**。dsh-goal 为 event-sourced 纯协议层（无 provide/可注入
+  服务、无对外读取通道）；DSH 事件流仅 8 类（无 goal/schedule 类型）。自动同步需 DSH 侧开放
+  goal 状态读取/事件 emit——跨仓改动，本轮不实施。替代：显式工具通道 trinity_goal/goals、
+  trinity_schedule/schedules（已可用，probe 验证落库）。
+- **trajectory 类型枚举扩展**：支持 goal/write、schedule/create、compacted_turn（插件三副本同步，
+  生效需重启 web host）。
+- **F5 MCP 冗余移除（文档化）**：步骤 = 删 cordis.patch.yml 中 mcp-trinity insert → 重启 web profile；
+  原生 trinity_* 已覆盖（含结构层），移除前确认无 mcp__trinity__* 依赖。

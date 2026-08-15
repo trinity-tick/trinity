@@ -28,7 +28,7 @@ param(
 
 # 兼容 powershell -File 传参：命令行里的 "a,b,c" 会以单个字符串到达，
 # 这里统一按逗号拆分 + 校验。
-$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "selftest", "session-summarize", "all")
+$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "compact", "selftest", "session-summarize", "all")
 $normalized = @()
 foreach ($t in $Tasks) { $normalized += $t.Split(',') }
 $normalized = $normalized | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
@@ -230,6 +230,16 @@ runpy.run_path(r"$TrinityRoot\scripts\entity_dedup.py", run_name="__main__")
 "@
 $dedupPrompt = "在 C:\Users\Administrator\trinity 运行 python scripts/entity_dedup.py --threshold 0.90（实体归一化去重，结果写入 .trinity\logs），汇报合并数与关系迁移；先备份再执行。"
 
+# 结构层 compaction（2026-08-15）：已结束会话 dsh_events 按 turn 聚合，控制表增长
+$compactCmd = @"
+import sys
+sys.path.insert(0, r"$TrinityRoot")
+import runpy
+sys.argv = ["compact_structure", "--min-days", "1"]
+runpy.run_path(r"$TrinityRoot\scripts\compact_structure.py", run_name="__main__")
+"@
+$compactPrompt = "在 C:\Users\Administrator\trinity 运行 python scripts/compact_structure.py --min-days 1（结构层 compaction：已结束会话的 dsh_events 按 turn 聚合为摘要，控制表增长），汇报压缩会话数与移除明细数。"
+
 # 双向同步：Hermes ↔ Trinity + Marvis 一次性同步
 $syncCmd = @"
 import sys, subprocess
@@ -302,7 +312,7 @@ finally:
 $sessionSummaryPrompt = "在 C:\Users\Administrator\trinity 为 ~/.trinity/store/trinity_store.db 中尚无摘要的会话生成会话摘要（trinity.daemon.session_state.summarize_all_sessions，幂等，LLM 或抽取式降级），汇报会话数与摘要数。"
 
 # ── 选择任务 ──────────────────────────────────────────────────────────────
-if ($Tasks -contains "all") { $Tasks = @("health", "evolution", "mirror", "decay", "tiers", "consolidate", "dedup", "sync", "selftest") }
+if ($Tasks -contains "all") { $Tasks = @("health", "evolution", "mirror", "decay", "tiers", "consolidate", "dedup", "sync", "compact", "selftest") }
 if ($Tasks -contains "compress") { $Tasks = @($Tasks | Where-Object { $_ -ne "compress" }) + "decay" }
 
 if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
@@ -318,6 +328,7 @@ foreach ($t in $Tasks) {
         "consolidate" { Invoke-Task -Name "consolidate" -DirectCommand $consolidateCmd -DshPrompt $consolidatePrompt }
         "dedup"      { Invoke-Task -Name "dedup"      -DirectCommand $dedupCmd      -DshPrompt $dedupPrompt }
         "sync"      { Invoke-Task -Name "sync"      -DirectCommand $syncCmd   -DshPrompt $syncPrompt }
+        "compact"   { Invoke-Task -Name "compact"   -DirectCommand $compactCmd  -DshPrompt $compactPrompt }
         "selftest"  { Invoke-Task -Name "selftest"  -DirectCommand $selftestCmd -DshPrompt $selftestPrompt }
         "session-summarize" { Invoke-Task -Name "session-summarize" -DirectCommand $sessionSummaryCmd -DshPrompt $sessionSummaryPrompt }
     }
