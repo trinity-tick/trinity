@@ -1,5 +1,6 @@
 """P28: Chronos Temporal Memory — arXiv 2603.16862 (LongMemEval-S 95.60%).
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Time-aware memory with EventTuple timestamped entries, EventCalendar
 range queries, TurnCalendar conversation context preservation, and
 DynamicRetrievalGuidance for time-sensitive question answering.

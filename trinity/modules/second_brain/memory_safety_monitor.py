@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P8-1: Temporal Memory Safety Contamination Monitor (对标 arXiv 2605.17830)
 ===========================================================================
 

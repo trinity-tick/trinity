@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P23-1: ChronoMem — 语义版本控制与自然语言回滚
 
 对标论文: ChronoMem (Semantic Version Control for Agent Memory, 2026.08)

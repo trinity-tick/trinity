@@ -1,5 +1,6 @@
 """Mi-Memory Lifecycle Framework (P34) — 对标 Mi-Memory (arXiv 2607.18975, 小米 Darwin Agent Team)
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 实现四大角色审计合约：
 - Structure: MemStack 多粒度可追踪长期记忆
 - Expansion: MemSense/MemFuse 多模态跨场景证据融合

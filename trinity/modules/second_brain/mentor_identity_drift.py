@@ -1,5 +1,6 @@
 """P32: MENTOR Identity Drift Detector — ACL 2026.
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Dual-chain (GlobalChain + per-role RoleChain) with knowledge-boundary
 filtering, identity drift detection (role confusion in responses), and
 safe role switching with a 0.46→0.75 accuracy lift.

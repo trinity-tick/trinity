@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 ProjectMemEventSourced — PROJECTMEM Event-Sourced Memory & Judgment Layer
 ==========================================================================
 arXiv 2606.12329 · P44-3

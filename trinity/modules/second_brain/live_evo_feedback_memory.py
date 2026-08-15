@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 Live-Evo — Online Evolution of Agentic Memory from Continuous Feedback
 =======================================================================
 arXiv 2602.02369 · P49-1

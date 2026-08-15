@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 CB75: AnchorFactTracker — 锚定事实追踪
 =======================================
 

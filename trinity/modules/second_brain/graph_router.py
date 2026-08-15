@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P10-4: Graph Memory Workflow Router (对标 GraphPlanner)
 
 实现双维决策图（Agent Role + LLM Backbone 联合选择）、

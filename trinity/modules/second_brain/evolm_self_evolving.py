@@ -1,5 +1,6 @@
 """P24: EvoLM Self-Evolving Rubric System — 2026.06.
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Co-evolved rubrics with feedback-driven adaptation.
 Policy self-evaluation with per-dimension scoring and weighted pass/fail threshold.
 """

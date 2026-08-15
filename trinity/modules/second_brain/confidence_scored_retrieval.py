@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P14-2: Confidence-Scored Memory Retrieval (对标 AgentPrizm 2026.07.09)
 ========================================================================
 

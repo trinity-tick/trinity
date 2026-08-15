@@ -1,5 +1,6 @@
 """P28: NS-Mem Neuro-Symbolic Memory — arXiv 2603.15280.
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Neuro-symbolic hybrid memory that augments vector retrieval with
 symbolic rule reasoning. Learns LogicRule triples from multi-modal
 episodes via SK-Gen consolidation and provides forward-chain inference

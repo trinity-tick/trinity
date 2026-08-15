@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 CurriculumGuidedMemory — DSMentor Difficulty-Sorted Curriculum Learning
 =======================================================================
 ACL 2026 SURGeLLM Workshop · P40-1

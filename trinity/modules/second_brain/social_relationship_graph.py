@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P21-6: Social Relationship Graph — Multi-Dimensional Social Network
 ====================================================================
 

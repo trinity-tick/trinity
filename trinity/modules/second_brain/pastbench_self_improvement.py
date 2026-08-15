@@ -1,5 +1,6 @@
 """P28: PAST-Bench Self-Improvement — arXiv 2608.04003 (5-mechanism ablation).
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Five complementary self-improvement mechanisms for agent memory:
 (1) Planning Guidance, (2) Memory Binding, (3) Skill Lifecycle,
 (4) Retrieval Gating, (5) Closeout Flushing. Ablation study shows

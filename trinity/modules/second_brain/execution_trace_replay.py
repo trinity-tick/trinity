@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P17-2: Execution Trace Replay — 执行轨迹回放调试
 
 对标: Retrace (2026.07) + Agent Debug 工作流 2026

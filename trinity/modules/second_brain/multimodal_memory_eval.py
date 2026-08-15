@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P14-3: Multi-Session Multimodal Evaluation (对标 WorldMemArena)
 ================================================================
 

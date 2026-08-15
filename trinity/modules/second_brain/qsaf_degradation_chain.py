@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P27-3: QSAF Degradation Chain — QSAF Framework (2026.05).
 Triadic: [Flood Detection] → [Entrenchment Breaking] → [Intervention Planning].
 

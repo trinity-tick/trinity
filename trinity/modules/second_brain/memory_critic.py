@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P3-2: Memory Critic + Reconstruction Pipeline (对标 MemHarness)
 ================================================================
 Implements a four-stage pipeline: Retrieve -> Critique -> Reconstruct -> Action.

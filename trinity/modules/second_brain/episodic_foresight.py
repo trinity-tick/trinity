@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P12-2: Episodic Foresight & Mental Simulation.
 
 Reference: Constructive Episodic Simulation Hypothesis (Schacter & Addis)

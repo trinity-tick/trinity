@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P8-3: Typed Conflict Resolution Engine (对标 Mnemos + MindMemOS)
 =================================================================
 

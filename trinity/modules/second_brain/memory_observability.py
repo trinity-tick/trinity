@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P12-3: Memory Observability & Telemetry.
 
 Reference: 2026 Agent Observability Guide + OWASP Agent Memory Guard.

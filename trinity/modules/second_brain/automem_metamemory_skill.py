@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 AutoMem — Metamemory as a Learnable Skill
 ==========================================
 arXiv 2607.01224 · P48-1

@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P15-3: Hippocampus-Cortex Dual-Pathway Bridge.
 
 Reference: MemVerse (Shanghai AI Lab, arXiv 2512.03627) —

@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P21-2: Living Knowledge Topology — HNSW 活拓扑 + Gossip 协议 + 三原语 + 涌现共识
 
 对标论文: HyphaeDB (2026.08)

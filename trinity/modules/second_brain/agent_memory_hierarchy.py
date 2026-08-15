@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P14-8: Agent Memory Hierarchy (对标 OpenClaw · Hot/Warm/Cold Tiered Cache)
 ==============================================================================
 

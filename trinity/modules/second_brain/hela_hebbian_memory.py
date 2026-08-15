@@ -1,5 +1,6 @@
 """P24: HeLa-Mem Hebbian Memory — 2026.
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Hebbian co-activation dynamics: edges strengthen when nodes fire together,
 decay with inactivity. Includes hub detection and reflective distillation.
 """

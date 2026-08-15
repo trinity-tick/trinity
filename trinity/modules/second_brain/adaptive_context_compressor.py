@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P19-5: Adaptive Context Compressor — Semantic-Aware Compression Pipeline
 =========================================================================
 

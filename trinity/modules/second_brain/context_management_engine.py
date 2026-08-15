@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P18-8: Context Management Engine — Three-Layer Lean Architecture
 =================================================================
 

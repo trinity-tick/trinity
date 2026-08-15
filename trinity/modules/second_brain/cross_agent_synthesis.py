@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P11-8: Cross-Agent Synthesis Protocol — 对标 Silo-Bench 跨智能体知识合成
 
 实现多 Agent 独立推理结果的统一融合:

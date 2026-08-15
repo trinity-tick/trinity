@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 EA-Graph — Artifact-Anchored Verification Memory for Upstream Drift
 ====================================================================
 arXiv 2608.04278 · P48-4

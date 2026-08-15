@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 XMemoryDecouplingAggregation — xMemory Decoupling-Aggregation Hierarchical Memory
 ==================================================================================
 arXiv 2602.02007v4, KCL+腾讯元宝 · P43-1

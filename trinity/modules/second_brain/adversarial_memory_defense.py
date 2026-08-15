@@ -1,5 +1,6 @@
 
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P19-1: Adversarial Memory Defense — 记忆对抗防御
 
 对标论文: OWASP ASI06 Memory & Context Poisoning (2026)

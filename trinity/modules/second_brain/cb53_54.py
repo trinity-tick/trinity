@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 Trinity Second Brain — CB53-CB54: BEAMLIGHT, ExabaseRetrieval
 ================================================================
 """

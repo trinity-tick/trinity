@@ -1,5 +1,6 @@
 """Hermes Curator Semantic Garbage Collector (P34) — 对标 Hermes Agent 框架
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 实现智能后台守护进程，持续审查、合并、归档、去重 Agent 长期技能库：
 
 - SemanticGarbageCollector: 语义级去重，相似度 > 0.85 合并

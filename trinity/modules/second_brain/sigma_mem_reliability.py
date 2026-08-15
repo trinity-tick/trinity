@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 SigmaMem — Spectral Reliability Memory for Multi-Agent Systems
 ===============================================================
 arXiv 2607.27958 · P46-4

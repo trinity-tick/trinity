@@ -1,5 +1,6 @@
 """P30: Runtime Safety Guardrails — PAST-Bench E4/E5.
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Context budget monitoring, retrieval gate control (relevance+urgency
 truncation), session closeout flush, cross-session leak prevention,
 and a safe agent loop wrapper integrating all four guardrails.

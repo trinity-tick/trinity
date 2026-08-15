@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P24-3: Mandol — 无 LLM 语义统一存储
 
 对标论文: arXiv:2606.29778 (Mandol: LLM-Free Semantic Unified Memory Store)

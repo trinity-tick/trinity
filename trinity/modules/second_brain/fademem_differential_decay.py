@@ -1,5 +1,6 @@
 """P31: FadeMem Differential Decay — arXiv 2601.18642.
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Two-layer differential decay: LTM slow exponential (0.9995/h), STM fast
 exponential (0.99/h), Ebbinghaus power-law decay, and storage optimization
 saving ~45% via differential pruning.

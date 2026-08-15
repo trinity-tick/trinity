@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 InformationGeometricMemory — Fisher Metric-Driven Memory Management
 ===================================================================
 arXiv 2603.14588 · P38-3 · SuperLocalMemory V3

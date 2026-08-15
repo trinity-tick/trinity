@@ -1,5 +1,6 @@
 """P31: Adaptive Budgeted Forgetting — arXiv 2604.02280.
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Learns optimal pruning thresholds via importance scoring (recency ×
 importance × relevance) and automatic threshold optimization to keep
 memory within a configurable budget limit.

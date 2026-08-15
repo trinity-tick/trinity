@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P25-2: MEMTIER Attribution Loop — 对标 MEMTIER 2026.05
 三元语: Track → Attribute → Adapt → Consolidate
 设计要点:

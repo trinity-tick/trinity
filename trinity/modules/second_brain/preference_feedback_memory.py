@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 PreferenceFeedbackMemory — PAHF Personalized Agents from Human Feedback
 ========================================================================
 P40-2 · arXiv 2026

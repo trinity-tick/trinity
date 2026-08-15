@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 CB70: MASharedMemoryBus — 多智能体共享记忆总线
 ===============================================
 

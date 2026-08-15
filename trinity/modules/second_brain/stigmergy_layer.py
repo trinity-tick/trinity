@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P7-3: Ant-Colony Stigmergy Federated Knowledge Layer (对标 Stigmem)
 =====================================================================
 

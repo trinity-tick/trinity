@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P21-1: Active Memory Reconstruction — Cue-Tag-Content 关联记忆图 + 主动重构循环
 
 对标论文: MRAgent (Memory Reconstruction Agent, 2026.08)

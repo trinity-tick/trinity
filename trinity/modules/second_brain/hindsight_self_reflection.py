@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P14-6: Hindsight Self-Reflection (对标 RetroAgent · Shanghai AI Lab/NUS)
 =============================================================================
 

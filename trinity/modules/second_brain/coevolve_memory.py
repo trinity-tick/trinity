@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P18-5: Coevolve Memory — Agent-Data Coevolution Loop
 =====================================================
 

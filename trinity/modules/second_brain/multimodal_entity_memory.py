@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P8-2: Cross-Modal Entity-Centric Memory Layer (对标 M3-Agent ICLR2026)
 =======================================================================
 

@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P26-1: A2A Semantic Routing — 对标 A2A Protocol (Google, 2026.04)
 三元语: Register → Discover → Route → Track
 设计要点:

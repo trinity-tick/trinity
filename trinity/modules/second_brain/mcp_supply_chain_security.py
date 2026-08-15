@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P27-4: MCP Supply Chain Security — OWASP MCP Supply Chain (2026.08).
 Triadic: [Capability Auditing] → [Least Privilege] → [Sandbox Isolation].
 

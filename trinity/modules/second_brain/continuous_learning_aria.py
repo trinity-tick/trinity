@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P20-8: Continuous Learning ARIA — Dual-Memory Continuous Learning (Zenodo 2026)
 ================================================================================
 

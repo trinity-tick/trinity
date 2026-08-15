@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 MementoSkillMemory — Memento-Skills Read-Write-Reflection Learning Loop
 ========================================================================
 arXiv 2603.18743 · P42-3

@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P25-2: Probabilistic Belief Memory (BeliefMem)
 arXiv:2605.05583
 

@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P7-2: Token-Level Reasoning-Aligned Memory Growth (对标 MemSearch-o1 ACL2026)
 ==============================================================================
 

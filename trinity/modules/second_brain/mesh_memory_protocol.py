@@ -1,5 +1,6 @@
 
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P18-1: Mesh Memory Protocol — 网格记忆协议
 
 对标论文: Mesh Memory Protocol (arXiv 2604.19540)

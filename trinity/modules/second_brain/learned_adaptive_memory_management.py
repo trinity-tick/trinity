@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 Learned Adaptive Memory Management — Memory as a Controlled Process
 ====================================================================
 arXiv 2607.13591 · P48-2

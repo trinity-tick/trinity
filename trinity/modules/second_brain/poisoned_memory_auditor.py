@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 PoisonedMemoryAuditor — Post-hoc Poisoned Memory Audit Framework
 =================================================================
 arXiv 2605.23723 · P38-1 · MemAudit

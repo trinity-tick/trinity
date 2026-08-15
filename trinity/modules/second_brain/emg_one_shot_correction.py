@@ -1,5 +1,6 @@
 """P33: Experience Memory Graph One-Shot Correction — arXiv 2607.13884.
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Builds ActionDecisionGraph from trajectories, extracts graph edit paths
 between failed/success trajectory pairs, and performs one-shot correction
 at test time without iterative reflect-replay loops.

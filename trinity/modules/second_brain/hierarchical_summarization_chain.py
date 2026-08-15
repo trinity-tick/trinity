@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P17-3: Hierarchical Summarization Chain — 层次化摘要链
 
 对标: Agent Context Engineering 2026 — 滑动窗口 + 层次摘要 + 记忆卸载

@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P22-1: Cognitive Folding Memory — 脑启发三层 CLS 主动记忆
 
 对标论文: Cognifold (脑启发认知折叠记忆, 2026.08)

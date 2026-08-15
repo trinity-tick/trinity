@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 MAGEExecutionStateTree — MAGE Execution State Tree for Agent Trajectories
 ==========================================================================
 arXiv 2606.06090 · P45-1

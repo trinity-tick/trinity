@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P14-7: Code Agent Memory (对标 MemCoder · SWE-bench +9.4%)
 ==============================================================
 

@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P15-1: Theory of Mind User Modeling.
 
 Reference: Readable Minds (arXiv 2604.04157) — Persistent memory catalyzes

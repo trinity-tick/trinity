@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P13-3: CRDT Collaborative Memory Store
 =======================================
 

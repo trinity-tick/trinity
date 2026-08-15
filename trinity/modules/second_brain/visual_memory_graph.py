@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P25-4: Visual Memory Graph (VimRAG)
 arXiv:2602.12735
 

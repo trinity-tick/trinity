@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P23-5: FedAgentKE — 联邦语义知识进化
 
 对标论文: FedAgentKE: Federated Semantic Knowledge Evolution for Heterogeneous Agents (arXiv 2607.21361, 2026.07)

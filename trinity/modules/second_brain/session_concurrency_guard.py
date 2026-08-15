@@ -1,5 +1,6 @@
 """P30: Session Concurrency Guard — CVE-2025-64168 (CVSS 7.1).
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Concurrent session isolation: detects session-state cross-user leaks,
 shared-mutable-state race conditions, and enforces user→session affinity
 routing under high concurrency.

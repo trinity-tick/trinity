@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 M112 SelfEvolutionCertificates — 自演进统计证书
 
 基于 Self-Evolving Agents with Anytime-Valid Certificates (arXiv 2607.00871, 7月1日)

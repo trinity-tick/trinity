@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P6-4: Memory Change Human-in-the-Loop Review (对标 Immutable Audit Trail)
 ==========================================================================
 

@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 PPRO — User Profile-Guided Personalized Retrieval Optimization
 ================================================================
 arXiv 2607.00017 · P49-3

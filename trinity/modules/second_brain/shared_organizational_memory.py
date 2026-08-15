@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 Shared Organizational Memory — Enterprise Coding Agent Knowledge Base
 ======================================================================
 arXiv 2608.00122 · P48-3

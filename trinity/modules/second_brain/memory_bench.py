@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P9-1: MemoryAgentBench Evaluation Framework Integration (对标 ICLR2026)
 ========================================================================
 

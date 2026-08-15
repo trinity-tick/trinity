@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P21-4: Spreading Activation Memory — 扩散激活 + 侧抑制 + 时间衰减 + 三重混合检索
 
 对标论文: Synapse (2026.08)

@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P5-4: Cross-Session Identity Resolver (对标 Mem0 2026 年报)
 =============================================================
 

@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P14-5: Multi-modal Memory Graph (对标 MemVerse · 上海AI Lab)
 =====================================================================
 

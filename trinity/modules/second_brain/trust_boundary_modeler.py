@@ -1,5 +1,6 @@
 """P30: Trust Boundary Modeler — Agent Trust Boundary Design 2026.
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Models agent trust boundaries with coupling types (tight/loose/blackboard),
 attack surface enumeration, trust degradation protocol (degrade→isolate→
 recover), and per-boundary firewall decisions (ALLOW/DENY/AUDIT).

@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P8-4: Sleep-Phase Memory Consolidation Pipeline (对标 Light-Omni)
 ==================================================================
 

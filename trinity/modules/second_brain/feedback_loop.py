@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P3-3: User Feedback -> Memory Correction Closed Loop (对标 MindMemOS Feedback)
 ==============================================================================
 Implement explicit correction (user directly points out memory errors) and

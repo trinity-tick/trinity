@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 EAM — Executable Action Memory via DFS Compression & Q-Guided MCTS Graph Search (ICML 2026).
 
 三元语: 可执行行动记忆——以窗口/控件/输入/实体为节点的结构化知识图谱, 通过

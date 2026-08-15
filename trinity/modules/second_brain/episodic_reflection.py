@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P10-6: Episodic Reflection Pipeline — 对标 AWS Bedrock AgentCore
 
 实现结构化情节记录管道:

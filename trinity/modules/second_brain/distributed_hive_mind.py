@@ -1,5 +1,6 @@
 
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P18-3: Distributed Hive Mind — 分布式蜂群记忆
 
 对标论文: Distributed Hive Mind (2026.02)

@@ -1,5 +1,6 @@
 """P33: MemCollab Contrastive Distillation — arXiv 2603.23234.
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Cross-model memory collaboration: contrasts reasoning trajectories from
 different model-based agents, distills task-invariant constraints via KL
 divergence minimization, and gates retrieval by task category.

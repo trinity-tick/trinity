@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 VersionedThoughtMemory — GitOfThoughts Reasoning Tree Versioning
 =================================================================
 arXiv 2606.14470 · P39-2

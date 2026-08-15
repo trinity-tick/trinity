@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P25-3: Agent Skill Graph — 对标 AgentSkillGraph 2026.06
 三元语: Register → Match → Offload → Distill
 设计要点:

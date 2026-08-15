@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 GLong-T5 Attention Selector — Long Context Importance Scoring
 ==============================================================
 arXiv 2605.16481 · P46-5

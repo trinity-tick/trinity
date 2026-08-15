@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 StreamMem / StreamArena — Hour-Scale Streaming Memory
 ======================================================
 arXiv 2608.05703 · P49-2

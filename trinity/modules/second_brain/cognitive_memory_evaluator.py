@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P15-2: Level-2 Cognitive Memory Evaluation.
 
 Reference: LoCoMo-Plus (Xi'an Jiaotong University × Tencent) —

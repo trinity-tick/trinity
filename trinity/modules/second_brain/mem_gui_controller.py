@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 MementoGUI — Plug-and-Play Multimodal Memory Controller for Long-Horizon GUI Agents
 ====================================================================================
 arXiv 2605.18652 · P36-2

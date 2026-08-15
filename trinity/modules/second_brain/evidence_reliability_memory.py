@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 EvidenceReliabilityMemory — MMA Dynamic Reliability Scoring
 ============================================================
 arXiv 2602.16493 · P39-4

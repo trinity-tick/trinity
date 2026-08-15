@@ -1,5 +1,6 @@
 """P29: Trust No Skill Verifier — Unit 42 Four-Tier Framework.
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Four-layer verification pipeline: Code Signature → Runtime Behavior →
 Provenance Graph → Auditor Audit. Each tier independently validates
 a skill and cross-validates the tier below. The "Auditor Auditor" is

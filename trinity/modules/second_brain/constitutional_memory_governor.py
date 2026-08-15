@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 ConstitutionalMemoryGovernor — Constitutional Memory Governance Engine
 =======================================================================
 v2.1, Jul 2026 · P41-4

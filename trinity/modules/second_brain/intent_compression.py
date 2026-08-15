@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P12-7: Intent-Aware Compression — 对标 SimpleMem (ICML 2026)
 
 实现意图感知的交互记忆压缩:

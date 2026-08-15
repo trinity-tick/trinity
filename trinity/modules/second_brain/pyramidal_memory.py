@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P5-1 + P5-3: Pyramidal Multimodal Memory + SIB Adaptive Compression (对标 MM-Mem ACL2026)
 ============================================================================================
 

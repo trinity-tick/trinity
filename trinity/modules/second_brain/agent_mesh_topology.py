@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P26-2: Agent Mesh Topology — 对标 Agent Mesh 2026.07
 三元语: Mesh → Elect → Route → Monitor
 设计要点:

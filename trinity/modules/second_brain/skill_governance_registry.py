@@ -1,5 +1,6 @@
 """P29: Skill Governance Registry — Agentic Skills Governance.
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Lifecycle management and compliance registry for agentic skills.
 Tracks skill status from pending→published→verified→deprecated→revoked,
 validates permission manifests, and maps registry records to ISO 42001

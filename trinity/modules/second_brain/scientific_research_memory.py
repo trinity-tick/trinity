@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P20-2: Scientific Research Memory — 科研全生命周期记忆
 
 对标论文: AutoSci (arXiv 2605.31468, 2026.05, PKU)

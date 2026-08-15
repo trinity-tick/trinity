@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 CB69: NeuralSymbolicMemoryReasoner — 神经符号记忆推理引擎
 ==========================================================
 

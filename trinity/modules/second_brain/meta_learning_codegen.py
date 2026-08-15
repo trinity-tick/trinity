@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P12-8: Meta-Learning Code Generation — 对标 ALMA (arXiv 2602.07755)
 
 实现代码空间中的元学习记忆逻辑生成:

@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P12-1: Multi-Agent Memory Topology Coordinator.
 
 Reference: arXiv 2606.04197 — Network Topology x Memory Depth Interaction.

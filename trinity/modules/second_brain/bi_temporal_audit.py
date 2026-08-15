@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P11-7: Bi-Temporal Audit Trail — 双时态不可变审计追踪
 
 在 ImmutableAuditTrail 基础上叠加双时态查询:

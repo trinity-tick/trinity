@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P27-1: Memory Injection Defense — OWASP Agent Top 10 (2026.08).
 Triadic: [Threat Detection] → [Cross-Session Integrity] → [Audit Trail].
 

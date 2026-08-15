@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P20-3: Parametric Embodied Memory — 参数化具身记忆
 
 对标论文: PEAM (arXiv 2605.27762, 2026.05)

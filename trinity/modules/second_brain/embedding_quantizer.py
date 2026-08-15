@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P9-4: Embedding Quantization Engine (对标 HuggingFace 2026)
 ============================================================
 

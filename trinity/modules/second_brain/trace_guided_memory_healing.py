@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P17-4: Trace-Guided Memory Healing — 轨迹引导记忆自愈
 
 对标: Retrace Counterfactual × ParamMem Reflection 组合

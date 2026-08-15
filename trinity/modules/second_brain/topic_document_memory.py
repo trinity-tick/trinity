@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 TopicDocumentMemory — Infini Memory Semantic Unit Architecture
 ==============================================================
 arXiv 2606.10677 · P39-1

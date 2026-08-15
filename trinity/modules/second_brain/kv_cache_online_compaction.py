@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 KV Cache Online Compaction — Attention-Guided Token Eviction
 =============================================================
 arXiv 2608.00902 · P46-6

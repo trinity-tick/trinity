@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 ContextLifecycleManager — Agentic Context Management (Maximem)
 ===============================================================
 arXiv 2607.21503 · P43-4

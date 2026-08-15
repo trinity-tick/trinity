@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P7-4: Enterprise-Level Memory Permission Hierarchy (对标 Tencent Enterprise Memory)
 ======================================================================================
 

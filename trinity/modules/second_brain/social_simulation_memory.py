@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P21-5: Agentopia Social Simulation Memory — Anuttacon + Fudan (arXiv 2606.07513)
 ================================================================================
 

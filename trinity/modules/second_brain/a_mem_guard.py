@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P11-6: A-MemGuard Access Control — 对标 NTU 2026 "A-MemGuard" 记忆访问控制
 
 实现基于角色/AgentID 的细粒度记忆访问控制:

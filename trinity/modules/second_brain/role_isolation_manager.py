@@ -1,5 +1,6 @@
 """P32: Role Isolation Manager — BEAM-SWITCH + MENTOR dual-chain.
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Serializable role profiles with state snapshots, cross-role leak
 detection, and guarded role switching with temporary state flush
 and leak filtering.

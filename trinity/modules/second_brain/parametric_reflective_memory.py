@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P17-1: Parametric Reflective Memory — 参数化反思记忆
 
 对标论文: ParamMem / ParamAgent (arXiv 2602.23320)

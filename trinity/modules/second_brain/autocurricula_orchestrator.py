@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 M113 AutoCurriculaOrchestrator — 自动课程编排
 
 基于 Open-ended Multi-agent Autocurricula via Visual Inspection (arXiv 2607.08193, 7月9日)

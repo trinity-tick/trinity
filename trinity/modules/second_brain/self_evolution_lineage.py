@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 CB71: SelfEvolutionLineage — 自演化历史追溯
 ============================================
 

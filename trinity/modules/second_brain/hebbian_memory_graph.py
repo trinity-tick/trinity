@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 CB72: HebbianMemoryGraph — 赫布记忆图
 ======================================
 

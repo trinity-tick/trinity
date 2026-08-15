@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 TransferableMemoryOS — MindMemOS Cross-Agent Transferable Memory OS
 ====================================================================
 华为诺亚方舟, Aug 2026 · P42-1

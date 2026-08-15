@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P14-1: Standardized Evaluation Protocol Adapter (对标 AML 2026.07.29)
 ======================================================================
 

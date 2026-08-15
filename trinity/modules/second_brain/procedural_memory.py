@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 CB60: ProceduralMemory — 程序性记忆
 ====================================
 

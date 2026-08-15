@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 MANDOL — Agglomerative Memory with Unified Retrieval
 =====================================================
 arXiv 2606.29778 · P46-7

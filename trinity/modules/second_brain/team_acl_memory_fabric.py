@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P23-4: Agent-Memory-OS — 团队级 ACL 记忆织物
 
 对标论文: agent-memory-os (Team ACL Memory Fabric for Multi-Agent Systems, 2026.08)

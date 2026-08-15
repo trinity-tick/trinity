@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P23-7: Memory Alerting — 记忆异常告警系统
 
 对标方案: Memory Alerting for Agentic Systems (2026)

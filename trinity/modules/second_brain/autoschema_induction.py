@@ -1,5 +1,6 @@
 """AutoSchemaKG Dynamic Schema Induction (P34) — 对标 AutoSchemaKG (ACL 2026, 50M docs, 9亿节点, 59亿边)
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 实现 LLM 驱动的无预定义 Schema 知识图谱构建：
 
 - DynamicSchemaInduction: 从文本同时抽取三元组 + 归纳 Schema，无需预定义模板

@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 CWL — Context Window Lifecycle Management for Agent Episodes
 =============================================================
 arXiv 2606.11213 · P46-3

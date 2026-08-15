@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 TieredExperienceMemory — SE-GA Three-Tier Memory Experience Framework
 ======================================================================
 ICML 2026 (arXiv 2605.16883) · P41-2

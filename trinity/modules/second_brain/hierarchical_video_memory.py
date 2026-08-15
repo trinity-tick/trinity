@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P20-4: Hierarchical Video Memory — 层次化视频记忆
 
 对标论文: Homer (arXiv 2607.02588, 2026.07)

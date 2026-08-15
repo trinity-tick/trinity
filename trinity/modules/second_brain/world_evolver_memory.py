@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 WorldEvolverMemory — WorldEvolver Action-Transformation World Simulator
 =======================================================================
 arXiv 2606.30639 · P41-1

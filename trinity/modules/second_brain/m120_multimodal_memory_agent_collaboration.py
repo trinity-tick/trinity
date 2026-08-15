@@ -3,6 +3,7 @@
 # Last assessed: 2026-08-08. Remove in a future cleanup cycle if unused.
 
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 M120 MultimodalMemoryAgentCollaboration — 多模态记忆增强Agent协作推荐
 ==========================================================
 基于 MMEACR (arXiv 2607.07108, July 8, 2026):

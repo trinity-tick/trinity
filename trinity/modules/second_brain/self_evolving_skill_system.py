@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 SelfEvolvingSkillSystem — MUSE-Autoskill Autonomous Skill Evolution
 ====================================================================
 字节ByteBrain, May 2026 · P42-4

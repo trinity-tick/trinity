@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 SuperLocalMemory V3.3 — Ebbinghaus Forgetting Curve + Cognitive Quantization
 =============================================================================
 arXiv 2604.04514 · P49-4

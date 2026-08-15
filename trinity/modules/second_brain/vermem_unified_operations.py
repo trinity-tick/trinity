@@ -1,5 +1,6 @@
 """P31: VerMem Unified Memory Operations — arXiv 2608.03137 (2026.08.04).
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Unified 7-operation policy (ADD/REVISE/SOFT_DELETE/RETRIEVE/FILTER/
 SUMMARIZE/RESTORE) across 3 memory states with local→global verification.
 """

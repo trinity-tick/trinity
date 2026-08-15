@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P14-4: Brain-Inspired Parallel Memory Architecture (对标 RoboMemory arXiv 2508.01415)
 =======================================================================================
 

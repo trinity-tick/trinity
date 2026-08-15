@@ -1,5 +1,6 @@
 """Light-Omni Reflex Video Controller (P34) — 对标 Light-Omni (arXiv 2607.05511)
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 实现"反射优先于推理"的 Agentic Video Understanding：
 
 - ReflexVideoController: 快速通道检测已知模式，反射匹配 → 跳过深度推理

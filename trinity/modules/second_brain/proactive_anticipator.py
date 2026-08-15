@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P7-1: Idle-Time Proactive Anticipation Engine (对标 ProAct)
 =============================================================
 

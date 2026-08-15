@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 MemMark — State Evolution Attribution Watermark for Agent Memory
 =================================================================
 arXiv 2605.25002 · P37-4

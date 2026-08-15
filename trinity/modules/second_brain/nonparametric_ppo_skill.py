@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P23-2: Skill-Pro — 非参数 PPO 技能学习
 
 对标论文: Skill-Pro (Nonparametric PPO for Procedural Skill Memory, 2026.08)

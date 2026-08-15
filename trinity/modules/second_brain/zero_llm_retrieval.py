@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 CB59: ZeroLLMRetrieval — 零LLM检索引擎
 ======================================
 

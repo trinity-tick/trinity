@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P11-2: Event-Anchored Preference Adapter (对标 FinPerMA arXiv 2608.04095)
 ==========================================================================
 

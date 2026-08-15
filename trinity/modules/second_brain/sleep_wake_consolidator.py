@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 SleepWakeConsolidator — Language Models Need Sleep (Google)
 ============================================================
 Google Research, Jul 2026 · P44-4

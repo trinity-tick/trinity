@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 BudgetMemRouter — BudgetMem Budget-Tier Routing for Runtime Agent Memory
 ==========================================================================
 ICML 2026 (arXiv 2602.06025) · P43-3

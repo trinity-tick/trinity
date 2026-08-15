@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 POMDPActivePerceptionMemory — OmniAgent Observation→Thought→Action Loop
 ========================================================================
 arXiv 2606.19341 · P39-3

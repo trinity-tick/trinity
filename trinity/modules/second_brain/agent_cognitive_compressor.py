@@ -1,5 +1,6 @@
 """P24: Agent Cognitive Compressor (ACC) — UChicago, arXiv 2601.11653.
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Bounded compressed cognitive state (CCS) replacing transcript replay.
 Schema-governed 9-dimension state with recall→qualify→commit cycle.
 Key insight: multi-turn failures stem from weak memory control, not knowledge gaps.

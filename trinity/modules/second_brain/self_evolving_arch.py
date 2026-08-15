@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P12-6: Self-Evolving Architecture — 对标 MemEvolve (ICML 2026)
 
 实现四维诊断器 + 架构变异 + 适应度评估循环:

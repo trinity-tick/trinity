@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P24-2: JAMEL — 潜在记忆令牌 + 探索共进化
 
 对标论文: arXiv:2606.01528 (JAMEL: Jointly Adaptive Memory and Exploration Learning)

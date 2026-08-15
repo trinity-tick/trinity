@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P10-5: Bi-Temporal Graph Engine — 对标 Zep/Graphiti 双时态知识图谱
 
 实现双时间轴知识图谱:

@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P20-5: Bayesian Procedural Memory — AAMAS 2026
 ===============================================
 

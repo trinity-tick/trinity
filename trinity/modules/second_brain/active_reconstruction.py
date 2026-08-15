@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P12-5: Active Memory Reconstruction — 对标 MRAgent (ICML 2026)
 
 实现 Cue-Tag-Content 三元组关联记忆图:

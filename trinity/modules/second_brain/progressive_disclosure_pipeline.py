@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P22-3: Progressive Disclosure Pipeline — L0-L4 渐进式披露管线
 
 对标论文: 腾讯 Agent Memory (Progressive Disclosure Architecture, 2026.08)

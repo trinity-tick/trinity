@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 UGradSL — Unlearning with Gradient Ascent via Smoothed Negative Labels (ICLR 2026).
 
 三元语: UGradSL 把负标签平滑嫁接到梯度上升机器遗忘中——在被遗忘数据上做带负

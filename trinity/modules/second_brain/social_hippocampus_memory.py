@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 SocialHippocampusMemory — Hippocampal-Inspired Multi-Agent Memory Sharing
 =========================================================================
 arXiv 2603.25614 · P38-2 · SoHip

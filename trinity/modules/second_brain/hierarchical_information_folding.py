@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 HIPIF — Hierarchical Information Folding for Long-Context Agents
 =================================================================
 arXiv 2606.10507 · P37-3

@@ -1,5 +1,6 @@
 
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P18-4: Edge Memory Compressor — 边缘记忆压缩
 
 对标论文: TurboQuant (Google, 2026.04)

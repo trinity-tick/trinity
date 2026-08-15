@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P23-8: Memory Coverage Auditor — 记忆覆盖率审计
 
 对标方案: Memory Coverage Auditing for Agent Systems (2026)

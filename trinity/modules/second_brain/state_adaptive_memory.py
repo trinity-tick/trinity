@@ -1,5 +1,6 @@
 
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P19-2: State-Adaptive Memory — 状态自适应记忆
 
 对标论文: SAM: State-Adaptive Memory (arXiv 2605.24468, 2026.05)

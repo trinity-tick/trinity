@@ -1,5 +1,6 @@
 """P24: MAGMA Multi-Graph Retrieval — 2026.07.
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Multi-graph routing across semantic / temporal / causal / entity sub-graphs
 with intent-aware strategy selection and adaptive topological traversal.
 """

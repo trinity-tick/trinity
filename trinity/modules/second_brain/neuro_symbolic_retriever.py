@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P6-2: Neuro-Symbolic Hybrid Retrieval Engine (对标 NS-Mem)
 ===========================================================
 

@@ -1,5 +1,6 @@
 """P31: RHELM Benchmark Engine — Microsoft arXiv 2605.31086 (2025.06).
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Cross-source (dialogue/email/attachment/calendar) aggregation with
 27-dimension challenge feature evaluation (attachment reference, hybrid
 reasoning, facticity, hallucination detection, info aggregation, temporal

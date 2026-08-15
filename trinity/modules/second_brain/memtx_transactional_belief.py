@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 MemTxn Transactional Belief State for Agents
 =============================================
 arXiv 2607.27834 · P45-4

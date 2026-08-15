@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 CB61: DimensionalMemory — 维度结构化记忆
 ========================================
 

@@ -1,5 +1,6 @@
 
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P19-4: Risk-Sensitive Memory Controller — 风险敏感记忆控制
 
 对标论文: RSCB-MC (arXiv 2604.27283, 2026.04)

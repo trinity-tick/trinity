@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P2-2 CompressionEvaluator — Memory Compression Quality Assessment
 
 Evaluates compression quality across multiple dimensions:

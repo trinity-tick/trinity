@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 CB73: HypergraphMemory — 超图记忆
 ==================================
 

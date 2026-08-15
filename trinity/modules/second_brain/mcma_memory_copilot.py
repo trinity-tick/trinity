@@ -1,5 +1,6 @@
 """P33: MCMA Memory Copilot — ACL 2026 Findings.
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Meta-Cognitive Memory Abstraction: learns to structure experience into
 instance→pattern→strategy hierarchy. DPO-trained memory copilot decouples
 task execution from memory management. Selective reuse by task similarity.

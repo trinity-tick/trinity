@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P13-1: Memory → Weight Distillation Pipeline (Hybrid Memory→Weight)
 ====================================================================
 

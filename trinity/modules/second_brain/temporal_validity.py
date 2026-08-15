@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P3-6: Automatic Temporal Metadata Extraction + Decay (对标 Mem0 May 2026)
 ==========================================================================
 Auto-extract event occurrence time, ongoing/completed status, time precision,

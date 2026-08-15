@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 M114 MemoryConsolidationSleep — 记忆巩固睡眠机制
 
 基于 Sleep Paradigm (arXiv 2606.03979, Google+Cornell, 6月)

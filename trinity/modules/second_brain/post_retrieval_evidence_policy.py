@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P16-2: Post-Retrieval Evidence Policy.
 
 Reference: MemChain (arXiv 2607.24097, 2026.07.27) — Trainable post-retrieval

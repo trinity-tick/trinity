@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 CB65: FilesystemMemoryOrganizer — 文件系统记忆组织器
 =====================================================
 

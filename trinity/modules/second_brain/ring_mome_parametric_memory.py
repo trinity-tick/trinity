@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 MoME Parametric Internal Memory for Agents
 ===========================================
 arXiv 2608.01630 · P45-3

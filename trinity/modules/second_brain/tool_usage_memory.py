@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P20-7: Tool Usage Memory — Structured Tool Call Memory (Dakera 2026)
 ====================================================================
 

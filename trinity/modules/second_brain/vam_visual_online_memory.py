@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 VAM — Visual Online Memory for Agents
 ======================================
 arXiv 2606.01435 · P46-2

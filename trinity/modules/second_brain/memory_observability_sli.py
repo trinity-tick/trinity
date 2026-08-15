@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P23-6: Memory Observability SLI — 记忆可观测性指标体系
 
 对标方案: Memory Observability SLI for Agentic Systems (2026)

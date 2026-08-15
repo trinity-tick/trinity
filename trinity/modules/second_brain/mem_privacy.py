@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P10-8: MemPrivacy Edge-Cloud — 对标 arXiv 2605.09530
 
 实现边云协同的隐私保护记忆系统:

@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P20-1: Self-Evolving Skill Memory — 自进化技能记忆
 
 对标论文: SkeMex (arXiv 2606.09365, 2026.06)

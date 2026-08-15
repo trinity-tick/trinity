@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 TemporalMemoryTree — TiMem Five-Level Temporal Containing Tree
 ===============================================================
 ACL 2026 Findings (arXiv 2601.02845) · P42-2

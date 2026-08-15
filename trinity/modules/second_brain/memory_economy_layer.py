@@ -1,5 +1,6 @@
 
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P19-3: Memory Economy Layer — 记忆经济层
 
 对标论文: EpochX (QuantaAlpha, 2026.04) + Yaochi 记忆共享经济

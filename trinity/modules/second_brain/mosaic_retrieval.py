@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P22-2: MOSAIC Retrieval — 实体类型图存储 + LSH 哈希加速双路径检索
 
 对标论文: MOSAIC (Multi-Organizational Semantic Access with Intelligent Caching, 2026.08)

@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P6-1: Logic Rule Memory Layer (对标 NS-Mem)
 ============================================
 

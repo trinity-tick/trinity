@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 AdaMMAnalyticMemory — AdaMM Analytic Memory for Multimodal Agents
 ==================================================================
 arXiv 2607.29440v2, Jul 31 2026 · P44-1

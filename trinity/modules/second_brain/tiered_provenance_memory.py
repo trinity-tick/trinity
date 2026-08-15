@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P23-3: TierMem — 溯源感知双层记忆
 
 对标论文: TierMem (Tiered Provenance-Aware Agent Memory, 2026.08)

@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P11-5: OWASP Agent Memory Guard — 对标 OWASP ASI06 Agent Security Checklist
 
 实现 5 类安全检测器 + YAML 策略引擎 + 安全快照回滚:

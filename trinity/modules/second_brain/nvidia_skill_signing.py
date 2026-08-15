@@ -1,5 +1,6 @@
 """P29: NVIDIA Model Signing — Skill Artifact Cryptography.
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Cryptographic signing and verification pipeline for skill artifacts.
 Generates SHA-256 hashes, RSA/ECDSA signatures, and X.509 certificate
 chains. Includes CI gate verification and certificate revocation

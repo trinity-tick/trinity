@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P12-4: Git-like Memory Version Control.
 
 Reference: Memoria (GTC 2026) — Copy-on-Write snapshots + branch/merge/rollback.

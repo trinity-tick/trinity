@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P22-7: Rashomon Argumentation Memory — Multi-Perspective Argumentation-Driven Retrieval
 ========================================================================================
 

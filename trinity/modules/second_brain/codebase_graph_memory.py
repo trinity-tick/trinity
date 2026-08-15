@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P10-1: Codebase Typed Graph Memory Layer (对标 Cognee)
 
 实现 AST 级代码实体提取、类型化关系图谱、影响面分析、CI 增量更新、

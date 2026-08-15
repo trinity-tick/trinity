@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P24-4: SAMEP — 记忆互操作协议
 
 对标论文: W3C AI Agent Memory Interoperability CG (2026.05)

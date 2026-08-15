@@ -1,5 +1,6 @@
 """P32: Temporal Predicate Rewriter — Memory Consolidation Survey (Zylos, Jun 2026).
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Fact self-updating: rewrites temporal predicates ("will go"/"is going")→
 ("went") as time advances, checks validity windows, and records immutable
 audit trails for each rewrite (addressing the Zylos Review audit gap).

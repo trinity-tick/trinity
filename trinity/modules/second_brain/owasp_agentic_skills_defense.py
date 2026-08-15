@@ -1,5 +1,6 @@
 """P29: OWASP Agentic Skills Top 10 Defense — 2026.
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Comprehensive scanner for the OWASP Agentic Skills Top 10 vulnerability
 categories. Covers typo-squatting, malicious instructions, credential
 leaks, privilege escalation, log poisoning, WebSocket hijacking, config

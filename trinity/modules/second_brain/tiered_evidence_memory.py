@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 TieredEvidenceMemory — TierMem Dual-Tier Evidence Architecture
 ===============================================================
 ICLR 2026 MemAgents Workshop · P40-3

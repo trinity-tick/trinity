@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 CB64: HarmonicMemoryRepresentation — 谐波记忆表征
 ==================================================
 

@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 CB63: HierarchicalNavigationRetrieval（HORMA）— 分层导航检索
 ============================================================
 

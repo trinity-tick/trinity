@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P11-4: Intent-Aware Memory Compressor (对标 SimpleMem ICML 2026)
 =================================================================
 

@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 Dialectic-Med — Counterfactual Adversarial Multi-Agent Debate for Medical Reasoning (ACL 2026).
 
 三元语: 反事实对抗多智能体辩论框架——提议者从记忆库检索证据生成初始推理,

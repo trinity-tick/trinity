@@ -3,6 +3,7 @@
 # Last assessed: 2026-08-08. Remove in a future cleanup cycle if unused.
 #!/usr/bin/env python3
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 M117 - Hierarchical Experimentalist (三层实验主义者)
 =====================================================
 Based on HExA: Hierarchical Experimentalist Agents for Long-Horizon

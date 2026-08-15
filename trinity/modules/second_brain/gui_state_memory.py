@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P11-3: Structured GUI State-Action Memory Graph (对标 EAM arXiv 2605.12294)
 ============================================================================
 

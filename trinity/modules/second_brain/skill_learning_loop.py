@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P13-2: Token-Space Skill Continuous Learning Loop
 ===================================================
 

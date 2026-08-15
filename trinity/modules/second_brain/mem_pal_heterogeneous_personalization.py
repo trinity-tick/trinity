@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 MemPAL Heterogeneous Personalization — arXiv 2511.13410
 ========================================================
 P45-2

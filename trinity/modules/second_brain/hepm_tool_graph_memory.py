@@ -1,5 +1,6 @@
 """P32: H-EPM Tool Graph Memory — Microsoft ICML 2026.
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Episodic-Procedural Memory for LLM tool agents: builds dynamic tool
 graphs from accumulated trajectories, balances episodic recall vs
 procedural routing at inference time, and biases RL exploration

@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 Nemori — Prediction-Error-Driven Adaptive Memory Distillation
 ==============================================================
 ACL 2026 · P37-2

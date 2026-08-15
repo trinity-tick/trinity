@@ -1,5 +1,6 @@
 """P33: PersonaAgent Test-Time Alignment — ACL 2026 Findings.
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Persona prompt as intermediary between memory and action. Test-time
 preference alignment via simulated recent interactions and text loss
 feedback. PersonaMemoryBridge connects persona prompt to memory store.

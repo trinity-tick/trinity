@@ -1,5 +1,6 @@
 """P30: Multi-Agent Topology Governance — Topology Patterns 2026.
 
+# status: orphan (2026-08-15 audit, not in runtime path)
 Defense for five canonical multi-agent topologies: STAR (supervisor injection
 guard), MESH (peer trust), HIERARCHICAL (delegation chain), BLACKBOARD
 (read-write isolation / CVE-2025-64168), FEDERATED (consensus validation).

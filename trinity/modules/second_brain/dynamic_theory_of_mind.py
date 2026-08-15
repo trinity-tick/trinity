@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 DynamicTheoryOfMind — Persistent Memory-Driven Recursive Opponent Modeling
 ==========================================================================
 arXiv 2604.04157 · P38-4 · Readable Minds

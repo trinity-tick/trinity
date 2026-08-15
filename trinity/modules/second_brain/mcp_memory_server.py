@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P10-2: MCP Stateless Memory Service Interface (对标 MCP 2026-07-28 GA)
 
 将 Trinity 记忆系统包装为无状态 MCP Server，实现 Header 路由、可缓存工具目录、

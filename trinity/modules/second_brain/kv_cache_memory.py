@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 KVCacheMemory — AgentKVShift KV-Cache Residual Decomposition
 ==============================================================
 arXiv 2607.21604 · P40-4

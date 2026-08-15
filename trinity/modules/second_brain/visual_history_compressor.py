@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P24-1: AgentOCR — Visual History Compression
 
 对标论文: arXiv:2601.04786 (AgentOCR: Visual History Compression for Agent Memory)

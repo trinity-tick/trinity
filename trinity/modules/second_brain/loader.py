@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 Optimized SecondBrain loader with lazy module loading.
 Replaces the monolithic SecondBrainV636 constructor.
 """

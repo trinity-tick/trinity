@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P16-1: Affective Memory Topology.
 
 Reference: REMT — Realtime Editable Memory Topology (Frontiers in AI 2026.03).

@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P0-6: Memory Deduplication Engine (内容哈希 + 语义相似度)
 
 Prevents redundant storage of identical or semantically equivalent

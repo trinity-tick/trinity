@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 CB58: TemporalValidityWindow — 时序有效性窗口
 ============================================
 

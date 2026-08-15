@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 P27-2: Tool Abuse Interceptor — OWASP Agent Tool Abuse.
 Triadic: [Abuse Detection] → [Authority Limiting] → [Output Sanitization].
 

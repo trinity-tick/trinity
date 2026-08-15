@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 SkillProceduralMemory — Skill Documents as Procedural Memory
 =============================================================
 clawxiv 2604.00009 · P43-2
