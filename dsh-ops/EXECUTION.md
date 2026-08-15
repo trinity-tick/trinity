@@ -2241,3 +2241,18 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
   memory 过滤 + checksum 可追溯）。实测 /audit 200、api/audit 过滤生效。
 - **顺带**：修复 API :8001 被我误杀（dashboard 重启时进程匹配误伤），已拉起。
 - **验证**：全量测试通过。
+
+
+### 56.1 V2 动作 C 执行（2026-08-15）：联邦记忆网络
+
+- **① 联邦增量同步**：scripts/federation_sync.py——增量导出（--since 按 updated_at）、
+  diff 冲突检测（同 hash 异内容）、merge 三策略（newer/keep-both/skip）、导入幂等。
+  实测：A 导出 3 + B 导出 2 → merge 5 → import 5 new/重导幂等；增量导出只含新增 1 条；
+  7 单测。
+- **② A2A 协作流水线**：scripts/a2a_pipeline_demo.py——3 agent（eng-dev/eng-qa/
+  hr-recruiter）+ 工程/HR 治理策略 + 共享聚合池。治理裁决全对（部门内✅/跨部门拒✅/
+  知识库只读✅/写拒✅）；跨 agent hybrid 检索命中 3 条。
+- **③ 记忆市场知识包**：scripts/knowledge_pack.py——按 category/tags 打包 → PII 脱敏
+  （手机/邮箱→[PHONE]/[EMAIL]）→ 跨实例拆包（隔离 persona）→ 幂等；与 TrustExchange
+  市场衔接（/market/estimate 估价）。实测脱敏生效 + 2 imported/重导幂等；5 单测。
+- **验证**：全量测试通过。
