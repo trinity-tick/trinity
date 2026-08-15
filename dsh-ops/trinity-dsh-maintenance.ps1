@@ -28,7 +28,7 @@ param(
 
 # 兼容 powershell -File 传参：命令行里的 "a,b,c" 会以单个字符串到达，
 # 这里统一按逗号拆分 + 校验。
-$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "sync", "selftest", "session-summarize", "all")
+$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "sync", "selftest", "session-summarize", "all")
 $normalized = @()
 foreach ($t in $Tasks) { $normalized += $t.Split(',') }
 $normalized = $normalized | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
@@ -208,6 +208,17 @@ runpy.run_path(r"$TrinityRoot\scripts\run_memory_tiers.py", run_name="__main__")
 "@
 $tiersPrompt = "在 C:\Users\Administrator\trinity 运行 python scripts/run_memory_tiers.py --store sqlite（对 SQLite 运行时大库执行三层记忆分层 Core/Recall/Archival），汇报分层统计；库不可用则报告失败。"
 
+# 睡眠式整合（Option P0-2c，2026-08-15）：decay/压缩 + LLM 事实提取 + 图更新
+$consolidateCmd = @"
+import sys
+sys.path.insert(0, r"$TrinityRoot")
+import runpy
+sys.argv = ["sleep_consolidation", "--store", "sqlite", "--llm", "$DecayLLM",
+            "--output", r"$LogDir\sleep_consolidation_$Timestamp.json"]
+runpy.run_path(r"$TrinityRoot\scripts\sleep_consolidation.py", run_name="__main__")
+"@
+$consolidatePrompt = "在 C:\Users\Administrator\trinity 运行 python scripts/sleep_consolidation.py --store sqlite --llm mock（睡眠式记忆整合：衰减扫描压缩 + 从高重要性记忆聚合提取可固化事实 + 实体图更新，结果写入 .trinity\logs），汇报各阶段统计；失败阶段明确报告。"
+
 # 双向同步：Hermes ↔ Trinity + Marvis 一次性同步
 $syncCmd = @"
 import sys, subprocess
@@ -274,7 +285,7 @@ finally:
 $sessionSummaryPrompt = "在 C:\Users\Administrator\trinity 为 ~/.trinity/store/trinity_store.db 中尚无摘要的会话生成会话摘要（trinity.daemon.session_state.summarize_all_sessions，幂等，LLM 或抽取式降级），汇报会话数与摘要数。"
 
 # ── 选择任务 ──────────────────────────────────────────────────────────────
-if ($Tasks -contains "all") { $Tasks = @("health", "evolution", "mirror", "decay", "tiers", "sync", "selftest") }
+if ($Tasks -contains "all") { $Tasks = @("health", "evolution", "mirror", "decay", "tiers", "consolidate", "sync", "selftest") }
 if ($Tasks -contains "compress") { $Tasks = @($Tasks | Where-Object { $_ -ne "compress" }) + "decay" }
 
 if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
@@ -287,6 +298,7 @@ foreach ($t in $Tasks) {
         "decay"     { Invoke-Task -Name "decay"     -DirectCommand $decayCmd  -DshPrompt $decayPrompt }
         "tiers"     { Invoke-Task -Name "tiers"     -DirectCommand $tiersCmd  -DshPrompt $tiersPrompt }
         "mirror"    { Invoke-Task -Name "mirror"    -DirectCommand $mirrorCmd -DshPrompt $mirrorPrompt }
+        "consolidate" { Invoke-Task -Name "consolidate" -DirectCommand $consolidateCmd -DshPrompt $consolidatePrompt }
         "sync"      { Invoke-Task -Name "sync"      -DirectCommand $syncCmd   -DshPrompt $syncPrompt }
         "selftest"  { Invoke-Task -Name "selftest"  -DirectCommand $selftestCmd -DshPrompt $selftestPrompt }
         "session-summarize" { Invoke-Task -Name "session-summarize" -DirectCommand $sessionSummaryCmd -DshPrompt $sessionSummaryPrompt }
