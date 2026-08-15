@@ -496,7 +496,8 @@ def create_llm_compress_callable(
                 {"role": "user", "content": user_prompt},
             ],
             "temperature": 0.2,
-            "max_tokens": 800,
+            # 压缩 token 预算可调（P1-2）：TRINITY_LLM_MAX_TOKENS，默认 800
+            "max_tokens": int(os.environ.get("TRINITY_LLM_MAX_TOKENS", "800")),
         }
         req = urllib.request.Request(
             endpoint,
