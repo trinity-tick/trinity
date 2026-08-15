@@ -2039,3 +2039,21 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
   ③fuse_docs GBK 控制台打印 ✅ 崩溃 → ASCII PASS/FAIL。
 - **测试**：tests/unit/test_doc_fusion.py 5 例（切分/分类/幂等指纹）；
   文档：DOC_FUSION_20260815.md（融合手册）+ mkdocs 导航。
+
+
+### 46.1 代码/结构梳理（2026-08-15）：模块审计 + 根目录清理 + 加载链核查
+
+- **模块审计（scripts/audit_modules.py）**：303 个 second_brain 模块分类——
+  ACTIVE 38（engine 聚合链可达）/ EXPERIMENTAL 1（loader）/ ORPHAN 264（全库零引用）。
+  给 264 孤儿模块加 `# status: orphan` 文件头标注（BOM 安全、engine 链保护、幂等）；
+  报告 ~/.trinity/logs/module_audit.json。
+- **关键结论**：①90% 模块不在运行路径=论文对齐算法储备（保留不删）；
+  ②registry 懒加载从未接入（loader 零外部引用），但"9693 行单文件"已被 P0 refactor
+  解决——engine.py 是 131 行 facade re-export 56 类（全验证有效）；
+  ③registry/loader 标 experimental 保留（未来可选懒加载，引用的 12 类全部存在）。
+- **根目录清理**：删 10 个调试残留（proc_test*.txt、sig.txt、test*.py/txt 等）；
+  归档 trinity_init.py/trinity_work.py → scripts/legacy/；docs_site/（12 md 旧源副本）
+  → scripts/legacy/docs_site/；确认 temp/output/site/logs/egg-info 已在 gitignore。
+- **验证**：304 模块全部 compile 通过（0 语法失败）；engine facade 56 导出全解析；
+  全量测试通过。
+- 文档：CODE_STRUCTURE_AUDIT_20260815.md（审计报告）。
