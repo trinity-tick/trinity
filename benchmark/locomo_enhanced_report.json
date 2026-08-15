@@ -3,27 +3,27 @@
     "config": "A.turn-baseline",
     "ingested": 38,
     "overall": {
-      "Recall@5": 0.14,
-      "Precision@5": 0.028,
-      "MRR": 0.061
+      "Recall@5": 0.16,
+      "Precision@5": 0.032,
+      "MRR": 0.0657
     },
     "by_category": {
       "single-session-user": {
-        "Recall@5": 0.2857,
-        "Precision@5": 0.0571,
-        "MRR": 0.1714,
+        "Recall@5": 0.2143,
+        "Precision@5": 0.0429,
+        "MRR": 0.1309,
         "count": 14
       },
       "single-session-assistant": {
-        "Recall@5": 0.0,
-        "Precision@5": 0.0,
-        "MRR": 0.0,
+        "Recall@5": 0.1053,
+        "Precision@5": 0.0211,
+        "MRR": 0.0307,
         "count": 19
       },
       "multi-session-reasoning": {
         "Recall@5": 0.2857,
         "Precision@5": 0.0571,
-        "MRR": 0.0571,
+        "MRR": 0.0952,
         "count": 7
       },
       "temporal-reasoning": {
@@ -33,19 +33,19 @@
         "count": 4
       },
       "knowledge-update": {
-        "Recall@5": 0.3333,
-        "Precision@5": 0.0667,
-        "MRR": 0.0833,
-        "count": 3
-      },
-      "preference-tracking": {
         "Recall@5": 0.0,
         "Precision@5": 0.0,
         "MRR": 0.0,
         "count": 3
+      },
+      "preference-tracking": {
+        "Recall@5": 0.3333,
+        "Precision@5": 0.0667,
+        "MRR": 0.0667,
+        "count": 3
       }
     },
-    "elapsed_s": 29.6
+    "elapsed_s": 29.7
   },
   "B.session-aggregate": {
     "config": "B.session-aggregate",
@@ -53,25 +53,25 @@
     "overall": {
       "Recall@5": 0.88,
       "Precision@5": 0.184,
-      "MRR": 0.5353
+      "MRR": 0.5633
     },
     "by_category": {
       "single-session-user": {
         "Recall@5": 1.0,
         "Precision@5": 0.2,
-        "MRR": 0.5357,
+        "MRR": 0.5226,
         "count": 14
       },
       "single-session-assistant": {
         "Recall@5": 1.0,
         "Precision@5": 0.2105,
-        "MRR": 0.6105,
+        "MRR": 0.6368,
         "count": 19
       },
       "multi-session-reasoning": {
         "Recall@5": 1.0,
         "Precision@5": 0.2286,
-        "MRR": 0.8333,
+        "MRR": 0.8571,
         "count": 7
       },
       "temporal-reasoning": {
@@ -83,31 +83,31 @@
       "knowledge-update": {
         "Recall@5": 0.6667,
         "Precision@5": 0.1333,
-        "MRR": 0.2778,
+        "MRR": 0.6667,
         "count": 3
       },
       "preference-tracking": {
         "Recall@5": 0.6667,
         "Precision@5": 0.1333,
-        "MRR": 0.3333,
+        "MRR": 0.25,
         "count": 3
       }
     },
-    "elapsed_s": 15.1
+    "elapsed_s": 15.3
   },
   "C.turn+query-expansion": {
     "config": "C.turn+query-expansion",
     "ingested": 38,
     "overall": {
-      "Recall@5": 0.14,
-      "Precision@5": 0.028,
-      "MRR": 0.0673
+      "Recall@5": 0.18,
+      "Precision@5": 0.036,
+      "MRR": 0.0653
     },
     "by_category": {
       "single-session-user": {
         "Recall@5": 0.4286,
         "Precision@5": 0.0857,
-        "MRR": 0.169,
+        "MRR": 0.1809,
         "count": 14
       },
       "single-session-assistant": {
@@ -117,9 +117,9 @@
         "count": 19
       },
       "multi-session-reasoning": {
-        "Recall@5": 0.1429,
-        "Precision@5": 0.0286,
-        "MRR": 0.1429,
+        "Recall@5": 0.4286,
+        "Precision@5": 0.0857,
+        "MRR": 0.1048,
         "count": 7
       },
       "temporal-reasoning": {
@@ -141,7 +141,7 @@
         "count": 3
       }
     },
-    "elapsed_s": 59.2
+    "elapsed_s": 58.1
   },
   "D.session+query-expansion": {
     "config": "D.session+query-expansion",
@@ -149,25 +149,25 @@
     "overall": {
       "Recall@5": 0.88,
       "Precision@5": 0.184,
-      "MRR": 0.508
+      "MRR": 0.5283
     },
     "by_category": {
       "single-session-user": {
         "Recall@5": 1.0,
         "Precision@5": 0.2,
-        "MRR": 0.5964,
+        "MRR": 0.6298,
         "count": 14
       },
       "single-session-assistant": {
         "Recall@5": 1.0,
         "Precision@5": 0.2105,
-        "MRR": 0.4895,
+        "MRR": 0.5754,
         "count": 19
       },
       "multi-session-reasoning": {
         "Recall@5": 1.0,
         "Precision@5": 0.2286,
-        "MRR": 0.8214,
+        "MRR": 0.7381,
         "count": 7
       },
       "temporal-reasoning": {
@@ -179,16 +179,16 @@
       "knowledge-update": {
         "Recall@5": 0.6667,
         "Precision@5": 0.1333,
-        "MRR": 0.1667,
+        "MRR": 0.2222,
         "count": 3
       },
       "preference-tracking": {
         "Recall@5": 0.6667,
         "Precision@5": 0.1333,
-        "MRR": 0.5,
+        "MRR": 0.2778,
         "count": 3
       }
     },
-    "elapsed_s": 44.5
+    "elapsed_s": 43.7
   }
 }
