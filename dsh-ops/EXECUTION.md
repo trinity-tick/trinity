@@ -1837,3 +1837,22 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
    `engine_core.py.som_bak` 残留（旧整文件备份，建议删除或入库管理）。
 4. **记忆分布正常**：大库 11,764 = archived 9,582 / active 1,525 / deleted 399 / merged 258（decay 归档设计如此）。
 5. **Jaeger 告警为历史噪音**：api-fix.err.log 的 span flush 拒绝发生在容器未就绪时段；当前 api err log 为空。
+
+### 34.7 跟进执行（2026-08-15 午后）：web 重启验证 + 端口收敛 + mirror 接入 + 三库厘清
+
+- **web host 重启成功**：新宿主 PID 6740、engine_worker 32924，`trinity_ping`/`trinity_diagnostics`（原生）恢复，
+  引擎诊断 ALL_PASS（122 模块/50 守护/47 通道）。schema + 引擎修复端到端生效。
+- **5432 端口收敛**：smartcos-wms 的 base compose 移除 `5432:5432` 发布（override 保留 127.0.0.1:5433）；
+  容器重建后宿主机 5432 仅剩原生 PG16。
+- **orphan 容器（wms-debezium/wms-pgvector/wms-zookeeper）结论：不删**——属 `docker-compose.cdc.yml`
+  的 CDC 管道基础设施，主 compose 的 orphan 告警属正常。
+- **sqlite_pg_mirror.py 原生 PG 兼容补丁**：tenants/personas 补 is_active/created_at 等幂等 ALTER、
+  tenants 补 UNIQUE(name) 索引、memories.sha256_hash 放宽 NOT NULL、_resolve_tenant 按 id 复用。
+  已用 `--pg-port 5432` 跑通（native PG 1,040→2,553：active 2,444=SQLite 1,525+遗留 931，去重幂等）。
+- **maintenance 新增 `mirror` 任务**（Direct：runpy 跑 sqlite_pg_mirror.py，参数取凭证解析值）；
+  autostart 每日链改为 `mirror,decay,tiers,sync`。两次运行验证幂等（第二次 added=0）。
+- **三库拓扑厘清（重要）**：①运行时=SQLite 大库（11,764，权威）；②维护 PG=docker trinity-db :5430
+  （trinity/trinity，7,512 条，maintenance decay/tiers/mirror 实际目标，凭证 TRINITY_PG_* 指向它）；
+  ③原生 PG :5432=恢复后遗留（此前 skill 手册误写"5432 主存储"已修正）。
+  遗留决策：decay/tiers 结果只落维护 PG，运行时 SQLite 大库的衰减仍无维护路径（建议后续将
+  decay/tiers 直接指向 SQLite 大库，或明确分层设计）。

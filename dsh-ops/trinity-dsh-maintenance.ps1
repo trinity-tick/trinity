@@ -28,7 +28,7 @@ param(
 
 # 兼容 powershell -File 传参：命令行里的 "a,b,c" 会以单个字符串到达，
 # 这里统一按逗号拆分 + 校验。
-$allowed = @("health", "evolution", "decay", "compress", "tiers", "sync", "selftest", "all")
+$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "sync", "selftest", "session-summarize", "all")
 $normalized = @()
 foreach ($t in $Tasks) { $normalized += $t.Split(',') }
 $normalized = $normalized | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
@@ -217,6 +217,16 @@ sys.exit(0 if all(c == 0 for c in codes) else 1)
 "@
 $syncPrompt = "执行 Trinity 双向同步：1) 运行 python C:\Users\Administrator\.trinity\sync_hermes_trinity.py 同步 Hermes 记忆；2) 在 C:\Users\Administrator\trinity 运行 python -m trinity.collector sync 做 Marvis 一次性同步；汇报两边统计与错误。"
 
+# SQLite 大库 → PG 幂等镜像（2026-08-15 接入：保证 decay/tiers 扫描覆盖运行时全量 active）
+$mirrorCmd = @"
+import sys
+sys.path.insert(0, r"$TrinityRoot")
+import runpy
+sys.argv = ["sqlite_pg_mirror", "--pg-port", "$PgPort", "--pg-user", "$PgUser", "--pg-password", "$PgPass"]
+runpy.run_path(r"$TrinityRoot\scripts\sqlite_pg_mirror.py", run_name="__main__")
+"@
+$mirrorPrompt = "在 C:\Users\Administrator\trinity 运行 python scripts/sqlite_pg_mirror.py --pg-port 5432（SQLite 大库 active 记忆幂等镜像到本地 PostgreSQL，供 decay/tiers 全量扫描），汇报 added/skipped/errors 统计。"
+
 # 自检（逐模块，可能较慢；仅在显式指定时运行）
 $selftestCmd = @"
 import sys
@@ -227,8 +237,34 @@ runpy.run_path(r"$TrinityRoot\scripts\run_all_self_tests.py", run_name="__main__
 "@
 $selftestPrompt = "在 C:\Users\Administrator\trinity 运行 python scripts/run_all_self_tests.py，汇总 PASS/FAIL/TIMEOUT 数量并报告失败的模块。"
 
+# 会话状态化（OPT9/SESS-1）：为 SQLite store 中尚无摘要的会话生成 LLM 摘要（幂等）。
+# 真实 LLM 需 TRINITY_LLM_API_KEY；无 key 时降级为抽取式摘要。
+$sessionSummaryCmd = @"
+import sys, os
+sys.path.insert(0, r"$TrinityRoot")
+os.environ.setdefault("TRINITY_MEMORY_ENABLED", "0")
+from trinity.adapters.sqlite import SQLiteAdapter
+from trinity.daemon.session_state import summarize_all_sessions
+key = os.environ.get("TRINITY_LLM_API_KEY")
+llm = None
+if key:
+    from trinity.daemon.memory_compressor import create_llm_compress_callable
+    llm = create_llm_compress_callable(
+        base_url=os.environ.get("TRINITY_LLM_BASE_URL", "https://api.deepseek.com/v1"),
+        api_key=key, model=os.environ.get("TRINITY_LLM_MODEL", "deepseek-chat"), timeout=60)
+store = os.path.expanduser("~/.trinity/store/trinity_store.db")
+adapter = SQLiteAdapter(db_path=store)
+adapter.connect()
+try:
+    res = summarize_all_sessions(adapter, llm)
+    print("SESSION-SUMMARIZE:", res)
+finally:
+    adapter.disconnect()
+"@
+$sessionSummaryPrompt = "在 C:\Users\Administrator\trinity 为 ~/.trinity/store/trinity_store.db 中尚无摘要的会话生成会话摘要（trinity.daemon.session_state.summarize_all_sessions，幂等，LLM 或抽取式降级），汇报会话数与摘要数。"
+
 # ── 选择任务 ──────────────────────────────────────────────────────────────
-if ($Tasks -contains "all") { $Tasks = @("health", "evolution", "decay", "tiers", "sync", "selftest") }
+if ($Tasks -contains "all") { $Tasks = @("health", "evolution", "mirror", "decay", "tiers", "sync", "selftest") }
 if ($Tasks -contains "compress") { $Tasks = @($Tasks | Where-Object { $_ -ne "compress" }) + "decay" }
 
 if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
@@ -240,8 +276,10 @@ foreach ($t in $Tasks) {
         "evolution" { Invoke-Task -Name "evolution" -DirectCommand $evoCmd    -DshPrompt $evoPrompt }
         "decay"     { Invoke-Task -Name "decay"     -DirectCommand $decayCmd  -DshPrompt $decayPrompt }
         "tiers"     { Invoke-Task -Name "tiers"     -DirectCommand $tiersCmd  -DshPrompt $tiersPrompt }
+        "mirror"    { Invoke-Task -Name "mirror"    -DirectCommand $mirrorCmd -DshPrompt $mirrorPrompt }
         "sync"      { Invoke-Task -Name "sync"      -DirectCommand $syncCmd   -DshPrompt $syncPrompt }
         "selftest"  { Invoke-Task -Name "selftest"  -DirectCommand $selftestCmd -DshPrompt $selftestPrompt }
+        "session-summarize" { Invoke-Task -Name "session-summarize" -DirectCommand $sessionSummaryCmd -DshPrompt $sessionSummaryPrompt }
     }
 }
 

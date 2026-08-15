@@ -126,6 +126,23 @@ def _ensure_varchar_ids(cur) -> bool:
 def ensure_pg_schema(cur) -> bool:
     for stmt in ALIGN_STATEMENTS:
         cur.execute(stmt)
+    # 原生 PG（restore 后的 trinity 库）schema 较 docker trinity-db 旧：
+    # tenants/personas 缺 is_active 等列，补幂等 ALTER（默认值兼容旧行）。
+    for tbl, col, ddl in (
+        ("tenants", "is_active", "BOOLEAN DEFAULT true"),
+        ("personas", "is_active", "BOOLEAN DEFAULT true"),
+        ("tenants", "created_at", "TIMESTAMP"),
+        ("personas", "created_at", "TIMESTAMP"),
+        ("sessions", "created_at", "TIMESTAMP"),
+        ("sessions", "updated_at", "TIMESTAMP"),
+    ):
+        cur.execute(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS {col} {ddl}")
+    # 原生 PG 的 tenants 无 UNIQUE(name)（docker 库才有）——ON CONFLICT (name)
+    # 依赖它，幂等补唯一索引（已确认无重复名）。
+    cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS tenants_name_key ON tenants (name)")
+    # SQLite 大库 sha256_hash 可空（如 summ_* 摘要记忆），原生 PG 却 NOT NULL——
+    # 放宽以匹配来源 schema，避免镜像失败。
+    cur.execute("ALTER TABLE memories ALTER COLUMN sha256_hash DROP NOT NULL")
     converted = _ensure_varchar_ids(cur)
     try:
         cur.execute("SELECT to_regclass('memory_versions')")
@@ -149,12 +166,18 @@ def seed_referenced_rows(cur, rows) -> dict:
         row = cur.fetchone()
         if row:
             return str(row[0])
+        # 原生 PG 可能已有同 id 不同名的租户行（如 tenant_id='default'）——按 id 复用，
+        # 避免 PK 冲突；否则插入（按 id 幂等）。
+        cur.execute("SELECT tenant_id FROM tenants WHERE tenant_id = %s", (name,))
+        row = cur.fetchone()
+        if row:
+            return str(row[0])
         cur.execute(
             "INSERT INTO tenants (tenant_id, name, created_at, is_active) VALUES (%s, %s, %s, true) "
-            "ON CONFLICT (name) DO NOTHING",
+            "ON CONFLICT (tenant_id) DO NOTHING",
             (name, name, now),
         )
-        cur.execute("SELECT tenant_id FROM tenants WHERE name = %s", (name,))
+        cur.execute("SELECT tenant_id FROM tenants WHERE tenant_id = %s", (name,))
         return str(cur.fetchone()[0])
 
     def _resolve_persona(name: str, tenant_uuid: str) -> str:
