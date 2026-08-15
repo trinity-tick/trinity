@@ -2208,3 +2208,21 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
     objective/phase→status）。部署到 node_modules（新会话生效）。
   - 测试：test_structure_sync 扩至 11 例（goal/write 全量同步/complete 映射/无 id 忽略）。
 - **验证**：全量测试通过。
+
+
+### 54.1 V2 动作 A 执行（2026-08-15）：记忆可迁移标准
+
+- **① 记忆可迁移标准**：scripts/memory_portability.py——标准 JSON/NDJSON 导出导入
+  （schema v1.0，核心 8 字段+元数据）；导入幂等（content_hash 去重）；Mem0/Zep
+  格式转换（import-mem0 / import-zep）。实测：库 A 导出→库 B 导入 2 new、重导
+  0 new 幂等；7 单测。
+- **② README 重写**：名实一致（41 active + 261 储备替代宣称 122 模块；526 文件/
+  243K 行/147 端点/705 测试）；加 V2 定位（Open Memory Layer with Governance）+
+  记忆可迁移章节 + 服务表。
+- **③ MCP 发布准备**：验证 CLI 三入口（trinity/trinity-mcp/trinity-api）+ mcp 依赖
+  就绪；docs/MCP_RELEASE_CHECKLIST_20260815.md（PyPI 发布 + Claude/IDE 接入 +
+  检查清单）。
+- **④ leaderboard 接入 dashboard**：dashboard 加 /leaderboard + /api/leaderboard
+  路由（渲染 benchmark/leaderboard.html）；修正 DB 路径兜底（优先
+  ~/.trinity/store）。实测 /leaderboard 200（3180B）。
+- **验证**：全量测试通过。

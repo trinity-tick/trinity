@@ -30,9 +30,12 @@ from flask import Flask, jsonify, render_template, request
 # ---------------------------------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent  # dashboard/
 TRINITY_DIR = BASE_DIR.parent               # trinity/
-DB_PATH = TRINITY_DIR / "trinity_store.db"
+# 权威大库兜底（2026-08-15）：优先 ~/.trinity/store，回退项目根
+_AUTH_DB = Path(os.path.expanduser("~/.trinity/store/trinity_store.db"))
+DB_PATH = _AUTH_DB if _AUTH_DB.exists() else (TRINITY_DIR / "trinity_store.db")
 KGRAPH_PATH = TRINITY_DIR / "data" / "kgraph" / "kgraph_data.jsonl"
 A2A_PATH = TRINITY_DIR / "data" / "a2a_registry.json"
+LEADERBOARD_PATH = TRINITY_DIR / "benchmark" / "leaderboard.html"
 
 app = Flask(__name__,
             template_folder=str(BASE_DIR / "templates"),
@@ -278,6 +281,30 @@ def api_agents():
         "total": len(result),
         "agents": result,
         "registry_version": a2a_data.get("registry_version", "1.0"),
+    })
+
+
+# ---------------------------------------------------------------------------
+# Leaderboard（2026-08-15, V2 动作 A）：渲染 benchmark/leaderboard.html
+# ---------------------------------------------------------------------------
+
+@app.route("/leaderboard")
+def leaderboard():
+    """记忆基准榜单页（MemBench leaderboard）。"""
+    if LEADERBOARD_PATH.exists():
+        return LEADERBOARD_PATH.read_text(encoding="utf-8", errors="ignore")
+    return "<h3>Leaderboard 未生成</h3><p>运行 benchmark 后生成 leaderboard.html</p>", 404
+
+
+@app.route("/api/leaderboard")
+def api_leaderboard():
+    """Leaderboard 元数据（供外部引用）。"""
+    return jsonify({
+        "exists": LEADERBOARD_PATH.exists(),
+        "path": str(LEADERBOARD_PATH),
+        "generated": time.strftime("%Y-%m-%d %H:%M:%S",
+                                    time.localtime(LEADERBOARD_PATH.stat().st_mtime))
+        if LEADERBOARD_PATH.exists() else None,
     })
 
 

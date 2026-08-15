@@ -1,175 +1,138 @@
----
-AIGC:
-    Label: "1"
-    ContentProducer: 001191440300708461136T1XGW3
-    ProduceID: 1ed0c9b5065b1819decccf0a8be25f33_55465776963511f1ac84525400f8a581
-    ReservedCode1: T6Zs5aQIQbXYrY63vpU17HOWXH9UPKYV6kFf+yH54Bbv/kWJumqkdUD0QBUUfKQfNi6XpnGeJ3WeYpETaLFqRGhZOADTXx0/QOpLHh+8KWibwlYin3dHi6MtUW4iMdGQIla5OcH0ZoOxRDC7Yix8BUbjfuTVXtNxWh2TzU7OMCCG5BD+EWNwKqtENs4=
-    ContentPropagator: 001191440300708461136T1XGW3
-    PropagateID: 1ed0c9b5065b1819decccf0a8be25f33_55465776963511f1ac84525400f8a581
-    ReservedCode2: T6Zs5aQIQbXYrY63vpU17HOWXH9UPKYV6kFf+yH54Bbv/kWJumqkdUD0QBUUfKQfNi6XpnGeJ3WeYpETaLFqRGhZOADTXx0/QOpLHh+8KWibwlYin3dHi6MtUW4iMdGQIla5OcH0ZoOxRDC7Yix8BUbjfuTVXtNxWh2TzU7OMCCG5BD+EWNwKqtENs4=
----
+# Trinity — Open Memory Layer with Governance
 
-# Trinity — Memory Operating System
-
-> **v8.2.0** — Multi-Agent Shared Memory with 50-Layer Guardian Chain and Brain-Inspired Architecture
+> **v8.2.0** — 治理优先的记忆操作系统：模型会换、框架会换，但记忆不换。
+> Trinity 是让记忆**可迁移、可治理、可交易**的基础设施。
 
 Trinity is not a "memory library." It is a **Memory Operating System** — an
 infrastructure layer that any memory store (vector DB, graph DB, SQLite) can
-plug into, with identity, RBAC, auditing, and economic protocols on top.
+plug into, with retrieval, governance, identity, evolution, and economic
+protocols on top.
+
+**定位（2026-08-15, V2）**：记忆是 AI 最后的切换成本。Trinity = 开放记忆层 + 治理底座——
+记忆可进可出（[可迁移标准](scripts/memory_portability.py)）、企业敢存（治理/合规/审计）、
+记忆值钱（TrustExchange 市场）。
 
 ---
 
 ## Architecture
 
 ```
-┌──────────────────────────────────────────────────────┐
-│                    Agent Layer                        │
-│  Multi-Agent • A2A v0.3 • 4 Anchor Identity          │
-├──────────────────────────────────────────────────────┤
-│                  Governance Layer                     │
-│  RBAC (6 roles) • 50-Layer Guardian Chain • DCSA-EJP │
-├──────────────────────────────────────────────────────┤
-│                  Memory Layer                         │
-│  7-channel retrieval • FTS5+jieba • Causal Graph     │
-│  Self-Evolving • Federated • Multimodal              │
-├──────────────────────────────────────────────────────┤
-│                  Storage Layer                        │
-│  SQLite/PostgreSQL • Vector Index • Graph DB          │
-│  Loihi 2 / TrueNorth (neuromorphic)                  │
-├──────────────────────────────────────────────────────┤
-│                  Economic Layer                       │
-│  TrustExchange — Memory Trading Market               │
-└──────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│ Agent Layer      A2A v0.3 · DSH 原生 · 共享聚合池 · 身份   │
+├──────────────────────────────────────────────────────────┤
+│ Governance Layer RBAC(6) · 50-Guardian · 审计签名 · 加密  │
+│                  B3 策略层（isolated/shared/delegated）    │
+├──────────────────────────────────────────────────────────┤
+│ Memory Layer     47 通道 · PPR · 意图压缩 · 蒸馏 11x      │
+│                  个性化(PAHF) · 跨模态 · 联邦              │
+├──────────────────────────────────────────────────────────┤
+│ Storage Layer    SQLite(FTS5) · PostgreSQL · AES-GCM 加密 │
+├──────────────────────────────────────────────────────────┤
+│ Economic Layer   TrustExchange 记忆市场 · 资产定价         │
+└──────────────────────────────────────────────────────────┘
 ```
 
-**22 sub-packages, 505+ Python files, 227K+ lines, 135+ API endpoints.**
+**526 Python files · 243K+ lines · 147 API endpoints · 705 tests passing**
 
 ---
 
 ## Quick Start
 
 ```bash
-# Install from source
+# 安装（系统 Python 3.11+）
 cd trinity
 pip install -e .
 
-# Verify
-python -c "import trinity; print(trinity.__version__)"
-# → 8.2.0
+# 验证
+python -c "import trinity; print(trinity.__version__)"   # → 8.2.0
 
-# Run all self-tests (208 pass)
-python scripts/run_all_self_tests.py
+# 全量测试（705 passed / 50 skipped / 0 failed）
+python -m pytest tests/ -q
 ```
 
-### Docker (4 container stack)
+### 服务（全在线，supervisor 自愈）
+
+| 服务 | 端口 | 说明 |
+|---|---|---|
+| trinity-api | :8001 | REST（147 端点） |
+| trinity-mcp | :8000 / :8003 | MCP SSE / MCP v2 streamable-http |
+| gateway | :8002 | OpenAI/Mem0 兼容层（DeepSeek 上游，鉴权/限流/模型映射） |
+| dashboard | :3005 | 可视化 |
+| PostgreSQL | :5430 | 维护镜像（docker） |
+
+---
+
+## Key Features（名实一致，2026-08-15 实测）
+
+| 能力 | 状态 | 说明 |
+|---|---|---|
+| **41 个 active 模块** | ✅ | 运行路径可达（另有 261 个论文对齐储备，`status: orphan` 标注，audit_modules.py 审计） |
+| **47 通道检索** | ✅ | BM25+jieba / FAISS HNSW / Exabase / BEAM-LIGHT / Hindsight / PPR 图扩散 / RRF 融合 |
+| **语义缓存** | ✅ | Redis 305x，scope 隔离 |
+| **存储加密** | ✅ | AES-256-GCM 可选（TRINITY_STORAGE_ENCRYPTION），FTS/哈希链兼容 |
+| **治理策略层** | ✅ | B3：YAML 策略（isolated/shared/delegated）+ 热切换 + 审计 |
+| **多智能体** | ✅ | A2A v0.3 + 共享聚合池 + 身份漂移检测 |
+| **意图压缩** | ✅ | SimpleMem 对齐（TRINITY_INTENT_CLUSTER=on） |
+| **结构化蒸馏** | ✅ | ICML 2026 对齐，11x 压缩（TRINITY_DISTILL_COMPRESS=on） |
+| **个性化** | ✅ | PAHF 双反馈（Meta ICLR 2026 对齐） |
+| **跨模态** | ✅ | 图搜文/文搜图闭环 |
+| **DSH 结构融合** | ✅ | 6 表自动同步（会话/事件/goal/todo/header/schedule），goal objective 100% |
+| **记忆可迁移** | ✅ | memory_portability.py：标准 JSON/NDJSON + Mem0/Zep 导入 |
+| **记忆市场** | ✅ | TrustExchange：挂单/订单簿/定价/声誉（11 端点） |
+| **联邦** | ✅ | 多实例 export/import/diff 同步 |
+
+---
+
+## 记忆可迁移（V2 核心）
 
 ```bash
-docker-compose up -d
-# trinity-mcp  :8000
-# trinity-api  :8005
-# trinity-db   :5430
-# trinity-dash :3000
+# 导出标准格式（记忆护城河入场券：可进可出）
+python scripts/memory_portability.py export --out memories.json
+python scripts/memory_portability.py export --out memories.ndjson --format ndjson
+
+# 导入（幂等：content_hash 去重）
+python scripts/memory_portability.py import --file memories.json
+
+# 从 Mem0 / Zep 迁移
+python scripts/memory_portability.py import-mem0 --file mem0_export.json --persona p1
+python scripts/memory_portability.py import-zep --file zep_export.json --persona p1
 ```
 
 ---
 
-## Key Features
+## Benchmark（本地实测口径，官方集网络阻塞中）
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| **Multi-Agent Shared Memory** | ✅ | RBAC 6 roles, scope enforcement at write time |
-| **50-Layer Guardian Chain** | ✅ | Injection → Sandbox → Audit → Sanitize → Self-heal |
-| **BM25 + Jieba Chinese Retrieval** | ✅ | CJK auto-detect, FTS5 with COALESCE fallback |
-| **GraphQL API (Strawberry)** | ✅ | Query/Mutation/Subscription, 6/6 integration PASS |
-| **Raft Consensus Cluster** | ✅ | 100/100 writes, 4/4 checks, 3-node local |
-| **Causal Reasoning** | ✅ | CausalGraph + Counterfactual Engine |
-| **Neuromorphic Chip Adapter** | ✅ | Loihi 2 (SNN), TrueNorth (<100mW) |
-| **TrustExchange Market** | ✅ | On-chain hash audit, KYC/AML compliance |
-| **129-Paper Brain Alignment** | ✅ | P1–P129 in `second_brain` (304 modules) |
-| **Self-Evolving Memory** | ✅ | EvolutionScheduler + SelfHealingPipeline |
-| **Federated Memory** | ✅ | FederatedAggregator + PrivacyBudget |
-| **CI/CD Pipeline** | ✅ | GitHub Actions, Makefile, 30s timeout |
-| **SDK (Python / TypeScript / Go)** | ✅ | Three languages, read-only interfaces |
+| Benchmark | Score | 口径 |
+|---|---|---|
+| LongMemEval-style (500q) | R@5 = **0.992** | 社区 mock 集（官方集 HF 不可达） |
+| SQuAD v1.1 (adapted) | R@5 = **98.3%** | 180 题 passage selection |
+| LoCoMo (subset) | R@5 = **0.88** | 38 题会话聚合 |
+| pytest | **705 passed / 50 skipped / 0 failed** | 全量 |
 
----
-
-## API Overview
-
-### REST (135+ endpoints)
-
-```
-GET  /health              → {"status": "ok", "version": "8.2.0"}
-POST /memories            → Create memory
-GET  /memories/{id}       → Retrieve memory
-GET  /agents              → List agents
-GET  /dashboard           → Dashboard data
-GET  /benchmark           → Benchmark results
-```
-
-### GraphQL
-
-```graphql
-# Health
-query { health { status version uptimeSeconds componentStatus } }
-
-# Memory Search (BM25 + jieba)
-query { searchMemories(query: "machine learning", topK: 5) { score memory { memoryId content } } }
-
-# Agents
-query { agents { agentId name status } }
-
-# Diagnostics
-query { diagnostics { component health latencyMs errorRate } }
-```
-
----
-
-## Benchmark Scores
-
-> 完整实测与官方参考口径见 [docs_site/benchmarks.md](docs_site/benchmarks.md)（2026-08-14 统一版，Trinity v8.2.0）。
-
-| Benchmark | Score | Dataset | Conditions |
-|-----------|:-----:|---------|------------|
-| LongMemEval (simulated) | R@5 = **0.9818** | 55 questions, self-built | BM25 + jieba, multi-term merge |
-| LongMemEval-style (500q) | R@5 / MRR（见 benchmarks.md） | 500 questions, community mock | FTS5 keyword, 6 categories |
-| SQuAD v1.1 (adapted) | R@5 = **98.3%** (177/180) | SQuAD v1.1 dev, 180 questions | BM25/FTS5 retrieval → passage selection |
-| LoCoMo (subset) | R@5 = **0.88**, MRR = **0.5353** | 38 self-built questions, session-aggregate | 官方 1982 题集本环境网络不可达 |
-| BEAM Scale | R@5 = **1.000**（1K/10K/100K 见 benchmarks.md） | 50 queries × scale | PostgreSQL FTS |
-| GraphQL Load Test | p50=**2.06ms**, p99=**29.25ms** | 100 QPS, 20 workers | Strawberry execute_sync, 0 errors |
-| Cluster Stress | **5/5 checks**（单 leader 已修复） | 3-node Raft, multi-process | Exactly 1 leader, commit advanced |
-| pytest | **135 passed / 33 skipped / 0 failed** | trinity/tests 全量 | 2026-08-14 修复后基线 |
-
-> **Note**: LongMemEval simulated result uses a template-generated 55-question set, NOT the official 500-question LongMemEval-S; the 500-question mock set follows LongMemEval-S category structure but is community-generated. Official LongMemEval-S / LoCoMo (1982 questions) datasets are **unreachable from this environment** (GitHub/HuggingFace blocked); once network access is available, replace with official sets. SQuAD score reflects passage-selection retrieval, not end-to-end memory recall.
+> 本地口径 ≠ 官方口径。HF 网络就绪后替换为 LongMemEval-S / LoCoMo 官方集，
+> 获得可对外宣称的公开数字（见 docs/FUTURE_PLAN_V2_20260815.md）。
 
 ---
 
 ## Research Foundation
 
-Trinity's `second_brain` module aligns with 129 brain-inspired papers:
-
-- **Memory**: HebbianMemoryGraph, HippocampalComplementaryMemory, OnlineFocusedMemory
-- **Evolution**: SelfOptimizingMemory (EvolM), MetaMemoryOptimizer
-- **Safety**: AdversarialMemoryDefense, PoisonedMemoryAuditor, BackdoorDetector
-- **Causality**: CausalSemanticGraphMemory, CounterfactualReasoningEngine
-- **Economics**: TrustExchange, PrivacyBudget, FederatedAggregator
+Trinity 的 `second_brain` 与 2026 前沿对齐：PPR/HippoRAG 2、SimpleMem (ICML 2026)、
+Structured Distillation (11x)、PAHF (Meta ICLR 2026)、Hindsight/BEAM、Mem0/Zep/Graphiti 思路。
 
 ---
 
 ## Requirements
 
-- Python 3.11+
-- Docker Desktop (for containerized deployment)
-- jieba >= 0.42.1 (Chinese word segmentation)
-- strawberry-graphql >= 0.224 (GraphQL API)
-- Optional: Loihi 2 / TrueNorth hardware for neuromorphic mode
+- Python 3.11+（推荐 3.14）
+- Docker Desktop（容器化部署）
+- jieba（中文分词）、fastapi、strawberry-graphql
 
 ---
 
 ## License
 
-MIT — see [pyproject.toml](pyproject.toml) and LICENSE file.
+MIT — see [pyproject.toml](pyproject.toml).
 
 ---
 
-*Trinity: not a memory library — a memory operating system.*
-*（内容由AI生成，仅供参考）*
+*Trinity: model changes, framework changes, memory doesn't.*
