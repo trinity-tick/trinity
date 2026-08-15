@@ -286,5 +286,8 @@ def api_agents():
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    print("Starting Trinity Dashboard on http://localhost:3000")
-    app.run(host="0.0.0.0", port=3000, debug=False)
+    # 端口收敛（2026-08-15）：Docker trinity-dash 容器占用 :3000（IPv6 分占），
+    # 本地 dashboard 改用 :3005 避免地址族分占冲突（DASH_PORT 可覆盖）。
+    dash_port = int(os.environ.get("DASH_PORT", "3005"))
+    print(f"Starting Trinity Dashboard on http://localhost:{dash_port}")
+    app.run(host="0.0.0.0", port=dash_port, debug=False)
