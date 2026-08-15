@@ -59,3 +59,18 @@ Trinity 均已落地）。
 2026 Q3 的前沿维度（PPR/时序/图向量统一/治理共享记忆），Trinity **几乎全部已实现**
 ——最大优化空间不是写新代码，而是**把 4-5 个现成的增强模块接入运行路径**（P0-1/P0-2），
 让"库里的前沿"变成"跑着的前沿"；对外则补齐 Caura 式的包装（MCP 发布 + 基准数字）。
+
+## 五、执行结果（2026-08-15 落地）
+
+| 项 | 状态 | 验证 |
+|---|---|---|
+| P0-1a Graph+PPR 第 6 通道 | ✅ | MemoryAggregator hybrid 融合新增图通道（_AggregatorKGraphAdapter：
+  关系图 PPR 扩展 → 池内记忆映射 → RRF）；verify_graph_channel.py + 5 单测 PASS |
+| P0-1b kgraph PPR 增强 | ✅ | KnowledgeGraph.search = 关键词种子 → PPR 扩散 → 融合
+  （复用 ppr_search，对齐 HippoRAG 2）；关联实体带 ppr_score 进入结果；5 单测 |
+| P0-1c 意图聚类压缩 | ✅ | MemoryCompressor.intent_cluster_batch（SimpleMem 对齐）——
+  HierarchicalClustering 按意图聚类子批；TRINITY_INTENT_CLUSTER=on 启用；
+  失败回退原样；4 单测 |
+| P0-2 个性化接入 | ✅ | Trinity.personalization（PAHFEngine）+ get_preference_context /
+  integrate_feedback / should_clarify（Meta ICLR 2026 对齐）；全链路 PASS；6 单测 |
+| 全量测试 | ✅ | +20 测试全绿 |

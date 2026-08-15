@@ -249,6 +249,10 @@ class Trinity:
         # ── 跨模态检索（文字 ↔ 图片记忆）─────────────────────────
         self._cross_modal_retriever = None
 
+        # ── 个性化引擎（PAHF 双反馈, R3 P0-2, 2026-08-15）────────
+        # 惰性实例化；TRINITY_PERSONALIZE=on 时 search 注入偏好上下文。
+        self._personalization = None
+
         # ── 记忆压缩引擎 ──────────────────────────────────────────
         self._compressor = None
 
@@ -2493,6 +2497,113 @@ class Trinity:
         return result
 
     # ── 跨模态检索（文字 ↔ 图片记忆）─────────────────────────────
+
+    # ── 个性化（R3 P0-2, 2026-08-15）───────────────────────────────
+    # PAHF 双反馈个性化引擎（Meta ICLR 2026 对齐）：行动前澄清 →
+    # 偏好检索 → 行动后反馈整合。惰性实例化；失败静默降级（不影响主流程）。
+
+    @property
+    def personalization(self):
+        """惰性获取 PAHFEngine（不可用时返回 None）。"""
+        if self._personalization is None:
+            try:
+                from trinity.modules.second_brain.personalization_engine import PAHFEngine
+                self._personalization = PAHFEngine()
+            except Exception:
+                self._personalization = None
+        return self._personalization
+
+    def get_preference_context(
+        self, user_id: str, domain: str = "search",
+    ) -> Dict[str, Any]:
+        """获取用户偏好上下文（供检索/行动注入）。
+
+        Args:
+            user_id: 用户标识（persona_id）。
+            domain: 偏好领域（search/style/format...）。
+
+        Returns:
+            {"user_id": ..., "preferences": [...], "enabled": bool}
+        """
+        eng = self.personalization
+        if eng is None:
+            return {"user_id": user_id, "preferences": [], "enabled": False}
+        try:
+            from trinity.modules.second_brain.personalization_engine import PreferenceDomain
+            dom = PreferenceDomain(domain) if domain in {d.value for d in PreferenceDomain} \
+                else PreferenceDomain.SEARCH
+            prefs = eng.retriever.retrieve(user_id, dom)
+            entries = [
+                {"content": e.value, "confidence": e.confidence,
+                 "key": e.key,
+                 "domain": e.domain.value if hasattr(e.domain, "value") else str(e.domain)}
+                for e in (prefs or {}).values()
+            ]
+            return {"user_id": user_id, "preferences": entries, "enabled": True}
+        except Exception:
+            return {"user_id": user_id, "preferences": [], "enabled": False}
+
+    def integrate_feedback(
+        self, user_id: str, feedback: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """整合用户反馈到偏好记忆（行动后）。
+
+        Args:
+            user_id: 用户标识。
+            feedback: {"content": 偏好内容, "domain": 领域,
+                       "feedback_type": "explicit_confirm|explicit_correction", ...}
+
+        Returns:
+            {"integrated": bool, "preference_count": int}
+        """
+        eng = self.personalization
+        if eng is None:
+            return {"integrated": False, "preference_count": 0}
+        try:
+            content = feedback.get("content", "")
+            if not content:
+                return {"integrated": False, "preference_count": 0}
+            from trinity.modules.second_brain.personalization_engine import (
+                FeedbackRecord, FeedbackType, PreferenceDomain,
+            )
+            domain_str = feedback.get("domain", "search")
+            dom = PreferenceDomain(domain_str) if domain_str in {d.value for d in PreferenceDomain} \
+                else PreferenceDomain.SEARCH
+            fb_type_str = feedback.get("feedback_type", "explicit_confirm")
+            fb_type = FeedbackType(fb_type_str) if fb_type_str in {f.value for f in FeedbackType} \
+                else FeedbackType.EXPLICIT_CONFIRM
+            record = FeedbackRecord(
+                user_id=user_id,
+                feedback_type=fb_type,
+                raw_response=content,
+                preference_changes=[{"domain": dom.value, "key": content[:60],
+                                     "value": content, "confidence": 0.6}],
+            )
+            result = eng.integrator.integrate_feedback(
+                user_id=user_id, feedback=record, retriever=eng.retriever,
+            )
+            return {
+                "integrated": True,
+                "changes": result.get("changes_made", 0),
+                "drift_detected": result.get("drift_detected", False),
+            }
+        except Exception:
+            return {"integrated": False, "preference_count": 0}
+
+    def should_clarify(
+        self, user_id: str, action_context: str, domain: str = "search",
+    ) -> bool:
+        """判断行动前是否需要澄清偏好。"""
+        eng = self.personalization
+        if eng is None or not action_context.strip():
+            return False
+        try:
+            from trinity.modules.second_brain.personalization_engine import PreferenceDomain
+            dom = PreferenceDomain(domain) if domain in {d.value for d in PreferenceDomain} \
+                else PreferenceDomain.SEARCH
+            return eng.should_clarify(user_id, action_context, dom)
+        except Exception:
+            return False
 
     def _ensure_cross_modal_retriever(self):
         """Lazy-initialize the CrossModalRetriever.

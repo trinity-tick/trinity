@@ -2076,3 +2076,21 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
   多智能体 5/存储 3/论文对齐 3/Other 63），生成 docs/ORPHAN_MODULES_INDEX.md（299 行）。
 - **顺带修复**：owasp_memory_guard.py:115 无效转义（raw 字符串被 ['""] 提前闭合，
   \s 落非 raw 上下文——未来 Python 会报错），改单引号+转义引号，SyntaxWarning 消失。
+
+
+### 48.1 R3 优化执行（2026-08-15）：前沿模块接入运行路径
+
+- **P0-1a Graph+PPR 第 6 通道**：MemoryAggregator hybrid 融合新增图通道——
+  _AggregatorKGraphAdapter（关系图 query_relations/get_entity/ppr_search 适配），
+  向量候选 → PPR 1-2 跳扩展 → 池内记忆映射 → RRF 融合。verify_graph_channel.py PASS；
+  5 单测。
+- **P0-1b kgraph PPR 增强**：KnowledgeGraph.search 升级为"关键词召回种子 →
+  PPR 图扩散（ppr_search 复用）→ 融合"（对齐 HippoRAG 2）；图关联实体进入结果
+  带 ppr_score。5 单测。
+- **P0-1c 意图聚类压缩**：MemoryCompressor.intent_cluster_batch（SimpleMem ICML 2026
+  对齐）——HierarchicalClustering 按意图把一批记忆聚为子批供逐簇压缩；
+  env TRINITY_INTENT_CLUSTER=on 可启用；失败/关闭回退原样。4 单测。
+- **P0-2 个性化接入**：Trinity 暴露 personalization（PAHFEngine 惰性实例化）+
+  get_preference_context / integrate_feedback / should_clarify（Meta ICLR 2026 对齐）；
+  反馈→偏好入库→检索→澄清全链路 PASS。6 单测。
+- **验证**：全量测试通过（+20 测试）。文档：COMPARISON_VS_2026_SOTA_R3 执行结果。

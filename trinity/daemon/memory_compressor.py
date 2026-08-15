@@ -277,6 +277,64 @@ class MemoryCompressor:
 
     # ── Full Compression Pipeline ──────────────────────────────
 
+    # ── Intent-Aware Pre-Clustering（R3 P0-1c, 2026-08-15）──────────
+    # 对齐 SimpleMem (ICML 2026)：压缩前按意图层次聚类，同意图记忆
+    # 一起压缩（摘要更聚焦）。env 开关 TRINITY_INTENT_CLUSTER=on 启用；
+    # 失败/关闭时原样返回批次（行为不变）。
+
+    def intent_cluster_batch(
+        self,
+        memories: List[Dict[str, Any]],
+        min_cluster: int = 2,
+    ) -> List[List[Dict[str, Any]]]:
+        """按意图把一批记忆聚类为多个子批（供逐簇压缩）。
+
+        Args:
+            memories: 待压缩记忆列表。
+            min_cluster: 子批最小记忆数（小于则并入相邻）。
+
+        Returns:
+            子批列表；意图聚类不可用时返回 [memories]（原样）。
+        """
+        if len(memories) < min_cluster * 2:
+            return [memories]
+        try:
+            from trinity.modules.second_brain.intent_compression import (
+                InteractionFragment, HierarchicalClustering,
+            )
+            frags = [
+                InteractionFragment(
+                    fragment_id=str(m.get("memory_id", i)),
+                    text=str(m.get("content", "")),
+                    task_labels=[str(m.get("category", "general"))],
+                    importance=float(m.get("importance", 0.5)),
+                )
+                for i, m in enumerate(memories)
+            ]
+            clusterer = HierarchicalClustering()
+            labels = clusterer.fit_predict(frags)
+            groups: Dict[int, List[Dict[str, Any]]] = {}
+            for mem, label in zip(memories, labels.values()):
+                groups.setdefault(int(label), []).append(mem)
+            sub_batches = [g for g in groups.values() if len(g) >= 1]
+            # 过小的簇并入最近的大簇
+            merged: List[List[Dict[str, Any]]] = []
+            small: List[Dict[str, Any]] = []
+            for g in sub_batches:
+                if len(g) >= min_cluster:
+                    merged.append(g)
+                else:
+                    small.extend(g)
+            if small:
+                if merged:
+                    merged[0].extend(small)
+                else:
+                    merged = [small]
+            return merged or [memories]
+        except Exception as exc:
+            logger.debug("intent clustering skipped: %s", exc)
+            return [memories]
+
     def compress_all_batches(
         self,
         batches: List[List[Dict[str, Any]]],

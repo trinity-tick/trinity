@@ -76,6 +76,57 @@ except ImportError:
 _SENTINEL = object()
 
 
+# ── Graph KGraph Adapter（2026-08-15, R3 P0-1a）────────────────────────
+# 把 MemoryAggregator 的 _relations_graph（memory_id 级关系图）+ 向量索引
+# 适配为 GraphVectorHybridRetriever 所需的 kgraph 接口（query_relations /
+# get_entity / ppr_search），让"向量+PPR+RRF"三阶段检索成为 hybrid 第 6 通道。
+class _AggregatorKGraphAdapter:
+    """GraphVectorHybridRetriever 兼容的轻量 kgraph（基于聚合池关系图）。"""
+
+    def __init__(self, aggregator: "MemoryAggregator"):
+        self._agg = aggregator
+
+    def query_relations(self, memory_id: str, max_depth: int = 1) -> list:
+        """返回 memory_id 的直接邻接关系（模拟 kgraph.query_relations）。"""
+        graph = self._agg._relations_graph
+        edges = []
+        adj = graph.get(memory_id, {})
+        for target, rel in adj.items():
+            edges.append({"subject_id": memory_id, "object_id": target,
+                          "predicate": str(rel)})
+        # 反向边（target → memory_id）
+        for src, adj_dict in graph.items():
+            if memory_id in adj_dict:
+                edges.append({"subject_id": src, "object_id": memory_id,
+                              "predicate": str(adj_dict[memory_id])})
+        return edges[: max_depth * 16]
+
+    def get_entity(self, memory_id: str) -> Optional[dict]:
+        """返回 memory_id 对应的记忆向量（模拟 get_entity）。"""
+        dv = self._agg._pool.get(memory_id)
+        if dv is None:
+            return None
+        return {"id": memory_id, "name": memory_id,
+                "properties": {"content": getattr(dv, "content", "")[:200]}}
+
+    def ppr_search(self, query_entities: list, top_k: int = 20, **kwargs) -> list:
+        """轻量 PPR：从种子实体做 1-2 跳 BFS，按度加权返回。"""
+        from collections import Counter
+        graph = self._agg._relations_graph
+        scores: Counter = Counter()
+        for seed in query_entities:
+            seed_id = seed if isinstance(seed, str) else (seed or {}).get("id", "")
+            if not seed_id:
+                continue
+            scores[seed_id] += 1.0
+            for target in graph.get(seed_id, {}):
+                scores[target] += 0.5
+                for hop2 in graph.get(target, {}):
+                    scores[hop2] += 0.25
+        ranked = scores.most_common(top_k)
+        return [{"id": mid, "score": float(s)} for mid, s in ranked]
+
+
 # ── MemoryAggregator ──────────────────────────────────────────────────────
 
 
@@ -133,6 +184,18 @@ class MemoryAggregator:
                 logger.info("Retrieval Gateway active: V47 + Exabase + BEAMLIGHT")
             except Exception as exc:
                 logger.info("Retrieval Gateway limited: %s", exc)
+
+        # ── R3 P0-1a: Graph+PPR hybrid channel (2026-08-15) ──────────
+        # 用聚合池关系图做"向量候选 → PPR 图扩展"作为 hybrid 融合的第 6 通道，
+        # 对齐 2026 PPR 检索主流。通道对象总创建（ppr 不依赖向量索引）；
+        # 实际生效由 hybrid 查询时的 vec_ids 是否非空决定。
+        self._graph_channel: Any = None
+        try:
+            self._graph_channel = _AggregatorKGraphAdapter(self)
+            logger.info("Graph+PPR hybrid channel active (6th RRF channel)")
+        except Exception as exc:
+            self._graph_channel = None
+            logger.info("Graph+PPR hybrid channel disabled: %s", exc)
 
         # ── P1-4: Degradation Policy ─────────────────────────────────
         from trinity.agents.degradation import DegradationManager, ServiceTier
@@ -666,6 +729,23 @@ class MemoryAggregator:
                         ranked_lists.append(exa_dvs)
                 except Exception as exc:
                     self._degradation.mark_failure("exabase", str(exc)[:100])
+
+            # ── R3 P0-1a: Graph+PPR 第 6 通道（2026-08-15）────────────
+            # 向量候选 → 关系图 PPR 扩展 → 按 ppr 分数映射回池内记忆。
+            if self._graph_channel is not None and query_text and vec_ids:
+                try:
+                    ppr_candidates = self._graph_channel.ppr_search(
+                        vec_ids[:10], top_k=limit * 2,
+                    )
+                    graph_dvs: List[DimensionVector] = []
+                    for g in ppr_candidates:
+                        mid = g.get("id") or (g.get("entity_id") if isinstance(g, dict) else None)
+                        if mid and mid in self._pool and mid not in [d.memory_id for d in graph_dvs]:
+                            graph_dvs.append(self._pool[mid])
+                    if graph_dvs:
+                        ranked_lists.append(graph_dvs)
+                except Exception as exc:
+                    logger.debug("Graph+PPR channel skipped: %s", exc)
 
             # RRF Fusion across all active channels
             merged = self._rrf_fusion(ranked_lists, top_k=limit)

@@ -150,8 +150,18 @@ class KnowledgeGraph:
         return [self._entities[eid] for eid in ids if eid in self._entities]
 
     def search(self, query_text: str, top_k: int = 5) -> list[dict]:
+        """关键词检索 + PPR 图扩散（2026-08-15, R3 P0-1b）。
+
+        两阶段：
+          1. 关键词召回种子实体（原有逻辑）
+          2. PPR 从种子扩散，把图上关联实体提升进结果
+             （对齐 HippoRAG 2 / 2026 PPR 检索主流；图小或无关时回退纯关键词）
+
+        Returns:
+            [{"entity": {...}, "score": float, "ppr_score": float|None}, ...]
+        """
         query = query_text.lower()
-        results = []
+        kw_results: list[dict] = []
         for eid, entity in self._entities.items():
             score = 0.0
             if query in eid.lower():
@@ -165,10 +175,38 @@ class KnowledgeGraph:
             if entity.get("entity_type") and query in entity["entity_type"].lower():
                 score += 0.2
             if score > 0:
-                results.append({"entity": entity, "score": score})
+                kw_results.append({"entity": entity, "score": score,
+                                   "ppr_score": None})
 
-        results.sort(key=lambda x: -x["score"])
-        return results[:top_k]
+        kw_results.sort(key=lambda x: -x["score"])
+        kw_ids = [r["entity"].get("id") or r["entity"].get("entity_id")
+                  for r in kw_results]
+
+        # ── PPR 图扩散（有种子且图非空时）────────────────────────────
+        if kw_ids and len(self._relations) > 0 and len(self._entities) > 1:
+            try:
+                ppr = self.ppr_search([e for e in kw_ids if e], top_k=max(top_k * 3, 10))
+                ppr_by_id = {p["entity_id"]: p["ppr_score"] for p in ppr}
+                # 融合：关键词结果打 PPR 标记；PPR 独有实体补入
+                for r in kw_results:
+                    eid = r["entity"].get("id") or r["entity"].get("entity_id")
+                    if eid in ppr_by_id:
+                        r["ppr_score"] = ppr_by_id[eid]
+                        r["score"] += ppr_by_id[eid] * 0.5  # 图信号加权
+                known = {r["entity"].get("id") or r["entity"].get("entity_id")
+                         for r in kw_results}
+                for eid, pscore in ppr_by_id.items():
+                    if eid not in known and eid in self._entities:
+                        kw_results.append({
+                            "entity": self._entities[eid],
+                            "score": pscore * 0.5,   # 仅图信号
+                            "ppr_score": pscore,
+                        })
+                kw_results.sort(key=lambda x: -x["score"])
+            except Exception:
+                pass  # PPR 失败回退纯关键词
+
+        return kw_results[:top_k]
 
     def get_stats(self) -> dict:
         rel_type_dist: dict[str, int] = defaultdict(int)
