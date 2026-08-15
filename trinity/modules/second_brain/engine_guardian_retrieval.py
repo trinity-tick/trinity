@@ -245,6 +245,14 @@ class RetrievalSystemV47:
     def validate(self) -> bool:
         return len(self.channels) == 47
 
+    def search(self, query: str, top_k: int = 10) -> list:
+        """聚合器通道契约（2026-08-15）：V47 是 47 路通道注册器，无独立记忆数据源。
+
+        返回空列表——通道"可用但不贡献结果"，避免 aggregator 调用 .search 抛
+        AttributeError 触发通道降级（degradation）。
+        """
+        return []
+
     def get_new_channels(self) -> dict:
         return {
             "channel_38": {

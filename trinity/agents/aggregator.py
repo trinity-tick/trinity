@@ -643,6 +643,8 @@ class MemoryAggregator:
                     v47_dvs: List[DimensionVector] = []
                     for r in v47_results:
                         dv_id = getattr(r, "memory_id", None) or getattr(r, "id", None)
+                        if dv_id is None and isinstance(r, dict):
+                            dv_id = r.get("memory_id") or r.get("id")
                         if dv_id and dv_id in self._pool:
                             v47_dvs.append(self._pool[dv_id])
                     if v47_dvs:
@@ -656,6 +658,8 @@ class MemoryAggregator:
                     exa_dvs: List[DimensionVector] = []
                     for r in exa_results:
                         dv_id = getattr(r, "memory_id", None) or getattr(r, "id", None)
+                        if dv_id is None and isinstance(r, dict):
+                            dv_id = r.get("memory_id") or r.get("id")
                         if dv_id and dv_id in self._pool:
                             exa_dvs.append(self._pool[dv_id])
                     if exa_dvs:

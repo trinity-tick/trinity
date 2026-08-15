@@ -550,6 +550,16 @@ class ExabaseRetrieval:
     def retrieve(self, query: str, top_k: int = 10) -> dict:
         return self._planner.retrieve(query, top_k)
 
+    def search(self, query: str, top_k: int = 10) -> list:
+        """聚合器通道契约（2026-08-15）：委托 retrieve，兼容 dict/list 返回。
+
+        aggregator 以 `for r in results` 消费并取 memory_id——返回 dict 列表。
+        """
+        res = self.retrieve(query, top_k)
+        if isinstance(res, dict):
+            return res.get("results", res.get("memories", []))
+        return res or []
+
     def _estimate_precision(self, results: list[dict], cutoff: int = 10) -> float:
         return self._planner._estimate_precision(results, cutoff)
 
