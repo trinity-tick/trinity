@@ -60,6 +60,18 @@ if (-not $PgUser) { $PgUser = "postgres" }
 $PgPass = if ($env:TRINITY_PG_PASSWORD) { $env:TRINITY_PG_PASSWORD } else { (Get-DshCredential "TRINITY_PG_PASSWORD") }
 if (-not $PgPass) { $PgPass = "postgres" }
 
+# 真实 LLM 压缩（可选）：无 TRINITY_LLM_API_KEY 时用 DEEPSEEK_API_KEY 兜底（OpenAI 兼容）。
+# 维护任务（decay --llm real）默认仍 mock；显式 -DecayLLM real 才走真实 LLM。
+if (-not $env:TRINITY_LLM_API_KEY) {
+    $dk = Get-DshCredential "DEEPSEEK_API_KEY"
+    if ($dk) {
+        $env:TRINITY_LLM_API_KEY = $dk
+        if (-not $env:TRINITY_LLM_BASE_URL) { $env:TRINITY_LLM_BASE_URL = "https://api.deepseek.com/v1" }
+        if (-not $env:TRINITY_LLM_MODEL) { $env:TRINITY_LLM_MODEL = "deepseek-chat" }
+    }
+}
+if (-not $PgPass) { $PgPass = "postgres" }
+
 # ── dsh CLI 解析 ──────────────────────────────────────────────────────────
 function Get-DshCli {
     $cmd = Get-Command dsh -ErrorAction SilentlyContinue
