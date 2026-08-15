@@ -2226,3 +2226,18 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
   路由（渲染 benchmark/leaderboard.html）；修正 DB 路径兜底（优先
   ~/.trinity/store）。实测 /leaderboard 200（3180B）。
 - **验证**：全量测试通过。
+
+
+### 55.1 V2 动作 B 执行（2026-08-15）：治理底座产品化
+
+- **① 企业治理策略模板**：trinity/governance/policies/enterprise/ 三模板（hr/finance/
+  engineering）——部门内共享（glob 通配 hr-*）、跨部门隔离、敏感数据定向授权、
+  代码知识库跨部门只读、委托检索。GovernanceEngine._rule_matches 加 fnmatch glob
+  支持（V2 动作 B 增强）。10 用例全 PASS（含财务读薪酬拒、HR 写代码库拒等）。
+- **② 合规认证包**：scripts/compliance_check.py 一键检查（存储加密/RBAC/审计链/
+  GDPR），JSON/单项模式；如实报告（当前加密未开、RBAC 未强制=配置项，非 bug）。
+  8 单测。
+- **③ 企业审计回放**：dashboard /audit 页 + /api/audit 端点（agent/persona/action/
+  memory 过滤 + checksum 可追溯）。实测 /audit 200、api/audit 过滤生效。
+- **顺带**：修复 API :8001 被我误杀（dashboard 重启时进程匹配误伤），已拉起。
+- **验证**：全量测试通过。

@@ -58,10 +58,20 @@ class Policy:
         return sum(1 for k in ("subject", "target", "action") if rule.get(k) not in (None, "*"))
 
     @staticmethod
+    def _matches(value: str, pattern: str) -> bool:
+        """精确或 glob 匹配（支持 hr-* 部门通配，2026-08-15 V2 动作 B）。"""
+        if pattern in (value, "*"):
+            return True
+        if "*" in pattern or "?" in pattern:
+            import fnmatch
+            return fnmatch.fnmatch(value, pattern)
+        return False
+
+    @staticmethod
     def _rule_matches(rule: Dict[str, Any], subject: str, action: str, target: str) -> bool:
-        return (rule.get("subject", "*") in (subject, "*")
-                and rule.get("action", "*") in (action, "*")
-                and rule.get("target", "*") in (target, "*"))
+        return (Policy._matches(subject, rule.get("subject", "*"))
+                and Policy._matches(action, rule.get("action", "*"))
+                and Policy._matches(target, rule.get("target", "*")))
 
     def decide(self, subject: str, action: str, target: str) -> Dict[str, Any]:
         # 最具体规则优先（具体共享/委托 > 通配隔离），否则用 defaults

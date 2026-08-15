@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>Trinity 审计回放</title>
+  <style>
+    body { font-family: monospace; margin: 20px; background: #1e1e2e; color: #cdd6f4; }
+    h1 { color: #89b4fa; }
+    .filters { margin: 12px 0; }
+    .filters input { margin-right: 8px; padding: 4px; background: #313244; color: #cdd6f4; border: 1px solid #45475a; }
+    .filters button { padding: 4px 12px; background: #89b4fa; color: #1e1e2e; border: none; cursor: pointer; }
+    table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+    th, td { border: 1px solid #45475a; padding: 6px 10px; text-align: left; font-size: 13px; }
+    th { background: #313244; color: #a6e3a1; }
+    tr:nth-child(even) { background: #282838; }
+    .badge { padding: 2px 8px; border-radius: 8px; font-size: 11px; }
+    .b-create { background: #a6e3a1; color: #1e1e2e; }
+    .b-search { background: #89b4fa; color: #1e1e2e; }
+    .b-delete { background: #f38ba8; color: #1e1e2e; }
+    .b-update { background: #f9e2af; color: #1e1e2e; }
+    .stats { color: #a6adc8; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>🔍 Trinity 审计回放（可追溯）</h1>
+  <div class="filters">
+    <input id="agent" placeholder="agent_id">
+    <input id="persona" placeholder="persona_id">
+    <input id="action" placeholder="action">
+    <input id="memory" placeholder="memory_id">
+    <button onclick="load()">查询</button>
+    <button onclick="clearFilters()">清空</button>
+  </div>
+  <div class="stats" id="stats"></div>
+  <table id="tbl">
+    <thead><tr><th>时间</th><th>Action</th><th>Agent</th><th>Persona</th><th>Memory</th><th>Checksum</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <script>
+    async function load() {
+      const p = new URLSearchParams();
+      for (const k of ["agent", "persona", "action", "memory"]) {
+        const v = document.getElementById(k).value.trim();
+        if (v) p.set(k, v);
+      }
+      const r = await fetch("/api/audit?" + p.toString());
+      const data = await r.json();
+      document.getElementById("stats").textContent = "共 " + data.total + " 条审计记录";
+      const tbody = document.getElementById("rows");
+      tbody.innerHTML = "";
+      for (const e of data.entries) {
+        const cls = "b-" + (e.action.startsWith("STORE") || e.action.startsWith("CREATE") ? "create"
+          : e.action.startsWith("SEARCH") ? "search"
+          : e.action.startsWith("DELETE") ? "delete" : "update");
+        const tr = document.createElement("tr");
+        tr.innerHTML = "<td>" + e.timestamp + "</td>" +
+          "<td><span class='badge " + cls + "'>" + e.action + "</span></td>" +
+          "<td>" + (e.agent_id || "") + "</td>" +
+          "<td>" + (e.persona_id || "") + "</td>" +
+          "<td>" + (e.memory_id || "") + "</td>" +
+          "<td>" + e.checksum + "</td>";
+        tbody.appendChild(tr);
+      }
+    }
+    function clearFilters() {
+      for (const k of ["agent", "persona", "action", "memory"]) document.getElementById(k).value = "";
+      load();
+    }
+    load();
+  </script>
+</body>
+</html>

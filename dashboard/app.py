@@ -309,6 +309,61 @@ def api_leaderboard():
 
 
 # ---------------------------------------------------------------------------
+# 企业审计回放（2026-08-15, V2 动作 B）：/audit 页 + /api/audit 端点
+# ---------------------------------------------------------------------------
+
+@app.route("/audit")
+def audit_page():
+    """审计回放页（HTML，含过滤 UI）。"""
+    return render_template("audit.html")
+
+
+@app.route("/api/audit")
+def api_audit():
+    """审计日志查询：按 agent / persona / action / memory 过滤，可追溯。
+
+    Query: ?agent=&persona=&action=&memory=&limit=100
+    """
+    agent = request.args.get("agent", "")
+    persona = request.args.get("persona", "")
+    action = request.args.get("action", "")
+    memory = request.args.get("memory", "")
+    limit = min(int(request.args.get("limit", 100)), 500)
+
+    where = []
+    params: list = []
+    if agent:
+        where.append("agent_id LIKE ?")
+        params.append(f"%{agent}%")
+    if persona:
+        where.append("persona_id LIKE ?")
+        params.append(f"%{persona}%")
+    if action:
+        where.append("action LIKE ?")
+        params.append(f"%{action}%")
+    if memory:
+        where.append("memory_id = ?")
+        params.append(memory)
+
+    db = _get_db()
+    sql = "SELECT id, memory_id, action, agent_id, persona_id, timestamp, checksum FROM audit_log"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY timestamp DESC LIMIT ?"
+    params.append(limit)
+    rows = db.execute(sql, params).fetchall()
+    entries = [
+        {"id": r[0], "memory_id": r[1], "action": r[2], "agent_id": r[3],
+         "persona_id": r[4], "timestamp": r[5],
+         "checksum": (r[6] or "")[:16] + "..." if r[6] and len(r[6]) > 16 else (r[6] or "")}
+        for r in rows
+    ]
+    return jsonify({"total": len(entries), "entries": entries,
+                    "filters": {"agent": agent, "persona": persona,
+                                "action": action, "memory": memory}})
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 

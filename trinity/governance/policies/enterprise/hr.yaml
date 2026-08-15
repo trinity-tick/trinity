@@ -1,0 +1,40 @@
+# Trinity 企业治理模板 — HR 部门（2026-08-15, V2 动作 B）
+# 场景：HR 部门记忆严格隔离；HR 内部 agent 互相可读；招聘 agent 可读候选库；
+#      其他部门（finance/eng）默认不可读 HR 记忆。
+# 用法：GovernanceEngine.load_policy("trinity/governance/policies/enterprise/hr.yaml")
+policy:
+  name: enterprise-hr
+  description: HR 部门记忆：部门内共享、跨部门隔离、候选库定向授权
+  rules:
+    # 1) 兜底隔离：任何 agent 只能访问自己
+    - scope: isolated
+      subject: "*"
+      target: "*"
+      action: "*"
+      audit: true
+    # 2) HR 部门内共享：hr-* agent 之间可读写
+    - scope: shared
+      subject: "hr-*"
+      target: "hr-*"
+      action: "*"
+      audit: true
+    # 3) 定向授权：recruiter 可读 candidate-pool
+    - scope: shared
+      subject: "hr-recruiter"
+      target: "candidate-pool"
+      action: read
+      audit: true
+    # 4) 薪酬数据仅 hr-compensation 可写（敏感字段保护）
+    - scope: isolated
+      subject: "*"
+      target: "compensation-data"
+      action: write
+      audit: true
+    - scope: shared
+      subject: "hr-compensation"
+      target: "compensation-data"
+      action: write
+      audit: true
+  defaults:
+    audit: true
+    allow: false
