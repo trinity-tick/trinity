@@ -1,6 +1,6 @@
 # Trinity Leaderboard（2026-08-15）
 
-> 生成时间：2026-08-15T05:17:02.274240+00:00；版本 v8.2.0；环境 Windows / Python 3.14 / API :8001
+> 生成时间：2026-08-15T06:06:27.723275+00:00；版本 v8.2.0；环境 Windows / Python 3.14 / API :8001
 
 ## 一、BEAM 规模延迟（本地模拟 50 查询）
 
@@ -21,7 +21,17 @@
 ### 按类别
 
 
-## 三、MemBench v1.0 核心指标（2026-08-14 实测，来源 benchmark/MEMBENCH_REPORT.md）
+## 三、LongMemEval（本地 55 题模拟集，BM25 检索）
+
+| 指标 | 值 |
+|---|---|
+| Recall@5（整体） | 1.0 |
+| single-session-user | 1.0 |
+| knowledge-update | 1.0 |
+| multi-session | 1.0 |
+| 题数 | 55 |
+
+## 四、MemBench v1.0 核心指标（2026-08-14 实测，来源 benchmark/MEMBENCH_REPORT.md）
 
 | 维度 | 指标 | 结果 |
 |---|---|---|

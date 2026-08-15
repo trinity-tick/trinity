@@ -105,7 +105,27 @@ def main() -> int:
                 lines.append(f"| {cat} | {r5} |")
         lines.append("")
 
-    lines.append("## 三、MemBench v1.0 核心指标（2026-08-14 实测，来源 benchmark/MEMBENCH_REPORT.md）")
+    lines.append("## 三、LongMemEval（本地 55 题模拟集，BM25 检索）")
+    lines.append("")
+    lme = os.path.join(HERE, "..", "output", "longmemeval_results.json")
+    if os.path.exists(lme):
+        try:
+            with open(lme, encoding="utf-8") as f:
+                d = json.load(f)
+            ov = d.get("overall", {})
+            lines.append("| 指标 | 值 |")
+            lines.append("|---|---|")
+            lines.append(f"| Recall@5（整体） | {ov.get('recall_at_5', ov.get('R@5', 'n/a'))} |")
+            for cat, v in (d.get("by_category") or {}).items():
+                r5 = v.get("recall_at_5", v.get("R@5")) if isinstance(v, dict) else v
+                lines.append(f"| {cat} | {r5} |")
+            lines.append(f"| 题数 | {d.get('total_questions')} |")
+            lines.append("")
+        except Exception:
+            lines.append("（读取 longmemeval_results.json 失败）")
+            lines.append("")
+
+    lines.append("## 四、MemBench v1.0 核心指标（2026-08-14 实测，来源 benchmark/MEMBENCH_REPORT.md）")
     lines.append("")
     lines.append("| 维度 | 指标 | 结果 |")
     lines.append("|---|---|---|")
