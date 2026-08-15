@@ -83,6 +83,18 @@ class DecayConfig:
     # 批量压缩最大条数
     max_batch_size: int = 20
 
+    # ── 多因子遗忘（2026-08-15，对齐业界算法遗忘方案）─────────────
+    # 访问频率因子：access_count 每满 access_boost_interval 次，
+    # 分数提升 access_boost_step（上限 access_boost_max）。
+    access_boost_enabled: bool = True
+    access_boost_interval: int = 5
+    access_boost_step: float = 0.05
+    access_boost_max: float = 0.20
+    # 最近访问保护：days_since_access <= recency_protection_days 时
+    # 分数不低于 recency_floor（刚被检索/使用过的记忆不归档）。
+    recency_protection_days: float = 7.0
+    recency_floor: float = 0.50
+
 
 @dataclass
 class DecayResult:
@@ -96,6 +108,8 @@ class DecayResult:
     status: DecayStatus
     created_at: str
     content_preview: str = ""
+    access_count: int = 0
+    days_since_access: Optional[float] = None
 
 
 @dataclass
@@ -126,6 +140,8 @@ class MemoryDecayEngine:
 
     衰减公式：
       score = importance * exp(-λ * days_since_creation)
+            × (1 + 访问频率提升)          # 频繁访问的记忆衰减更慢
+            , 且最近访问保护兜底            # 7 天内访问过 → 分数不低于地板
 
       其中：
         importance ∈ [0, 1]  记忆初始重要性
@@ -145,13 +161,24 @@ class MemoryDecayEngine:
         importance: float,
         decay_lambda: float,
         days_since_creation: float,
+        access_count: int = 0,
+        days_since_access: Optional[float] = None,
+        access_boost_enabled: bool = True,
+        access_boost_interval: int = 5,
+        access_boost_step: float = 0.05,
+        access_boost_max: float = 0.20,
+        recency_protection_days: float = 7.0,
+        recency_floor: float = 0.50,
     ) -> float:
-        """计算单条记忆的衰减分数。
+        """计算单条记忆的衰减分数（多因子）。
 
         Args:
             importance: 原始重要性 [0, 1]
             decay_lambda: 衰减速率 λ
             days_since_creation: 自创建以来的天数
+            access_count: 历史访问/检索次数（访问频率因子）
+            days_since_access: 距最近一次访问的天数（最近访问保护）
+            access_boost_* / recency_*: 多因子遗忘参数
 
         Returns:
             衰减后分数，范围 [0, 1]
@@ -159,6 +186,23 @@ class MemoryDecayEngine:
         if importance <= 0:
             return 0.0
         score = importance * math.exp(-decay_lambda * days_since_creation)
+
+        # 访问频率因子：频繁检索的记忆衰减更慢（对齐 2026 算法遗忘方案）
+        if access_boost_enabled and access_count > 0:
+            boost = min(
+                (access_count // access_boost_interval) * access_boost_step,
+                access_boost_max,
+            )
+            score *= 1.0 + boost
+
+        # 最近访问保护：刚用过的记忆不归档
+        if (
+            days_since_access is not None
+            and recency_protection_days > 0
+            and days_since_access <= recency_protection_days
+        ):
+            score = max(score, recency_floor)
+
         return max(0.0, min(1.0, score))
 
     def get_lambda_for_type(self, memory_type: str) -> float:
@@ -200,6 +244,8 @@ class MemoryDecayEngine:
         memory_type: str,
         created_at: Any,
         content: str = "",
+        access_count: int = 0,
+        last_accessed_at: Any = None,
     ) -> DecayResult:
         """评估单条记忆的衰减状态。
 
@@ -209,13 +255,28 @@ class MemoryDecayEngine:
             memory_type: 记忆类型（决定 λ）
             created_at: 创建时间
             content: 记忆内容（可选，用于报告）
+            access_count: 历史访问次数（多因子遗忘）
+            last_accessed_at: 最近访问时间（多因子遗忘）
 
         Returns:
             DecayResult 包含衰减评估结果
         """
         decay_lambda = self.get_lambda_for_type(memory_type)
         days = self.compute_days_since(created_at)
-        score = self.calculate_decay_score(importance, decay_lambda, days)
+        days_since_access = self.compute_days_since(last_accessed_at) if last_accessed_at else None
+        score = self.calculate_decay_score(
+            importance,
+            decay_lambda,
+            days,
+            access_count=access_count,
+            days_since_access=days_since_access,
+            access_boost_enabled=self.config.access_boost_enabled,
+            access_boost_interval=self.config.access_boost_interval,
+            access_boost_step=self.config.access_boost_step,
+            access_boost_max=self.config.access_boost_max,
+            recency_protection_days=self.config.recency_protection_days,
+            recency_floor=self.config.recency_floor,
+        )
         status = self.determine_status(score)
 
         return DecayResult(
@@ -228,6 +289,8 @@ class MemoryDecayEngine:
             status=status,
             created_at=str(created_at),
             content_preview=(content[:80] + "..." if len(content) > 80 else content),
+            access_count=access_count,
+            days_since_access=round(days_since_access, 4) if days_since_access is not None else None,
         )
 
     # ── Batch Scanning ──────────────────────────────────────────
@@ -264,6 +327,8 @@ class MemoryDecayEngine:
             memory_type = str(mem.get("category", MemoryType.GENERAL.value))
             created_at = mem.get("created_at")
             content = str(mem.get("content", ""))
+            access_count = int(mem.get("access_count") or 0)
+            last_accessed_at = mem.get("last_accessed_at")
 
             result = self.evaluate_memory(
                 memory_id=mem_id,
@@ -271,6 +336,8 @@ class MemoryDecayEngine:
                 memory_type=memory_type,
                 created_at=created_at,
                 content=content,
+                access_count=access_count,
+                last_accessed_at=last_accessed_at,
             )
             report.results.append(result)
 

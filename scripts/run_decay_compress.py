@@ -101,7 +101,8 @@ def fetch_active_memories_sqlite(adapter: Any, limit: int = 500) -> List[Dict[st
     rows = conn.execute("""
         SELECT memory_id, session_id, persona_id, tenant_id,
                content, role, importance, tags, category,
-               sha256_hash, status, version, created_at, updated_at
+               sha256_hash, status, version, created_at, updated_at,
+               access_count, last_accessed_at
         FROM memories
         WHERE status = 'active'
         ORDER BY created_at ASC
@@ -136,7 +137,8 @@ def fetch_active_memories(adapter: Any, limit: int = 500) -> List[Dict[str, Any]
             cur.execute("""
                 SELECT memory_id, session_id, persona_id, tenant_id,
                        content, role, importance, tags, category,
-                       sha256_hash, status, version, created_at, updated_at
+                       sha256_hash, status, version, created_at, updated_at,
+                       access_count, last_accessed_at
                 FROM memories
                 WHERE status = 'active'
                 ORDER BY created_at ASC
