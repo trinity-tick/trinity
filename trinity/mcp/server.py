@@ -88,15 +88,21 @@ def run_server(mode: str = "stdio", port: int = 8000, host: str = "127.0.0.1"):
     """Start the MCP server.
 
     Args:
-        mode: Transport mode ("stdio" or "sse").
-        port: SSE port (default: 8000).
-        host: SSE host (default: 127.0.0.1).
+        mode: Transport mode ("stdio" | "sse" | "streamable-http").
+        port: HTTP/SSE port (default: 8000).
+        host: Bind host (default: 127.0.0.1).
     """
     mcp = create_server()
 
     if mode == "stdio":
         logger.info("Starting in stdio mode...")
         mcp.run(transport="stdio")
+    elif mode == "streamable-http":
+        mcp.settings.host = host
+        mcp.settings.port = port
+        # MCP v2 (2026-08-15)：单端点 /mcp，streamable-http transport
+        logger.info("Starting in streamable-http mode on %s:%d (mount /mcp)...", host, port)
+        mcp.run(transport="streamable-http", mount_path="/mcp")
     else:
         mcp.settings.host = host
         mcp.settings.port = port
@@ -107,7 +113,7 @@ def run_server(mode: str = "stdio", port: int = 8000, host: str = "127.0.0.1"):
 def main():
     """CLI entry point for MCP server."""
     parser = argparse.ArgumentParser(description=f"{SERVER_NAME} v{SERVER_VERSION}")
-    parser.add_argument("--mode", choices=["stdio", "sse"], default="stdio")
+    parser.add_argument("--mode", choices=["stdio", "sse", "streamable-http"], default="stdio")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--host", default="127.0.0.1")
     args = parser.parse_args()
