@@ -1949,3 +1949,15 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
   生效需重启 web host）。
 - **F5 MCP 冗余移除（文档化）**：步骤 = 删 cordis.patch.yml 中 mcp-trinity insert → 重启 web profile；
   原生 trinity_* 已覆盖（含结构层），移除前确认无 mcp__trinity__* 依赖。
+
+### 42.1 融合优化续轮（2026-08-15）：goal/schedule 自动同步打通 + 联邦验证 + 手册更新
+
+- **goal/schedule 自动同步（0459617）**：`structure_store.structure_sync` 从 tool/call 事件
+  解析 create_goal/update_goal/schedule_create 参数 → 自动 upsert dsh_goals/dsh_schedules
+  （同一连接避免锁重入；action→status 映射；objective COALESCE 防覆盖）。
+  **DSH goal 生命周期现自动反映到 Trinity**（此前标记阻塞，经事件流解析打通，无需 DSH 侧改动）。
+  验证：伪造事件流 → goal create→complete 状态链、schedule active、objective 保留。
+- **B4 联邦（42b）**：federation/sync_protocol.py 验证并入库（export/import/diff，
+  离线优先多实例同步；export 7,270B/15 条，自比幂等）。
+- **SKILL.md 手册补充**（坑 15-17）：DSH 结构融合/compaction、Gateway 生产化、性能要点、
+  三库→两库。健康巡检：api/gateway/dashboard 200、collector RUNNING。
