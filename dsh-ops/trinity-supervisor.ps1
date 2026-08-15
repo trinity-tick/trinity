@@ -1,9 +1,10 @@
 <#
 .SYNOPSIS
-    Trinity 进程监督器 — 确保 trinity-api / trinity-mcp(SSE) / collector 常驻。
+    Trinity 进程监督器 — 确保 trinity-api / trinity-mcp(SSE) / collector / gateway 常驻。
 
 .DESCRIPTION
     每次运行做一次"检查 → 拉起"：
+      - trinity-gateway (OpenAI/Mem0 兼容层, 端口 8002)：/v1/models 带鉴权探测，失败则重启；
       - trinity-api   (FastAPI, 端口 8001)：HTTP /health 探测，失败则重启；
       - trinity-mcp   (SSE, 端口 8000)：TCP 端口探测，失败则重启；
       - collector     (python -m trinity.collector status)：STOPPED/STALE 则 start。
@@ -41,6 +42,19 @@ foreach ($cred in @("TRINITY_PG_HOST", "TRINITY_PG_PORT", "TRINITY_PG_DB", "TRIN
         $v = Get-DshCredential $cred
         if ($v) { [Environment]::SetEnvironmentVariable($cred, $v, "Process") }
     }
+}
+# ── Gateway 上游（OpenAI/Mem0 兼容层，2026-08-15）：UPSTREAM_BASE_URL 默认
+#    OpenAI 会超时（无 OPENAI_API_KEY）。复用 DEEPSEEK_API_KEY 兜底为 DeepSeek
+#    上游（MODEL_ALIASES 自动映射 gpt-4o-mini→deepseek-v4-flash）。
+if (-not [Environment]::GetEnvironmentVariable("UPSTREAM_BASE_URL", "Process")) {
+    [Environment]::SetEnvironmentVariable("UPSTREAM_BASE_URL", "https://api.deepseek.com/v1", "Process")
+}
+if (-not [Environment]::GetEnvironmentVariable("UPSTREAM_API_KEY", "Process")) {
+    $dk = Get-DshCredential "DEEPSEEK_API_KEY"
+    if ($dk) { [Environment]::SetEnvironmentVariable("UPSTREAM_API_KEY", $dk, "Process") }
+}
+if (-not [Environment]::GetEnvironmentVariable("MODEL_ALIASES", "Process")) {
+    [Environment]::SetEnvironmentVariable("MODEL_ALIASES", "gpt-4o-mini:deepseek-v4-flash,gpt-4o:deepseek-v4-pro", "Process")
 }
 # 语义缓存（OPT6 生产开启）：子进程（api/mcp）继承；可用 TRINITY_CACHE_BACKEND=off 关闭
 foreach ($cache in @("TRINITY_CACHE_BACKEND", "TRINITY_REDIS_URL", "TRINITY_CACHE_TTL")) {
@@ -111,6 +125,18 @@ function Test-ApiHealth {
     } catch { return $false }
 }
 
+function Test-GatewayHealth {
+    # Gateway（OpenAI/Mem0 兼容层，端口 8002）：/v1/models 带鉴权探测。
+    # 未设置 GATEWAY_API_KEY 时用默认 gw-test-key；设置则读取。
+    try {
+        $gwKey = $env:GATEWAY_API_KEY
+        if (-not $gwKey) { $gwKey = "gw-test-key" }
+        $r = Invoke-WebRequest -Uri "http://127.0.0.1:8002/v1/models" -TimeoutSec 3 `
+            -UseBasicParsing -Headers @{ "Authorization" = "Bearer $gwKey" } -ErrorAction Stop
+        return ($r.StatusCode -eq 200)
+    } catch { return $false }
+}
+
 function Start-WithLogs {
     param([string]$Name, [string]$Exe, [string[]]$ArgList)
     $outLog = Join-Path $LogDir "$Name.out.log"
@@ -138,6 +164,22 @@ function Should-Restart {
     if (-not $last) { return $true }
     $lastTime = [datetime]::Parse($last)
     return (($now - $lastTime).TotalSeconds -ge $MinRestartIntervalSec)
+}
+
+# ── 0. Gateway（OpenAI/Mem0 兼容层，2026-08-15 加入监督）────────────
+# 此前 Gateway 不在 supervisor 管理范围（偶发 down 无人拉起）。
+# 启动方式：系统 Python 跑 gateway/server.py（cwd=trinity 根）。
+if (-not (Test-GatewayHealth)) {
+    if (Should-Restart "gateway") {
+        Write-Log "gateway DOWN (/v1/models probe failed) — restarting" "WARN"
+        $gwPy = $SysPy
+        Start-WithLogs -Name "gateway" -Exe $gwPy -ArgList @("gateway\server.py")
+        $state.restartedAt.gateway = $now.ToString("o")
+    } else {
+        Write-Log "gateway DOWN but within restart interval — skipped" "WARN"
+    }
+} else {
+    Write-Log "gateway OK (/v1/models 200)"
 }
 
 # ── 1. API ────────────────────────────────────────────────────────────────

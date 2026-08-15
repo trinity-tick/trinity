@@ -454,6 +454,26 @@ function apply(ctx, config) {
 				return { seq: event.seq, type: "todo/write", time: event.time, data: { count: (d.todos ?? []).length } };
 			case "request/header":
 				return { seq: event.seq, type: "request/header", time: event.time, data: { reason: d.reason } };
+			case "goal/change": {
+				// DSH goal 快照（事件溯源，含完整 GoalSnapshot）→ 结构事件。
+				// 2026-08-15：此前缺此分支，goal 事件被静默丢弃 → 新 goal 不落库。
+				const goal = d.goal ?? d;
+				const gid = goal?.id ?? d.goalId ?? null;
+				if (!gid) return null;
+				return {
+					seq: event.seq, type: "goal/write", time: event.time,
+					data: {
+						goal_id: gid,
+						objective: goal?.objective ?? "",
+						phase: goal?.phase ?? d.operation ?? "active",
+						revision: goal?.revision ?? d.revision ?? 0,
+						roundsStarted: d.roundsStarted ?? 0,
+						createdAt: d.createdAt ?? event.time,
+						updatedAt: d.updatedAt ?? event.time,
+						operation: d.operation ?? "create",
+					},
+				};
+			}
 			default:
 				return null; // chunk/step/seed 等噪声丢弃
 		}

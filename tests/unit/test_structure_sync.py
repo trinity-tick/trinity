@@ -108,3 +108,35 @@ def test_non_tool_event_ignored(conn) -> None:
     ev = {"seq": 1, "type": "user/message", "time": 1.0, "data": {"text": "hi"}}
     structure_store._sync_goal_schedule_from_event(conn, ev, 1.0)
     assert conn.execute("SELECT COUNT(*) FROM dsh_goals").fetchone()[0] == 0
+
+
+def test_goal_write_event_full_sync(conn) -> None:
+    """插件 goal/change → goal/write 结构事件：完整 GoalSnapshot 落库（防回归核心）。"""
+    ev = {"seq": 1, "type": "goal/write", "time": 1000.0, "data": {
+        "goal_id": "goal-5c6523c8-2f15-439b-837e-2744b5c2bb74",
+        "objective": "执行两项修复优化：Gateway 稳定 + goal 防回归",
+        "phase": "active", "operation": "create",
+        "roundsStarted": 0, "createdAt": 1000.0, "updatedAt": 1000.0,
+    }}
+    structure_store._sync_goal_schedule_from_event(conn, ev, 1000.0)
+    row = conn.execute("SELECT * FROM dsh_goals WHERE goal_id='goal-5c6523c8-2f15-439b-837e-2744b5c2bb74'").fetchone()
+    assert row is not None
+    assert row["objective"] == "执行两项修复优化：Gateway 稳定 + goal 防回归"
+    assert row["status"] == "active"
+
+
+def test_goal_write_complete_phase(conn) -> None:
+    """goal/write 的 phase=complete → status=completed。"""
+    ev = {"seq": 2, "type": "goal/write", "time": 2000.0, "data": {
+        "goal_id": "g-done", "objective": "已完成的目标", "phase": "complete",
+        "operation": "update",
+    }}
+    structure_store._sync_goal_schedule_from_event(conn, ev, 2000.0)
+    row = conn.execute("SELECT status FROM dsh_goals WHERE goal_id='g-done'").fetchone()
+    assert row["status"] == "completed"
+
+
+def test_goal_write_without_id_ignored(conn) -> None:
+    ev = {"seq": 3, "type": "goal/write", "time": 1.0, "data": {"objective": "no id"}}
+    structure_store._sync_goal_schedule_from_event(conn, ev, 1.0)
+    assert conn.execute("SELECT COUNT(*) FROM dsh_goals").fetchone()[0] == 0

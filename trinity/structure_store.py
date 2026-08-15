@@ -176,10 +176,37 @@ _GOAL_ACTION_STATUS = {
 
 
 def _sync_goal_schedule_from_event(conn, ev: dict, now: float) -> None:
-    """从 tool/call 事件解析 goal/schedule 变更并写入结构表（2026-08-15）。
+    """从 tool/call 或 goal/write 事件解析 goal/schedule 变更并写入结构表。
 
+    2026-08-15：
+      - tool/call 的 create_goal/update_goal（DSH 内置工具，create 无 goal_id）
+      - goal/write（插件新增：DSH goal/change 快照，含完整 GoalSnapshot）
     在 structure_sync 持有锁的同一连接上操作（避免 goal_upsert 锁重入）。
     """
+    if ev.get("type") == "goal/write":
+        data = ev.get("data") or {}
+        gid = data.get("goal_id")
+        if not gid:
+            return
+        objective = data.get("objective", "")
+        phase = data.get("phase", "active")
+        status = _GOAL_ACTION_STATUS.get(data.get("operation"), None) or \
+            {"active": "active", "complete": "completed", "paused": "paused",
+             "blocked": "blocked"}.get(phase, phase)
+        conn.execute(
+            """INSERT INTO dsh_goals(goal_id, objective, status, phase, round, max_rounds,
+                                     created_at, updated_at)
+               VALUES(?,?,?,?,?,?,?,?)
+               ON CONFLICT(goal_id) DO UPDATE SET
+                 objective=COALESCE(NULLIF(excluded.objective,''), dsh_goals.objective),
+                 status=excluded.status, phase=excluded.phase,
+                 round=excluded.round, max_rounds=COALESCE(excluded.max_rounds, dsh_goals.max_rounds),
+                 updated_at=excluded.updated_at""",
+            (gid, objective, status, phase, int(data.get("roundsStarted", 0) or 0),
+             None, data.get("createdAt") or now, data.get("updatedAt") or now),
+        )
+        return
+
     if ev.get("type") != "tool/call":
         return
     data = ev.get("data") or {}

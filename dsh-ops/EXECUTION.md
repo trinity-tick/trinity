@@ -2188,3 +2188,23 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
   回填 11 个 → 30/30（100%）；②清理 9 个重复哈希行（objective 与 UUID 行相同），
   保留权威 UUID 行 + 2 个唯一哈希行 → 最终 21 条全部带 objective。
 - **结论**：dsh_goals 从 63% → 100% 完整；DSH 结构融合档案完整可审计。
+
+
+### 53.1 Gateway 监督 + goal 防回归（2026-08-15）
+
+- **① Gateway 稳定**：
+  - 排查：Gateway :8002 实际在运行（/v1/models 200），但 /v1/chat/completions
+    超时——根因：进程启动时未注入 UPSTREAM 配置（默认转发 OpenAI 无 key 超时）。
+  - 修复：supervisor 加 Gateway 检查块（/v1/models 带鉴权探测，失败重启）+ 凭证段
+    注入 UPSTREAM_BASE_URL=DeepSeek / UPSTREAM_API_KEY / MODEL_ALIASES（gpt-4o-mini→
+    deepseek-v4-flash）。Gateway 之前不在 supervisor 管理范围（偶发 down 无人拉起）。
+  - 验证：/v1/models 200；/v1/chat/completions 200 1.5s（模型映射生效）；
+    supervisor 日志 "gateway OK (/v1/models 200)"。
+- **② goal 防回归（发现真缺口）**：
+  - 核查发现当前 goal-5c6523c8 不在 dsh_goals、事件流无记录——插件 toStructureEvent
+    的 switch 无 goal/change 分支 → goal 事件被静默丢弃（新 goal 不落库）。
+  - 修复：插件加 goal/change → goal/write 分支（含完整 GoalSnapshot）；
+    structure_store._sync_goal_schedule_from_event 加 goal/write 解析（goal_id/
+    objective/phase→status）。部署到 node_modules（新会话生效）。
+  - 测试：test_structure_sync 扩至 11 例（goal/write 全量同步/complete 映射/无 id 忽略）。
+- **验证**：全量测试通过。
