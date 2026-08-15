@@ -52,16 +52,21 @@ reply = client.chat.completions.create(
 print(reply.choices[0].message.content)
 ```
 
-## 用自带 SDK
+## 用自带 SDK（2026-08-15 实测）
 
 ```python
-from trinity_gateway import TrinityGateway   # gateway/client.py
+import sys; sys.path.insert(0, "gateway")
+from client import TrinityGateway   # gateway/client.py
 
-mem = TrinityGateway()
-mem.add("Trinity 图谱已有 28k 关系", tags=["graph", "fact"])
-print(mem.search("图谱关系"))
-reply = mem.chat([{"role": "user", "content": "图谱里有多少关系？"}])
+gw = TrinityGateway(base_url="http://127.0.0.1:8002", api_key="gw-test-key")
+gw.add("用户偏好深色模式", tags=["preference"])
+print(gw.search("偏好", top_k=3))
+print(gw.chat([{"role": "user", "content": "用户喜欢什么？"}], model="deepseek-v4-flash"))
 ```
+
+已验证 health/add/search/list/chat 端到端（记忆注入聊天以上游 LLM 作答）。
+启用 `GATEWAY_API_KEY` 后须传 `api_key`；OpenAI SDK 直连用
+`OpenAI(base_url="http://127.0.0.1:8002/v1", api_key="<gateway-key>")`。
 
 ## 环境变量
 
