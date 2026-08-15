@@ -1921,3 +1921,15 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
 - **④Dashboard**：:3000 Flask 监控验证可运行（/api/stats 200，stats/kgraph/memories/
   agents/heatmap 端点齐全）。
 - 全量测试 580 passed / 0 failed。
+
+### 40.1 优化续轮（2026-08-15）：原生 PG 下线 + 记忆市场验证 + 官方基准阻塞标记
+
+- **③原生 PG :5432 下线**：确认 0 个 active 业务连接（仅 PG 后台 idle）后停止
+  `postgresql-x64-16` 服务——5432 关闭、trinity api 200 不受影响、docker 维护库
+  :5430 正常（7,517 条）。三库收敛为两库（SQLite 运行时权威 + docker PG 维护镜像）。
+  回滚：`Start-Service postgresql-x64-16`。
+- **②C1 记忆市场验证**：11 端点已实现（list/delist/search/orderbook/buy/transactions/
+  reputation/endorse/report/price/estimate），完整生命周期实测通过（挂单→搜索 count=1→
+  订单簿 count=1→撤单 200）。协议文档 `docs/MEMORY_MARKET_PROTOCOL.md`。
+- **①官方 LongMemEval/BEAM 数据集**：HF 网络不可达（连接失败）——下载阻塞，明确标记；
+  本地 55 题模拟集结果（R@5=1.0）已在 leaderboard（本地口径）。
