@@ -232,6 +232,12 @@ class Trinity:
         # 性能（2026-08-15）：ANN 索引持久化缓存（版本键：维度+条数+最新updated_at）。
         # 此前每次 use_ann 搜索都全量编码+重建索引——缓存后首次构建、后续直查。
         self._ann_cache = None
+        # ①落盘持久化（2026-08-15）：索引 save/load 到 ~/.trinity/data/ann_index.bin，
+        # 跨进程/重启免 30s 重建；写入增量维护（脏计数阈值触发 save）。
+        self._ann_index_path = os.path.join(
+            os.path.expanduser("~/.trinity"), "data", "ann_index.bin"
+        )
+        self._ann_dirty = 0
 
         # ── ANN 配置 ──────────────────────────────────────────────
         self.use_ann: bool = use_ann  # 启用 hnswlib/FAISS HNSW ANN 索引
@@ -1058,11 +1064,13 @@ class Trinity:
             if self._adapter:
                 dim = self._embedding_engine.embedding_dim()
 
-                # ── ANN 路径（持久缓存 + 后台预热，2026-08-15）──
+                # ── ANN 路径（持久缓存 + 磁盘加载 + 后台预热，2026-08-15）──
                 if self.use_ann:
                     if self._ann_cache is not None:
                         return self._vector_search_ann(query_vec, top_k, dim)
-                    # 首次：后台线程构建索引，本次降级走 FTS（避免 30s+ 首查阻塞）
+                    # 优先磁盘索引（跨进程/重启免重建）；否则后台构建+本次降级 FTS
+                    if self._try_load_ann_from_disk(dim):
+                        return self._vector_search_ann(query_vec, top_k, dim)
                     self._ensure_ann_background()
                     return self._adapter.search_memories(
                         query=query, top_k=top_k,
@@ -1177,12 +1185,100 @@ class Trinity:
             mem_map = {m["memory_id"]: m for m in all_memories}
             max_upd = max((str(m.get("updated_at") or "") for m in all_memories), default="")
             self._ann_cache = ((dim, len(all_memories), max_upd), mem_map, _time.time())
+            # 落盘持久化（跨进程/重启免重建）
+            try:
+                os.makedirs(os.path.dirname(self._ann_index_path) or ".", exist_ok=True)
+                ann.save(self._ann_index_path)
+            except Exception as exc:  # noqa: BLE001
+                logging.getLogger(__name__).warning("ANN index save failed: %s", exc)
         except Exception as exc:  # noqa: BLE001 构建失败则下次查询再试
             logger = sys.modules.get("logging", None)
             if logger:
                 logging.getLogger(__name__).warning("ANN background build failed: %s", exc)
         finally:
             self._ann_building = False
+
+    def _try_load_ann_from_disk(self, dim: int) -> bool:
+        """启动/首次查询时从磁盘加载 ANN 索引（免全量编码重建）。
+
+        成功 → 填充 _ann_cache（mem_map 拉全量一次 ~160ms，远快于 30s 编码）。
+        """
+        import time as _time
+        try:
+            meta_path = self._ann_index_path + ".meta.json"
+            if not os.path.exists(meta_path):
+                return False
+            with open(meta_path, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+            if meta.get("dim") != dim or not meta.get("size"):
+                return False
+            self._ann_index = None
+            ann = self._get_ann_index(dim)
+            ann.load(self._ann_index_path)
+            all_memories = self._adapter.get_all_memories(limit=20000) if self._adapter else []
+            if not all_memories:
+                return False
+            mem_map = {m["memory_id"]: m for m in all_memories}
+            max_upd = max((str(m.get("updated_at") or "") for m in all_memories), default="")
+            self._ann_cache = ((dim, len(all_memories), max_upd), mem_map, _time.time())
+            return True
+        except Exception:  # noqa: BLE001
+            self._ann_cache = None
+            return False
+
+    def _ann_incremental_add(self, memory_id: str, content: str) -> None:
+        """ANN 增量维护：新/更新记忆写入后同步进索引（若已构建且 use_ann）。
+
+        后台线程调用；embed 单条约 380ms 不影响写路径；脏计数阈值触发 save。
+        """
+        try:
+            if self._ann_cache is None or not self.use_ann or not content or not memory_id:
+                return
+            if self._embedding_engine is None:
+                self._embedding_engine = _get_embedding_engine()
+            if self._embedding_engine is None:
+                return
+            dim = self._embedding_engine.embedding_dim()
+            ann = self._get_ann_index(dim)
+            if memory_id in self._ann_cache[1]:
+                try:
+                    ann.remove_vector(memory_id)
+                except Exception:  # noqa: BLE001
+                    pass
+            vec = self._embedding_engine.embed(content)
+            ann.add_vectors([memory_id], [vec])
+            self._ann_cache[1][memory_id] = {
+                "memory_id": memory_id, "content": content,
+                "content_preview": content[:100], "importance": 0.5,
+                "created_at": "", "score": 0.0,
+            }
+            self._ann_dirty += 1
+            if self._ann_dirty >= 20:
+                self._ann_dirty = 0
+                try:
+                    ann.save(self._ann_index_path)
+                except Exception:  # noqa: BLE001
+                    pass
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _ann_incremental_remove(self, memory_id: str) -> None:
+        """ANN 增量维护：删除记忆时从索引移除。"""
+        try:
+            if self._ann_cache is None or not memory_id:
+                return
+            if memory_id not in self._ann_cache[1]:
+                return
+            dim = self._ann_cache[0][0]
+            ann = self._get_ann_index(dim)
+            try:
+                ann.remove_vector(memory_id)
+            except Exception:  # noqa: BLE001
+                pass
+            self._ann_cache[1].pop(memory_id, None)
+            self._ann_dirty += 1
+        except Exception:  # noqa: BLE001
+            pass
 
     def _vector_search_ann(
         self,
@@ -1357,6 +1453,13 @@ class Trinity:
         if self._adapter and hasattr(self._adapter, "create_memory_link"):
             linked_ids = self._auto_link_semantic(memory_id, content)
         entity_ids = self._auto_extract_entities(memory_id, content)
+        # ANN 增量维护（①落盘持久化，2026-08-15）：后台线程同步新记忆进索引
+        if memory_id and self.use_ann:
+            import threading as _th
+            _th.Thread(
+                target=self._ann_incremental_add, args=(memory_id, content),
+                daemon=True,
+            ).start()
         all_ids = [memory_id] + linked_ids if memory_id else linked_ids
         pushed = self.proactive_push(all_ids)
         if result is not None:
@@ -1653,6 +1756,13 @@ class Trinity:
     def delete_memory(self, memory_id: str) -> bool:
         if self._adapter:
             result = self._adapter.delete_memory(memory_id)
+            # ANN 增量维护（①落盘持久化）：后台移除索引条目
+            if result and self.use_ann:
+                import threading as _th
+                _th.Thread(
+                    target=self._ann_incremental_remove, args=(memory_id,),
+                    daemon=True,
+                ).start()
             # 自动审计日志
             if hasattr(self._adapter, "write_audit_log"):
                 try:
@@ -1701,6 +1811,13 @@ class Trinity:
         )
         if result is None:
             raise ValueError(f"Memory not found: {memory_id}")
+        # ANN 增量维护（①落盘持久化）：内容变更 → 后台更新索引条目
+        if self.use_ann:
+            import threading as _th
+            _th.Thread(
+                target=self._ann_incremental_add,
+                args=(memory_id, new_content), daemon=True,
+            ).start()
         return {
             "memory_id": memory_id,
             "old_version": old_version,
