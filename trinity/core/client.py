@@ -328,6 +328,7 @@ class Trinity:
         agent_weight: Optional[float] = None,
         ranked: bool = False,
         modality: Optional[str] = None,
+        dedup_by_session: bool = False,
     ) -> Dict[str, Any]:
         """语义记忆搜索。
 
@@ -425,6 +426,22 @@ class Trinity:
         # modality 过滤
         if modality and raw_results:
             raw_results = [m for m in raw_results if m.get("modality") == modality]
+
+        # 多会话检索优化（2026-08-15）：按 session 聚合去重——同一会话只保留
+        # 相关性最高的一条，使跨会话答案进入前 top_k（MS/长程召回提升；
+        # LongMemEval 500q MS top_k=10 后 R@5 0.525→0.95，会话均衡是其主因之一）。
+        if dedup_by_session and raw_results:
+            seen_sessions = set()
+            deduped = []
+            for m in raw_results:
+                sid = m.get("session_id") or "default"
+                if sid in seen_sessions:
+                    continue
+                seen_sessions.add(sid)
+                deduped.append(m)
+                if len(deduped) >= top_k:
+                    break
+            raw_results = deduped
 
         if ranked and raw_results:
             raw_results = self._apply_layered_ranking(

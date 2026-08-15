@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 Trinity — Leaderboard 生成器（2026-08-15）
 ==========================================
@@ -130,7 +130,7 @@ def main() -> int:
         try:
             with open(lme500, encoding="utf-8") as f:
                 d5 = json.load(f)
-            lines.append("### LongMemEval 500q（本地 mock 集，6 分类）")
+            lines.append("### LongMemEval 500q（本地 mock 集，6 分类；top_k=10 召回窗口）")
             lines.append("")
             lines.append("| 分类 | n | R@5 | MRR |")
             lines.append("|---|---|---|---|")

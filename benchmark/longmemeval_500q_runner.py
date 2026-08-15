@@ -24,6 +24,14 @@ from trinity import Trinity  # noqa: E402
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mode", default="keyword", choices=["keyword", "semantic", "hybrid"])
+    parser.add_argument("--category", default="", help="只跑指定分类（如 MS）")
+    parser.add_argument("--top-k", type=int, default=5, help="检索候选数（round9：MS 需更大 top_k）")
+    parser.add_argument("--dedup", action="store_true", help="按 session 去重（多会话均衡）")
+    args = parser.parse_args()
+
     data = json.load(open(DSET, encoding="utf-8"))
     questions = data["questions"]
     print(f"total questions: {len(questions)}")
@@ -54,12 +62,15 @@ def main():
 
     for q in questions:
         cat = q.get("category", "?")
+        if args.category and cat != args.category:
+            continue
         question = q.get("question", "")
         answers = [f.get("fact", "").strip() for f in q.get("context_facts", []) if f.get("fact")]
         if not answers or not question:
             continue
-        results = mem.search(query=question, mode="keyword", top_k=5,
-                             persona_id=q.get("persona_name") or None).get("results", [])
+        results = mem.search(query=question, mode=args.mode, top_k=args.top_k,
+                             persona_id=q.get("persona_name") or None,
+                             dedup_by_session=args.dedup).get("results", [])
         top_contents = [r.get("content", "") for r in results]
         hit = any(any(a and a in c for c in top_contents) for a in answers)
         # MRR: first rank where any answer fact appears
