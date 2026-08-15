@@ -197,6 +197,26 @@ class MemoryAggregator:
             self._graph_channel = None
             logger.info("Graph+PPR hybrid channel disabled: %s", exc)
 
+        # ── R5 P0: Serendipity 探索通道（2026-08-15）────────────────
+        # RippleMem 对齐：WanderRetriever 温度采样 + AssociativeBridging
+        # 弱关联桥，作为 hybrid 融合的探索通道（噪声预算，提升长尾/意外发现）。
+        # env TRINITY_SERENDIPITY=off 可关闭（默认 on）。
+        self._serendipity: Any = None
+        self._serendipity_bridge: Any = None
+        try:
+            from trinity.modules.second_brain.serendipity_retrieval_engine import (
+                AssociativeBridging, WanderRetriever,
+            )
+            self._serendipity = WanderRetriever(
+                temperature=1.2,
+                sample_count=int(os.environ.get("TRINITY_SERENDIPITY_SAMPLES", "3")),
+            )
+            self._serendipity_bridge = AssociativeBridging(max_hops=2)
+            logger.info("Serendipity exploration channel active (RippleMem aligned)")
+        except Exception as exc:
+            self._serendipity = None
+            logger.info("Serendipity channel disabled: %s", exc)
+
         # ── P1-4: Degradation Policy ─────────────────────────────────
         from trinity.agents.degradation import DegradationManager, ServiceTier
         self._degradation = DegradationManager()
@@ -746,6 +766,34 @@ class MemoryAggregator:
                         ranked_lists.append(graph_dvs)
                 except Exception as exc:
                     logger.debug("Graph+PPR channel skipped: %s", exc)
+
+            # ── R5: Serendipity 探索通道（2026-08-15）────────────────
+            # RippleMem 对齐：从池内低相关记忆温度采样少量，提升长尾/意外发现。
+            # 只在有向量候选时启用（探索建立在已有检索之上）；失败静默降级。
+            if (self._serendipity is not None and query_text and vec_ids
+                    and os.environ.get("TRINITY_SERENDIPITY", "on") != "off"):
+                try:
+                    # 候选 = 池中未被主通道命中的记忆（低相关 → 高意外性）
+                    hit_ids = set(vec_ids[:limit]) | {d.memory_id for lst in ranked_lists for d in lst}
+                    explore_pool = [
+                        dv for dv in self._pool.values()
+                        if dv.memory_id not in hit_ids
+                    ][:50]
+                    if explore_pool:
+                        # 用 WanderRetriever 温度采样（relevance 取 importance 近似）
+                        class _Hit:
+                            def __init__(self, dv):
+                                self.dv = dv
+                                self.relevance = float(dv.importance) + 0.01
+                                self.mode = None
+                                self.serendipity_score = 0.0
+                        hits = [_Hit(dv) for dv in explore_pool]
+                        wandered = self._serendipity.wander(hits)
+                        ser_dvs = [h.dv for h in wandered if h.dv.memory_id in self._pool]
+                        if ser_dvs:
+                            ranked_lists.append(ser_dvs)
+                except Exception as exc:
+                    logger.debug("Serendipity channel skipped: %s", exc)
 
             # RRF Fusion across all active channels
             merged = self._rrf_fusion(ranked_lists, top_k=limit)

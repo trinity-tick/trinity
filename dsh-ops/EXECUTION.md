@@ -2270,3 +2270,19 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
   goal-eb9c90b2（重启后创建）经 projcache 自动补全 objective。
 - **结果**：dsh_goals 27/27 100% 完整，且**今后每轮 supervisor 自动兜底**
   （不再依赖插件事件通道，也不需手工回填）。
+
+
+### 58.1 R5 储备接入（2026-08-15）：联想检索/自进化图/双过程
+
+- **① Serendipity 联想检索（RippleMem 对齐）**：MemoryAggregator 加探索通道——
+  WanderRetriever 温度采样（sample_count 默认 3，TRINITY_SERENDIPITY_SAMPLES 可调）
+  + AssociativeBridging 弱关联桥（max_hops=2）；hybrid 融合中从池内低相关记忆
+  采样（TRINITY_SERENDIPITY=off 可关）。实测 hybrid 返回含探索记忆（life 类别被采样）。
+- **② SAGE 自进化图（MindMemOS 对齐）**：Trinity.sage_ingest/query/evolve——
+  惰性实例化 SAGEGraphMemoryEngine；写入同步图记忆（实体/关系）、查询证据路径、
+  触发自进化。实测 ingest 实体+关系、query 证据路径、evolve 完成。
+- **③ DCPM 双过程（Dual-Process 对齐）**：Trinity.dcpm_record_belief/consolidate——
+  System1 信念修订链（supersede 双向链）+ System2 夜间 schema 归纳/冲突检测。
+  实测 chain_len=2 修订链 + consolidate schema 归纳。
+- **测试**：test_r5_reserves.py 5 例；全量通过。
+- **效果**：261 储备中 3 个高价值模块接入运行路径（检索探索/图自进化/信念一致性）。

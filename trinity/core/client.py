@@ -253,6 +253,14 @@ class Trinity:
         # 惰性实例化；TRINITY_PERSONALIZE=on 时 search 注入偏好上下文。
         self._personalization = None
 
+        # ── SAGE 自进化图记忆（R5 P0, 2026-08-15, MindMemOS 对齐）──
+        # 惰性实例化；写入时可同步图记忆、查询图证据路径、触发自进化。
+        self._sage = None
+
+        # ── DCPM 双过程认知记忆（R5 P0, 2026-08-15, Dual-Process 对齐）
+        # 惰性实例化；System1 信念修订链 + System2 夜间 schema 归纳。
+        self._dcpm = None
+
         # ── 记忆压缩引擎 ──────────────────────────────────────────
         self._compressor = None
 
@@ -2604,6 +2612,106 @@ class Trinity:
             return eng.should_clarify(user_id, action_context, dom)
         except Exception:
             return False
+
+    # ── SAGE 自进化图记忆（R5 P0, 2026-08-15, MindMemOS 对齐）──────
+    # 惰性实例化 SAGEGraphMemoryEngine：写入同步图记忆、查询证据路径、
+    # 触发自进化。失败静默降级（不影响主流程）。
+
+    @property
+    def sage(self):
+        if self._sage is None:
+            try:
+                from trinity.modules.second_brain.sage_graph_memory_engine import (
+                    SAGEGraphMemoryEngine,
+                )
+                self._sage = SAGEGraphMemoryEngine()
+            except Exception:
+                self._sage = None
+        return self._sage
+
+    def sage_ingest(self, content: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """摄入一轮交互到 SAGE 图记忆（MindMemOS 自进化）。"""
+        eng = self.sage
+        if eng is None:
+            return {"sage": False}
+        try:
+            return {**eng.ingest_turn(content, metadata), "sage": True}
+        except Exception:
+            return {"sage": False}
+
+    def sage_query(self, query_text: str) -> Dict[str, Any]:
+        """SAGE 图检索（实体/关系/证据路径）。"""
+        eng = self.sage
+        if eng is None:
+            return {"sage": False, "entities": [], "relations": []}
+        try:
+            return {**eng.query(query_text), "sage": True}
+        except Exception:
+            return {"sage": False, "entities": [], "relations": []}
+
+    def sage_evolve(self) -> Dict[str, Any]:
+        """触发 SAGE 自进化轮（图结构调整）。"""
+        eng = self.sage
+        if eng is None:
+            return {"sage": False}
+        try:
+            return {**eng.evolve(), "sage": True}
+        except Exception:
+            return {"sage": False}
+
+    # ── DCPM 双过程认知记忆（R5 P0, 2026-08-15, Dual-Process 对齐）──
+
+    @property
+    def dcpm(self):
+        if self._dcpm is None:
+            try:
+                from trinity.modules.second_brain.dcpm_dual_process_memory import (
+                    System1DaytimeWriter, System2NighttimeEngine,
+                )
+                self._dcpm = {
+                    "system1": System1DaytimeWriter(),
+                    "system2": System2NighttimeEngine(),
+                }
+            except Exception:
+                self._dcpm = None
+        return self._dcpm
+
+    def dcpm_record_belief(self, subject: str, predicate: str, obj: str,
+                           superseded_by: Optional[str] = None) -> Dict[str, Any]:
+        """System1 记录信念（含修订链，快路径）。"""
+        eng = self.dcpm
+        if eng is None:
+            return {"dcpm": False}
+        try:
+            import uuid as _uuid
+            from trinity.modules.second_brain.dcpm_dual_process_memory import BeliefRevisionNode
+            node = BeliefRevisionNode(
+                belief_id=_uuid.uuid4().hex[:12],
+                subject=subject, predicate=predicate,
+                object=obj, superseded_by=superseded_by,
+            )
+            stored = eng["system1"].record_belief(node)
+            return {"dcpm": True, "belief_id": stored.belief_id,
+                    "chain_len": len(eng["system1"].get_chain(stored.belief_id))}
+        except Exception:
+            return {"dcpm": False}
+
+    def dcpm_consolidate(self) -> Dict[str, Any]:
+        """System2 夜间整合：schema 归纳 + 冲突检测（慢路径）。"""
+        eng = self.dcpm
+        if eng is None:
+            return {"dcpm": False, "schemas": 0, "collisions": 0}
+        try:
+            beliefs = list(eng["system1"]._beliefs.values())
+            schemas = eng["system2"].induce_schemas(beliefs)
+            collisions = 0
+            for i in range(len(schemas)):
+                for j in range(i + 1, len(schemas)):
+                    if eng["system2"].detect_collisions(schemas[i], schemas[j]):
+                        collisions += 1
+            return {"dcpm": True, "schemas": len(schemas), "collisions": collisions}
+        except Exception:
+            return {"dcpm": False, "schemas": 0, "collisions": 0}
 
     def _ensure_cross_modal_retriever(self):
         """Lazy-initialize the CrossModalRetriever.
