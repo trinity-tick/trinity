@@ -2127,3 +2127,15 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
   schedule/无关事件无副作用）。
 - **已知限制**：DSH harness 生成的 goal_id（UUID）与 Trinity 哈希 id 不同，
   create/update 无法用同一 id 合并（各记各的，均可查）。
+
+
+### 50.2 DSH 融合"不完美"深挖与全量修复（2026-08-15）
+
+- **深挖结论**：create/update 的 goal_id "不合并"其实是**历史事件未重放**——
+  DSH 实际事件格式：create_goal（无 id）→ update_goal(edit, 带真实 UUID+objective)
+  → update_goal(complete, 同 UUID)。修复后的解析器**能正确处理全部三种**。
+- **全量重放**：36 个 goal/schedule 事件重放 → 24 个 goal 入库，UUID 行 objective
+  补全（goal-45b85d3c 等可见完整目标）；清理哈希孤立行。
+- **剩余缺口（数据上限）**：13 个 completed goal objective 为空——其 create/edit
+  事件已被历史 compaction 清出事件流，无法从 Trinity 侧恢复（信息源缺失，非实现缺陷）。
+- **测试**：test_structure_sync.py 扩至 8 例（edit 带 objective / edit→complete 合并）。

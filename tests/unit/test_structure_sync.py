@@ -61,6 +61,32 @@ def test_update_goal_status(conn) -> None:
     assert row["status"] == "completed"
 
 
+def test_update_goal_edit_with_objective(conn) -> None:
+    """update_goal(action=edit) 携带真实 UUID + objective → 完整写入（DSH 实际格式）。"""
+    ev = _tool_call("update_goal", {
+        "action": "edit", "goal_id": "goal-45b85d3c-8b43-4e0c-b2e8-ca885ef9a94d",
+        "revision": 1, "objective": "全方位执行 Trinity 优化方向",
+    })
+    structure_store._sync_goal_schedule_from_event(conn, ev, 1000.0)
+    row = conn.execute("SELECT * FROM dsh_goals WHERE goal_id='goal-45b85d3c-8b43-4e0c-b2e8-ca885ef9a94d'").fetchone()
+    assert row is not None
+    assert row["objective"] == "全方位执行 Trinity 优化方向"
+    assert row["status"] == "active"  # edit 保留现有状态
+
+
+def test_goal_edit_then_complete_merges(conn) -> None:
+    """同一 UUID 的 edit→complete 合并到一行（状态更新，objective 保留）。"""
+    ev1 = _tool_call("update_goal", {"action": "edit", "goal_id": "g-9",
+                                     "objective": "目标文本"})
+    structure_store._sync_goal_schedule_from_event(conn, ev1, 1000.0)
+    ev2 = _tool_call("update_goal", {"action": "complete", "goal_id": "g-9"})
+    structure_store._sync_goal_schedule_from_event(conn, ev2, 2000.0)
+    rows = conn.execute("SELECT * FROM dsh_goals WHERE goal_id='g-9'").fetchall()
+    assert len(rows) == 1  # 合并为一行
+    assert rows[0]["status"] == "completed"
+    assert rows[0]["objective"] == "目标文本"  # objective 不被 complete 覆盖
+
+
 def test_schedule_create(conn) -> None:
     ev = _tool_call("schedule_create", {"schedule_id": "s-1", "prompt": "reminder",
                                         "after_seconds": 3600})
