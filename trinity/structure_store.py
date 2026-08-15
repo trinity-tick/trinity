@@ -192,8 +192,15 @@ def _sync_goal_schedule_from_event(conn, ev: dict, now: float) -> None:
     if not isinstance(a, dict):
         return
 
-    if name in ("create_goal", "update_goal") and a.get("goal_id"):
-        gid = a["goal_id"]
+    if name in ("create_goal", "update_goal") and (a.get("goal_id") or name == "create_goal"):
+        # DSH 系统内置 create_goal 工具不携带 goal_id（参数为 objective/
+        # max_goal_rounds，goal_id 由 harness 生成）。用 objective 哈希生成
+        # 稳定 id，使后续 update_goal（携带真实 goal_id）能合并到同一行。
+        gid = a.get("goal_id")
+        if not gid and name == "create_goal":
+            import hashlib as _hl
+            obj = a.get("objective", "")
+            gid = f"goal-{_hl.sha256(obj.encode()).hexdigest()[:16]}" if obj else f"goal-sys-{int(now)}"
         action = a.get("action", "create")
         status = _GOAL_ACTION_STATUS.get(action)
         if status is None:

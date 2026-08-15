@@ -2109,3 +2109,21 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
 - **判断**：R3+R4 后"接线"优化完成（PPR/意图/个性化/蒸馏全接入），
   下一阶段重心转向对外证明与包装（官方基准/README/MCP 发布/leaderboard）。
 - 文档：COMPARISON_VS_2026_SOTA_R4.md。
+
+
+### 50.1 DSH 结构核查与修复（2026-08-15）
+
+- **结构盘点**：DSH 融合 6 表落库（dsh_sessions 2 / dsh_events 3340 / dsh_goals 3 /
+  dsh_todos 11 / dsh_headers 4 / dsh_schedules 0）；事件 9 类型（tool/call 1035 +
+  tool/result 1249 配对完整）；插件注册 17 工具（trinity_* 含结构层 trajectory/
+  sessions/stats/goals/schedules）；structure_store 无副作用共享（engine_worker/API/
+  GraphQL 三入口）。
+- **发现 bug**：DSH 系统内置 create_goal 工具不携带 goal_id（参数仅 objective/
+  max_goal_rounds），_sync_goal_schedule_from_event 的 `a.get("goal_id")` 条件恒 False
+  → objective 永远写不进 dsh_goals（只有后续 update_goal 写入空 objective 行）。
+- **修复**：create_goal 无 goal_id 时用 objective SHA-256 生成稳定 id（幂等）；
+  生产库重放 5 个历史 create_goal 事件补回 objective。
+- **测试**：tests/unit/test_structure_sync.py 6 例（create 哈希/幂等/update 状态/
+  schedule/无关事件无副作用）。
+- **已知限制**：DSH harness 生成的 goal_id（UUID）与 Trinity 哈希 id 不同，
+  create/update 无法用同一 id 合并（各记各的，均可查）。
