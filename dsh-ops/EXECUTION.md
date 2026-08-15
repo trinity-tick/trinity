@@ -2094,3 +2094,18 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
   get_preference_context / integrate_feedback / should_clarify（Meta ICLR 2026 对齐）；
   反馈→偏好入库→检索→澄清全链路 PASS。6 单测。
 - **验证**：全量测试通过（+20 测试）。文档：COMPARISON_VS_2026_SOTA_R3 执行结果。
+
+
+### 49.1 R4 优化执行（2026-08-15）：结构化蒸馏压缩接入
+
+- **R4 情报**：ICML 2026 Structured Distillation（11x token 缩减 + 96% MRR 保留，
+  huggingface 2603.13017）——Trinity 已有 structured_distillation_compressor.py
+  （671 行，曾 orphan）。
+- **接入**：MemoryCompressor.distill_compress（记忆批 → ExchangeTurn → distill 复合对象
+  → 摘要文本）；env TRINITY_DISTILL_COMPRESS=on；失败回退 LLM 摘要。
+  实测 4 记忆 → Intent/Summary/Outcome/Themes 聚焦摘要，直接 distill 压缩比 ~13x。
+- **修复**：ThematicRoomType 枚举 join 非 str → .value。
+- **测试**：test_distill_compress.py 4 例；全量通过。
+- **判断**：R3+R4 后"接线"优化完成（PPR/意图/个性化/蒸馏全接入），
+  下一阶段重心转向对外证明与包装（官方基准/README/MCP 发布/leaderboard）。
+- 文档：COMPARISON_VS_2026_SOTA_R4.md。

@@ -335,6 +335,61 @@ class MemoryCompressor:
             logger.debug("intent clustering skipped: %s", exc)
             return [memories]
 
+    # ── Structured Distillation Compress（R4, 2026-08-15）────────────
+    # 对接 ICML 2026 Structured Distillation（11x 压缩 + 96% MRR 保留）：
+    # 把记忆批转 ExchangeTurn → distill 复合对象 → 摘要文本。
+    # env TRINITY_DISTILL_COMPRESS=on 启用；失败/关闭返回 None（调用方回退 LLM）。
+
+    def distill_compress(
+        self,
+        memories: List[Dict[str, Any]],
+    ) -> Optional[str]:
+        """用结构化蒸馏压缩一批记忆为摘要文本（11x 目标）。
+
+        Args:
+            memories: 待压缩记忆列表。
+
+        Returns:
+            摘要文本；不可用/失败返回 None。
+        """
+        if not memories:
+            return None
+        try:
+            from trinity.modules.second_brain.structured_distillation_compressor import (
+                ExchangeRole, ExchangeTurn, StructuredDistillationCompressor,
+            )
+            turns = [
+                ExchangeTurn(
+                    turn_id=i,
+                    role=ExchangeRole.USER if m.get("role", "user") == "user"
+                    else ExchangeRole.ASSISTANT,
+                    content=str(m.get("content", "")),
+                )
+                for i, m in enumerate(memories)
+            ]
+            compressor = StructuredDistillationCompressor()
+            distillate = compressor.distill(turns)
+            core = distillate.exchange_core
+            lines = [
+                f"[DISTILLED - {distillate.compression_ratio:.1f}x]",
+                f"Intent: {core.user_intent}",
+                f"Summary: {core.assistant_response_summary}",
+                f"Outcome: {core.outcome or 'n/a'}",
+            ]
+            rooms = distillate.thematic_room_assignments
+            if rooms:
+                themes = ", ".join(
+                    (getattr(r, "room_type", None).value
+                     if hasattr(getattr(r, "room_type", None), "value")
+                     else (getattr(r, "room", "") or ""))
+                    for r in rooms[:3]
+                )
+                lines.append(f"Themes: {themes}")
+            return "\n".join(l for l in lines if l and not l.endswith(": "))
+        except Exception as exc:
+            logger.debug("structured distillation skipped: %s", exc)
+            return None
+
     def compress_all_batches(
         self,
         batches: List[List[Dict[str, Any]]],
