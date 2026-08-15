@@ -91,16 +91,7 @@ class RetrievalSystemV47:
 # ======================================================================
 # discover_latest_version
 # ======================================================================
+# 2026-08-15 (P2 dedup): 统一实现到 engine_core（含完整版本链），此处 re-export，
+# 消除三处双实现（原单 latest 结构仅本文件使用，无外部调用方）。
 
-def discover_latest_version(subsystem: str) -> dict:
-    """Discover the latest module versions for a subsystem."""
-    versions = {
-        "second_brain": "v6.36",
-        "auto_daemon": "v1.11",
-        "chromadb": "v6.17",
-    }
-    return {
-        "subsystem": subsystem,
-        "latest": versions.get(subsystem, "unknown"),
-        "upgrade_available": False,
-    }
+from trinity.modules.second_brain.engine_core import discover_latest_version  # noqa: E402,F401

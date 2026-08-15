@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Trinity DSH 维护驱动器 — 由 Windows 计划任务或手动调用。
 
@@ -279,6 +279,12 @@ _d = TrinityClient().diagnostics()
 _e = _d.get("engine", {})
 assert _e.get("ALL_PASS"), "engine diagnostics not ALL_PASS: %s" % _e.get("status", "?")
 print("SMOKE diagnostics ALL_PASS OK (modules=%s)" % _e.get("total_modules"))
+# 模块审计：孤儿/实验标注一致性（2026-08-15, P3 CI 集成）
+import subprocess
+_aud = subprocess.run([sys.executable, r"$TrinityRoot\scripts\audit_modules.py", "--json-only"],
+                      capture_output=True, text=True, timeout=120)
+assert _aud.returncode == 0, "audit_modules failed: %s" % _aud.stderr[-300:]
+print("SMOKE module audit OK")
 import runpy
 sys.argv = ["run_all_self_tests"]
 runpy.run_path(r"$TrinityRoot\scripts\run_all_self_tests.py", run_name="__main__")

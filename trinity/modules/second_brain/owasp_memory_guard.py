@@ -112,7 +112,7 @@ class PromptInjectionDetector:
         (r"(?i)-{3,}\s*(BEGIN|END)\s*(INSTRUCTION|PROMPT|SYSTEM)", DetectionSeverity.MEDIUM),
         (r"(?i)\[system\]\s*\(override\)", DetectionSeverity.HIGH),
         # 输出操控
-        (r"(?i)(output|reply|respond)\s+(only|exactly|with\s+just)\s*[:：]\s*['""][\s\S]{30,}", DetectionSeverity.MEDIUM),
+        (r'(?i)(output|reply|respond)\s+(only|exactly|with\s+just)\s*[:：]\s*[\'\"]{1,2}[\s\S]{30,}', DetectionSeverity.MEDIUM),
     ]
 
     def detect(self, content: str) -> list[DetectionResult]:

@@ -2057,3 +2057,22 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
 - **验证**：304 模块全部 compile 通过（0 语法失败）；engine facade 56 导出全解析；
   全量测试通过。
 - 文档：CODE_STRUCTURE_AUDIT_20260815.md（审计报告）。
+
+
+### 47.1 代码健康优化四件套（2026-08-15）：冒烟测试 + 去重 + CI 集成 + 孤儿分类
+
+- **P1 active 模块冒烟测试**：tests/unit/test_engine_core_smoke.py（16 例：SecondBrainV636
+  构造/50 守护/47 通道/facade 56 导出/10 个 engine_* 模块关键类/discover_latest_version）
+  + tests/unit/test_active_modules_smoke.py（19 过 7 跳：23 个非 engine active 模块导入+
+  类实例化）。34 个无直接覆盖的 active 模块现有关键类级回归保护。
+- **P2 重复函数治理**：discover_latest_version 三处双实现（engine_core/guardian_retrieval/
+  engine_guardian_retrieval）统一为 engine_core 单一实现，另两处 re-export（is 验证同一函数）；
+  删除 engine_guardian_retrieval 同文件重复定义。其余 18 个同名函数为各模块私有工具，
+  无行为冲突，不做强行合并。
+- **P3 audit 集成 CI**：trinity-dsh-maintenance.ps1 selftest 增加 audit_modules.py
+  子进程调用（json-only 模式，rc=0 断言）——维护链自动检测"新增模块未接入"。
+- **P4 孤儿分类索引**：audit_modules.py --categorize-orphans 按文件名语义把 264 孤儿
+  归 10 类（记忆架构 98/学习进化 26/压缩上下文 22/图谱关系 19/安全防御 16/时间时序 9/
+  多智能体 5/存储 3/论文对齐 3/Other 63），生成 docs/ORPHAN_MODULES_INDEX.md（299 行）。
+- **顺带修复**：owasp_memory_guard.py:115 无效转义（raw 字符串被 ['""] 提前闭合，
+  \s 落非 raw 上下文——未来 Python 会报错），改单引号+转义引号，SyntaxWarning 消失。

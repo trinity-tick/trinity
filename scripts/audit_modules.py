@@ -96,6 +96,48 @@ def scan() -> Dict[str, List[str]]:
     }
 
 
+# 孤儿分类关键词（按文件名语义）
+_CATEGORY_KEYWORDS = [
+    ("安全/防御", ["defense", "guard", "adversarial", "injection", "poison", "jailbreak",
+                   "security", "owasp", "abuse", "watermark", "trust", "reputation",
+                   "privacy", "redteam", "backdoor"]),
+    ("论文对齐/前沿", ["paper", "arxiv", "iclr", "acl", "icml", "neurips", "2026", "sota",
+                    "beam", "hindsight", "mem0", "zep", "graphiti", "supermemory",
+                    "exabase", "hopfield", "llm"], ),
+    ("时间/时序", ["temporal", "time", "chronos", "timeline", "bi_temporal", "validity"]),
+    ("图谱/关系", ["graph", "kgraph", "knowledge", "ontology", "semantic_graph",
+                  "topology", "network", "mesh", "gossip"]),
+    ("压缩/上下文", ["compress", "context", "budget", "token", "kv", "cache", "prompt",
+                    "summariz", "reflection"]),
+    ("学习/进化", ["learning", "rl", "reinforce", "evolution", "coevolve", "curricula",
+                  "adaptive", "self", "meta", "train", "induction"]),
+    ("记忆架构", ["memory", "episodic", "semantic", "procedural", "engram", "recall",
+                 "reconstruct", "replay", "foresight", "working_memory", "recognition",
+                 "memoriz", "mnemonic", "amnesia", "forget"]),
+    ("多智能体/社会", ["agent", "social", "community", "role", "team", "collaborat",
+                     "multi", "swarm", "mesh"]),
+    ("存储/后端", ["storage", "store", "sqlite", "postgres", "vector", "index", "ann",
+                  "faiss", "chroma", "cache"]),
+]
+
+
+def categorize_orphans(orphans: List[str]) -> Dict[str, List[str]]:
+    """按文件名语义把孤儿模块归入大类（启发式；未命中归 Other）。"""
+    cats: Dict[str, List[str]] = {"Other": []}
+    for name in orphans:
+        placed = False
+        for cat, kws in _CATEGORY_KEYWORDS:
+            if any(k in name for k in kws):
+                cats.setdefault(cat, []).append(name)
+                placed = True
+                break
+        if not placed:
+            cats["Other"].append(name)
+    for cat in cats:
+        cats[cat].sort()
+    return dict(sorted(cats.items()))
+
+
 def mark_orphans(report: Dict[str, List[str]]) -> int:
     """给孤儿模块文件头加 status: orphan 标注（幂等）。
 
@@ -137,6 +179,8 @@ def main() -> int:
     parser.add_argument("--json-only", action="store_true")
     parser.add_argument("--mark-orphan", action="store_true",
                         help="给孤儿模块加 status: orphan 标注")
+    parser.add_argument("--categorize-orphans", action="store_true",
+                        help="按文件名语义为孤儿模块分类并生成索引")
     args = parser.parse_args()
 
     report = scan()
@@ -153,6 +197,28 @@ def main() -> int:
         (out / "module_audit.json").write_text(
             json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8"
         )
+        return 0
+
+    if args.categorize_orphans:
+        cats = categorize_orphans(report["orphan"])
+        report["orphan_categories"] = cats
+        (out / "module_audit.json").write_text(
+            json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8"
+        )
+        # 生成索引文档
+        doc = _TRINITY_ROOT / "docs" / "ORPHAN_MODULES_INDEX.md"
+        lines = ["# 孤儿模块索引（2026-08-15 audit）\n",
+                 f"> {len(report['orphan'])} 个模块不在运行路径（全库零引用），保留为算法/论文储备。",
+                 "> 来源：scripts/audit_modules.py --categorize-orphans\n"]
+        for cat, mods in sorted(cats.items()):
+            lines.append(f"\n## {cat}（{len(mods)}）\n")
+            for m in mods:
+                lines.append(f"- {m}")
+        doc.write_text("\n".join(lines), encoding="utf-8")
+        print(f"categorized {len(report['orphan'])} orphans -> {len(cats)} categories")
+        print(f"index: {doc}")
+        for cat, mods in sorted(cats.items()):
+            print(f"  {cat}: {len(mods)}")
         return 0
 
     if args.json_only:

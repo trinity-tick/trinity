@@ -326,22 +326,6 @@ print("[Retrieval] 47-channel retrieval initialized (ch45+ch46+ch47 NEW)")
 
 
 
-def discover_latest_version(subsystem: str) -> dict:
-    """优先级回退链: v6.15→v6.14→v6.13→v6.12"""
-    versions = {
-        "second_brain": ["v6.36", "v6.34", "v6.32", "v6.30", "v6.28"],
-        "chromadb": ["v6.15", "v6.14", "v6.13", "v6.12"],
-        "auto_daemon": ["v1.7.0", "v1.6.0", "v1.5.0", "v1.4.0"],
-    }
-    chain = versions.get(subsystem, ["v6.15", "v6.14", "v6.13", "v6.12"])
-    return {
-        "subsystem": subsystem,
-        "current": VERSION,
-        "fallback_chain": chain,
-        "primary": chain[0],
-    }
-
-
 # ============ Second Brain v6.24 主类 ============
 
 
@@ -364,21 +348,10 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 # ============ discover_latest_version ============
+# 2026-08-15 (P2 dedup): 统一实现到 engine_core（含完整版本链），此处 re-export，
+# 消除 engine_core/guardian_retrieval/engine_guardian_retrieval 三处双实现。
 
-def discover_latest_version(subsystem: str) -> dict:
-    """优先级回退链: v6.15→v6.14→v6.13→v6.12"""
-    versions = {
-        "second_brain": ["v6.36", "v6.34", "v6.32", "v6.30", "v6.28"],
-        "chromadb": ["v6.15", "v6.14", "v6.13", "v6.12"],
-        "auto_daemon": ["v1.7.0", "v1.6.0", "v1.5.0", "v1.4.0"],
-    }
-    chain = versions.get(subsystem, ["v6.15", "v6.14", "v6.13", "v6.12"])
-    return {
-        "subsystem": subsystem,
-        "current": VERSION,
-        "fallback_chain": chain,
-        "primary": chain[0],
-    }
+from trinity.modules.second_brain.engine_core import discover_latest_version  # noqa: E402,F401
 
 
 # ============ Second Brain v6.24 主类 ============
