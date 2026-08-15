@@ -78,6 +78,12 @@ t.txt
 test_*.py
 !tests/test_*.py
 !tests/unit/test_*.py
+# Debug residue (2026-08-15): aggregator/jieba/e2e scratch output
+agg*.txt
+_jieba*.txt
+_fv*.txt
+_c.txt
+_e2e_out.txt
 
 # Local config (not committed)
 .github_token
