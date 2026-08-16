@@ -322,3 +322,33 @@ RSS 307.5→308.7MB（**+0.4%**）、WAL 峰值恒定 4.26MB（checkpoint 完全
 ### 13.5 测试与提交
 - 全量 **766 passed / 50 skipped / 0 failed**（PG 测试在 docker 恢复后
   不再 skip，54→50）
+
+## 14. 维护链 + 小时级验证（2026-08-16，commit 待填）
+
+### 14.1 维护链完整链路 ✅
+PG :5430 恢复后运行 maintenance 编排（mirror → decay → tiers → sync → compact）：
+- **mirror**（SQLite→PG :5430）：added=410 / skipped=1,519（幂等）/ errors=0（3.0s），
+  PG 镜像 7,544→7,955 条
+- **decay**（--store sqlite，DecayLimit=20）：扫描 20 条 active，healthy=20 /
+  decaying=0——当前无衰减记忆，治理正常
+- **tiers**（--store sqlite）：500 条分层 core=153 / recall=347 / archival=0，
+  生命周期完整执行（Core=14 blk/433 tok、Recall=434）
+- **sync**：Marvis 2 用户/168 会话，1 会话同步，errors=0
+- **compact**：0 候选会话（结构层无积压）
+- 执行前已做 CSV 全量备份（12,173 条 pre_maintenance_backup_*.csv）
+
+### 14.2 60 分钟长时间 soak ✅
+75,579 操作（写 25.2k/读 25.2k/touch 25.2k），**0 错误 / 0 锁冲突**，
+RSS 302.9→129.7MB（**-57%，GC 回收无泄漏**）、WAL 峰值恒定 4.7MB
+（checkpoint 完全跟上）、连接池稳定 10——**小时级验证确认长期稳定**。
+
+### 14.3 PG 容器资源评估 ✅
+- `docker inspect trinity-db`：**NanoCpus=0 / Memory=0（无资源限制）**，
+  当前仅 39MB 内存 / CPU 0%
+- 单次查询对比：容器 :5430 avg 12.7ms vs 原生 :5432 6.1ms（~2x，docker
+  网络栈 + 容器 PG 配置），但绝对延迟健康
+- 结论：**PG 容器无需扩容**（无资源限制、延迟可接受）；读 QPS 85.8 vs 916
+  差异源于容器并发放大 + 维护库表结构，非资源瓶颈
+
+### 14.4 测试与提交
+- 全量 **766 passed / 50 skipped / 0 failed**
