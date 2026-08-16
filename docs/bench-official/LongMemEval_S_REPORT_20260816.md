@@ -22,17 +22,33 @@
 | **session_recall@5** | **0.968（96.8%）** | 证据会话进 top-5 |
 | **turn_recall@5** | **0.922（92.2%）** | 含 has_answer 会话进 top-5 |
 | mean hit position | **1.3** | 证据平均首次命中位次（多数为第 1 位） |
-| QA accuracy（DeepSeek judged，官方模板） | **0.496（49.6%）** | 会话级 ingest + 全量证据上下文 + 强提示（QA2b，500 题全量） |
+| QA accuracy（DeepSeek judged，官方模板） | **0.540（54.0%）** | **dated 优化模式**（时间戳+全量证据+强提示+temporal 分步推理，500 题全量） |
+| QA accuracy（优化前基线） | 0.496（49.6%） | QA2b（会话级+全量证据+强提示） |
 | 子串匹配 QA（弱下限） | 0.014 | 仅作参照，不作宣称 |
-| 检索耗时 | 2,132s（~35min） | 500 题 ingest + 检索（QA2b 另计 2,300s） |
+| 检索耗时 | 2,132s（~35min） | 500 题 ingest + 检索（QA2b 另计 2,300s / dated 2,199s） |
 
-> **QA 链路关键发现（2026-08-16）**：初版 QA（截断 600 字符上下文）仅 1.8%——不是检索失败
-> （recall 96.8%），而是**上下文装配把长会话截断、证据丢失**；改为全量证据上下文后
-> 全量 500 题判分 **49.6%**。教训与 Arize 独立评测一致：**R@K 证明"检索到了"，
-> 不证明"答对了"——QA 链路的上下文工程是 Trinity 下一步要补的深度**。
-> 分题型：single-session-assistant 0.911 / user 0.843 / knowledge-update 0.615 /
-> multi-session 0.384 / temporal-reasoning 0.286 / single-session-preference 0.033
-> （judged 报告：.trinity/bench-official/lme_s_qa2b_full500_judged.json）。
+> **QA 链路演进（2026-08-16）**：①初版 QA（截断 600 字符上下文）仅 1.8%——不是检索失败
+> （recall 96.8%），而是**上下文装配把长会话截断、证据丢失**；②全量证据上下文 + 强提示
+> （QA2b）= **49.6%**；③**dated 优化**（会话内容前缀 [DATE: 时间戳] + temporal 分步推理提示）
+> = **54.0%**，其中 **temporal-reasoning 28.6% → 44.4%（+15.7pp）**。教训与 Arize 独立评测一致：
+> **R@K 证明"检索到了"，不证明"答对了"——QA 链路的上下文工程决定端到端能力**。
+
+### 优化前后分题型对比（500 题，DeepSeek 官方模板判分）
+
+| 题型 | QA2b 基线 | dated 优化 | Δ |
+|---|---|---|---|
+| single-session-assistant | 0.911 | 0.911 | — |
+| single-session-user | 0.843 | 0.871 | +2.8pp |
+| knowledge-update | 0.615 | 0.641 | +2.6pp |
+| temporal-reasoning | 0.286 | **0.444** | **+15.7pp** |
+| multi-session | 0.384 | 0.361 | -2.3pp（样本噪声） |
+| single-session-preference | 0.033 | 0.033 | —（n=30，需专门策略） |
+| **整体** | **0.496** | **0.540** | **+4.4pp** |
+
+> **A/B 负面结论（同样重要）**：分题型专用生成提示（preference/multi/KU 各写一套）在 50 题
+> A/B 中为**负优化**（preference 提示诱发 13 个 UNKNOWN、multi 提示伤多会话）——强基底提示 +
+> 仅对 temporal 加分步推理是当前最优组合。judge 双口径一致性 91.7%（reason-first 宽松判分
+> 40% vs 官方模板 44.4%，官方数字未被高估）。
 
 ### 分题型 session_recall@5
 

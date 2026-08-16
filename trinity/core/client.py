@@ -1420,6 +1420,11 @@ class Trinity:
             Dict with memory_id, version_id, sha256_hash, timestamp, pushed_memories.
         """
         tags = tags or []
+        # 2026-08-16(基建夯实):压测/锁测试写入隔离——已知测试 agent/category/
+        # 标签/内容标记的写入强制 archived(仍落库可查、不占 active 检索面)。
+        # 开关 TRINITY_ISOLATE_TEST_WRITES=off 可关闭。
+        isolated_test_write = self._is_isolated_test_write(
+            agent_id=agent_id, category=category, tags=tags, content=content)
 
         result: Dict[str, Any] = {}
         if self._adapter:
@@ -1449,8 +1454,22 @@ class Trinity:
                 ) if self._adapter else {"memory_id": "", "error": "no adapter"}
             )
 
-        # 自动审计日志（同步：核心写入 + 审计链即时落账，保证可信链完整）
         memory_id = result.get("memory_id", "")
+
+        # 隔离写入:立即归档(不进入 active 检索面),并留审计痕迹
+        if isolated_test_write and memory_id and self._adapter:
+            try:
+                self._adapter.archive_memories([memory_id])
+                if hasattr(self._adapter, "write_audit_log"):
+                    self._adapter.write_audit_log(
+                        memory_id=memory_id, action="ISOLATED_TEST_WRITE",
+                        agent_id=agent_id, persona_id=persona_id,
+                        details={"category": category, "tags": tags},
+                    )
+            except Exception:
+                pass
+
+        # 自动审计日志（同步：核心写入 + 审计链即时落账，保证可信链完整）
         if self._adapter and hasattr(self._adapter, "write_audit_log"):
             try:
                 self._adapter.write_audit_log(
@@ -1470,18 +1489,19 @@ class Trinity:
         # result 为共享 dict 引用，后台线程回填 pushed_memories /
         # extracted_entities / postprocess（pending → done），API 返回
         # 时可能仍为 pending，属设计内的异步语义。
-        # 例外：TRINITY_LLM_EXTRACT=on 默认同步（调用方期望 ingest 返回时
-        # 实体/关系已入库，如测试/管线）；设置 TRINITY_LLM_EXTRACT_ASYNC=on
-        # 可改为异步（写入即时返回、LLM 抽取后台完成，吞吐优先，2026-08-16）。
+        # 例外：TRINITY_LLM_EXTRACT=on 默认异步（2026-08-16 优化，实测真实 LLM
+        # 提取 ~4.5s/条，同步会阻塞写路径）；TRINITY_LLM_EXTRACT_SYNC=on 强制同步
+        # （调用方期望 ingest 返回时实体/关系已入库，如测试/管线）。
+        # 兼容旧开关：TRINITY_LLM_EXTRACT_ASYNC=on 仍为异步（本就是默认）。
         llm_extract = os.environ.get(
             "TRINITY_LLM_EXTRACT", "").strip().lower() in ("1", "on", "true", "yes")
-        llm_async = os.environ.get(
-            "TRINITY_LLM_EXTRACT_ASYNC", "").strip().lower() in ("1", "on", "true", "yes")
-        if postprocess and memory_id:
+        llm_sync = os.environ.get(
+            "TRINITY_LLM_EXTRACT_SYNC", "").strip().lower() in ("1", "on", "true", "yes")
+        if postprocess and not isolated_test_write and memory_id:
             result.setdefault("pushed_memories", [])
             result["extracted_entities"] = 0
             result["postprocess"] = "pending"
-            if llm_extract and not llm_async:
+            if llm_extract and llm_sync:
                 self._postprocess_memory(memory_id, content, result)
             else:
                 threading.Thread(
@@ -1495,6 +1515,34 @@ class Trinity:
             result["postprocess"] = "pending" if memory_id else "skipped"
 
         return result
+
+    _ISOLATED_TEST_AGENTS = {"stress-agent", "lock-test", "stress-test", "stress-db-writer"}
+    _ISOLATED_TEST_CATEGORIES = {"stress-test", "stress_test"}
+    _ISOLATED_TEST_TAGS = {"locktest", "stress"}
+
+    def _is_isolated_test_write(
+        self, agent_id: str, category: str, tags: Optional[List[str]],
+        content: str,
+    ) -> bool:
+        """判断写入是否为压测/锁测试/自污染类,应隔离出 active 检索面。
+
+        2026-08-16(基建夯实):历史 stress-agent(200)/lock-test(50)/auto-link
+        噪音(576)已归档,此守卫防止同类写入再次进入 active 面(写入仍落库,
+        测试脚本可正常验证,但检索不再被污染)。TRINITY_ISOLATE_TEST_WRITES=off 关闭。
+        """
+        if os.environ.get(
+            "TRINITY_ISOLATE_TEST_WRITES", "on"
+        ).lower() in ("off", "0", "false"):
+            return False
+        if agent_id in self._ISOLATED_TEST_AGENTS:
+            return True
+        if category in self._ISOLATED_TEST_CATEGORIES:
+            return True
+        if any((tg or "").lower() in self._ISOLATED_TEST_TAGS for tg in (tags or [])):
+            return True
+        if content.startswith("[自动关联]") or "LONG-STRESS" in content:
+            return True
+        return False
 
     def _postprocess_memory(
         self, memory_id: str, content: str,
