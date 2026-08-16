@@ -10,6 +10,26 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+import json
+import os
+from pathlib import Path
+
+
+# 2026-08-16 修复(P1):信誉账本 JSON 持久化 —— API 重启后信誉状态不再丢失。
+_REPUTATION_FILE = os.path.join(
+    os.environ.get("TRINITY_HOME", str(Path.home() / ".trinity")),
+    "memory_market_reputation.json",
+)
+
+
+def _entry_to_dict(e):
+    return {"event_id": e.event_id, "agent_id": e.agent_id, "event_type": e.event_type,
+            "from_agent": e.from_agent, "reason": e.reason, "timestamp": e.timestamp}
+
+
+def _entry_from_dict(d):
+    return ReputationEntry(**{k: v for k, v in d.items() if k in ReputationEntry.__dataclass_fields__})
+
 
 
 # ── Data structures ───────────────────────────────────────────────────
@@ -70,6 +90,36 @@ class ReputationEngine:
         self._ledger: Dict[str, List[ReputationEntry]] = {}
         self._trade_stats: Dict[str, Dict[str, int]] = {}  # agent -> {success, fail}
         self._lock = threading.Lock()
+        self._load()
+
+    def _load(self) -> None:
+        """加载持久化信誉状态(P1,2026-08-16)。"""
+        if os.environ.get("TRINITY_TESTING") == "1":
+            return  # 测试隔离:不加载真实持久化文件
+        try:
+            if not os.path.exists(_REPUTATION_FILE):
+                return
+            with open(_REPUTATION_FILE, encoding="utf-8") as fh:
+                d = json.load(fh)
+            for agent, entries in (d.get("ledger") or {}).items():
+                self._ledger[agent] = [_entry_from_dict(e) for e in entries]
+            self._trade_stats = d.get("trade_stats") or {}
+        except Exception:
+            pass
+
+    def _save(self) -> None:
+        """持久化信誉状态(P1,2026-08-16)。"""
+        if os.environ.get("TRINITY_TESTING") == "1":
+            return  # 测试隔离:不写真实持久化文件
+        try:
+            os.makedirs(os.path.dirname(_REPUTATION_FILE), exist_ok=True)
+            with open(_REPUTATION_FILE, "w", encoding="utf-8") as fh:
+                json.dump({
+                    "ledger": {a: [_entry_to_dict(e) for e in es] for a, es in self._ledger.items()},
+                    "trade_stats": self._trade_stats,
+                }, fh, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
 
     # ── Core scoring ──────────────────────────────────────────────────
 
@@ -137,6 +187,7 @@ class ReputationEngine:
     def _record(self, entry: ReputationEntry) -> None:
         with self._lock:
             self._ledger.setdefault(entry.agent_id, []).append(entry)
+        self._save()
 
     def endorse_agent(self, from_agent: str, to_agent: str, reason: str = "") -> ReputationEntry:
         entry = ReputationEntry(

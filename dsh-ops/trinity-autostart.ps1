@@ -5,7 +5,7 @@
 .DESCRIPTION
     以隐藏窗口常驻循环，提供三个周期：
       - 每 5 分钟：跑一次 trinity-supervisor.ps1（api/mcp/collector 监督）；
-      - 每 4 小时：跑一次维护 health,evolution（进化完整周期）；
+      - 每 4 小时：跑一次维护 health,evolution,session-auto（进化完整周期 + 会话自动沉淀）；
       - 每日 03:00-03:10：跑一次维护 decay,tiers,sync（需 PostgreSQL）。
     由 install-autostart.bat 生成的 Startup VBS 在用户登录时自动启动；
     退出登录即停止（与旧 StartUp VBS 方案相同）。若已用管理员注册了
@@ -75,9 +75,12 @@ while ($true) {
     # ── 每 5 分钟：监督 ────────────────────────────────────────
     if (Test-Path $Supervisor) { Invoke-Script -Path $Supervisor -Label "supervisor" }
 
+    # ── SQLite 锁看门狗(2026-08-16):持续锁占用时自动清理 ──
+    if (Test-Path (Join-Path $PSScriptRoot "trinity-lock-watchdog.ps1")) { Invoke-Script -Path (Join-Path $PSScriptRoot "trinity-lock-watchdog.ps1") -Label "lock-watchdog" }
+
     # ── 每 4 小时：health + evolution（进化完整周期）────────────
     if ((Test-Path $Maintenance) -and (($now - $lastMaint).TotalSeconds -ge $MaintIntervalSec)) {
-        Invoke-Script -Path $Maintenance -ArgsList @("-Tasks", "health,evolution") -Label "maintenance(health,evolution)"
+        Invoke-Script -Path $Maintenance -ArgsList @("-Tasks", "health,evolution,session-auto") -Label "maintenance(health,evolution)"
         $lastMaint = $now
     }
 

@@ -12,6 +12,17 @@ from typing import Any, Dict, List, Optional
 
 from .orderbook import OrderBook
 from .reputation import ReputationEngine
+import json
+import os
+from pathlib import Path
+
+
+# 2026-08-16 修复(P1):交易引擎状态 JSON 持久化 —— API 重启后余额/交易历史不再丢失。
+_TRUST_EXCHANGE_FILE = os.path.join(
+    os.environ.get("TRINITY_HOME", str(Path.home() / ".trinity")),
+    "memory_market_trust_exchange.json",
+)
+
 
 
 # ── Currencies ────────────────────────────────────────────────────────
@@ -92,6 +103,44 @@ class TrustExchange:
         self._history: Dict[str, Transaction] = {}
         self._agent_history: Dict[str, List[str]] = {}  # agent_id -> [tx_id, ...]
         self._lock = threading.Lock()
+        self._load()
+
+    def _load(self) -> None:
+        """加载持久化交易状态(P1,2026-08-16)。"""
+        if os.environ.get("TRINITY_TESTING") == "1":
+            return  # 测试隔离:不加载真实持久化文件
+        try:
+            if not os.path.exists(_TRUST_EXCHANGE_FILE):
+                return
+            with open(_TRUST_EXCHANGE_FILE, encoding="utf-8") as fh:
+                d = json.load(fh)
+            for agent, b in (d.get("balances") or {}).items():
+                self.ledger._balances[agent] = TrustBalance(**{k: v for k, v in b.items() if k in TrustBalance.__dataclass_fields__})
+            for txid, t in (d.get("history") or {}).items():
+                self._history[txid] = Transaction(**{k: v for k, v in t.items() if k in Transaction.__dataclass_fields__})
+            self._agent_history = d.get("agent_history") or {}
+        except Exception:
+            pass
+
+    def _save(self) -> None:
+        """持久化交易状态(P1,2026-08-16)。"""
+        if os.environ.get("TRINITY_TESTING") == "1":
+            return  # 测试隔离:不写真实持久化文件
+        try:
+            os.makedirs(os.path.dirname(_TRUST_EXCHANGE_FILE), exist_ok=True)
+            with open(_TRUST_EXCHANGE_FILE, "w", encoding="utf-8") as fh:
+                json.dump({
+                    "balances": {a: {"agent_id": b.agent_id, "trust_score": b.trust_score,
+                                      "audit_trail": b.audit_trail, "anchor_token": b.anchor_token}
+                                for a, b in self.ledger._balances.items()},
+                    "history": {t.tx_id: {"tx_id": t.tx_id, "buyer_agent": t.buyer_agent, "seller_agent": t.seller_agent,
+                                           "asset_id": t.asset_id, "price": t.price, "currency": t.currency,
+                                           "timestamp": t.timestamp, "status": t.status}
+                                for t in self._history.values()},
+                    "agent_history": self._agent_history,
+                }, fh, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
 
     # ── Trading ───────────────────────────────────────────────────────
 
@@ -166,6 +215,7 @@ class TrustExchange:
             self.reputation.record_trade_success(buyer_agent)
             self.reputation.record_trade_success(seller_agent)
 
+        self._save()
         return tx
 
     def trade(

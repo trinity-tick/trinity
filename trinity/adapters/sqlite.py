@@ -9,6 +9,26 @@ import logging
 import os
 import re
 import sqlite3
+import functools
+
+
+def _safe_write(fn):
+    """写路径统一异常保护(2026-08-16):任何异常立即回滚,避免悬挂未提交
+    写事务长期占用 SQLite 写锁(锁复发根因)。"""
+    @functools.wraps(fn)
+    def wrapper(self, *args, **kwargs):
+        try:
+            return fn(self, *args, **kwargs)
+        except Exception:
+            try:
+                self._conn.rollback()
+            except Exception:
+                pass
+            raise
+    return wrapper
+
+
+
 import threading
 import time
 import uuid
@@ -712,6 +732,7 @@ class SQLiteAdapter(StorageAdapter):
 
         return {"redacted": redacted, "found": found}
 
+    @_safe_write
     def write_audit_log(self, memory_id: str = None, action: str = "",
                          agent_id: str = None, persona_id: str = None,
                          details: dict = None) -> None:
@@ -915,6 +936,7 @@ class SQLiteAdapter(StorageAdapter):
 
     # ── 批量写入 ─────────────────────────────────────────────────────
 
+    @_safe_write
     def ingest_batch(self, records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """批量写入记忆记录。
 
@@ -980,6 +1002,7 @@ class SQLiteAdapter(StorageAdapter):
 
     # ── 核心存储方法 ─────────────────────────────────────────────────
 
+    @_safe_write
     def store_memory(
         self,
         content: str,
@@ -1419,6 +1442,7 @@ class SQLiteAdapter(StorageAdapter):
                 r["content"] = self._decrypt_content(r["content"])
         return rows
 
+    @_safe_write
     def delete_memory(self, memory_id: str) -> bool:
         with self._write_lock:
 
@@ -1457,6 +1481,7 @@ class SQLiteAdapter(StorageAdapter):
             conn.commit()
             return True
 
+    @_safe_write
     def update_memory(
         self,
         memory_id: str,
@@ -1550,6 +1575,7 @@ class SQLiteAdapter(StorageAdapter):
                 d["content"] = self._decrypt_content(d["content"])
             return d
 
+    @_safe_write
     def archive_memories(self, memory_ids: List[str]) -> int:
         """批量将记忆标记为 archived（衰减压缩回写；与 PostgreSQLAdapter 同接口）。"""
         if not memory_ids:
@@ -1615,6 +1641,7 @@ class SQLiteAdapter(StorageAdapter):
 
     # ── TTL & 自动老化 ────────────────────────────────────────────────
 
+    @_safe_write
     def touch_memory(self, memory_id: str) -> bool:
         """更新指定记忆的 last_accessed_at 和 access_count。
 
@@ -2496,6 +2523,7 @@ class SQLiteAdapter(StorageAdapter):
 
         return {"nodes": node_list, "edges": edges}
 
+    @_safe_write
     def create_entity(self, name: str, etype: str = "concept",
                       properties: Optional[Dict] = None) -> Dict[str, Any]:
         """创建新实体（非幂等，实体已存在时返回错误）。

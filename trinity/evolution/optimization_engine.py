@@ -8,6 +8,58 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+import json
+import os
+from pathlib import Path
+
+
+# 2026-08-16 修复:优化统计持久化 —— API 重启后统计不再归零。
+# 只持久化累计计数(last_cycle),细节列表(IndexChange/PruneResult)不落盘,避免膨胀。
+_STATS_FILE = os.path.join(
+    os.environ.get("TRINITY_HOME", str(Path.home() / ".trinity")),
+    "evolution_optimizer_stats.json",
+)
+
+
+def _stats_to_dict(s) -> dict:
+    return {
+        "total_index_changes": s.total_index_changes,
+        "total_graph_reorgs": s.total_graph_reorgs,
+        "total_pruned": s.total_pruned,
+        "total_defrags": s.total_defrags,
+        "last_cycle": s.last_cycle,
+    }
+
+
+def _load_stats():
+    s = OptimizationStats()
+    if os.environ.get("TRINITY_TESTING") == "1":
+        return s  # 测试隔离:不加载真实统计文件
+    try:
+        if os.path.exists(_STATS_FILE):
+            with open(_STATS_FILE, encoding="utf-8") as fh:
+                d = json.load(fh)
+            s.total_index_changes = int(d.get("total_index_changes", 0))
+            s.total_graph_reorgs = int(d.get("total_graph_reorgs", 0))
+            s.total_pruned = int(d.get("total_pruned", 0))
+            s.total_defrags = int(d.get("total_defrags", 0))
+            s.last_cycle = str(d.get("last_cycle", ""))
+    except Exception:
+        pass
+    return s
+
+
+def _save_stats(s) -> None:
+    if os.environ.get("TRINITY_TESTING") == "1":
+        return  # 测试隔离:不写真实统计文件
+    try:
+        os.makedirs(os.path.dirname(_STATS_FILE), exist_ok=True)
+        with open(_STATS_FILE, "w", encoding="utf-8") as fh:
+            json.dump(_stats_to_dict(s), fh, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
 from .usage_analyzer import Hotspot
 
 
@@ -83,7 +135,7 @@ class OptimizationEngine:
         self.importance_threshold = importance_threshold
         self.age_threshold_days = age_threshold_days
         self.relevance_threshold = relevance_threshold
-        self._stats = OptimizationStats()
+        self._stats = _load_stats()
         self._index_weights: Dict[str, float] = {}
 
     # ── Index Optimisation ──────────────────────────────────────────────
@@ -139,6 +191,7 @@ class OptimizationEngine:
                 self._index_weights[mem_id] = new_weight
 
         self._stats.total_index_changes += len(changes)
+        _save_stats(self._stats)
         self._stats.index_changes.extend(changes)
         return changes
 
@@ -147,6 +200,7 @@ class OptimizationEngine:
     def reorganize_graph(self) -> GraphReorganization:
         """Reorganise knowledge graph based on co-occurrence and usage."""
         self._stats.total_graph_reorgs += 1
+        _save_stats(self._stats)
         return GraphReorganization(
             edge_weight_changes=0,
             merged_nodes=[],
@@ -168,6 +222,7 @@ class OptimizationEngine:
             memory_ids=[],
         )
         self._stats.total_pruned += result.pruned
+        _save_stats(self._stats)
         self._stats.prunes.append(result)
         return result
 
@@ -176,6 +231,7 @@ class OptimizationEngine:
     def defragment_storage(self) -> Dict[str, Any]:
         """Defragment storage for improved read performance."""
         self._stats.total_defrags += 1
+        _save_stats(self._stats)
         self._stats.last_cycle = datetime.now(timezone.utc).isoformat()
         return {
             "action": "defragment",
@@ -188,4 +244,5 @@ class OptimizationEngine:
     def get_optimization_stats(self) -> OptimizationStats:
         """Return cumulative optimisation statistics."""
         self._stats.last_cycle = datetime.now(timezone.utc).isoformat()
+        _save_stats(self._stats)
         return self._stats

@@ -32,6 +32,31 @@ class CapabilityRegistry:
         self._lock = threading.RLock()
         # In-memory cache for fast lookups: agent_id → AgentCard
         self._cards: Dict[str, AgentCard] = {}
+        # 2026-08-16 修复:启动时从持久存储(agent_registry 表)加载已注册卡片,
+        # API 重启后 A2A 目录不再丢失。
+        self._load_from_adapter()
+
+    def _load_from_adapter(self) -> None:
+        """Load registered agent cards from the persistent adapter store."""
+        if not (self._adapter and hasattr(self._adapter, "_conn") and self._adapter._conn):
+            return
+        try:
+            rows = self._adapter._conn.execute(
+                "SELECT agent_id, card_json FROM agent_registry WHERE status='active'"
+            ).fetchall()
+            loaded = 0
+            for row in rows:
+                try:
+                    data = json.loads(row["card_json"])
+                    card = AgentCard.from_dict(data)
+                    self._cards[row["agent_id"]] = card
+                    loaded += 1
+                except Exception:
+                    continue
+            if loaded:
+                logger.info("A2A registry loaded %d agent card(s) from store", loaded)
+        except Exception as e:
+            logger.warning("A2A registry load from store failed: %s", e)
 
     # ── Registration ───────────────────────────────────────────────
 

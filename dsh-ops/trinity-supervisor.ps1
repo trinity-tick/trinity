@@ -234,7 +234,7 @@ if (Test-Path $SysPy) {
 # 可靠来源（每次 goal 变更实时更新）。supervisor 每轮同步一次，保证
 # dsh_goals objective 不丢（幂等：已存在跳过）。
 if (Test-Path $SysPy) {
-    $gs = & $SysPy scripts\sync_dsh_goals.py 2>&1 | Out-String
+    $gs = & $SysPy "$TrinityRoot\scripts\sync_dsh_goals.py" 2>&1 | Out-String
     if ($gs -match "回填: (\d+)") {
         Write-Log "dsh-goals sync: $($Matches[0])"
     } else {

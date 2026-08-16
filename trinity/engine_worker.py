@@ -33,6 +33,17 @@ _PROTO_FD = os.dup(1)
 _PROTO = os.fdopen(_PROTO_FD, "w", encoding="utf-8", buffering=1)
 sys.stdout = sys.stderr  # 引擎日志进 stderr，不再污染协议
 
+# 2026-08-16 修复：强制 stdin/stderr 使用 UTF-8（Windows 下 sys.stdin 默认按
+# locale 代码页如 cp936 解码 Node 写入的 UTF-8 字节，中文会损坏成孤立代理项，
+# 导致 json.dumps().encode('utf-8') 抛 UnicodeEncodeError）。
+# errors="backslashreplace" 保证日志/错误信息始终可写，不因编码崩溃。
+try:
+    sys.stdin.reconfigure(encoding="utf-8", errors="strict")
+    sys.stderr.reconfigure(encoding="utf-8", errors="backslashreplace")
+except (AttributeError, ValueError):
+    pass
+
+
 # ── 引擎导入（1.5s 初始化，进程内只做一次）────────────────────────
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -325,6 +336,70 @@ def _batch_write(params: dict) -> dict:
     return {"written": len(results), "errors": errors, "items": results}
 
 
+
+def _session_dispose_summary(params: dict) -> dict:
+    """会话销毁钩子(2026-08-16):从结构层事件流生成抽取式摘要记忆(幂等)。
+
+    实时触发(插件 session/disposed),LLM 增强版由维护链 session-auto 任务
+    (scripts/auto_session_summary.py)负责;两者都检查已有 session-auto-summary,
+    不会重复落库。
+    """
+    import sqlite3 as _sqlite3
+    sid = params.get("session_id", "")
+    if not sid:
+        return {"status": "noop", "reason": "no session_id"}
+    db = os.path.expanduser("~/.trinity/store/trinity_store.db")
+    conn = _sqlite3.connect(db, timeout=15)
+    try:
+        aid = f"dsh-{sid}"
+        dup = conn.execute(
+            "SELECT COUNT(*) FROM memories WHERE agent_id=? AND tags LIKE '%session-auto-summary%'",
+            (aid,),
+        ).fetchone()[0]
+        if dup:
+            return {"status": "skipped", "reason": "already summarized"}
+        rows = conn.execute(
+            "SELECT type, payload FROM dsh_events WHERE session_id=? "
+            "AND type IN ('user/message','assistant/message') ORDER BY seq",
+            (sid,),
+        ).fetchall()
+        lines = []
+        for r in rows[-40:]:
+            try:
+                p = json.loads(r[1]) if isinstance(r[1], str) else (r[1] or {})
+                c = p.get("content") or p.get("text") or ""
+                if c:
+                    prefix = "U: " if r[0] == "user/message" else "A: "
+                    lines.append(prefix + str(c)[:600])
+            except Exception:
+                continue
+        if not lines:
+            return {"status": "noop", "reason": "no message events"}
+        transcript = "\n".join(lines)[:6000]
+        summary = (
+            "[会话结束自动沉淀(抽取式)]\n--- 会话开头 ---\n"
+            + transcript[:2500]
+            + "\n--- 会话结尾 ---\n"
+            + transcript[-2500:]
+        )
+        content = f"[会话结束自动沉淀] {sid}\n{summary}"
+        import uuid as _uuid
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            "INSERT INTO memories (memory_id, session_id, persona_id, agent_id, content, role, importance, tags, category, status, version, sha256_hash, created_at, updated_at, access_count) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (f"summ_auto_{sid[:12]}_{int(time.time())}", sid, "default", aid, content,
+             "assistant", 0.7, json.dumps(["session-auto-summary", "session"], ensure_ascii=False),
+             "session", "active", 1, "", now, now, 0),
+        )
+        conn.commit()
+        return {"status": "created", "session_id": sid}
+    except Exception as exc:
+        return {"status": "error", "detail": str(exc)}
+    finally:
+        conn.close()
+
+
 _METHODS = {
     "ping": _ping,
     "search": _search,
@@ -337,6 +412,7 @@ _METHODS = {
     "chronicle": _chronicle,
     "tag_search": _tag_search,
     "identity_register": _identity_register,
+    "session_dispose_summary": _session_dispose_summary,
     # ── DSH 结构层（结构融合核心）──
     "structure_sync": _structure_sync,
     "structure_query": _structure_query,

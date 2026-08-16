@@ -28,7 +28,7 @@ param(
 
 # 兼容 powershell -File 传参：命令行里的 "a,b,c" 会以单个字符串到达，
 # 这里统一按逗号拆分 + 校验。
-$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "compact", "selftest", "session-summarize", "all")
+$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "compact", "selftest", "session-summarize", "session-auto", "all")
 $normalized = @()
 foreach ($t in $Tasks) { $normalized += $t.Split(',') }
 $normalized = $normalized | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
@@ -316,6 +316,13 @@ finally:
     adapter.disconnect()
 "@
 $sessionSummaryPrompt = "在 C:\Users\Administrator\trinity 为 ~/.trinity/store/trinity_store.db 中尚无摘要的会话生成会话摘要（trinity.daemon.session_state.summarize_all_sessions，幂等，LLM 或抽取式降级），汇报会话数与摘要数。"
+$sessionAutoCmd = @"
+import sys
+sys.path.insert(0, r"C:\Users\Administrator\trinity\scripts")
+from auto_session_summary import main
+main()
+"@
+$sessionAutoPrompt = "在 C:\Users\Administrator\trinity 运行 scripts/auto_session_summary.py（会话结束自动沉淀：从结构层 dsh_events 提取已结束/超时无活动会话的事件流，DeepSeek LLM 或抽取式生成 session-auto-summary 记忆，幂等），汇报候选/生成/跳过数。"
 
 # ── 选择任务 ──────────────────────────────────────────────────────────────
 if ($Tasks -contains "all") { $Tasks = @("health", "evolution", "mirror", "decay", "tiers", "consolidate", "dedup", "sync", "compact", "selftest") }
@@ -327,7 +334,12 @@ Write-Log "maintenance start (mode=$(if ($ViaDsh) {'ViaDsh'} else {'Direct'}), t
 foreach ($t in $Tasks) {
     switch ($t) {
         "health"    { Invoke-Task -Name "health"    -DirectCommand $healthCmd -DshPrompt $healthPrompt }
-        "evolution" { Invoke-Task -Name "evolution" -DirectCommand $evoCmd    -DshPrompt $evoPrompt }
+        "evolution" {
+            # 2026-08-16: 先喂 API analyzer(审计回放)再触发 API 进化周期,最后跑 MetaEvolution
+            & "$Py" "$LogDir\feed_evolution.py" 2>&1 | Out-Null
+            try { Invoke-RestMethod -Uri "http://127.0.0.1:8001/evolution/cycle/run" -Method Post -TimeoutSec 120 | Out-Null } catch { Write-Log "API evolution cycle failed: $_" "WARN" }
+            Invoke-Task -Name "evolution" -DirectCommand $evoCmd -DshPrompt $evoPrompt
+        }
         "decay"     { Invoke-Task -Name "decay"     -DirectCommand $decayCmd  -DshPrompt $decayPrompt }
         "tiers"     { Invoke-Task -Name "tiers"     -DirectCommand $tiersCmd  -DshPrompt $tiersPrompt }
         "mirror"    { Invoke-Task -Name "mirror"    -DirectCommand $mirrorCmd -DshPrompt $mirrorPrompt }
@@ -337,6 +349,7 @@ foreach ($t in $Tasks) {
         "compact"   { Invoke-Task -Name "compact"   -DirectCommand $compactCmd  -DshPrompt $compactPrompt }
         "selftest"  { Invoke-Task -Name "selftest"  -DirectCommand $selftestCmd -DshPrompt $selftestPrompt }
         "session-summarize" { Invoke-Task -Name "session-summarize" -DirectCommand $sessionSummaryCmd -DshPrompt $sessionSummaryPrompt }
+        "session-auto" { Invoke-Task -Name "session-auto" -DirectCommand $sessionAutoCmd -DshPrompt $sessionAutoPrompt }
     }
 }
 

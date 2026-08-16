@@ -251,13 +251,21 @@ function registerTools(ctx, worker) {
 				persona_id: { type: "string", description: "Filter by persona." },
 				agent_id: { type: "string", description: "Filter by agent (namespace isolation)." },
 				session_id: { type: "string", description: "Filter by session." }
-			}, jsonSchema, (a, exec) => {
+			}, jsonSchema, async (a, exec) => {
 				const ident = ensureIdentity(exec);
-				return worker.call("search", {
-					...a,
-					// 未显式指定时自动归属当前会话（F4）
-					...(a.agent_id ? {} : ident ? { agent_id: ident.agentId, session_id: ident.sessionId } : {})
-				});
+				// 未显式指定时自动归属当前会话（F4）；空结果时自动回退全局检索，
+				// 避免"当前会话无记忆 → 历史记忆永远搜不到"的体验断裂。
+				const autoScope = !a.agent_id && ident ? { agent_id: ident.agentId, session_id: ident.sessionId } : {};
+				const r1 = await worker.call("search", { ...a, ...autoScope });
+				const results = Array.isArray(r1) ? r1 : (r1?.results ?? []);
+				if (results.length > 0 || a.agent_id || !ident) return r1;
+				const r2 = await worker.call("search", { ...a, agent_id: undefined, session_id: undefined, persona_id: undefined, tenant_id: undefined });
+				const g = Array.isArray(r2) ? r2 : (r2?.results ?? []);
+				return {
+					...(r2 ?? {}),
+					results: g,
+					fallback: { from: "global", reason: "session-scoped search returned no results", scoped: results.length, global: g.length }
+				};
 			}),
 
 		tool("trinity_write", "Write memory to Trinity (CRDT versioned, SHA-256 audited).",

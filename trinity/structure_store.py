@@ -18,10 +18,21 @@ import threading
 import time
 from typing import Any, Dict, List, Optional
 
-_STRUCTURE_DB = os.path.join(
-    os.environ.get("TRINITY_STORE", os.path.expanduser("~")),
-    ".trinity", "store", "trinity_store.db",
-)
+# 2026-08-16 修复:与 core/client.py 的解析一致。
+# TRINITY_STORE 语义 = store 目录(凭证: C:\Users\Administrator\.trinity\store),
+# 引擎 db = <TRINITY_STORE>/trinity_store.db;未设置时回退 ~/.trinity/store/trinity_store.db。
+# 旧实现把 TRINITY_STORE 当 home 根再拼 .trinity/store/,会连到错误空库(API 重启后 stats=0)。
+def _resolve_structure_db() -> str:
+    env_store = os.environ.get("TRINITY_STORE")
+    if env_store:
+        if os.path.isdir(env_store):
+            return os.path.join(env_store, "trinity_store.db")
+        if os.path.isfile(env_store):
+            return env_store
+    return os.path.join(os.path.expanduser("~"), ".trinity", "store", "trinity_store.db")
+
+
+_STRUCTURE_DB = _resolve_structure_db()
 _structure_lock = threading.Lock()
 
 _STRUCTURE_DDL = """

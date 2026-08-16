@@ -7,6 +7,16 @@ for listing, delisting, searching, and price queries.
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+import json
+import os
+from pathlib import Path
+
+
+# 2026-08-16 修复:订单簿 JSON 持久化 —— API 重启后挂单不再丢失。
+_ORDERBOOK_FILE = os.path.join(
+    os.environ.get("TRINITY_HOME", str(Path.home() / ".trinity")),
+    "memory_market_orderbook.json",
+)
 
 
 @dataclass
@@ -29,6 +39,53 @@ class OrderBook:
 
     def __init__(self):
         self._orders: Dict[str, OrderEntry] = {}
+        self._load()
+
+    def _load(self) -> None:
+        """Load persisted orders from JSON file (2026-08-16)."""
+        if os.environ.get("TRINITY_TESTING") == "1":
+            return  # 测试隔离:不加载真实持久化文件
+        try:
+            if not os.path.exists(_ORDERBOOK_FILE):
+                return
+            with open(_ORDERBOOK_FILE, encoding="utf-8") as fh:
+                data = json.load(fh)
+            from trinity.market.memory_asset import MemoryAsset
+            for aid, d in (data or {}).items():
+                try:
+                    asset = MemoryAsset.from_dict(d.get("asset", {}))
+                    self._orders[aid] = OrderEntry(
+                        asset_id=aid,
+                        asset=asset,
+                        price=float(d.get("price", 0.0)),
+                        currency=d.get("currency", "trust_score"),
+                        listed_at=d.get("listed_at", ""),
+                        is_active=bool(d.get("is_active", True)),
+                    )
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+    def _save(self) -> None:
+        """Persist orders to JSON file (2026-08-16)."""
+        if os.environ.get("TRINITY_TESTING") == "1":
+            return  # 测试隔离:不写真实持久化文件
+        try:
+            os.makedirs(os.path.dirname(_ORDERBOOK_FILE), exist_ok=True)
+            payload = {}
+            for aid, e in self._orders.items():
+                payload[aid] = {
+                    "asset": e.asset.to_dict() if hasattr(e.asset, "to_dict") else {"memory_id": e.asset_id},
+                    "price": e.price,
+                    "currency": e.currency,
+                    "listed_at": e.listed_at,
+                    "is_active": e.is_active,
+                }
+            with open(_ORDERBOOK_FILE, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
 
     # ── CRUD ──────────────────────────────────────────────────────────
 
@@ -51,6 +108,7 @@ class OrderBook:
             currency=currency,
         )
         self._orders[asset.memory_id] = entry
+        self._save()
         return entry
 
     def delist_asset(self, asset_id: str) -> bool:
@@ -59,6 +117,7 @@ class OrderBook:
         if entry is None:
             return False
         entry.is_active = False
+        self._save()
         return True
 
     # ── Queries ───────────────────────────────────────────────────────

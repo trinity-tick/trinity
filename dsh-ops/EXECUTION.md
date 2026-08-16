@@ -2327,3 +2327,85 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
 - **结论**：压测优化（sklearn+预热+非阻塞）完全生效——写入毫秒级、混合 20k+ QPS、
   零锁冲突；剩余：检索 p99 偶发尾部待 ANN 预热。
 - 报告：docs/STRESS_TEST_REPORT_20260815.md。
+
+## 第 10 轮:engine_worker UTF-8 编码修复(2026-08-16)
+- 现象:trinity_* 原生工具中文内容写入报 'utf-8' codec can't encode character (surrogates not allowed);ASCII 正常。
+- 根因:Windows Python sys.stdin 按 cp936 解码 Node(UTF-8)写入的 stdin 字节,中文损坏成孤立代理项。
+- 修复:1) engine_worker.py 顶部 sys.stdin.reconfigure(encoding=utf-8) + stderr reconfigure(errors=backslashreplace);2) dsh-trinity 插件 spawn env 加 PYTHONUTF8=1。
+- 验证:修复后无环境变量中文写入 OK;插件 reconnect 后 trinity_write 中文端到端成功(mem_e6bb9ffbe9554bf6)。
+- 回滚:删除两处改动即可(worker reconfigure 块 + 插件 spawn env)。
+
+## 第 11 轮:会话结束自动沉淀(2026-08-16)
+- 目标:让'会话结束沉淀'自动化,不依赖 agent 自觉。
+- 实现:1) 新增 scripts/auto_session_summary.py —— 从结构层 dsh_events 提取已结束(closed/compacted)或超时无活动(>12h)会话的事件流,DeepSeek LLM(凭证 DEEPSEEK_API_KEY,失败降级抽取式)生成摘要,落库为 session-auto-summary 记忆(agent_id=dsh-<sid>, importance=0.7, 幂等);2) maintenance.ps1 新增 session-auto 任务(已实测 OK,幂等);3) engine_worker.py 新增 session_dispose_summary 方法 + dsh-trinity 插件 session/disposed 钩子(实时触发抽取式摘要,与维护链互斥幂等)。
+- 验证:首次运行 done=2(2 个 compacted 会话生成高质量 LLM 摘要,含 pytest 配置决策/双库问题等要点);重跑 skipped=2;worker 方法 skipped/noop 分支正确。
+- 生效边界:维护链 session-auto 立即生效(已挂进 daily chain);插件实时钩子需重启 web profile 后生效。
+- 回滚:删除 auto_session_summary.py + maintenance session-auto 任务行 + worker 方法 + 插件钩子。
+
+## 第 12 轮:锁看门狗 + 会话沉淀入链 + 检索验证(2026-08-16)
+- 新增 dsh-ops/trinity-lock-watchdog.ps1:检测 SQLite 写锁持续占用(3 次/2s),行动1 kill engine_worker(插件 reconnect),行动2 kill 全部 trinity python(supervisor 重启);已挂进 autostart 每 5 分钟循环。实测无锁 7s 无动作退出。
+- autostart 4h 链更新为 health,evolution,session-auto(会话自动沉淀入日常链)。
+- 检索验证:trinity_search 中文/英文/各 mode 均正常命中(audit 证明 hits=1-3);此前'0 命中'为调用方解析错误,非引擎 bug。
+- 回滚:删除 watchdog 文件及 autostart 两处改动行。
+
+## 第 13 轮:SQLite 写锁根因治本(2026-08-16)
+- 根因:trinity/adapters/sqlite.py 写路径无异常回滚(全文件仅 1 处 rollback/126 处 execute)。写方法(store_memory/update_memory/delete_memory/archive_memories/ingest_batch/write_audit_log/touch_memory/create_entity)执行异常(如 UNIQUE content_hash 冲突)时,连接悬挂未提交写事务 -> 长期占 SQLite 写锁(本会话 3 次锁复发根因)。
+- 修复:新增 _safe_write 装饰器(异常即 rollback+重抛),加到 8 个核心写方法。
+- 验证:新代码 spawn worker 测试——正常写 OK -> 重复写(UNIQUE 冲突)正确失败 -> 失败后继续写成功(锁不悬挂);锁诊断 AVAILABLE。
+- 生效:重启 API/MCP/collector/worker(supervisor 拉起,15:46 全部新进程);ping/中文写/检索/健康全绿。
+- 配套:trinity-lock-watchdog.ps1 保留为最后防线(自动清理)。
+- 回滚:删除 _safe_write 装饰器及方法上的 @_safe_write 行。
+
+## 第 14 轮:structure_store 路径解析修复(2026-08-16)
+- 现象:API 重启后 /structure/stats 返回 sessions=0 events=0(此前 7/5100)。
+- 根因:TRINITY_STORE 凭证(C:\Users\Administrator\.trinity\store)被 supervisor 注入环境;structure_store 旧实现 os.path.join(TRINITY_STORE, '.trinity','store','trinity_store.db') 拼出错误路径,创建了空库(64KB);而 core/client.py 的解析正确(TRINITY_STORE 即 store 目录)。
+- 修复:structure_store._STRUCTURE_DB 改为与 core/client.py 一致的解析(TRINITY_STORE 目录->join trinity_store.db;文件->直接用;未设置->~/.trinity/store/)。删除错误空库。
+- 验证:API 重启后 structure stats=7 sessions/5100 events/35 goals。
+- 回滚:恢复旧 _STRUCTURE_DB 定义。
+
+## 第 15 轮:本机智能体分层接入 Trinity(2026-08-16)
+- 执行'分层接入'建议:DSH 深度接入(已有)+ Hermes 双向同步验证(4+3 条)+ A2A 联邦注册 + Gateway 验证。
+- A2A 联邦目录注册 4 个本机智能体:marvis-desktop/workbuddy/hermes-agent/rag-v42(capabilities+TTL 24h,注册 0.1s)。
+- Gateway(:8002)chat completions 实测可用(OpenAI 兼容,外部 agent 可经此接入)。
+- 嵌入引擎确认:本地 CachedEmbeddingEngine 1024 维,不依赖 Ollama/LM Studio(它们仅作通用推理)。
+- 锁事件:又出现 1 次(修复前残留进程 47384 持锁),杀非 API 进程后解锁;新进程(_safe_write 修复)无此问题,看门狗兜底。
+- Hermes 桥接说明:sync_hermes_trinity.py 已在 maintenance sync 任务(每日链),保持低频双向同步,不实时直连。
+
+## 第 16 轮:高级功能激活 + evolution 统计持久化(2026-08-16)
+- A. evolution 统计持久化:optimization_engine.py 新增 _load_stats/_save_stats(JSON 文件 ~/.trinity/evolution_optimizer_stats.json),__init__ 加载、每次变更写盘;API 重启统计不再归零。验证:cycle 后文件生成,重启后从文件加载。
+- B. 清理 A2A 压测死任务:a2a_tasks 中 loop-* pending 残留 5 条已删除。
+- C. 记忆市场激活:上架 4 条真实记忆(锁修复/路径修复/分层接入/UTF-8 修复,CC-BY,0 价),orderbook 可见。
+- D. A2A 真实任务闭环:创建(DSH->hermes-agent)-> pending->in_progress->completed 状态机全链路验证成功(注意:状态机禁止 pending 直接到 completed)。
+- E. Hermes 消费侧验证:MEMORY.md 最后两条为 Trinity 同步记忆(PYTHONUTF8 测试、锁修复验证),双向同步真实生效。
+- 附带:optimization_engine.py 缩进修复(插入 _save_stats 时多一层)。
+
+## 第 17 轮:高级功能持久化(A2A 目录 + 记忆市场)(2026-08-16)
+- 目标:让高级功能从'可演示'变'可持续'(此前 API 重启后 A2A agents/market orders 归零)。
+- A2A CapabilityRegistry:register_agent 本就写 agent_registry 表,但 __init__ 只读内存;新增 _load_from_adapter() 启动时从 DB 加载已注册卡片(AgentCard.from_dict)。
+- 记忆市场 OrderBook:纯内存 _orders;新增 JSON 文件持久化(~/.trinity/memory_market_orderbook.json),__init__ 加载、list/delist 写盘。
+- 清理:agent_registry 中 loop-* 压测残留 10 条删除。
+- 验证:注册 4 agent + 上架 4 记忆后连续 2 次重启 API —— A2A agents=4、market orders=4 全部保留;锁 AVAILABLE。
+- 回滚:删除 _load_from_adapter 调用与 orderbook _load/_save 及文件。
+
+## 第 18 轮:代码定向审计(2026-08-16)
+- 产出 dsh-ops/trinity-code-audit.md:526 文件/24.5 万行定向审计(内存态/路径/回滚/冗余)。
+- 发现:中风险 1 项(ReputationEngine/TrustExchange 内存态被 API 使用)、低风险 3 项、冗余标记 4 项。
+- 原则:只标记不修改;P1 修复项(信誉/信任持久化)待用户确认后执行。
+
+## 第 19 轮:P1 信誉/信任持久化完成 + 锁定位(2026-08-16)
+- P1 完成:ReputationEngine(_ledger/_trade_stats)与 TrustExchange(ledger._balances/_history/_agent_history)JSON 持久化(~/.trinity/memory_market_reputation.json + memory_market_trust_exchange.json),变更即写盘,启动加载。
+- 验证:endorse+report 后信誉文件生成(score=0.1875,ledger=2);连续重启 API 后 a2a=4/orders=4/reputation ledger=2 全保留;锁 AVAILABLE。
+- 锁定位:a2a=0 的根因是 API 启动时锁被占导致 CapabilityRegistry 加载失败(静默);锁解除后重启即恢复。
+- 观察:Hermes 应用注册了 trinity MCP(hermes cache/mcp_schema_cache.json),其 MCP stdio 进程可能是反复锁的来源之一;当前 Hermes 未运行,若常驻需看门狗扩展匹配或调整其配置。
+- 回滚:删除 reputation/trust_exchange 的 _load/_save 及两个 JSON 文件。
+
+
+## 第 20 轮:运行评估 + 全方位运维修复(2026-08-16)
+- 评估: Trinity v8.2.0 全绿(API/Gateway/MCP/Collector); 12,193 记忆/11,864 实体/29,609 关系/9,261 审计; 结构层 7 会话 5,043 事件 35 goals; 进化 20 轮。价值=记忆注入聊天+会话沉淀+审计链; 缺口=进化产出近空+会话默认检索隔离。
+- 坑记录: DSH code sandbox scrubbedParentEnv 移除 PATHEXT → PS 5.1 报 CantActivateDocumentInPipeline 误判 maintenance 故障(注入 PATHEXT 即正常)。
+- 修复 1: supervisor.ps1 dsh-goals sync 相对路径 → "$TrinityRoot\scripts\sync_dsh_goals.py"(此前每 5 分钟报 can't open file, goal 回填从未成功; 修后 35 goals 28 objective 80%)。
+- 修复 2: health_check.py GitHub 401/403 降级本地检查(gh_api 加 _auth_error, repo/workflows 分支 auth-degraded OK)。
+- 修复 3: dsh-trinity 插件 trinity_search 会话空结果自动 fallback 全局检索(带 fallback 标记), 已同步 web profile node_modules, 需重启 web profile 生效。
+- 修复 4(回归): pytest 17 失败(market/evolution)根因 = 第 16-19 轮持久化(orderbook/reputation/trust_exchange/optimization_engine)__init__ 无条件 _load 真实文件, 测试状态污染; 加 TRINITY_TESTING=1 防护(load/save 跳过) + conftest 顶部 setdefault; 72 个 market/evolution 测试恢复通过。
+- 验证: maintenance health+evolution+session-auto 全 OK(session-auto candidates=2 skipped=2 llm=yes); supervisor rc=0 goals sync 成功; 完整 pytest 待补结果。
+- 回滚: 移除 4 模块 TRINITY_TESTING guard + conftest 行; supervisor 路径改回相对; health_check 分支恢复。

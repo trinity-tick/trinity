@@ -22,6 +22,13 @@ TRINITY_HOST = "127.0.0.1"
 TRINITY_URL = f"http://{TRINITY_HOST}:{TRINITY_PORT}"
 TEST_DB_PATH = os.path.join(os.path.dirname(__file__), ".test_trinity.db")
 
+# ── Testing isolation guard (2026-08-16) ─────────────────────────────
+# 持久化模块(orderbook/reputation/trust_exchange/optimization_engine)在测试
+# 环境必须禁用真实文件读写,否则 __init__ 会加载上次运行残留的真实状态,
+# 破坏测试隔离(ValueError already listed / stats != 0 等)。
+os.environ.setdefault("TRINITY_TESTING", "1")
+
+
 # ── Helpers ────────────────────────────────────────────────────────────
 
 def _port_free(host: str, port: int) -> bool:
