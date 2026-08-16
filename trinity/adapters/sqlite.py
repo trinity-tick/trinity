@@ -1718,6 +1718,13 @@ class SQLiteAdapter(StorageAdapter):
                 conn.commit()
             except Exception:
                 # flush 失败：回填队列避免丢失（下一轮重试）
+                # 2026-08-16 修复:必须先 rollback——python sqlite3 在 execute 异常后
+                # 连接留在未提交事务中(不自动回滚), 悬挂写事务会永久占 SQLite 写锁
+                # (worker 超时/锁复发根因, 与 skill 坑 #9 同源)。
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
                 for mid, cnt in queue.items():
                     self._touch_queue[mid] = self._touch_queue.get(mid, 0) + cnt
 
@@ -1727,32 +1734,42 @@ class SQLiteAdapter(StorageAdapter):
         Returns:
             Dict with aged_count and details.
         """
-        conn = self._conn
-        if not conn:
-            return {"aged_count": 0, "error": "Not connected"}
+        # 2026-08-16 修复:加 _write_lock + 异常 rollback——此前无锁保护且
+        # UPDATE 抛异常时不回滚, 会悬挂写事务占锁(与 touch flush 同源)。
+        with self._write_lock:
+            conn = self._conn
+            if not conn:
+                return {"aged_count": 0, "error": "Not connected"}
 
-        now = datetime.now(timezone.utc).isoformat()
-        cursor = conn.execute("""
-            SELECT memory_id FROM memories
-            WHERE status = 'active'
-              AND ttl_seconds IS NOT NULL
-              AND created_at IS NOT NULL
-              AND datetime(created_at, '+' || ttl_seconds || ' seconds') < datetime(?)
-        """, (now,))
-        expired_ids = [row["memory_id"] for row in cursor.fetchall()]
+            now = datetime.now(timezone.utc).isoformat()
+            cursor = conn.execute("""
+                SELECT memory_id FROM memories
+                WHERE status = 'active'
+                  AND ttl_seconds IS NOT NULL
+                  AND created_at IS NOT NULL
+                  AND datetime(created_at, '+' || ttl_seconds || ' seconds') < datetime(?)
+            """, (now,))
+            expired_ids = [row["memory_id"] for row in cursor.fetchall()]
 
-        if not expired_ids:
-            return {"aged_count": 0, "timestamp": now}
+            if not expired_ids:
+                return {"aged_count": 0, "timestamp": now}
 
-        placeholders = ",".join("?" for _ in expired_ids)
-        conn.execute(f"""
-            UPDATE memories
-            SET status = 'expired', updated_at = ?
-            WHERE memory_id IN ({placeholders})
-        """, [now] + expired_ids)
-        conn.commit()
+            try:
+                placeholders = ",".join("?" for _ in expired_ids)
+                conn.execute(f"""
+                    UPDATE memories
+                    SET status = 'expired', updated_at = ?
+                    WHERE memory_id IN ({placeholders})
+                """, [now] + expired_ids)
+                conn.commit()
+            except Exception:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                raise
 
-        return {"aged_count": len(expired_ids), "timestamp": now, "expired_ids": expired_ids}
+            return {"aged_count": len(expired_ids), "timestamp": now, "expired_ids": expired_ids}
 
     def get_memory_stats(self) -> Dict[str, Any]:
         """返回记忆统计信息（总数、过期数、Agent 分布、平均访问频率等）。
