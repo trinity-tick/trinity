@@ -241,3 +241,23 @@ api + collector + worker 三进程同时写同一 WAL 副本（各 300 条 / 4 �
 ### 10.4 测试与提交
 - 全量：**755 passed / 54 skipped / 0 failed**
 - 新增 `scripts/wal_growth_stress.py`；`multi_process_stress.py` 支持 `--procs 3`
+
+## 11. 剩余边界深挖（2026-08-16）
+
+### 11.1 交叉拓扑：3 进程 × 16 线程 ✅
+最恶劣写拓扑（api+collector+worker × 16 线程 × 同一 WAL 库，各 500 写）：
+- **0 锁错误 / 0 database is locked**，+1,488 memories 精确（12,169→13,657）
+- p50 ~720ms（写锁竞争+WAL 单写者导致高于低并发），正确性优先
+
+### 11.2 显式 checkpoint 路径 ✅
+2,000 写后 `wal_checkpoint(TRUNCATE)`：WAL 4.09MB→0MB，2000/2000 ingest 返回
+memory_id（无合并丢数）。此前"计数差 1"判定为**测试脚本断言 bug**
+（硬编码 12168+2000，实际副本 at-copy 时已是 12,167）——真实计数精确。
+
+### 11.3 checkpoint 与并发读互斥 ✅
+PASSIVE checkpoint 5 轮 + 并发检索线程：busy=0、reader 0 错误——checkpoint
+不阻塞读、读不阻塞 checkpoint。
+
+### 11.4 固化回归
+`tests/test_wal_checkpoint.py` 3 用例：TRUNCATE 回收+精确计数、checkpoint/
+读不阻塞、ingest id 完整性。全量 **758 passed / 54 skipped / 0 failed**。
