@@ -292,4 +292,33 @@ PASSIVE checkpoint 5 轮 + 并发检索线程：busy=0、reader 0 错误——ch
 - 新增 `scripts/pg_adapter_stress.py`、`scripts/soak_test.py`、
   `tests/test_pg_llm_extract.py`（4 用例）；test_wal_checkpoint fixture 改
   VACUUM INTO
-读不阻塞、ingest id 完整性。全量 **758 passed / 54 skipped / 0 failed**。
+
+## 13. 全方位修复（2026-08-16，commit 待填）
+
+### 13.1 全仓库快照扫描 ✅
+全仓库 grep 确认 `shutil.copy2` 复制 SQLite 库仅 4 处（full_stress /
+multi_process / wal_growth / soak），全部已用 VACUUM INTO 主路径（copy2
+仅作失败兜底，只读场景可接受）。其余匹配均为路径定义/新建，非复制。
+
+### 13.2 PG :5430 维护链直接压测 ✅
+docker daemon 恢复（com.docker.service 启动 + Docker Desktop 拉起），
+trinity-db 容器自动恢复（postgres:16-alpine, healthy）：
+- 读 QPS 85.8 / p50 53.9ms / p99 491ms，写(显式回滚) QPS 440 / p50 4.0ms，
+  0 错误，7,544 → 7,544 真零污染
+- 对比：docker :5430 读 QPS 85.8 vs 原生 :5432 916（容器资源受限 + 维护
+  库表结构差异），但写路径 440 QPS 健康
+- **维护链目标库（decay/tiers/mirror 指向的 :5430）首次直接压测**
+
+### 13.3 30 分钟长时间 soak ✅
+50,107 操作（写 16.7k/读 16.7k/touch 16.7k），**0 错误 / 0 锁冲突**，
+RSS 307.5→308.7MB（**+0.4%**）、WAL 峰值恒定 4.26MB（checkpoint 完全
+跟上）、连接池稳定 10——小时级趋势确认无泄漏、无失控。
+
+### 13.4 大批量加密写（5,000 条）✅
+- 加密 OFF QPS 47.8 vs ON 48.3（**-1.0%，无放大**）
+- 修正 500 条量级的 ~10% 结论：那是启动噪声；5,000 条量级 AES-GCM 加密
+  成本被 SQLite 写入本身掩盖，**批量加密近乎免费**
+
+### 13.5 测试与提交
+- 全量 **766 passed / 50 skipped / 0 failed**（PG 测试在 docker 恢复后
+  不再 skip，54→50）
