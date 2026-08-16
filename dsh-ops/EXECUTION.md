@@ -2418,3 +2418,10 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
 - 修复2(进化空转): MetaEvolution._observation_hooks 默认空, 维护链只传 action=scheduled → observations 恒空 → 20 轮 preferences/patterns 全 0。新增默认观察钩子 _audit_observation_hook: 从 audit_log 挖高频搜索(pattern) + 活跃写入(preference)。实测 observe() 产出 6 条, 完整周期后 active_patterns=4(置信度0.3)。
 - 验证: evolution+market 72 测试通过; API/Gateway/hybrid 全绿; 完整 pytest 待结果。
 - 回滚: 删 core.py 的 _audit_observation_hook 注册与方法; server.py 路由 base64 段。
+### 第 21 轮补记:进化 preferences 修复 + worker 锁根治(2026-08-16)
+- worker 工具连续超时(60s)根因: sqlite.py 两处写路径异常不回滚 → 悬挂写事务永久占 WAL 写锁(复发 3 次: 45476→20716→47532)。
+  - _flush_touch_queue except 分支只回填不 rollback; age_memories 无 _write_lock 且异常不回滚。
+  - 修复: 两处加 conn.rollback() + age 加 _write_lock。验证: 3 进程并发压测 2.5s 无锁; worker ping 100ms(原 60s 超时)。commit 4cdb420。
+- 进化 preferences 恒空根因: ① _analyze 只 count preferences 不写 state(代码 bug); ② audit_log 69% agent_id 为 NULL(历史调用方未传)。
+  - 修复: _analyze 加 preferences 落 state(同 patterns 逻辑); hook 里 agent NULL 兜底 default。验证: 3 轮 cycles patterns 4→5(test 0.3→1.0), preferences 0→{active_agent:default:0.3}。commit 131c8a2。
+- 当前进化状态: 26 轮, 5 patterns(2 个 confirmed 1.0), 1 preference。
