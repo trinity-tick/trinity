@@ -260,4 +260,36 @@ PASSIVE checkpoint 5 轮 + 并发检索线程：busy=0、reader 0 错误——ch
 
 ### 11.4 固化回归
 `tests/test_wal_checkpoint.py` 3 用例：TRUNCATE 回收+精确计数、checkpoint/
+
+## 12. 未覆盖边界深挖（2026-08-16，commit 682ea8d）
+
+### 12.1 PostgreSQL 镜像链 ✅（scripts/pg_adapter_stress.py）
+原生 PG16 :5432（维护链 :5430 docker 当前不可用，验证同一适配器代码路径）：
+- 读 QPS 916 / p50 3.4ms，显式事务回滚写 QPS 829 / p50 0.79ms，0 错误
+- **诚实修正**：此前"写回滚零污染"结论错误（store_memory 默认 commit，
+  实际泄漏 402 行已清理）——改为显式事务 ROLLBACK 后计数 2553→2553 真零污染
+
+### 12.2 加密存储路径 ✅（TRINITY_STORAGE_ENCRYPTION）
+- 读：加密 OFF p50 74.0ms vs ON 71.7ms（**<5% 开销**，解密 ~µs 级被检索成本掩盖）
+- 写：QPS 56.6 vs 51.1（**~10% 开销**）
+- 密文落库验证 + 检索解密正常
+- **关键发现**：`shutil.copy2` 快照跳过 WAL → FTS rowid 错位 → 写触发器撞
+  rowid → IntegrityError。所有快照函数改 **VACUUM INTO**（含 WAL、rowid 一致、
+  免疫 WinError 33）。此缺陷同时解释了此前加密写"失败"的误判。
+
+### 12.3 长时间运行 soak ✅（scripts/soak_test.py）
+10 分钟混合负载（27,863 操作：写 9.3k/读 9.3k/touch 8.6k）：
+- **0 错误 / 0 锁冲突**；RSS 306.1→309.6MB（**+1.1% 无泄漏**）
+- WAL 峰值 4.2MB（受控）、读连接池稳定 10（无泄漏）
+- 首跑 756 错误为脚本 bug（_pool 是聚合器属性非 Trinity）——修复后 0 错误
+
+### 12.4 LLM 抽取异步开关 ✅（TRINITY_LLM_EXTRACT_ASYNC）
+- 同步 LLM 抽取 ingest 3,656ms vs 异步开关返回 **20ms（183x）**，后台完成
+- 默认保持同步语义（兼容既有测试/管线）；异步开关供吞吐优先场景
+
+### 12.5 测试与提交
+- 全量 **762 passed / 54 skipped / 0 failed**
+- 新增 `scripts/pg_adapter_stress.py`、`scripts/soak_test.py`、
+  `tests/test_pg_llm_extract.py`（4 用例）；test_wal_checkpoint fixture 改
+  VACUUM INTO
 读不阻塞、ingest id 完整性。全量 **758 passed / 54 skipped / 0 failed**。
