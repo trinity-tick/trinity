@@ -116,6 +116,13 @@ class MetaEvolution:
 
         # Observer hooks
         self._observation_hooks: List[Callable] = []
+        # 2026-08-16 修复:注册默认观察钩子——从审计日志挖掘真实使用模式,
+        # 让进化"空转"(维护链只传 action=scheduled)变成"真学"。
+        # 此前 20 轮周期 preferences/patterns 恒 0,因无任何 observation 输入。
+        try:
+            self._observation_hooks.append(self._audit_observation_hook)
+        except Exception:
+            pass
 
         # Cross-session context
         self.session_context: Dict[str, Any] = {}
@@ -155,6 +162,64 @@ class MetaEvolution:
     def register_observation_hook(self, hook: Callable):
         """Register a function that returns observations."""
         self._observation_hooks.append(hook)
+
+    def _audit_observation_hook(self, context: Dict[str, Any]) -> List[Dict]:
+        """Mine the audit log (search/ingest actions) for real usage patterns.
+
+        从真实使用数据生成 observations,让进化周期有输入:
+        - 高频搜索主题 → pattern 观察(按 action=search 的 details/timestamp 聚合)
+        - 高频写入 agent → preference 观察
+        失败静默:审计表不可读时不产出,不影响周期。
+        """
+        try:
+            import sqlite3
+            from pathlib import Path
+            db = os.path.join(os.path.expanduser("~"), ".trinity", "store", "trinity_store.db")
+            if not os.path.exists(db):
+                return []
+            conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
+            conn.row_factory = sqlite3.Row
+            observations = []
+            # 最近 24h 的高频搜索查询(前 5)
+            rows = conn.execute(
+                "SELECT agent_id, details, count(*) c FROM audit_log "
+                "WHERE action='search' AND timestamp > ? "
+                "GROUP BY agent_id, details ORDER BY c DESC LIMIT 5",
+                (time.time() - 86400,)
+            ).fetchall()
+            for r in rows:
+                q = (r["details"] or "")[:200]
+                # details 可能是 JSON({"query": "..."}) 或纯文本——提取可读 query
+                try:
+                    _d = json.loads(q)
+                    q = str(_d.get("query") or _d.get("q") or q)[:60]
+                except Exception:
+                    pass
+                if q and not q.isspace():
+                    observations.append({
+                        "type": "pattern",
+                        "key": f"frequent_search:{q}",
+                        "description": f"高频检索主题(agent={r['agent_id']}, x{r['c']})",
+                        "agent_id": r["agent_id"],
+                    })
+            # 最近 24h 高频写入 agent(前 3)
+            rows2 = conn.execute(
+                "SELECT agent_id, count(*) c FROM audit_log "
+                "WHERE action IN ('ingest','STORE_MEMORY') AND timestamp > ? "
+                "GROUP BY agent_id ORDER BY c DESC LIMIT 3",
+                (time.time() - 86400,)
+            ).fetchall()
+            for r in rows2:
+                observations.append({
+                    "type": "preference",
+                    "key": f"active_agent:{r['agent_id']}",
+                    "description": f"活跃写入者(agent={r['agent_id']}, {r['c']}条)",
+                    "agent_id": r["agent_id"],
+                })
+            conn.close()
+            return observations
+        except Exception:
+            return []
 
     def observe(self, context: Dict[str, Any]) -> List[Dict]:
         """Collect observations from all hooks."""

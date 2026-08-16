@@ -1211,6 +1211,12 @@ async def get_memory_by_id(memory_id: str):
     if result is None:
         # 聚合池记忆（mem_vid_*/mem_wms_* 等）不在引擎库时给出明确 404 提示
         raise HTTPException(status_code=404, detail="Memory not found (pool-only ids may not be fetchable here)")
+    # 2026-08-16 修复:embedding 是 bytes(2048维向量),JSON 无法序列化
+    # → base64 字符串化,避免 GET /memories/{id} 500 (utf-8 codec / not serializable)
+    if isinstance(result, dict) and isinstance(result.get("embedding"), (bytes, bytearray)):
+        import base64
+        result["embedding"] = base64.b64encode(bytes(result["embedding"])).decode("ascii")
+        result["embedding_encoding"] = "base64"
     return result
 
 

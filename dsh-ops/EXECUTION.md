@@ -2409,3 +2409,12 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
 - 修复 4(回归): pytest 17 失败(market/evolution)根因 = 第 16-19 轮持久化(orderbook/reputation/trust_exchange/optimization_engine)__init__ 无条件 _load 真实文件, 测试状态污染; 加 TRINITY_TESTING=1 防护(load/save 跳过) + conftest 顶部 setdefault; 72 个 market/evolution 测试恢复通过。
 - 验证: maintenance health+evolution+session-auto 全 OK(session-auto candidates=2 skipped=2 llm=yes); supervisor rc=0 goals sync 成功; 完整 pytest 待补结果。
 - 回滚: 移除 4 模块 TRINITY_TESTING guard + conftest 行; supervisor 路径改回相对; health_check 分支恢复。
+
+
+## 第 21 轮:Gateway 记忆注入打通 + 进化真实输入(2026-08-16)
+- 评估结论: Trinity 价值=稳定记忆基础设施; 剩余缺口=Gateway 注入源 + 进化产出近空。
+- 坑1: 锁复发根因=engine_worker(DSH 插件进程)持写事务; 杀 worker 即释放(用户提示"应该是Marvis"——实际 agent_demo/web_app_v3_slim.py 不连 trinity 库, 非持锁者)。
+- 修复1(Gateway 注入): GET /memories/{id} 500 根因 = adapter.get_memory 返回含 embedding(bytes 2048维), FastAPI 无法 JSON 序列化 → 路由加 base64 转换(embedding_encoding=base64)。修复后 Gateway /v1/chat/completions 能回忆项目(smartcos-wms/WMS/供应链, 带 [1][2] 引用)——注入链路完全打通。
+- 修复2(进化空转): MetaEvolution._observation_hooks 默认空, 维护链只传 action=scheduled → observations 恒空 → 20 轮 preferences/patterns 全 0。新增默认观察钩子 _audit_observation_hook: 从 audit_log 挖高频搜索(pattern) + 活跃写入(preference)。实测 observe() 产出 6 条, 完整周期后 active_patterns=4(置信度0.3)。
+- 验证: evolution+market 72 测试通过; API/Gateway/hybrid 全绿; 完整 pytest 待结果。
+- 回滚: 删 core.py 的 _audit_observation_hook 注册与方法; server.py 路由 base64 段。
