@@ -418,11 +418,38 @@ async def lifespan(app: FastAPI):
     global _app_start_time
     _app_start_time = time.time()
     get_aggregator()  # pre-warm
+    _startup_prewarm()  # 2026-08-15：启动期后台预热（BM25 构建 + 首次检索）
     yield
     # Shutdown: flush persistence
     global _aggregator
     if _aggregator is not None:
         _aggregator._save()
+
+
+def _startup_prewarm() -> None:
+    """启动期后台预热（2026-08-15 二轮压测修复）：把 ~2.7s 冷启动
+    （BM25 后台构建 + embedding fit + jieba）从"首个请求"移到启动期。
+
+    - get_memory() 触发 adapter 连接（jieba 后台预热）
+    - 只触发 BM25 后台构建（_ensure_bm25_index），**不跑完整 search_hybrid**
+      ——预热线程跑全链路检索会与首请求竞争写锁/GIL（实测首请求 16s）
+    - 轮询等 _bm25_ready（上限 30s），不阻塞启动
+    失败静默：即使预热失败，首个请求仍走惰性路径（行为与预热前一致）。
+    """
+    import threading as _th
+
+    def _warm() -> None:
+        try:
+            mem = get_memory()
+            mem._ensure_bm25_index()  # 仅触发后台构建，返回即释放
+            deadline = time.time() + 30
+            while time.time() < deadline and not getattr(
+                    mem, "_bm25_ready", False):
+                time.sleep(0.2)
+        except Exception:
+            pass
+
+    _th.Thread(target=_warm, daemon=True, name="api-startup-prewarm").start()
 
 
 def get_aggregator() -> MemoryAggregator:

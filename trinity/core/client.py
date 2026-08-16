@@ -221,6 +221,14 @@ class Trinity:
         self.evolution_enabled = evolution_enabled
         self._scheduler = None
 
+        # ── 写入加工管线串行锁（2026-08-15 二轮压测修复）────────
+        # postprocess 后台线程化后，8 并发加工线程同时 sklearn fit +
+        # 抢 _write_lock 会拖垮写入线程（GIL 风暴 + 锁饥饿，实测响应
+        # p95 3.7s）。加工是后台异步工作，本就无需并发：全局串行化，
+        # 同一时刻至多一个加工线程（embedding 引擎也只 fit 一次）。
+        import threading as _thr
+        self._postprocess_lock = _thr.Lock()
+
         # ── 分层检索配置 ──────────────────────────────────────────
         self.half_life_days: float = 7.0       # 时间衰减半衰期（天）
         self.agent_weight_default: float = 1.0  # 未配置 Agent 的默认权重
@@ -247,6 +255,7 @@ class Trinity:
         self._hybrid_retriever = None
         self._bm25_index = None
         self._bm25_ready = False  # 后台预构建完成标记（2026-08-15）
+        self._bm25_lock = _thr.Lock()  # 构建原子化（2026-08-15 二轮）
 
         # ── 跨模态检索（文字 ↔ 图片记忆）─────────────────────────
         self._cross_modal_retriever = None
@@ -783,7 +792,9 @@ class Trinity:
                 target_id = link.get("target_id", "")
                 if not target_id or target_id in seen:
                     continue
-                strength = float(link.get("strength", 0.5))
+                # 2026-08-15（二轮压测修复）：strength 可能为 None
+                # （旧数据/部分链接未填）→ float(None) 崩溃；兜底 0.5。
+                strength = float(link.get("strength") or 0.5)
                 link_type = link.get("link_type", "semantic")
 
                 # 时间衰减
@@ -1452,10 +1463,29 @@ class Trinity:
                 pass
 
         # 加工管线（语义关联 + 实体提取 + 主动推送）
-        # postprocess=False 时跳过，交由调用方后台异步执行（memory_write 异步化，
-        # 写入即时返回、加工后台完成，消除嵌入引擎冷启动导致的写入超时）。
+        # 2026-08-15（二轮压测修复）：postprocess 默认后台线程执行——
+        # 写入即时返回、加工后台完成（_postprocess_memory 幂等、内部异常
+        # 保护、daemon 线程），调用方无需再传 postprocess=False 规避同步
+        # 加工成本（实测同步管线占写入 ~97%，单条 430-665ms vs 13ms）。
+        # result 为共享 dict 引用，后台线程回填 pushed_memories /
+        # extracted_entities / postprocess（pending → done），API 返回
+        # 时可能仍为 pending，属设计内的异步语义。
+        # 例外：TRINITY_LLM_EXTRACT=on 是显式同步功能（调用方期望 ingest
+        # 返回时实体/关系已入库，如测试/管线），此时保持同步执行。
+        llm_extract = os.environ.get(
+            "TRINITY_LLM_EXTRACT", "").strip().lower() in ("1", "on", "true", "yes")
         if postprocess and memory_id:
-            self._postprocess_memory(memory_id, content, result)
+            result.setdefault("pushed_memories", [])
+            result["extracted_entities"] = 0
+            result["postprocess"] = "pending"
+            if llm_extract:
+                self._postprocess_memory(memory_id, content, result)
+            else:
+                threading.Thread(
+                    target=self._postprocess_memory,
+                    args=(memory_id, content, result),
+                    daemon=True, name="ingest-postprocess",
+                ).start()
         else:
             result["pushed_memories"] = []
             result["extracted_entities"] = 0
@@ -1472,6 +1502,11 @@ class Trinity:
         从 ingest 同步路径分离，供 memory_write 异步化调用（写入即时返回，
         加工后台完成）。幂等：内部各步骤均有异常保护，失败不抛出。
 
+        2026-08-15（二轮压测修复）：全局 _postprocess_lock 串行化——
+        加工是后台异步工作，无需并发（并发 sklearn fit + 抢 _write_lock
+        会拖垮写入线程，实测响应 p95 3.7s）；串行后 embedding 引擎只
+        fit 一次、写锁竞争收敛到单加工线程。
+
         Args:
             memory_id: 已写入的记忆 ID。
             content:   记忆内容。
@@ -1480,29 +1515,30 @@ class Trinity:
         Returns:
             Dict with linked_ids / extracted_entities / pushed_memories.
         """
-        linked_ids: List[str] = []
-        if self._adapter and hasattr(self._adapter, "create_memory_link"):
-            linked_ids = self._auto_link_semantic(memory_id, content)
-        entity_ids = self._auto_extract_entities(memory_id, content)
-        # ANN 增量维护（①落盘持久化，2026-08-15）：后台线程同步新记忆进索引
-        if memory_id and self.use_ann:
-            import threading as _th
-            _th.Thread(
-                target=self._ann_incremental_add, args=(memory_id, content),
-                daemon=True,
-            ).start()
-        all_ids = [memory_id] + linked_ids if memory_id else linked_ids
-        pushed = self.proactive_push(all_ids)
-        if result is not None:
-            result["pushed_memories"] = pushed
-            result["extracted_entities"] = len(entity_ids)
-            result["linked_ids"] = linked_ids
-            result["postprocess"] = "done"
-        return {
-            "linked_ids": linked_ids,
-            "extracted_entities": len(entity_ids),
-            "pushed_memories": pushed,
-        }
+        with self._postprocess_lock:
+            linked_ids: List[str] = []
+            if self._adapter and hasattr(self._adapter, "create_memory_link"):
+                linked_ids = self._auto_link_semantic(memory_id, content)
+            entity_ids = self._auto_extract_entities(memory_id, content)
+            # ANN 增量维护（①落盘持久化，2026-08-15）：后台线程同步新记忆进索引
+            if memory_id and self.use_ann:
+                import threading as _th
+                _th.Thread(
+                    target=self._ann_incremental_add, args=(memory_id, content),
+                    daemon=True,
+                ).start()
+            all_ids = [memory_id] + linked_ids if memory_id else linked_ids
+            pushed = self.proactive_push(all_ids)
+            if result is not None:
+                result["pushed_memories"] = pushed
+                result["extracted_entities"] = len(entity_ids)
+                result["linked_ids"] = linked_ids
+                result["postprocess"] = "done"
+            return {
+                "linked_ids": linked_ids,
+                "extracted_entities": len(entity_ids),
+                "pushed_memories": pushed,
+            }
 
     def _auto_link_semantic(
         self, memory_id: str, content: str,
@@ -1529,7 +1565,11 @@ class Trinity:
         try:
             if not self._embedding_engine:
                 from trinity.embeddings import create_engine
-                self._embedding_engine = create_engine()
+                # 2026-08-15（二轮压测修复）：backend="sklearn"——auto 会先
+                # 探测 Ollama（本机未开时每次 embed 等 ~300ms 超时，embed_batch
+                # 100 条 → 30s+，导致后台加工线程长时间"卡住"）。与聚合器
+                # _get_embedding_fn 的修复一致：sklearn TF-IDF 确定性毫秒级。
+                self._embedding_engine = create_engine(backend="sklearn")
             import numpy as np
 
             # 获取已有记忆（候选上限可配置）
@@ -2372,29 +2412,36 @@ class Trinity:
         对空索引 search 返回空 = 优雅降级，融合其余通道），后台线程
         add_documents 填充同一索引对象（CPython GIL 下 dict 并发读写安全，
         只可能读到中间态，不会损坏）。完成后 _bm25_ready=True。
+
+        2026-08-15（二轮压测修复）：_bm25_lock 原子化"检查-创建-启动"——
+        启动预热线程与首个请求并发调用时，原先各自启动构建线程导致
+        双份 12k 条 BM25 构建 + GIL 竞争（实测首个请求 16s）。
         """
         from trinity.retrieval.bm25_index import BM25Index
 
-        if self._bm25_index is not None:
+        if self._bm25_ready:
             return
-        self._bm25_index = BM25Index()  # 空索引立即可用（优雅降级）
-        if self._adapter is None:
-            return
+        with self._bm25_lock:
+            if self._bm25_index is not None:
+                return  # 已在构建（另一线程启动），等待 ready 即可
+            self._bm25_index = BM25Index()  # 空索引立即可用（优雅降级）
+            if self._adapter is None:
+                return
 
-        def _build() -> None:
-            try:
-                all_mems = self._adapter.get_all_memories(limit=10000)
-                if not all_mems:
-                    return
-                items = [(m["memory_id"], m.get("content", ""))
-                         for m in all_mems]
-                self._bm25_index.add_documents(items)
-                self._bm25_ready = True
-            except Exception:
-                pass
+            def _build() -> None:
+                try:
+                    all_mems = self._adapter.get_all_memories(limit=10000)
+                    if not all_mems:
+                        return
+                    items = [(m["memory_id"], m.get("content", ""))
+                             for m in all_mems]
+                    self._bm25_index.add_documents(items)
+                    self._bm25_ready = True
+                except Exception:
+                    pass
 
-        threading.Thread(target=_build, daemon=True,
-                         name="bm25-prewarm").start()
+            threading.Thread(target=_build, daemon=True,
+                             name="bm25-prewarm").start()
 
     def search_hybrid(
         self,
