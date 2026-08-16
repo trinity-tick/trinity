@@ -100,17 +100,21 @@ python scripts/memory_portability.py import-zep --file zep_export.json --persona
 
 ---
 
-## Benchmark（本地实测口径，官方集网络阻塞中）
+## Benchmark（实测；官方 LongMemEval_S 已跑，2026-08-16）
 
 | Benchmark | Score | 口径 |
 |---|---|---|
-| LongMemEval-style (500q) | R@5 = **0.992** | 社区 mock 集（官方集 HF 不可达） |
-| SQuAD v1.1 (adapted) | R@5 = **98.3%** | 180 题 passage selection |
-| LoCoMo (subset) | R@5 = **0.88** | 38 题会话聚合 |
-| pytest | **705 passed / 50 skipped / 0 failed** | 全量 |
+| **LongMemEval_S（官方 ICLR 2025，500 题）** | **session R@5 = 0.968 · turn R@5 = 0.922 · hit pos 1.3** | 官方数据集实测（hf-mirror 获取），hybrid top-5 |
+| SQuAD v1.1 (adapted) | R@5 = **98.3%** | 180 题 passage selection（本地） |
+| LoCoMo (subset) | R@5 = **0.88** | 38 题会话聚合（中文本地集） |
+| pytest | **732 passed / 0 failed** | 全量 |
 
-> 本地口径 ≠ 官方口径。HF 网络就绪后替换为 LongMemEval-S / LoCoMo 官方集，
-> 获得可对外宣称的公开数字（见 docs/FUTURE_PLAN_V2_20260815.md）。
+> 📊 官方 LongMemEval_S 详情与分题型：docs/bench-official/LongMemEval_S_REPORT_20260816.md
+> （QA judged accuracy 以 DeepSeek 官方模板判分，见 .trinity/bench-official/lme_s_full500_judged.json）
+>
+> ⚠️ **口径声明（2026-08-16）**：README 旧版引用的 "LongMemEval 96.4% / BEAM 10M 64.1%"
+> 系 **Exabase M-1 / Hindsight 的成绩**，非 Trinity 实测，已移除。BEAM/LoCoMo 英文官方集
+> 仍未跑（网络限制），不构成对外宣称。
 
 ---
 

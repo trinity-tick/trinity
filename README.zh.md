@@ -55,28 +55,38 @@ python -m trinity bench --name mock
 
 三位一体记忆架构，整合 12+ 业界最优方案：
 
-| 层级 | 组件 | 对齐方案 |
+| 层级 | 组件 | 对齐方案（模块为储备；运行路径见 README.md Key Features） |
 |:-----|:-----|:---------|
-| **检索层** | BEAM-LIGHT (CB53) | ICLR 2026 BEAM 基准 |
-| | Exabase 三阶段检索 (CB54) | LongMemEval 96.4% SOTA |
-| | Hindsight 四网络 (CB55) | BEAM 10M SOTA 64.1% |
-| | Zikkaron Hopfield (CB56) | 非LLM SOTA 40.4% |
-| **记忆层** | 级联提取 (CB45-CB48) | ByteRover / Mem0 / Graphiti |
-| | 关系管理 (CB49-CB52) | Supermemory / Mastra / MemMachine |
-| | 自优化 (CB57) | SelfMem July 2026 |
+| **检索层** | BEAM-LIGHT (CB53) | ICLR 2026 BEAM 基准（对齐） |
+| | Exabase 三阶段检索 (CB54) | Exabase 论文（对齐；96.4% 系 Exabase M-1 官方宣称，非 Trinity 成绩） |
+| | Hindsight 四网络 (CB55) | Hindsight 论文（对齐；64.1% 系 Hindsight 在 BEAM 10M 的成绩，非 Trinity 成绩） |
+| | Zikkaron Hopfield (CB56) | Zikkaron 项目（对齐） |
+| **记忆层** | 级联提取 (CB45-CB48) | ByteRover / Mem0 / Graphiti（对齐） |
+| | 关系管理 (CB49-CB52) | Supermemory / Mastra / MemMachine（对齐） |
+| | 自优化 (CB57) | SelfMem（arXiv:2607.03726，对齐） |
 | **保护层** | 50 级 Guardian 链 | 遗忘防护 / 压缩审计 |
 | **检索通道** | 47 路融合检索 | 语义/图谱/精确/混合 |
 
 ---
 
-## 性能基准
+## 性能基准（本地实测口径）
 
-| 指标 | Mem0 | Trinity | 提升 |
-|:-----|:----:|:-------:|:----:|
-| P50 延迟 | 110ms | **21ms** | **5.2x** |
-| P95 延迟 | 280ms | **45ms** | **6.2x** |
-| LongMemEval | 72% | **96.4%** | **+24%** |
-| BEAM 10M | 52% | **64.1%** | **+12%** |
+| 指标 | Trinity（本地实测） | 口径 |
+|:-----|:-------:|:-----|
+| 端到端查询 P50 / P99 | **30-41ms / 33-49ms** | MemBench v1.0 单机 Windows（benchmark/MEMBENCH_REPORT.md） |
+| 200 并发 QPS | **2,431**（0 错误，~27MB） | concurrency_bench |
+| SQuAD v1.1 R@5（180 题） | **98.3%** | 题目偏易，本地 passage selection |
+| LoCoMo Recall@5（50 题） | **0.88**（会话聚合写入） | 中文本地集，非官方英文集 |
+| LongMemEval-style R@5（500q） | **0.992** | 社区 mock 集（官方集 HF 阻塞期间） |
+| MemSyco（LLM judge，20 题） | **0.88**（谄媚率 10%） | 小样本 |
+| 压缩经济 | **~21%** token 节省 | 15 条采样（真实 LLM 模式 78-97%） |
+| pytest | **732 passed / 0 failed** | 全量 |
+
+| **LongMemEval_S（官方 ICLR 2025，500 题）** | **session R@5=0.968 · turn R@5=0.922** | 官方数据集实测（2026-08-16，hybrid top-5，见 docs/bench-official） |
+
+> 📊 官方 LongMemEval_S 详情与分题型：docs/bench-official/LongMemEval_S_REPORT_20260816.md
+> ⚠️ **口径声明（2026-08-16）**：README 旧版引用的 "LongMemEval 96.4% / BEAM 10M 64.1%" 系 **Exabase M-1 / Hindsight 的成绩**，
+> 并非 Trinity 实测，已移除。BEAM / LoCoMo 英文官方集仍未跑（网络限制），不构成对外宣称。
 
 ---
 
@@ -84,7 +94,7 @@ python -m trinity bench --name mock
 
 - **多模态**: 文本、图像、音频统一记忆
 - **多租户**: 三级隔离（persona_id / session_id / tenant_id）
-- **47 路检索**: 渐进级联融合，P50=21ms
+- **47 路检索**: 渐进级联融合，P50=30-41ms（本地实测）
 - **50 级守护链**: L1-L50 含推理漂移检测
 - **MCP 支持**: 标准 Model Context Protocol（stdio + SSE）
 - **REST API**: FastAPI 8 端点 + Web Dashboard
