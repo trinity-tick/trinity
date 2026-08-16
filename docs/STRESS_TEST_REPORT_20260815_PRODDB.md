@@ -167,3 +167,44 @@ query_relations / query_graph / traverse。
   连接生命周期管理（注册表 + 上限 64 + overflow 计数 + disconnect 全关）已验证。
 - thread-local 连接在超限时走临时连接（GC 兜底），注册连接由 disconnect 全量关闭；
   长驻服务中若线程池频繁重建，注册连接数可能接近上限（有 overflow 计数可观测）。
+
+## 9. 三轮优化（commit `[round-3]`）——评价建议四项全部执行
+
+### 9.1 多进程写并发重压 ✅（scripts/multi_process_stress.py）
+API + collector 双进程同时打开同一 WAL 库副本，各自 4 线程并发写：
+| 进程 | 写入 | QPS | p50 | p99 | 错误 |
+|---|---|---|---|---|---|
+| api | 300 | 26.6 | 117ms | 1,642ms | 0 |
+| collector | 300 | 26.3 | 120ms | 1,713ms | 0 |
+| 一致性 | memories +600 精确 | audit 10,389 | **lock_errors=0** | | |
+
+**新连接池架构多进程写稳定性验证通过**——历史 `database is locked` 隐患
+在 API+collector 并存场景下 0 锁冲突。
+
+### 9.2 写入加工管线异步化 ✅
+`ingest(postprocess=True)` 默认后台线程执行（写入即时返回），
+`_postprocess_lock` 全局串行化（并发加工线程抢 GIL/写锁会拖垮写入：
+响应 p95 3.7s → **552ms**，QPS 14 → **51**）。
+顺带修复两个潜伏 bug：
+- `_auto_link_semantic` 用 `backend=sklearn`（auto 探测 Ollama → embed_batch
+  100 条 × 300ms = 30s 后台"卡住"）
+- `proactive_push` 的 `float(link.get("strength"))` 遇 None 崩溃
+- `TRINITY_LLM_EXTRACT=on` 保持同步（显式功能语义：调用方期望返回时实体已入库）
+
+### 9.3 崩溃恢复测试 ✅（tests/test_crash_recovery.py，4 用例）
+子进程 `os._exit(1)` 故障注入：
+- WAL 恢复已 commit 记忆（5 基准 + 20 崩溃前 = 25 精确）
+- 审计 checksum 链崩溃后完整
+- 异步 touch 丢数有界（access_count 无半写损坏值）
+- 库不损坏且崩溃后可继续写入
+
+### 9.4 API 启动期预热 ✅
+lifespan 触发 `_ensure_bm25_index`（**仅触发后台构建，不跑完整 search_hybrid**
+——预热跑全链路会与首请求竞争写锁/GIL，实测首请求 16s/0 结果 → 纯构建预热
+**122ms/5 结果**）。`_ensure_bm25_index` 加 `_bm25_lock` 原子化（防预热+请求
+并发时双份 12k 构建）。
+
+### 9.5 测试与提交
+- 全量：**755 passed / 54 skipped / 0 failed**
+- 新增：`scripts/multi_process_stress.py`、`tests/test_crash_recovery.py`（4 用例）；
+  修复 overflow 测试确定性（3 线程 barrier + 顺序第 4 线程）
