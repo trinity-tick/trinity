@@ -235,23 +235,36 @@ def _load_api_token() -> Optional[str]:
 
 
 def copy_db_snapshot(db_path: str) -> Optional[str]:
-    """复制生产库到临时文件（含 WAL），压测只读副本、零污染权威库。
+    """复制生产库到临时文件（VACUUM INTO），压测只读副本、零污染权威库。
 
-    2026-08-15（压测修复）：WAL/SHM 可能被运行中的 API 进程锁定
-    （WinError 33）——失败时静默跳过，SQLite 打开副本时会自动
-    checkpoint 恢复一致性；主库文件复制成功即可。
+    2026-08-16（深挖修复）：改为 VACUUM INTO——原 shutil.copy2 跳过 WAL，
+    在 WAL 模式下会导致副本的 FTS rowid 与 memories 错位（新写入触发
+    memories_ai 触发器 INSERT memories_fts 撞已存在 rowid → IntegrityError
+    constraint failed）。VACUUM INTO 包含 WAL 全部内容、rowid 一致、不
+    需要复制 -wal/-shm 文件（天然免疫运行中进程的 WinError 33 锁）。
     """
     src = Path(db_path)
     if not src.is_file():
         return None
+    import sqlite3 as _sqlite3
     tmp = Path(tempfile.mkdtemp(prefix="trinity_dbstress_")) / src.name
-    shutil.copy2(src, tmp)
-    for suffix in ("-wal", "-shm"):
-        if Path(str(src) + suffix).is_file():
-            try:
-                shutil.copy2(str(src) + suffix, str(tmp) + suffix)
-            except OSError:
-                pass  # WAL 被运行中进程锁定：跳过，副本可自恢复
+    try:
+        conn = _sqlite3.connect(str(src))
+        try:
+            conn.execute(
+                f"VACUUM INTO '{str(tmp).replace(chr(92), chr(92) * 2)}'"
+            )
+        finally:
+            conn.close()
+    except Exception:
+        # VACUUM INTO 失败时回退文件复制（只读压测场景可接受）
+        shutil.copy2(src, tmp)
+        for suffix in ("-wal", "-shm"):
+            if Path(str(src) + suffix).is_file():
+                try:
+                    shutil.copy2(str(src) + suffix, str(tmp) + suffix)
+                except OSError:
+                    pass
     return str(tmp)
 
 

@@ -29,7 +29,11 @@ def copy_db() -> str:
     """生产库副本（跳过锁定的 WAL）。"""
     tmp = tempfile.mkdtemp(prefix="ckpt_")
     db = os.path.join(tmp, "c.db")
-    shutil.copy2(_PROD_DB, db)
+    # VACUUM INTO（含 WAL 全部内容、rowid 一致）——copy2 跳过 WAL 会导致
+    # FTS rowid 错位，写入触发器撞 rowid → IntegrityError（2026-08-16 修复）
+    conn = sqlite3.connect(_PROD_DB)
+    conn.execute("VACUUM INTO '" + db.replace("\\", "\\\\") + "'")
+    conn.close()
     return db
 
 

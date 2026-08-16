@@ -1470,15 +1470,18 @@ class Trinity:
         # result 为共享 dict 引用，后台线程回填 pushed_memories /
         # extracted_entities / postprocess（pending → done），API 返回
         # 时可能仍为 pending，属设计内的异步语义。
-        # 例外：TRINITY_LLM_EXTRACT=on 是显式同步功能（调用方期望 ingest
-        # 返回时实体/关系已入库，如测试/管线），此时保持同步执行。
+        # 例外：TRINITY_LLM_EXTRACT=on 默认同步（调用方期望 ingest 返回时
+        # 实体/关系已入库，如测试/管线）；设置 TRINITY_LLM_EXTRACT_ASYNC=on
+        # 可改为异步（写入即时返回、LLM 抽取后台完成，吞吐优先，2026-08-16）。
         llm_extract = os.environ.get(
             "TRINITY_LLM_EXTRACT", "").strip().lower() in ("1", "on", "true", "yes")
+        llm_async = os.environ.get(
+            "TRINITY_LLM_EXTRACT_ASYNC", "").strip().lower() in ("1", "on", "true", "yes")
         if postprocess and memory_id:
             result.setdefault("pushed_memories", [])
             result["extracted_entities"] = 0
             result["postprocess"] = "pending"
-            if llm_extract:
+            if llm_extract and not llm_async:
                 self._postprocess_memory(memory_id, content, result)
             else:
                 threading.Thread(

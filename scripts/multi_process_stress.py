@@ -94,18 +94,33 @@ print(json.dumps({
 
 
 def copy_db_snapshot(db_path: str) -> Optional[str]:
-    """复制生产库到临时文件（多进程共享同一副本，零污染权威库）。"""
+    """复制生产库到临时文件（VACUUM INTO，含 WAL 全部内容、rowid 一致）。
+
+    2026-08-16（深挖修复）：原 shutil.copy2 跳过 WAL → FTS rowid 错位 →
+    写入触发器撞 rowid → IntegrityError；VACUUM INTO 无此问题且免疫
+    WinError 33 锁。
+    """
     src = Path(db_path)
     if not src.is_file():
         return None
+    import sqlite3 as _sqlite3
     tmp = Path(tempfile.mkdtemp(prefix="trinity_mpstress_")) / src.name
-    shutil.copy2(src, tmp)
-    for suffix in ("-wal", "-shm"):
-        if Path(str(src) + suffix).is_file():
-            try:
-                shutil.copy2(str(src) + suffix, str(tmp) + suffix)
-            except OSError:
-                pass
+    try:
+        conn = _sqlite3.connect(str(src))
+        try:
+            conn.execute(
+                f"VACUUM INTO '{str(tmp).replace(chr(92), chr(92) * 2)}'"
+            )
+        finally:
+            conn.close()
+    except Exception:
+        shutil.copy2(src, tmp)
+        for suffix in ("-wal", "-shm"):
+            if Path(str(src) + suffix).is_file():
+                try:
+                    shutil.copy2(str(src) + suffix, str(tmp) + suffix)
+                except OSError:
+                    pass
     return str(tmp)
 
 
