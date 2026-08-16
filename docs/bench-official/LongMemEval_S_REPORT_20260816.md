@@ -22,15 +22,17 @@
 | **session_recall@5** | **0.968（96.8%）** | 证据会话进 top-5 |
 | **turn_recall@5** | **0.922（92.2%）** | 含 has_answer 会话进 top-5 |
 | mean hit position | **1.3** | 证据平均首次命中位次（多数为第 1 位） |
-| QA accuracy（DeepSeek judged，官方模板） | **78%（50 题验证）/ 全量见 judged 报告** | 会话级 ingest + 全量证据上下文 + 强提示（QA2b） |
+| QA accuracy（DeepSeek judged，官方模板） | **0.496（49.6%）** | 会话级 ingest + 全量证据上下文 + 强提示（QA2b，500 题全量） |
 | 子串匹配 QA（弱下限） | 0.014 | 仅作参照，不作宣称 |
-| 检索耗时 | 2,132s（~35min） | 500 题 ingest + 检索（QA2b 全量另计） |
+| 检索耗时 | 2,132s（~35min） | 500 题 ingest + 检索（QA2b 另计 2,300s） |
 
-> **QA 链路关键发现（2026-08-16）**：初版 QA（截断 600 字符上下文）仅 1.8%，原因不是检索失败
-> （recall 96.8%），而是**上下文装配把长会话截断、证据丢失**；改为全量证据上下文后 50 题
-> 验证判分 78%（temporal-reasoning 0.455 / multi-session 1.0 / knowledge-update 0.571）。
-> 教训与 Arize 独立评测一致：**R@K 证明"检索到了"，不证明"答对了"——QA 链路的上下文
-> 工程是 Trinity 下一步要补的深度**（全量 QA2b 结果见 lme_s_qa2b_full500.json）。
+> **QA 链路关键发现（2026-08-16）**：初版 QA（截断 600 字符上下文）仅 1.8%——不是检索失败
+> （recall 96.8%），而是**上下文装配把长会话截断、证据丢失**；改为全量证据上下文后
+> 全量 500 题判分 **49.6%**。教训与 Arize 独立评测一致：**R@K 证明"检索到了"，
+> 不证明"答对了"——QA 链路的上下文工程是 Trinity 下一步要补的深度**。
+> 分题型：single-session-assistant 0.911 / user 0.843 / knowledge-update 0.615 /
+> multi-session 0.384 / temporal-reasoning 0.286 / single-session-preference 0.033
+> （judged 报告：.trinity/bench-official/lme_s_qa2b_full500_judged.json）。
 
 ### 分题型 session_recall@5
 
@@ -48,10 +50,14 @@
 | 系统 | LongMemEval_S R@5（独立/官方口径） | 来源 |
 |---|---|---|
 | MemPalace | 96.6% | dev.to 独立复测 |
-| Awareness（本地优先） | 96.0% | dev.to 独立复测 |
 | **Trinity（本次实测）** | **96.8% session / 92.2% turn** | 本报告（官方 500 题，hybrid top-5） |
+| Awareness（本地优先） | 96.0% | dev.to 独立复测 |
 | Zep | 63.8% | vectorize 独立评测 |
 | Mem0 OSS（独立） | ~32-49% | dev.to / vectorize |
+
+**QA 对比语境**：Trinity QA=49.6%（DeepSeek judge，上下文装配修复后；未调优）。官方论文中
+最佳系统 QA 约 80-90%（GPT-4o judge + 专门调优）；Mem0/Zep 未公开可复现 QA 数字。
+Trinity 检索召回进入头部区间（96.8%），**QA 生成是当前主要深度差距**（temporal/preference 题型）。
 
 > ⚠️ 口径差异说明：Trinity 为逐会话 ingest + 47 通道 hybrid 单轮检索；Awareness/MemPalace 为
 > 官方数据集真实生产管线复测（dev.to，runner 公开）；各家 top-k 与判分不一，量级参考。

@@ -110,7 +110,8 @@ python scripts/memory_portability.py import-zep --file zep_export.json --persona
 | pytest | **732 passed / 0 failed** | 全量 |
 
 > 📊 官方 LongMemEval_S 详情与分题型：docs/bench-official/LongMemEval_S_REPORT_20260816.md
-> （QA judged accuracy 以 DeepSeek 官方模板判分，见 .trinity/bench-official/lme_s_full500_judged.json）
+> **QA accuracy（DeepSeek judged，官方模板，500 题）= 49.6%**（上下文装配修复前仅 1.8%；
+> 分题型：assistant 91% / user 84% / knowledge-update 62% / multi 38% / temporal 29% / preference 3%）。
 >
 > ⚠️ **口径声明（2026-08-16）**：README 旧版引用的 "LongMemEval 96.4% / BEAM 10M 64.1%"
 > 系 **Exabase M-1 / Hindsight 的成绩**，非 Trinity 实测，已移除。BEAM/LoCoMo 英文官方集

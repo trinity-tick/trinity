@@ -82,7 +82,7 @@ python -m trinity bench --name mock
 | 压缩经济 | **~21%** token 节省 | 15 条采样（真实 LLM 模式 78-97%） |
 | pytest | **732 passed / 0 failed** | 全量 |
 
-| **LongMemEval_S（官方 ICLR 2025，500 题）** | **session R@5=0.968 · turn R@5=0.922** | 官方数据集实测（2026-08-16，hybrid top-5，见 docs/bench-official） |
+| **LongMemEval_S（官方 ICLR 2025，500 题）** | **session R@5=0.968 · turn R@5=0.922 · QA=0.496** | 官方数据集实测（2026-08-16，hybrid top-5，DeepSeek 官方模板判分；见 docs/bench-official） |
 
 > 📊 官方 LongMemEval_S 详情与分题型：docs/bench-official/LongMemEval_S_REPORT_20260816.md
 > ⚠️ **口径声明（2026-08-16）**：README 旧版引用的 "LongMemEval 96.4% / BEAM 10M 64.1%" 系 **Exabase M-1 / Hindsight 的成绩**，
