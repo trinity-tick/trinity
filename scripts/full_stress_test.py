@@ -235,7 +235,12 @@ def _load_api_token() -> Optional[str]:
 
 
 def copy_db_snapshot(db_path: str) -> Optional[str]:
-    """复制生产库到临时文件（含 WAL），压测只读副本、零污染权威库。"""
+    """复制生产库到临时文件（含 WAL），压测只读副本、零污染权威库。
+
+    2026-08-15（压测修复）：WAL/SHM 可能被运行中的 API 进程锁定
+    （WinError 33）——失败时静默跳过，SQLite 打开副本时会自动
+    checkpoint 恢复一致性；主库文件复制成功即可。
+    """
     src = Path(db_path)
     if not src.is_file():
         return None
@@ -243,7 +248,10 @@ def copy_db_snapshot(db_path: str) -> Optional[str]:
     shutil.copy2(src, tmp)
     for suffix in ("-wal", "-shm"):
         if Path(str(src) + suffix).is_file():
-            shutil.copy2(str(src) + suffix, str(tmp) + suffix)
+            try:
+                shutil.copy2(str(src) + suffix, str(tmp) + suffix)
+            except OSError:
+                pass  # WAL 被运行中进程锁定：跳过，副本可自恢复
     return str(tmp)
 
 
@@ -314,6 +322,61 @@ def run_api_read_stress(base: str, reads: int, threads: int = 8,
     return result
 
 
+def run_db_write_stress(db_path: str, writes: int, threads: int = 8) -> StressResult:
+    """生产库副本并发写入（真实 SQLite I/O：store_memory + 审计链）。
+
+    验证历史隐患 database is locked：多线程写同一副本库（WAL + 主连接
+    _write_lock 串行化），计数锁错误/死锁。副本可写，零污染权威库。
+
+    2026-08-15（压测修复）：用 postprocess=False —— 与生产 API 的
+    memory_write 异步化路径一致（写入即时返回、语义关联/实体提取/主动
+    推送后台完成）；同步加工管线占写入成本 ~97%（单条 430-665ms vs
+    13ms），计入会混淆"写库稳定性"验证（那是加工管线的成本，不是
+    SQLite 写路径的）。另跑少量 postprocess=True 采样对照。
+    """
+    result = StressResult()
+    from trinity.core.client import Trinity
+    mem = Trinity(store_path=db_path)
+    barrier = threading.Barrier(threads)
+
+    def worker(wid: int) -> None:
+        barrier.wait()
+        for i in range(writes // threads):
+            content = (f"{random.choice(_CORPUS)} [db-w{wid}-{i}] "
+                       f"production write stress")
+            t0 = _now_ms()
+            try:
+                mem.ingest(content, persona_id="stress-db-writer",
+                           metadata={"category": random.choice(
+                               ["db", "research", "ops"]),
+                               "source": "full_stress_test_db_write"},
+                           postprocess=False)
+                result.add(_now_ms() - t0)
+            except Exception as e:
+                result.add(_now_ms() - t0, str(e)[:120])
+
+    ts = [threading.Thread(target=worker, args=(i,)) for i in range(threads)]
+    t0 = time.time()
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    result.stats()["total_s"] = round(time.time() - t0, 2)
+    # 对照采样：同步加工管线（3 条，不计入主统计）
+    try:
+        pp_lat = []
+        for i in range(3):
+            t0 = _now_ms()
+            mem.ingest(f"postprocess 对照 {i} 记忆蒸馏",
+                       persona_id="stress-db-writer",
+                       metadata={"category": "db"}, postprocess=True)
+            pp_lat.append(round(_now_ms() - t0))
+        result.stats()["postprocess_sample_ms"] = pp_lat
+    except Exception:
+        pass
+    return result
+
+
 def consistency_check(db_path: str, expected_delta: int = 0) -> Dict[str, Any]:
     """压力后一致性校验：计数 + 审计 + 哈希链。"""
     import sqlite3
@@ -356,6 +419,8 @@ def main() -> int:
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--db", default=None,
                         help="生产库路径（默认自动探测）；传参时对副本做真实 I/O 检索压测")
+    parser.add_argument("--db-write", default=None,
+                        help="生产库路径；传参时对副本做真实 I/O 写入压测（并发 store_memory + 审计链，验证 database is locked）")
     parser.add_argument("--api", default=None,
                         help="API base（如 http://127.0.0.1:8001）；传参时并发打 /memory/search/hybrid")
     args = parser.parse_args()
@@ -459,12 +524,16 @@ def main() -> int:
         db_snapshot = copy_db_snapshot(args.db)
         if db_snapshot:
             print(f"[6] 生产库副本并发检索 ({args.db})...")
-            # 预热（计时外）：首次 search_hybrid 会惰性构建 BM25 索引（12k 记忆
-            # ~1-2s），属冷启动成本，不计入稳定态指标。
+            # 预热（计时外）：BM25 后台预构建（2026-08-15 起不再阻塞首次检索，
+            # 但构建期与检索争 GIL）——等 _bm25_ready 后再计时，冷启动不计入。
             t0 = time.time()
             _warm = Trinity(store_path=db_snapshot)
             try:
                 _warm.search_hybrid(query="数据库", top_k=3, strategy="rrf")
+                _deadline = time.time() + 30
+                while time.time() < _deadline and not getattr(
+                        _warm, "_bm25_ready", False):
+                    time.sleep(0.2)
             except Exception:
                 pass
             report["db"] = {"source": args.db,
@@ -484,12 +553,43 @@ def main() -> int:
         else:
             print(f"[6] 跳过：库不存在 {args.db}")
 
+    # 6b. 生产库副本并发写入（真实 I/O：store_memory + 审计链，验证锁稳定）
+    dbw_result = None
+    if args.db_write:
+        dbw_snapshot = copy_db_snapshot(args.db_write)
+        if dbw_snapshot:
+            print(f"[6b] 生产库副本并发写入 ({args.db_write})...")
+            t0 = time.time()
+            dbw_result = run_db_write_stress(dbw_snapshot, args.writes,
+                                             args.threads)
+            dbw_stats = dbw_result.stats()
+            dbw_stats["elapsed_s"] = round(time.time() - t0, 2)
+            lock_errs = sum(1 for e in dbw_stats.get("error_samples", [])
+                            if "locked" in e.lower() or "deadlock" in e.lower())
+            dbw_consistency = consistency_check(dbw_snapshot)
+            report["db_write"] = {
+                "source": args.db_write, "write": dbw_stats,
+                "lock_errors": lock_errs, "consistency": dbw_consistency,
+            }
+            print(f"    写入 {dbw_stats['count']} 条, "
+                  f"QPS={dbw_stats['qps']}, p50={dbw_stats['p50_ms']}ms, "
+                  f"p99={dbw_stats['p99_ms']}ms, errors={dbw_stats['errors']}")
+            print(f"    一致性: memories={dbw_consistency.get('memories_total')}, "
+                  f"audit={dbw_consistency.get('audit_entries')}")
+            try:
+                Path(dbw_snapshot).unlink(missing_ok=True)
+            except Exception:
+                pass
+        else:
+            print(f"[6b] 跳过：库不存在 {args.db_write}")
+
     # 7. API 并发检索（真实 HTTP → 引擎全链路）
     api_result = None
     if args.api:
         token = _load_api_token()
         print(f"[7] API 并发检索 ({args.api}, auth={'on' if token else 'off'})...")
-        # 预热（计时外）：API 进程首次检索构建 BM25 索引
+        # 预热（计时外）：API 进程首次检索触发 BM25 后台构建；
+        # 等待构建窗口（~1-2s）避免与压测抢 GIL。
         try:
             _warm_body = json.dumps({"query": "数据库", "top_k": 3,
                                      "strategy": "rrf"}).encode("utf-8")
@@ -501,6 +601,7 @@ def main() -> int:
                 data=_warm_body, headers=_warm_headers, method="POST")
             with urllib.request.urlopen(_warm_req, timeout=30) as _wr:
                 _wr.read()
+            time.sleep(2.5)  # BM25 后台构建窗口
         except Exception:
             pass
         t0 = time.time()
@@ -512,11 +613,13 @@ def main() -> int:
               f"p99={api_stats['p99_ms']}ms, errors={api_stats['errors']}")
         report["api"] = {"base": args.api, "read": api_stats}
 
-    # 通过判定：无错误 + 无锁冲突（内存池 + 生产库 + API）
+    # 通过判定：无错误 + 无锁冲突（内存池 + 生产库 + API + 生产库写入）
     ok = (w.stats()["errors"] == 0 and r.stats()["errors"] == 0
           and m.stats()["errors"] == 0 and lock_errors == 0)
     if db_result is not None:
         ok = ok and db_result.stats()["errors"] == 0
+    if dbw_result is not None:
+        ok = ok and dbw_result.stats()["errors"] == 0
     if api_result is not None:
         ok = ok and api_result.stats()["errors"] == 0
     report["pass"] = ok

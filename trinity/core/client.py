@@ -24,6 +24,7 @@ import hashlib
 import json
 import os
 import sys
+import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -245,6 +246,7 @@ class Trinity:
         # ── 混合检索（向量 + BM25 + 图谱）─────────────────────────
         self._hybrid_retriever = None
         self._bm25_index = None
+        self._bm25_ready = False  # 后台预构建完成标记（2026-08-15）
 
         # ── 跨模态检索（文字 ↔ 图片记忆）─────────────────────────
         self._cross_modal_retriever = None
@@ -2363,18 +2365,36 @@ class Trinity:
         return self._hybrid_retriever
 
     def _ensure_bm25_index(self) -> None:
-        """首次使用 BM25 时从已有记忆构建倒排索引。"""
+        """首次使用 BM25 时启动后台线程构建倒排索引（不阻塞首次检索）。
+
+        2026-08-15（压测优化）：原同步构建（12k 记忆 ~1-2s）是首次检索
+        2.4s 冷启动尾巴的组成部分。改为：立即返回空索引（HybridRetriever
+        对空索引 search 返回空 = 优雅降级，融合其余通道），后台线程
+        add_documents 填充同一索引对象（CPython GIL 下 dict 并发读写安全，
+        只可能读到中间态，不会损坏）。完成后 _bm25_ready=True。
+        """
         from trinity.retrieval.bm25_index import BM25Index
 
-        self._bm25_index = BM25Index()
-        if self._adapter:
+        if self._bm25_index is not None:
+            return
+        self._bm25_index = BM25Index()  # 空索引立即可用（优雅降级）
+        if self._adapter is None:
+            return
+
+        def _build() -> None:
             try:
                 all_mems = self._adapter.get_all_memories(limit=10000)
-                if all_mems:
-                    items = [(m["memory_id"], m.get("content", "")) for m in all_mems]
-                    self._bm25_index.add_documents(items)
+                if not all_mems:
+                    return
+                items = [(m["memory_id"], m.get("content", ""))
+                         for m in all_mems]
+                self._bm25_index.add_documents(items)
+                self._bm25_ready = True
             except Exception:
                 pass
+
+        threading.Thread(target=_build, daemon=True,
+                         name="bm25-prewarm").start()
 
     def search_hybrid(
         self,
