@@ -64,7 +64,13 @@ class SQLiteAdapter(StorageAdapter):
         # 读路径（search/get/query）每线程独立只读连接：WAL 下多读
         # 并行、零锁竞争（实测 8 线程 p50 115ms→25ms）。写路径仍走
         # 主连接 self._conn + _write_lock（WAL 单写者语义）。
+        # 生命周期管理（2026-08-15 二轮）：注册表 + 上限 + 超限回退，
+        # 防线程频繁重建时连接句柄滞留（见 _get_read_conn / disconnect）。
         self._read_local = threading.local()
+        self._read_conns: set = set()          # 全部线程本地读连接（强引用）
+        self._read_conns_lock = threading.Lock()
+        self._read_conn_max = 64               # 读连接上限（防无界增长）
+        self._read_conn_overflow = 0           # 超限回退计数（诊断）
 
         # ── 异步 touch 队列（2026-08-15，压测修复）────────────────
         # 检索命中即 touch 是隐藏写放大（实测占读延迟 ~40%）：每次
@@ -119,14 +125,20 @@ class SQLiteAdapter(StorageAdapter):
         if self._conn:
             self._conn.close()
             self._conn = None
-        # 关闭线程本地只读连接
-        conn = getattr(self._read_local, "conn", None)
-        if conn is not None:
+        # 关闭全部线程本地只读连接（注册表强引用保证不滞留）
+        with self._read_conns_lock:
+            conns = list(self._read_conns)
+            self._read_conns.clear()
+        for conn in conns:
             try:
                 conn.close()
             except Exception:
                 pass
+        # 当前线程的 thread-local 引用清空
+        try:
             self._read_local.conn = None
+        except Exception:
+            pass
 
     def _get_read_conn(self) -> Optional[sqlite3.Connection]:
         """返回当前线程的只读连接（WAL 多读并行，2026-08-15）。
@@ -134,10 +146,29 @@ class SQLiteAdapter(StorageAdapter):
         读路径用 per-thread 只读连接：WAL 下并发读不阻塞、无锁竞争，
         替代此前"单连接 + RLock 串行化"（8 线程 p50 115ms→25ms）。
         只读模式（mode=ro）保证不会误写；写路径仍走主连接+_write_lock。
+
+        生命周期（2026-08-15 二轮）：连接注册进 _read_conns（disconnect
+        全量关闭）；超过 _read_conn_max 时创建临时只读连接（不注册、不缓存，
+        GC 兜底关闭）并计 _read_conn_overflow——防线程频繁重建时句柄滞留、
+        防无界增长，同时避免回退主连接导致调用方锁外 execute 的游标竞态。
         """
         conn = getattr(self._read_local, "conn", None)
         if conn is not None:
             return conn
+        # 上限检查：满则用临时只读连接（不注册，本线程下次仍走主路径）
+        with self._read_conns_lock:
+            over = len(self._read_conns) >= self._read_conn_max
+        if over:
+            self._read_conn_overflow += 1
+            try:
+                conn = sqlite3.connect(
+                    f"file:{self.db_path}?mode=ro", uri=True, timeout=10.0,
+                )
+                conn.row_factory = sqlite3.Row
+                conn.execute("PRAGMA busy_timeout=15000;")
+                return conn
+            except Exception:
+                return None
         try:
             conn = sqlite3.connect(
                 f"file:{self.db_path}?mode=ro", uri=True, timeout=10.0,
@@ -145,6 +176,8 @@ class SQLiteAdapter(StorageAdapter):
             conn.row_factory = sqlite3.Row
             conn.execute("PRAGMA busy_timeout=15000;")
             self._read_local.conn = conn
+            with self._read_conns_lock:
+                self._read_conns.add(conn)
             return conn
         except Exception:
             return None
@@ -3134,6 +3167,11 @@ class SQLiteAdapter(StorageAdapter):
             "fts5_enabled": fts_ok,
             "avg_access_count": round(avg_access, 2),
             "journal_mode": "wal",
+            "read_conn_pool": {
+                "active": len(self._read_conns),
+                "max": self._read_conn_max,
+                "overflow": self._read_conn_overflow,
+            },
             "agent_weights_configured": len(self.get_agent_weights()),
             "memory_links_count": self._conn.execute(
                 "SELECT COUNT(*) as c FROM memory_links"
