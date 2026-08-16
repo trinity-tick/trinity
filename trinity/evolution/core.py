@@ -210,11 +210,13 @@ class MetaEvolution:
                 (time.time() - 86400,)
             ).fetchall()
             for r in rows2:
+                # agent_id 可能为 NULL(历史调用方未传)——兜底 default,否则 preference 永远空
+                _aid = r["agent_id"] or "default"
                 observations.append({
                     "type": "preference",
-                    "key": f"active_agent:{r['agent_id']}",
-                    "description": f"活跃写入者(agent={r['agent_id']}, {r['c']}条)",
-                    "agent_id": r["agent_id"],
+                    "key": f"active_agent:{_aid}",
+                    "description": f"活跃写入者(agent={_aid}, {r['c']}条)",
+                    "agent_id": _aid,
                 })
             conn.close()
             return observations
@@ -356,6 +358,15 @@ class MetaEvolution:
             elif count >= 1:
                 self.state.active_patterns[key] = min(
                     self.state.active_patterns.get(key, 0) + 0.3, 1.0
+                )
+
+        # 2026-08-16 修复:preferences 此前只 count 不落 state → active_preferences 恒空。
+        # 与 patterns 同逻辑:高频偏好确认,低频累积置信度。
+        for o in preferences:
+            key = o.get("key", o.get("description", "unknown"))
+            if key and key != "unknown":
+                self.state.active_preferences[key] = min(
+                    self.state.active_preferences.get(key, 0) + 0.3, 1.0
                 )
 
         return {
