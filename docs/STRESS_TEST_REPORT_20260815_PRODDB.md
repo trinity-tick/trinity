@@ -84,10 +84,56 @@ None 导致 `min()` 抛 `'<' not supported between instances of 'NoneType' and '
 
 ## 6. 边界与遗留
 
-- 压测写路径仍走内存池（`persist_path=None`），生产库写入/审计链压力未做
-  （避免污染权威库）；一致性校验在副本上验证了 12,164 条真实数据完整性。
-- 冷启动成本（~2.7s）在服务重启后仍存在，已通过启动预热 + 压测预热阶段管理，
-  未做启动期后台全量 BM25 预构建（生产 API 已在启动时预热 embedding，BM25 仍惰性）。
-- SQLite 单连接串行化后，多线程读并发被 RLock 收敛为串行 execute——
-  SQLite 单连接本质串行，锁开销 µs 级（实测 QPS 1,026 未受明显影响）；
-  更高读并发可考虑 WAL + 每线程连接池（后续优化项）。
+- 压测写路径走内存池；生产库写入/审计链压力在副本上完成（见第 7 节）。
+- 冷启动成本（~2.7s）已大幅收敛：BM25 后台预构建 + 启动预热管理。
+
+## 7. 二轮优化（commit `e520254`）——评价建议四项全部执行
+
+### 7.1 生产库副本写入压测（--db-write）✅
+对生产库副本并发 `store_memory` + 审计链 + 锁稳定性（历史 database is locked
+验证）。关键发现：`ingest(postprocess=True)` 同步加工管线（语义关联+实体提取+
+主动推送）占写入成本 **~97%**（单条 430-665ms vs `postprocess=False` 13ms，
+首次 31.8s 为 embedding 冷启动）。压测改用生产 API 一致的异步化路径
+（postprocess=False，加工后台完成）+ 少量同步对照采样。
+
+结果（8 线程 × 500 写）：
+- QPS **6,534**（同步加工路径为 17.9 → 365x）
+- p50 105ms / p99 166ms / **0 错误 / 0 锁冲突**
+- 一致性精确：副本 memories 12,164→12,664（+500），audit +501（含对照采样）
+
+### 7.2 启动期 BM25 后台预构建 ✅
+`_ensure_bm25_index` 改为立即返回空索引（HybridRetriever 对空索引 search 返回
+空 = 优雅降级）+ 后台 daemon 线程 `add_documents` 构建（`_bm25_ready` 标记）。
+消除首次检索 1-2s 惰性构建；压测预热等 `_bm25_ready` 后再计时。
+
+### 7.3 WAL + 每线程只读连接池 ✅
+`_get_read_conn()`：每线程独立只读 SQLite 连接（`mode=ro` URI），WAL 多读并行、
+零锁竞争；写路径保持主连接 + `_write_lock`。基准：8 线程 p50 **115ms→25ms**。
+读方法全部切换：search_memories / _search_fts / _search_like / _fts_available /
+get_memory / get_memory_owners / get_all_memories / search_entities /
+query_relations / query_graph / traverse。
+
+### 7.4 异步 touch（隐藏写放大）✅
+`_touch_batch` 改为内存队列（dict + pending event），后台线程批量
+`UPDATE…IN` + 单次 commit。检索路径零写阻塞。实测：touch 关闭 p50 120→64ms
+（占读延迟 ~40%）；异步化后 QPS +21%（57→75 单连接对照）。access_count
+累积精确验证（3 次命中 → +3）。
+
+### 7.5 二轮稳定态压测结果（8 线程 × 500/500/200 + 生产库 + API）
+
+| 阶段 | QPS | p50 | p99 | errors |
+|---|---|---|---|---|
+| 写（内存池） | 43,059 | 8.45ms | 12.46ms | 0 |
+| 检索（内存池） | 44,525 | 8.56ms | 12.85ms | 0 |
+| 混合读写 | 17,749 | 8.14ms | — | 0 |
+| 生产库副本检索（12k 真实 I/O） | **2,539** | 47.8ms | 195ms | 0 |
+| 生产库副本写入（异步化路径） | **6,534** | 105ms | 166ms | 0 |
+| API 并发检索（:8001 全链路） | **10,789** | 40ms | 56ms | 0 |
+| 一致性 | 12,664 memories / audit 10,176 / 锁错误 0 | | | |
+
+对比一轮（commit ba56408）：生产库检索 QPS 1,026→2,539（2.5x）、API 3,806→
+10,789（2.8x）、新增写入路径 6,534。全部 p99 < 200ms。
+
+### 7.6 测试与提交
+- 全量：**742 passed / 54 skipped / 0 failed**
+- 提交：`e520254 perf(stress): connection pool + async touch + BM25 prewarm + db-write stress`（3 files, +446/-247）
