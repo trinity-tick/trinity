@@ -2,10 +2,10 @@
 """
 Trinity — 多进程写并发压测（2026-08-15 二轮评价建议①）
 
-模拟生产拓扑：API 进程 + collector 进程同时打开同一 SQLite 库（WAL），
-各自多线程并发写（store_memory + 审计链），验证新连接池架构
-（每线程只读连接 + 主写连接 + _write_lock）在**多进程**下无
-database is locked / 无锁错误 / 审计链一致。
+模拟生产拓扑：API 进程 + collector 进程（+可选 worker）同时打开同一
+SQLite 库（WAL），各自多线程并发写（store_memory + 审计链），验证新连接池
+架构（每线程只读连接 + 主写连接 + _write_lock）在**多进程**下无
+database is locked / 无锁错误 / 审计链一致。--procs 3 时含 worker 进程。
 
 用法：
     python scripts/multi_process_stress.py --writes 300 --threads 4
@@ -113,8 +113,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Trinity multi-process write stress")
     parser.add_argument("--writes", type=int, default=300)
     parser.add_argument("--threads", type=int, default=4)
+    parser.add_argument("--procs", type=int, default=2,
+                        help="并发进程数（默认 2：api+collector；3：+worker）")
     parser.add_argument("--db", default=None, help="生产库路径（默认自动探测）")
     args = parser.parse_args()
+
+    roles = ["api", "collector", "worker"][: max(1, min(args.procs, 3))]
 
     db_path = args.db or os.path.expanduser(
         "~/.trinity/store/trinity_store.db")
@@ -124,7 +128,7 @@ def main() -> int:
         return 1
 
     print(f"== 多进程写并发压测 (db={db_path}, writes={args.writes}, "
-          f"threads={args.threads}) ==")
+          f"threads={args.threads}, procs={len(roles)}: {','.join(roles)}) ==")
     print(f"   副本: {snapshot}")
 
     worker_file = os.path.join(tempfile.mkdtemp(prefix="mpw_"), "worker.py")
@@ -133,7 +137,7 @@ def main() -> int:
 
     python = sys.executable
     procs: List[subprocess.Popen] = []
-    for role in ("api", "collector"):
+    for role in roles:
         p = subprocess.Popen(
             [python, worker_file, role, snapshot,
              str(args.writes), str(args.threads)],
@@ -167,7 +171,7 @@ def main() -> int:
     all_errors = [e for r in results for e in r.get("errors", [])]
     lock_errors = [e for e in all_errors
                    if "locked" in e.lower() or "deadlock" in e.lower()]
-    ok = (len(results) == 2 and not all_errors and not lock_errors
+    ok = (len(results) == len(roles) and not all_errors and not lock_errors
           and cons.get("memories_total", 0) > 0)
 
     for r in results:
