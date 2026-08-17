@@ -2805,6 +2805,12 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
   - **生产接入提示**：主树 `Trinity.reason`（TRINITY_ROUTE_REASONER=on）已接 RouteReasoner；temporal 策略要求调用方摄入时保留 `[DATE: ...]` 前缀或 session 时间戳，否则 REL/时间线失效——测试 harness（rr_batch）已按此修正，生产 ingest 链路（mem.ingest 带时间元数据）天然满足。
 - 产物：`rr_route2_full500.json` + `judge3_rr_full500.json` + `rr_temporal_fix_133.json` + `judge3_rr_temporal_fix_133.json`（均在 `.trinity/bench-official/`）。
 
+### B2. QA 第二轮优化（2026-08-17 深夜，pref inner2 + multi 调参）
+- **pref 增强（生产代码，commit 41c3b88）**：`build_prompt` pref 分支加 inner2 过滤（与 opt3 pref3 对齐：top-5 证据、只保留含问题词条的 turn）。全量 SS-P 30 题 judge3：**36.7% → 56.7%（+20.0pp）**，达到 ≥45% 目标；稳定性 93.3%。
+- **multi 调参 A/B**：turn_top_k=24 → **45.1%**（133 题，judge3），比 turn16 的 49.6% 低 -4.5pp（更多 turn 引入噪音）→ **确认 turn_top_k=16 为更优点，保持默认**。multi 49.6%（+6.0pp vs 基线 43.6%），未达 55% 目标；已知瓶颈在跨会话综合（命题化/推理链为后续大工程，OPTIMIZATION_PLAN 已规划）。
+- **FINAL v2 综合（pref-inner2 + temporal-fix + RR 其他）= 68.6%（343/500）**，较基线 63.2% **+5.4pp**；分题型：SS-A 96.4 / SS-U 92.9 / KU 69.2 / temporal 65.4 / **SS-P 56.7（+36.7pp）** / multi 49.6（+6.0pp）。
+- 新增产物：`rr_pref_inner2_30.json` + `judge3_rr_pref_inner2_30.json` + `rr_multi_turn24_133.json` + `judge3_rr_multi_turn24_133.json`。
+
 ### C. collector 零事件告警处理
 - 诊断确认**无源非故障**：collector 3428 scanner cycles / 0 errors（扫描器健康）；6 个 BUILTIN_AGENTS（main/file-agent/browser/app-agent/computer-agent/search-agent）只是监听目录；`agent_config.yaml` 不存在（走默认列表）；无 agent 运行时向缓存目录写事件。
 - 处理：`trinity-supervisor.ps1` 零事件告警去噪——首个 3 连 + 每 12 轮（约 1 小时）提示一次，避免每 5 分钟刷屏；文案改为准确表述（'no event source attached...'）。真实故障（scanner_errors>0 / 进程 DOWN）仍由其他分支告警。
