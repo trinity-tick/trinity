@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Trinity 进程监督器 — 确保 trinity-api / trinity-mcp(SSE) / collector / gateway 常驻。
 
