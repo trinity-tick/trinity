@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Trinity DSH 维护驱动器 — 由 Windows 计划任务或手动调用。
 
@@ -22,7 +22,7 @@ param(
     [switch]$ViaDsh,
     [switch]$DryRun,
     [int]$DecayLimit = 500,
-    [string]$DecayLLM = "mock",
+    [string]$DecayLLM = "auto",
     [string]$LogDir = "C:\Users\Administrator\.trinity\logs"
 )
 
@@ -60,8 +60,8 @@ if (-not $PgUser) { $PgUser = "postgres" }
 $PgPass = if ($env:TRINITY_PG_PASSWORD) { $env:TRINITY_PG_PASSWORD } else { (Get-DshCredential "TRINITY_PG_PASSWORD") }
 if (-not $PgPass) { $PgPass = "postgres" }
 
-# 真实 LLM 压缩（可选）：无 TRINITY_LLM_API_KEY 时用 DEEPSEEK_API_KEY 兜底（OpenAI 兼容）。
-# 维护任务（decay --llm real）默认仍 mock；显式 -DecayLLM real 才走真实 LLM。
+# 真实 LLM 压缩（生产默认 auto）：无 TRINITY_LLM_API_KEY 时用 DEEPSEEK_API_KEY 兜底（OpenAI 兼容）。
+# -DecayLLM auto（默认）= 有 key 走 real、无 key 回退 mock（脚本内解析），显式 mock/real 可覆盖。
 if (-not $env:TRINITY_LLM_API_KEY) {
     $dk = Get-DshCredential "DEEPSEEK_API_KEY"
     if ($dk) {

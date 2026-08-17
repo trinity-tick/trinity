@@ -332,8 +332,9 @@ def main():
                              "sqlite=SQLite 运行时大库（权威，Option A 方向）")
     parser.add_argument("--sqlite-path", default=os.path.expanduser("~/.trinity/store/trinity_store.db"),
                         help="SQLite 大库路径（--store sqlite 时使用）")
-    parser.add_argument("--llm", choices=["mock", "real"], default="mock",
-                        help="压缩器 LLM：mock（默认，离线抽取式摘要）或 real（OpenAI 兼容 API，"
+    parser.add_argument("--llm", choices=["mock", "real", "auto"], default="auto",
+                        help="压缩器 LLM：auto（默认，有 TRINITY_LLM_API_KEY/DEEPSEEK_API_KEY 则 real，"
+                             "否则回退 mock）、mock（离线抽取式摘要）或 real（OpenAI 兼容 API，"
                              "需 TRINITY_LLM_API_KEY 环境变量）")
     parser.add_argument("--llm-model", default="",
                         help="真实 LLM 模型名（缺省读 TRINITY_LLM_MODEL，再缺省 gpt-4o-mini）")
@@ -369,11 +370,19 @@ def main():
         )
 
     # ── Build compressor ─────────────────────────────────────
-    if args.llm == "real":
+    # auto（生产默认）：TRINITY_LLM_API_KEY 或 DEEPSEEK_API_KEY 存在 → real，
+    # 否则回退 mock（离线抽取式摘要），保证无人值守维护链永不因缺 key 崩溃。
+    _llm_mode = args.llm
+    if _llm_mode == "auto":
+        _has_key = bool(os.environ.get("TRINITY_LLM_API_KEY")
+                        or os.environ.get("DEEPSEEK_API_KEY"))
+        _llm_mode = "real" if _has_key else "mock"
+        logger.info("LLM auto mode: resolved to %s", _llm_mode)
+    if _llm_mode == "real":
         llm_callable = create_llm_compress_callable(model=args.llm_model or None)
         logger.info("Compressor initialized (REAL LLM mode)")
     else:
-        llm_callable = mock_llm_compress  # default mock; replace with real LLM
+        llm_callable = mock_llm_compress
         logger.info("Compressor initialized (mock LLM mode)")
 
     compressor = MemoryCompressor(

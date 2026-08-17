@@ -195,16 +195,25 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--limit", type=int, default=200, help="Phase1 扫描上限")
     parser.add_argument("--extract-top-n", type=int, default=20, help="Phase2 聚合记忆数")
-    parser.add_argument("--llm", choices=["mock", "real"], default="mock")
+    parser.add_argument("--llm", choices=["mock", "real", "auto"], default="auto",
+                        help="auto(默认)=有 TRINITY/DEEPSEEK key 走 real，否则 mock")
     parser.add_argument("--output", default="")
     args = parser.parse_args()
 
     adapter = connect_sqlite(args.sqlite_path)
+    # auto（生产默认）：有 TRINITY_LLM_API_KEY 或 DEEPSEEK_API_KEY → real，否则 mock
+    llm_mode = args.llm
+    if llm_mode == "auto":
+        import os as _os
+        llm_mode = "real" if (_os.environ.get("TRINITY_LLM_API_KEY")
+                              or _os.environ.get("DEEPSEEK_API_KEY")) else "mock"
+        logger.info("LLM auto mode: resolved to %s", llm_mode)
+    llm_real = llm_mode == "real"
     stats: Dict[str, Any] = {"run_at": datetime.now(timezone.utc).isoformat(), "dry_run": args.dry_run, "phases": {}}
     try:
         stats["phases"]["decay_compress"] = phase1_decay_compress(
-            adapter, args.limit, args.dry_run, args.llm == "real")
-        facts = phase2_extract_facts(adapter, args.extract_top_n, args.llm == "real", args.dry_run)
+            adapter, args.limit, args.dry_run, llm_real)
+        facts = phase2_extract_facts(adapter, args.extract_top_n, llm_real, args.dry_run)
         stats["phases"]["extract_facts"] = {"extracted": len(facts)}
         stats["phases"]["graph_update"] = {"entities_upserted": phase3_update_graph(adapter, facts) if not args.dry_run else 0}
     finally:
