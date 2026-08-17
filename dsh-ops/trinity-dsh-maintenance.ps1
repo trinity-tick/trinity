@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Trinity DSH 维护驱动器 — 由 Windows 计划任务或手动调用。
 
