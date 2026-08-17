@@ -1140,11 +1140,29 @@ class MemoryAggregator:
             signal = FeedbackSignal.TASK_SUCCESS if positive else FeedbackSignal.TASK_FAILURE
             self._rl_scorer.record_feedback(memory_id, signal)
             self._rl_scorer.update_q_values()
+            self._save_rl_state()
             q = self._rl_scorer.score_memory(memory_id)
             return {"rl": True, "q_value": round(q, 4)}
         except Exception as exc:
             logger.debug("rl_feedback failed: %s", exc)
             return {"rl": False, "q_value": 0.5}
+
+    def _save_rl_state(self) -> None:
+        """RL 状态独立落盘（2026-08-17 评分测试修复）。
+
+        聚合池 _save 只在写操作时触发，而 RL 状态由 query（读操作）的
+        rl_implicit_use / API 的 rl_feedback 更新——不主动落盘则 RL 奖励
+        永远滞留内存、重启清零（学完即忘）。此处直接写小文件 rl_state.json，
+        不触发整池保存。
+        """
+        if self._rl_scorer is None or not self._persist_path:
+            return
+        try:
+            import os as _os
+            rl_path = _os.path.join(_os.path.dirname(self._persist_path), "rl_state.json")
+            self._rl_scorer.save(rl_path)
+        except Exception:
+            pass
 
     def rl_implicit_use(self, memory_ids: List[str], limit: int = 3) -> int:
         """RL 闭环自动喂食源（2026-08-17）: 检索命中即视为"使用"。
@@ -1177,6 +1195,7 @@ class MemoryAggregator:
             self._rl_implicit_rewarded.clear()
         if rewarded:
             self._rl_scorer.update_q_values()
+            self._save_rl_state()
         return rewarded
 
     def get_by_agent(

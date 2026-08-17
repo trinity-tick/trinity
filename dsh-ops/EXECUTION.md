@@ -2713,6 +2713,25 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
   gateway 鉴权 401/200；supervisor 语法 OK + BOM 保留；aggregator py_compile 通过。
 - 生效：api/gateway 已重启加载新绑定（supervisor 拉起，PID 37132/36520）。
 - 回滚：compose/conf/server.py 改动均可 git 恢复或反向编辑；凭证 key 可从 .credentials.yaml 删除。
+
+## 第 36 轮:评分测试（2026-08-17）与 RL 持久化缺陷修复
+评分体系全方位测试结果：
+- 单元测试：tests/unit/test_rl_scorer + test_scoring_calibration + test_rl_implicit_loop +
+  test_rl_feedback_loop → **27 passed**。
+- 校准实测（calibrate_ranking.py，LongMemEval_S 30 题子集，隔离临时库）：
+  fusion_baseline R@5=0.033 / rrf_baseline R@5=0.967（+0.933，默认已切 rrf）；
+  rrf+confidence / rrf+importance / rrf+conf+imp 均 0.967——评分特性对 top-5 无额外增益（不损害）。
+- 评分分布（active 1,332）：importance 均值 0.696（0.1-0.99），0.6 档最多(430)；65% 记忆有访问记录；
+  高价值(>=0.8)集中在 general/sync/video_harvested/web_harvested。
+- **发现并修复缺陷：RL 评分状态不持久（学完即忘仍在）**——rl_implicit_use/rl_feedback 更新 Q 值
+  但聚合池 _save 只在写操作触发（query 是读操作），RL 状态从不落盘（rl_state.json 恒为空）。
+  修复：aggregator 新增 _save_rl_state()（独立小文件落盘，不触发整池保存），
+  rl_implicit_use 奖励后与 rl_feedback 成功后调用。实测：hybrid 查询后 rl_state.json
+  states=3/global_try=3/q=0.55（0.5 冷启动+0.05 IMPLICIT_USE），文件实时更新。
+- 验证：aggregator py_compile 通过；API 重启(17836)后查询 200（预热期短暂 FAIL 属正常）；
+  RL 微调（Q bonus ±0.15）现在有真实 Q 值输入。
+- 生效：aggregator 改动已随 API 重启加载。
+- 回滚：git checkout trinity/agents/aggregator.py。
 ### 第 35 轮补记:supervisor zeroEventCount 修复（2026-08-17 17:34）
 - 运行巡检发现:零事件告警的 $state.zeroEventCount = $z 在 PSCustomObject（Read-State 的 JSON
   反序列化产物）上无法添加新属性 → 每次轮次抛异常（"在此对象上找不到属性"），计数从不累积
