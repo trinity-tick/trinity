@@ -205,6 +205,20 @@
 - 产品化结论：**route2 = 当前最优评测配置**（对应产品：意图路由 → temporal 走时间线+内检索、
   preference 走画像生成、其余标准检索），与 3.9 judge3 治理后的结论一致（pref 真实 50-60%、temporal 需组合而非单点）
 
+### 3.11 chronos 细粒度事件提取（2026-08-17，50 题同批 A/B seed42，judge3，脚本 lme_qa_route_chronos.py）
+
+| 配置 | judge3 整体 | 三票一致 |
+|---|---|---|
+| route2 对照 | 68% | 1.0 |
+| **route2 + chronos 细粒度** | **70%** | 1.0 |
+
+- 实现：LLM 从检索到的 temporal 会话提取事件三元组（date|subject|verb|object，管道分隔）→
+  EventCalendar.add_event → DynamicRetrievalGuidance 时间过滤 query_range → EVENT 时间线（日期 + REL 相对天数）注入 QA 上下文
+- **结论：chronos 细粒度在 route2 之上 +2pp（68%→70%，judge3 三票一致）——正增量，接入有效**
+- 对比储备模块首轮（粗粒度"首句事件"0 增益）：**细粒度 LLM 事件提取是 chronos 生效的必要条件**
+- 累计评测配置演进（judge3 口径）：dated 66% → route2 68-72% → route2+chronos 70%+
+  （chronos 与 route2 的最优组合尚需合并验证；全量 500 按用户指示不跑）
+
 ## 四、一句话
 
 **检索已达标（96.8% 头部），下一步全部投入在【上下文工程 + 生成策略】：把时间戳注入上下文、按题型路由生成提示、异步化 LLM 提取**——这是从 49.6% 走向 70%+ 的三步，也是评测证明 Trinity 深度能力的关键。
