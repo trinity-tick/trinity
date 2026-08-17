@@ -2797,7 +2797,13 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
 - 方案：生产服务 `RouteReasoner`（trinity/qa/route_reasoner.py，2026-08-17 已封装：multi→turn 粒度+top16、temporal→REL+inner2、pref→两段式 stage1 摘要+stage2 个性化）已在 main 上；基线 63.2% 用的是 benchmark 脚本（multi 走 dated plain，未用 turn 粒度）→ 用 RouteReasoner 重跑全量 500 应提升 multi。
 - 执行：新建隔离 worktree `trinity-qa-rr`（detached @69e88d7）→ `rr_batch.py` 批量调 `RouteReasoner.answer`（每题按 session 摄入→策略路由→生成）→ 输出 `rr_route2_full500.json`。
 - 冒烟验证：api available=True；multi→turn / pref→pref / temporal→temporal 路由正确，答案合理。
-- 全量 500 运行中（预计 30-60 分钟）→ 完成后 judge3 判分对比基线。
+- **全量 500 结果（judge3 三票）**：
+  - RouteReasoner 首轮全量：**60.4%**（302/500）——multi 49.6%（+6.0pp）、SS-P 36.7%（+16.7pp）、KU 69.2%（+5.1pp）提升，但 **temporal 39.1%（-23.3pp）严重回退**。
+  - **根因（2026-08-17 诊断）**：temporal 策略依赖证据中的 `[DATE: ...]` 前缀做 REL 注入与时间线排序（DATE_RE 匹配）；基线 `lme_qa_route.py` 摄入时注入日期前缀，而 rr_batch 摄入时未注入 → REL/排序失效，退化为普通生成。
+  - **修复**：rr_batch 摄入时按 `dates[si]` 注入 `[DATE: ...]` 前缀，重跑 temporal 133 题 → **65.4%（87/133）**（比基线 62.4% 还 +3.0pp）。
+  - **最终混合（修复后 temporal + RR 其他题型）= 67.4%（337/500），较基线 63.2% 提升 +4.2pp**；分题型：SS-A 96.4 / SS-U 92.9 / KU 69.2 / temporal 65.4 / multi 49.6 / SS-P 36.7。
+  - **生产接入提示**：主树 `Trinity.reason`（TRINITY_ROUTE_REASONER=on）已接 RouteReasoner；temporal 策略要求调用方摄入时保留 `[DATE: ...]` 前缀或 session 时间戳，否则 REL/时间线失效——测试 harness（rr_batch）已按此修正，生产 ingest 链路（mem.ingest 带时间元数据）天然满足。
+- 产物：`rr_route2_full500.json` + `judge3_rr_full500.json` + `rr_temporal_fix_133.json` + `judge3_rr_temporal_fix_133.json`（均在 `.trinity/bench-official/`）。
 
 ### C. collector 零事件告警处理
 - 诊断确认**无源非故障**：collector 3428 scanner cycles / 0 errors（扫描器健康）；6 个 BUILTIN_AGENTS（main/file-agent/browser/app-agent/computer-agent/search-agent）只是监听目录；`agent_config.yaml` 不存在（走默认列表）；无 agent 运行时向缓存目录写事件。
