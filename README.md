@@ -108,7 +108,7 @@ python scripts/memory_portability.py import-zep --file zep_export.json --persona
 | SQuAD v1.1 (adapted) | R@5 = **98.3%** | 180 题 passage selection（本地） |
 | LoCoMo (subset) | R@5 = **0.88** | 38 题会话聚合（中文本地集） |
 | pytest | **815 passed / 0 failed** | 全量 |
-| **LongMemEval_S 500 题 QA（judge3 三票，RouteReasoner 产品化策略路由）** | **67.4%（337/500）** | 2026-08-17 全量；multi→turn 粒度 / pref→两段式 / temporal→REL+时间线；SS-A 96.4 / SS-U 92.9 / KU 69.2 / TR 65.4 / MS 49.6 / SS-P 36.7 |
+| **LongMemEval_S 500 题 QA（judge3 三票，RouteReasoner 产品化策略路由 + pref-inner2）** | **68.6%（343/500）** | 2026-08-17 全量；SS-A 96.4 / SS-U 92.9 / KU 69.2 / TR 65.4 / SS-P 56.7 / MS 49.6 |
 | LongMemEval_S 500 题 QA（judge3 三票，route2 benchmark 脚本） | 63.2%（316/500） | 2026-08-17 基线；MS 43.6 / SS-P 20.0 |
 | LongMemEval_S 500 题 QA（dated，旧 judge） | 54.0% | 2026-08-16 全量实测 |
 
