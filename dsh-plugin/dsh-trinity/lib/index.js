@@ -82,7 +82,11 @@ function createWorker(config) {
 		if (disposed) return;
 		child = spawn(pythonPath, [workerPath], {
 			stdio: ["pipe", "pipe", "pipe"],
-			env: scrubbedParentEnv(),
+			// 2026-08-17: 禁用 import 期聚合器自举（trinity/__init__ ensure_bootstrapped
+			// 会创建共享 MemoryAggregator 并启动 agg-ann-prewarm——真实大库 11k+ 条 faiss
+			// 构建数分钟，GIL 饥饿把 worker 主循环拖死，ping/write 排队超时）。
+			// worker 只需引擎功能，聚合器由 rl_feedback 等按需懒创建。
+			env: { ...scrubbedParentEnv(), TRINITY_MEMORY_ENABLED: "0" },
 			windowsHide: true
 		});
 		// 引擎日志经 stderr 转发（不 inherit，避免污染调用方 stderr/协议）
@@ -156,6 +160,13 @@ function createWorker(config) {
 			const timer = setTimeout(() => {
 				pending.delete(id);
 				reject(new Error(`trinity_${method} timed out after ${toolCallTimeoutMs}ms`));
+				// 自愈（2026-08-17）: 工具调用超时说明 worker 主循环可能被阻塞
+				// （如 SQLite 写锁等待叠加 >60s，busy_timeout=15s × 多步写入）。
+				// 杀掉 worker → 触发 exit → rejectAll + scheduleReconnect，
+				// 下次调用自动拉起新 worker，避免"活着的僵尸 worker"持续吞掉所有调用。
+				if (child && child.stdin && !child.stdin.destroyed) {
+					try { child.kill(); } catch {}
+				}
 			}, toolCallTimeoutMs);
 			timer.unref?.();
 			pending.set(id, { resolve, reject, timer });
@@ -362,7 +373,23 @@ function registerTools(ctx, worker) {
 			}, jsonSchema, (a) => worker.call("schedule_upsert", a)),
 
 		tool("trinity_schedules", "List tracked schedules in Trinity.",
-			{}, jsonSchema, () => worker.call("schedule_list", {}))
+			{}, jsonSchema, () => worker.call("schedule_list", {})),
+
+		tool("trinity_rl_feedback", "RL memory feedback — record user confirm/correction to update Q-value (MemRL: retrieval-use-feedback loop).",
+			{
+				memory_id: { type: "string", required: true, description: "Target memory ID (pool or engine side)." },
+				positive: { type: "boolean", description: "True=confirm/success (raise Q), False=correct/failure (lower Q). Default true." }
+			}, jsonSchema, (a) => worker.call("rl_feedback", a)),
+
+		tool("trinity_reason", "Open-domain reasoning QA (RouteReasoner: verified strategies — turn-granularity for multi-session, REL+inner2 for temporal, two-stage for preference).",
+			{
+				query: { type: "string", required: true, description: "Question to answer." },
+				qtype: { type: "string", description: "Question-type hint for strategy routing (multi-session/temporal-reasoning/single-session-preference/...)." },
+				question_date: { type: "string", description: "Question date YYYY/MM/DD (temporal REL computation)." },
+				top_k: { type: "integer", description: "Evidence top-k (default 8)." },
+				agent_id: { type: "string", description: "Filter evidence by agent." },
+				persona_id: { type: "string", description: "Filter evidence by persona." }
+			}, jsonSchema, (a) => worker.call("reason", a))
 	];
 
 	for (const definition of tools) {

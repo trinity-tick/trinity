@@ -917,7 +917,7 @@ async def ranked_search(request: dict):
 # 混合检索（Hybrid: Vector + BM25 + Graph）
 # ═══════════════════════════════════════════════════════════════════════════
 class HybridSearchRequest(BaseModel):
-    query: str = Field(..., min_length=1, max_length=4096, description="搜索查询字符串")
+    query: str = Field(..., min_length=1, max_length=32768, description="搜索查询字符串")
     top_k: int = Field(10, ge=1, le=50, description="返回结果数量")
     strategy: str = Field("fusion", description="融合策略: fusion / rrf / cascade")
     agent_id: Optional[str] = Field(None, description="按Agent 过滤")
@@ -964,18 +964,18 @@ async def hybrid_search(request: HybridSearchRequest):
 # Cross-Modal Search (v8.1.0) —Text →Image Memory Retrieval
 # ═══════════════════════════════════════════════════════════════════════════
 class CrossModalSearchRequest(BaseModel):
-    query: str = Field(..., min_length=1, max_length=4096, description="文字查询或图片文件路径")
+    query: str = Field(..., min_length=1, max_length=32768, description="文字查询或图片文件路径")
     query_type: str = Field("auto", description="查询类型: auto / text / image / combined")
     top_k: int = Field(10, ge=1, le=50, description="返回结果数量")
 
 
 class ImageByTextRequest(BaseModel):
-    text: str = Field(..., min_length=1, max_length=4096, description="文字查询描述要找的图片")
+    text: str = Field(..., min_length=1, max_length=32768, description="文字查询描述要找的图片")
     top_k: int = Field(10, ge=1, le=50, description="返回结果数量")
 
 
 class TextByImageRequest(BaseModel):
-    image_path: str = Field(..., min_length=1, max_length=4096, description="查询图片的绝对路径")
+    image_path: str = Field(..., min_length=1, max_length=32768, description="查询图片的绝对路径")
     top_k: int = Field(10, ge=1, le=50, description="返回结果数量")
 
 
@@ -1268,12 +1268,33 @@ async def get_persona_memories(
 
 @app.post("/reason")
 async def reason(
-    query: str = Body(...), multi_hop: bool = Body(False), top_k: int = Body(5),
+    query: str = Body(...),
+    multi_hop: bool = Body(False),
+    top_k: int = Body(5),
+    qtype: Optional[str] = Body(None, description="题型提示（multi-session/temporal-reasoning/single-session-preference…），用于策略路由"),
+    question_date: Optional[str] = Body(None, description="问题日期 YYYY/MM/DD（temporal REL 计算用）"),
+    route: bool = Body(False, description="走 RouteReasoner（已验证生成策略；需 DEEPSEEK_API_KEY）"),
 ):
-    """Open-domain reasoning."""
-    if not hasattr(get_memory(), 'reason'):
+    """Open-domain reasoning.
+
+    2026-08-17 产品化: route=True（或环境 TRINITY_ROUTE_REASONER=on）时走
+    RouteReasoner——multi→turn 粒度 / temporal→REL+inner2 / pref→两段式 /
+    其他→dated plain；否则回退 OpenDomainReasoner。
+    """
+    mem = get_memory()
+    if not hasattr(mem, 'reason'):
         raise HTTPException(status_code=501, detail="reason() not available")
-    return get_memory().reason(query=query, multi_hop=multi_hop, top_k=top_k)
+    prev_route = os.environ.get("TRINITY_ROUTE_REASONER", "off")
+    if route:
+        os.environ["TRINITY_ROUTE_REASONER"] = "on"
+    try:
+        return mem.reason(
+            query=query, multi_hop=multi_hop, top_k=top_k,
+            qtype=qtype, question_date=question_date,
+        )
+    finally:
+        if route:
+            os.environ["TRINITY_ROUTE_REASONER"] = prev_route
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1562,6 +1583,7 @@ async def agent_memory_search(
             results = agg.query(
                 filters, limit=top_k,
                 mode=mode, query_text=q,
+                source="api:/agents/memory/search",
             )
             return {
                 "query": q, "total": len(results),
@@ -1608,7 +1630,7 @@ async def agent_memory_search(
             pass
 
     # Keyword-based fallback
-    results = agg.query(filters, limit=top_k)
+    results = agg.query(filters, limit=top_k, source="api:/agents/memory/search")
     return {
         "query": q, "total": len(results),
         "method": "keyword",
@@ -1620,6 +1642,24 @@ async def agent_memory_search(
 async def agent_memory_pool():
     """Get shared Aggregator pool statistics."""
     return get_aggregator().statistics()
+
+
+@app.post("/agents/memory/feedback", tags=["Agents"], summary="RL 记忆反馈（Q 值强化）")
+async def agent_memory_feedback(
+    memory_id: str = Body(..., description="目标记忆 ID"),
+    positive: bool = Body(True, description="True=用户确认/任务成功，False=纠正/任务失败"),
+):
+    """记录 RL 强化信号并更新记忆 Q 值（影响后续混合检索的排序微调）。
+
+    对标 MemRL（arxiv.org/abs/2601.03192）：检索-使用-反馈闭环的在线更新。
+    未注册的记忆先以默认语义分冷启动注册，再记录反馈。
+    """
+    agg = get_aggregator()
+    try:
+        r = agg.rl_feedback(memory_id, positive=positive)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"feedback failed: {exc}")
+    return {"memory_id": memory_id, "positive": positive, **r}
 
 
 @app.get("/agents/memory/cleanup")
@@ -1763,7 +1803,7 @@ async def agent_bridge_extract(
     filters: Dict[str, Any] = {"scope": "cross_agent"}
     if agent_id:
         filters["source_agent"] = agent_id
-    results = agg.query(filters, limit=top_k * 3)
+    results = agg.query(filters, limit=top_k * 3, source="api:/agents/bridge/extract")
     bridge_entries = [
         r for r in results
         if hasattr(r, "metadata") and r.metadata and r.metadata.get("_source") == "marvis_bridge"
@@ -1980,14 +2020,14 @@ def _get_rlm_router() -> Any:
 
 class RouteRequest(BaseModel):
     """Request model for /identity/route."""
-    query: str = Field(..., min_length=1, max_length=4096, description="Query string to route")
+    query: str = Field(..., min_length=1, max_length=32768, description="Query string to route")
     context: Optional[Dict[str, Any]] = Field(None, description="Optional routing context")
     top_k: int = Field(1, ge=1, le=10, description="Number of top strategies to return")
 
 
 class RouteFeedbackRequest(BaseModel):
     """Request model for /identity/route/feedback."""
-    query: str = Field(..., min_length=1, max_length=4096, description="Original query")
+    query: str = Field(..., min_length=1, max_length=32768, description="Original query")
     strategy: str = Field(..., min_length=1, max_length=128, description="Selected strategy name")
     success: bool = Field(..., description="Whether the routing was successful")
 
@@ -3221,3 +3261,11 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# 2026-08-16 稳定性加固:全局异常兜底 —— 任何未捕获异常返回友好 JSON,而非裸 500。
+@app.exception_handler(Exception)
+async def _unhandled_exception_handler(request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal error: {type(exc).__name__}: {str(exc)[:300]}"},
+    )

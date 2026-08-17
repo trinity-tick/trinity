@@ -119,6 +119,7 @@ def fetch_all_memories_sqlite(adapter: Any, limit: int = 500) -> List[Dict[str, 
         SELECT m.memory_id, m.session_id, m.persona_id, m.tenant_id,
                m.content, m.role, m.importance, m.tags, m.category,
                m.sha256_hash, m.status, m.version, m.created_at, m.updated_at,
+               m.access_count, m.last_accessed_at,
                (SELECT COUNT(*) FROM memory_versions v WHERE v.memory_id = m.memory_id) AS version_count
         FROM memories m
         WHERE m.status = 'active'
@@ -141,7 +142,15 @@ def connect_sqlite(db_path: str) -> Any:
     from trinity.adapters.sqlite import SQLiteAdapter
     adapter = SQLiteAdapter(db_path=db_path)
     adapter.connect()
-    logger.info("Connected to SQLite store: %s", db_path)
+    # 2026-08-17（记忆周期优化 P0-1）：多进程共享大库时建表/INSERT 可能撞
+    # 写锁（8-16 每日链全挂根因 database is locked）。busy_timeout=30s 等待。
+    try:
+        conn = getattr(adapter, "_conn", None)
+        if conn is not None:
+            conn.execute("PRAGMA busy_timeout=30000")
+    except Exception:
+        pass
+    logger.info("Connected to SQLite store: %s (busy_timeout=30s)", db_path)
     return adapter
 
 
@@ -234,10 +243,16 @@ def compute_tier_score(
     importance = float(memory.get("importance", 0.5))
     importance = max(0.0, min(1.0, importance))
 
-    # Access frequency proxy: version_count as edit activity
+    # Access frequency: 优先真实 access_count（SQLite 大库权威字段），
+    # fallback version_count（仅版本编辑活动）。2026-08-17（P0-3 修复）：
+    # 此前只用 version_count，而大库 memory_versions 多为空 → af_score 恒 0，
+    # 25% 访问权重在评分中完全空转（tiers 报告 access_freq_per_hour 全 0）。
     version_count = int(memory.get("version_count", 0))
+    access_count = int(memory.get("access_count") or 0)
+    if access_count <= 0:
+        access_count = version_count
     hours = max(age_seconds / 3600.0, 0.01)
-    access_freq = version_count / hours
+    access_freq = access_count / hours
     af_score = min(1.0, access_freq / 10.0)
 
     # Weighted composite
@@ -253,6 +268,7 @@ def compute_tier_score(
         "recency_score": round(recency_score, 4),
         "importance": importance,
         "version_count": version_count,
+        "access_count": access_count,
         "access_freq_per_hour": round(access_freq, 4),
         "af_score": round(af_score, 4),
     }
@@ -300,6 +316,7 @@ def run_memory_tiers(
     recall_threshold: float = 0.20,
     output_file: str = "",
     store: str = "pg",
+    apply_archival: bool = False,
 ) -> Dict[str, Any]:
     """执行完整三层记忆分层守护任务。
 
@@ -327,6 +344,7 @@ def run_memory_tiers(
         "demotions": 0,
         "errors": [],
         "tiering_details": [],
+        "_archival_ids": [],   # --apply-archival 时落库的完整 memory_id 列表
     }
 
     # ── Step 1: Fetch memories ─────────────────────────────────
@@ -373,6 +391,7 @@ def run_memory_tiers(
             stats["assigned_recall"] += 1
         else:
             stats["assigned_archival"] += 1
+            stats["_archival_ids"].append(str(mem.get("memory_id", "")))
 
     logger.info(
         "  Tier assignment: core=%d, recall=%d, archival=%d",
@@ -470,6 +489,23 @@ def run_memory_tiers(
         logger.info("  DRY RUN — skipping lifecycle execution.")
         return stats
 
+    # ── Step 3.5: Apply archival demotions to the store ────────
+    # 2026-08-17（P1-2）：默认 tiers 仅做内部分层报告（archival 计数可能为 0，
+    # 因为当前记忆评分普遍 > recall_threshold=0.20）；--apply-archival 开启时，
+    # 才把分配到 archival 的记忆在 SQLite 大库真正标记 archived（status 变更，
+    # 可恢复，走 adapter.archive_memories；审计由 _safe_write/audit 层记录）。
+    if apply_archival:
+        arch_ids = [mid for mid in stats["_archival_ids"] if mid]
+        if arch_ids:
+            try:
+                n = adapter.archive_memories(arch_ids)
+                logger.info("  --apply-archival: archived %d memories to store", n)
+            except Exception as e:  # noqa: BLE001
+                stats["errors"].append(f"apply-archival: {e}")
+                logger.error("  --apply-archival FAILED: %s", e)
+        else:
+            logger.info("  --apply-archival: no archival candidates (score all above recall threshold)")
+
     # ── Step 4: Execute lifecycle ──────────────────────────────
     logger.info("Step 4/4: Executing memory tier lifecycle ...")
 
@@ -550,6 +586,8 @@ def main():
                         help="目标存储：pg=PostgreSQL（默认）；sqlite=SQLite 运行时大库（权威，Option A 方向）")
     parser.add_argument("--sqlite-path", default=os.path.expanduser("~/.trinity/store/trinity_store.db"),
                         help="SQLite 大库路径（--store sqlite 时使用）")
+    parser.add_argument("--apply-archival", action="store_true",
+                        help="把分配到 archival 的记忆在存储层真正标记 archived（默认仅报告，不落库）")
     args = parser.parse_args()
 
     # ── Import modules ────────────────────────────────────────
@@ -592,6 +630,7 @@ def main():
             recall_threshold=args.recall_threshold,
             output_file=args.output,
             store=args.store,
+            apply_archival=args.apply_archival,
         )
 
         if not args.output:
@@ -613,7 +652,7 @@ def main():
 
     finally:
         adapter.disconnect()
-        logger.info("Disconnected from PostgreSQL")
+        logger.info("Disconnected from %s", "SQLite" if args.store == "sqlite" else "PostgreSQL")
 
 
 if __name__ == "__main__":

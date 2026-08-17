@@ -47,6 +47,15 @@ except (AttributeError, ValueError):
 # ── 引擎导入（1.5s 初始化，进程内只做一次）────────────────────────
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# 2026-08-17（worker 卡死根因修复）: worker 只需引擎功能，禁用 import 期
+# 聚合器自举——trinity/__init__ 的 ensure_bootstrapped() 会创建共享
+# MemoryAggregator 并启动 agg-ann-prewarm（大库 11k+ 条 faiss 全量构建数分钟，
+# GIL 饥饿把主循环拖死，ping/write 排队超时）。聚合器由 rl_feedback 等按需懒创建。
+os.environ.setdefault("TRINITY_MEMORY_ENABLED", "0")
+# 2026-08-17（锁争用根治）: 写锁等待 3s 快速失败（默认 15s 的多步写入可叠加
+# >60s 工具超时），由 _retry_on_locked 自动重试，最坏秒级失败+重试而非卡死。
+os.environ.setdefault("TRINITY_SQLITE_BUSY_TIMEOUT_MS", "3000")
+
 from trinity.core.client import Trinity  # noqa: E402
 
 _engine: Optional[Trinity] = None
@@ -81,6 +90,72 @@ def _get_recorder() -> Any:
         from trinity.session_recorder import ChatSessionRecorder
         _session_recorder = ChatSessionRecorder()
     return _session_recorder
+
+
+def _retry_on_locked(fn, retries: int = 1, backoff_s: float = 0.5):
+    """SQLite 写锁争用快速失败 + 自动重试（2026-08-17 根治 worker 卡死）。
+
+    其他进程突发批量写（benchmark 摄入/维护链）时写锁可能被连续占用，
+    短 busy_timeout(3s) 会抛 'database is locked'——这里退避重试一次，
+    仍失败抛明确错误（含原因），避免 15s×N 叠加成 60s 工具超时。
+    """
+    last_err = None
+    for attempt in range(retries + 1):
+        try:
+            return fn()
+        except Exception as exc:  # noqa: BLE001
+            msg = str(exc)
+            if "locked" not in msg.lower():
+                raise
+            last_err = exc
+            if attempt < retries:
+                time.sleep(backoff_s * (attempt + 1))
+    raise RuntimeError(
+        f"trinity store write lock busy (retried {retries}x): {last_err} — "
+        "another process (maintenance/benchmark) holds the SQLite write lock"
+    ) from last_err
+
+
+# ── 主循环看门狗（2026-08-17 修复 worker 卡死）────────────────────
+# 场景: worker 主循环顺序处理请求，若某请求被 SQLite 写锁阻塞
+# （busy_timeout=15s 的多步写入可叠加 >60s，如维护链/其他会话写库并发），
+# 后续请求（含 ping）全部排队超时 → "活着的僵尸 worker"。
+# 看门狗检测主循环静默超过 _STALL_TIMEOUT 即 dump 线程栈 + 退出，
+# 由 DSH 插件自动重启 worker（自愈）。TRINITY_WORKER_STALL_TIMEOUT 可调。
+_STALL_TIMEOUT = float(os.environ.get("TRINITY_WORKER_STALL_TIMEOUT", "90"))
+_request_in_flight = False
+_request_start = time.time()
+
+
+def _start_watchdog() -> None:
+    """请求处理看门狗：仅当"有请求正在处理且超过 _STALL_TIMEOUT"才退出。
+
+    空闲等待输入（无 in-flight 请求）永不触发——避免插件空闲期 worker
+    自退出造成 90s 一次的重启循环。
+    """
+    try:
+        import faulthandler
+    except Exception:
+        faulthandler = None
+
+    def _watch() -> None:
+        while True:
+            time.sleep(10)
+            global _request_in_flight, _request_start
+            if _request_in_flight and time.time() - _request_start > _STALL_TIMEOUT:
+                print(
+                    f"[worker] request stalled >{_STALL_TIMEOUT}s, "
+                    "dumping traceback & exiting (plugin will respawn)",
+                    file=sys.stderr, flush=True,
+                )
+                if faulthandler is not None:
+                    try:
+                        faulthandler.dump_traceback(file=sys.stderr)
+                    except Exception:
+                        pass
+                os._exit(1)
+
+    threading.Thread(target=_watch, daemon=True, name="worker-stall-watchdog").start()
 
 
 # ── 方法实现（与 memory_tools.py 对齐，去掉 MCP/遥测层）───────────
@@ -143,6 +218,12 @@ def _search(params: dict) -> dict:
 def _write(params: dict) -> dict:
     engine = _get_engine()
     content = params.get("content", "")
+    if not content:
+        raise ValueError("content required")
+    return _retry_on_locked(lambda: _write_impl(engine, params, content))
+
+
+def _write_impl(engine, params: dict, content: str) -> dict:
     metadata = params.get("metadata") or {}
     # F4：agent_id/session_id 显式参数（优先于 metadata 内嵌），保证落库
     agent_id = params.get("agent_id") or metadata.get("agent_id") or "default"
@@ -172,16 +253,16 @@ def _write(params: dict) -> dict:
 
 def _update(params: dict) -> dict:
     engine = _get_engine()
-    return engine.update_memory(
+    return _retry_on_locked(lambda: engine.update_memory(
         memory_id=params.get("memory_id", ""),
         new_content=params.get("new_content", ""),
-    )
+    ))
 
 
 def _delete(params: dict) -> dict:
     engine = _get_engine()
     memory_id = params.get("memory_id", "")
-    deleted = engine.delete_memory(memory_id=memory_id)
+    deleted = _retry_on_locked(lambda: engine.delete_memory(memory_id=memory_id))
     if not deleted:
         raise ValueError(f"Memory not found: {memory_id}")
     return {
@@ -310,7 +391,7 @@ def _batch_write(params: dict) -> dict:
             agent_id = ev.get("agent_id") or default_agent
             session_id = ev.get("session_id") or default_session
             metadata.setdefault("source", "dsh-session-stream")
-            r = engine.ingest(
+            r = _retry_on_locked(lambda: engine.ingest(
                 content=content,
                 role=ev.get("role", "user"),
                 importance=ev.get("importance", 0.5),
@@ -320,7 +401,7 @@ def _batch_write(params: dict) -> dict:
                 agent_id=agent_id,
                 session_id=session_id,
                 postprocess=False,
-            )
+            ))
             mid = r.get("memory_id", "")
             if mid:
                 # 后台加工不阻塞批量写入
@@ -337,6 +418,52 @@ def _batch_write(params: dict) -> dict:
 
 
 
+def _reason(params: dict) -> dict:
+    """开放域推理（产品化 RouteReasoner, 2026-08-17）。
+
+    params: query / qtype(可选, 策略路由) / question_date(可选, REL 用) /
+            top_k / agent_id / persona_id
+    未启用 TRINITY_ROUTE_REASONER 或失败时回退引擎 reason()。
+    """
+    engine = _get_engine()
+    query = params.get("query", "")
+    if not query:
+        raise ValueError("query required")
+    qtype = params.get("qtype")
+    qdate = params.get("question_date")
+    top_k = int(params.get("top_k", 8))
+    return engine.reason(
+        query=query, top_k=top_k, qtype=qtype, question_date=qdate,
+        agent_id=params.get("agent_id"), persona_id=params.get("persona_id"),
+    )
+
+
+def _rl_feedback(params: dict) -> dict:
+    """RL 记忆反馈（MemRL 对齐）：记录用户确认/纠正信号，更新记忆 Q 值。
+
+    冷启动兜底：引擎侧（非聚合池）记忆 ID 也能直接反馈，未注册先注册。
+    """
+    from trinity.agents import MemoryAggregator, create_aggregator
+    agg = create_aggregator(persist=True)
+    memory_id = params.get("memory_id", "")
+    positive = bool(params.get("positive", True))
+    if not memory_id:
+        raise ValueError("memory_id required")
+    r = agg.rl_feedback(memory_id, positive=positive)
+    return {"memory_id": memory_id, "positive": positive, **r}
+
+
+def _resolve_store_db() -> str:
+    """权威库路径解析(2026-08-16,与 core/client.py 一致,替代硬编码)。"""
+    env_store = os.environ.get("TRINITY_STORE")
+    if env_store:
+        if os.path.isdir(env_store):
+            return os.path.join(env_store, "trinity_store.db")
+        if os.path.isfile(env_store):
+            return env_store
+    return os.path.expanduser("~/.trinity/store/trinity_store.db")
+
+
 def _session_dispose_summary(params: dict) -> dict:
     """会话销毁钩子(2026-08-16):从结构层事件流生成抽取式摘要记忆(幂等)。
 
@@ -348,7 +475,7 @@ def _session_dispose_summary(params: dict) -> dict:
     sid = params.get("session_id", "")
     if not sid:
         return {"status": "noop", "reason": "no session_id"}
-    db = os.path.expanduser("~/.trinity/store/trinity_store.db")
+    db = _resolve_store_db()
     conn = _sqlite3.connect(db, timeout=15)
     try:
         aid = f"dsh-{sid}"
@@ -412,6 +539,8 @@ _METHODS = {
     "chronicle": _chronicle,
     "tag_search": _tag_search,
     "identity_register": _identity_register,
+    "rl_feedback": _rl_feedback,
+    "reason": _reason,
     "session_dispose_summary": _session_dispose_summary,
     # ── DSH 结构层（结构融合核心）──
     "structure_sync": _structure_sync,
@@ -430,6 +559,8 @@ def _emit(obj: dict) -> None:
 
 
 def main() -> int:
+    global _request_in_flight, _request_start
+    _start_watchdog()
     for line in sys.stdin:
         line = line.strip()
         if not line:
@@ -443,8 +574,12 @@ def main() -> int:
         method = req.get("method", "")
         params = req.get("params") or {}
         handler = _METHODS.get(method)
+        # 请求进入处理：看门狗只在该状态超时（>_STALL_TIMEOUT）时判定卡死
+        _request_in_flight = True
+        _request_start = time.time()
         if handler is None:
             _emit({"id": req_id, "error": {"message": f"unknown method: {method}"}})
+            _request_in_flight = False
             continue
         try:
             result = handler(params)
@@ -454,6 +589,8 @@ def main() -> int:
                 "id": req_id,
                 "error": {"message": str(exc), "trace": traceback.format_exc()[-2000:]},
             })
+        finally:
+            _request_in_flight = False
     return 0
 
 

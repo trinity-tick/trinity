@@ -88,9 +88,15 @@ def test_er_extractor_llm_fallback_regex(tmp_path) -> None:
 # ── client 写路径 LLM 事实抽取 ─────────────────────────────────────
 
 def test_ingest_llm_extract_write_path(tmp_path, monkeypatch) -> None:
-    """TRINITY_LLM_EXTRACT=on 时 ingest 走 LLM 抽取：实体+关系入库。"""
+    """TRINITY_LLM_EXTRACT=on 时 ingest 走 LLM 抽取：实体+关系入库。
+
+    2026-08-17 修复: LLM 抽取默认异步(2026-08-16 起,真实 LLM ~4.5s/条,
+    同步会阻塞写路径);测试期望返回时实体/关系已入库,须设
+    TRINITY_LLM_EXTRACT_SYNC=on 强制同步(见 client.ingest 注释)。
+    """
     from trinity.core.client import Trinity
     monkeypatch.setenv("TRINITY_LLM_EXTRACT", "on")
+    monkeypatch.setenv("TRINITY_LLM_EXTRACT_SYNC", "on")
     # monkeypatch create_llm_compress_callable → 返回固定 LLM
     import trinity.daemon.memory_compressor as mc
     monkeypatch.setattr(mc, "create_llm_compress_callable", lambda **k: _FakeLLM())

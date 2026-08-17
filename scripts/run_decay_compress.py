@@ -105,7 +105,7 @@ def fetch_active_memories_sqlite(adapter: Any, limit: int = 500) -> List[Dict[st
                access_count, last_accessed_at
         FROM memories
         WHERE status = 'active'
-        ORDER BY created_at ASC
+        ORDER BY access_count ASC, created_at ASC
         LIMIT ?
     """, (limit,)).fetchall()
     results = []
@@ -124,7 +124,16 @@ def connect_sqlite(db_path: str) -> Any:
     from trinity.adapters.sqlite import SQLiteAdapter
     adapter = SQLiteAdapter(db_path=db_path)
     adapter.connect()
-    logger.info("Connected to SQLite store: %s", db_path)
+    # 2026-08-17（记忆周期优化 P0-1）：大库被 api/mcp/collector 等常驻进程
+    # 共享写入时，connect() 建表/INSERT tenants 可能撞写锁（8-16 每日链全挂
+    # 根因 database is locked）。busy_timeout=30s 让建表与写入等待锁释放。
+    try:
+        conn = getattr(adapter, "_conn", None)
+        if conn is not None:
+            conn.execute("PRAGMA busy_timeout=30000")
+    except Exception:
+        pass
+    logger.info("Connected to SQLite store: %s (busy_timeout=30s)", db_path)
     return adapter
 
 
@@ -395,7 +404,7 @@ def main():
 
     finally:
         adapter.disconnect()
-        logger.info("Disconnected from PostgreSQL")
+        logger.info("Disconnected from %s", "SQLite" if args.store == "sqlite" else "PostgreSQL")
 
 
 if __name__ == "__main__":

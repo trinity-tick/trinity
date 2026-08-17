@@ -37,7 +37,7 @@ $StateFile = Join-Path $LogDir "dsh-supervisor-state.json"
 # ── 凭证注入：从 ~/.dsh/.credentials.yaml 注入敏感环境变量（未设置时），
 #    供 Start-Process 拉起的 api/mcp 子进程继承（继承当前进程环境）。
 . (Join-Path $PSScriptRoot "dsh-credentials.ps1")
-foreach ($cred in @("TRINITY_PG_HOST", "TRINITY_PG_PORT", "TRINITY_PG_DB", "TRINITY_PG_USER", "TRINITY_PG_PASSWORD", "TRINITY_API_KEY", "TRINITY_STORE")) {
+foreach ($cred in @("TRINITY_PG_HOST", "TRINITY_PG_PORT", "TRINITY_PG_DB", "TRINITY_PG_USER", "TRINITY_PG_PASSWORD", "TRINITY_API_KEY", "TRINITY_STORE", "GATEWAY_API_KEY")) {  # 2026-08-17 安全加固：注入 gateway 鉴权 key
     if (-not [Environment]::GetEnvironmentVariable($cred, "Process")) {
         $v = Get-DshCredential $cred
         if ($v) { [Environment]::SetEnvironmentVariable($cred, $v, "Process") }
@@ -103,19 +103,11 @@ function Test-Tcp {
 }
 
 function Test-McpAlive {
-    # MCP SSE 探测：端口 8000 必须通，且监听进程必须属于 Trinity 原生进程。
-    # 防止 Docker（wslrelay/com.docker.backend，trinity-mcp 容器曾占 8000）抢占
-    # 端口造成"假 OK"——端口开着但 mcp 其实没在跑，supervisor 永不拉起。
-    if (-not (Test-Tcp -Port 8000)) { return $false }
-    try {
-        $pids = Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction Stop |
-                Select-Object -ExpandProperty OwningProcess -Unique
-        foreach ($procId in $pids) {
-            $cmdLine = (Get-CimInstance Win32_Process -Filter "ProcessId=$procId" -ErrorAction SilentlyContinue).CommandLine
-            if ($cmdLine -and $cmdLine -match 'trinity') { return $true }
-        }
-        return $false
-    } catch { return $false }
+    # 2026-08-16 稳定性修复:端口 8000 通即认为 MCP 存活。
+    # 原实现检查监听进程归属(命令行含 trinity),在后台 supervisor 环境下
+    # Get-CimInstance 调用失败导致误判 down -> 每 5 分钟重启 MCP -> 客户端被打断。
+    # 本机 8000 已被 Trinity MCP 独占,误杀比假 OK 危害大。
+    return (Test-Tcp -Port 8000)
 }
 
 function Test-ApiHealth {
@@ -186,7 +178,7 @@ if (-not (Test-GatewayHealth)) {
 if (-not (Test-ApiHealth)) {
     if (Should-Restart "api") {
         Write-Log "api DOWN (health probe failed) — restarting" "WARN"
-        Start-WithLogs -Name "api" -Exe $ApiPy -ArgList @("-m", "trinity.api.server", "--port", "8001")
+        Start-WithLogs -Name "api" -Exe $ApiPy -ArgList @("-m", "trinity.api.server", "--port", "8001", "--host", "127.0.0.1")  # 2026-08-17 安全加固：仅本机
         $state.restartedAt.api = $now.ToString("o")
     } else {
         Write-Log "api DOWN but within restart interval — skipped" "WARN"
@@ -215,7 +207,22 @@ if (-not (Test-McpAlive)) {
 if (Test-Path $SysPy) {
     $out = & $SysPy -m trinity.collector status 2>&1 | Out-String
     if ($out -match "RUNNING") {
-        Write-Log "collector OK"
+        $ev = 0
+        if ($out -match 'events_captured=(\d+)') { $ev = [int]$Matches[1] }
+        if ($ev -gt 0) {
+            Write-Log "collector OK (events_captured=$ev)"
+            $state.zeroEventCount = 0
+        } else {
+            $z = 0
+            if ($state.zeroEventCount) { $z = [int]$state.zeroEventCount }
+            $z += 1
+            $state.zeroEventCount = $z
+            if ($z -ge 3) {
+                Write-Log "collector RUNNING but ZERO events ($z consecutive, 6 connectors idle) - event-driven loop has no attached agents; check hook integration" "WARN"
+            } else {
+                Write-Log "collector OK (events_captured=0, $z consecutive)"
+            }
+        }
     } else {
         if (Should-Restart "collector") {
             Write-Log "collector not RUNNING — starting: $($out.Trim())" "WARN"
@@ -229,12 +236,35 @@ if (Test-Path $SysPy) {
     Write-Log "collector check skipped (system python not found at $SysPy)" "WARN"
 }
 
+# ── 3.5. 维护库 PostgreSQL (docker trinity-db :5430) ─────────────────────
+# 2026-08-17（记忆周期优化 P0-2）：每日链 mirror/decay/tiers 依赖 PG :5430，
+# 8-16 每日链因 trinity-db 未启动而 mirror→decay→tiers→consolidate→dedup
+# 5 任务全挂。这里每轮探测 TCP :5430，失败且 docker 可用时拉起容器
+# （60s 重启间隔保护，避免反复 docker start 空转）。
+if (Test-Tcp -Port 5430) {
+    Write-Log "pg-maintenance OK (:5430 open)"
+} else {
+    $dockerOk = $false
+    try { docker version *> $null; $dockerOk = ($LASTEXITCODE -eq 0) } catch { $dockerOk = $false }
+    if ($dockerOk) {
+        if (Should-Restart "pg-maintenance") {
+            Write-Log "pg-maintenance DOWN (:5430 closed) — docker start trinity-db" "WARN"
+            docker start trinity-db 2>&1 | Out-String | Write-Log
+            $state.restartedAt.'pg-maintenance' = $now.ToString("o")
+        } else {
+            Write-Log "pg-maintenance DOWN but within restart interval — skipped" "WARN"
+        }
+    } else {
+        Write-Log "pg-maintenance DOWN (:5430 closed) — docker unavailable, manual intervention needed" "WARN"
+    }
+}
+
 # ── 4. DSH goal 同步（2026-08-15, V2 兜底）────────────────────────────
 # 插件 goal/change 事件通道在 web 部署中不可靠（不落盘），projcache 是
 # 可靠来源（每次 goal 变更实时更新）。supervisor 每轮同步一次，保证
 # dsh_goals objective 不丢（幂等：已存在跳过）。
 if (Test-Path $SysPy) {
-    $gs = & $SysPy "$TrinityRoot\scripts\sync_dsh_goals.py" 2>&1 | Out-String
+    $gs = & $SysPy "C:\Users\Administrator\trinity\scripts\sync_dsh_goals.py" 2>&1 | Out-String
     if ($gs -match "回填: (\d+)") {
         Write-Log "dsh-goals sync: $($Matches[0])"
     } else {

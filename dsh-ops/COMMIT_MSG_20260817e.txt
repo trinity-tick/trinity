@@ -1,0 +1,7 @@
+feat(bench): per-type routed config validated with judge3 (route2 72% vs dated baseline 66%, +6pp)
+
+- route2 (temporal=timeline+inner2, pref=ppro profile, no KU freshness) = 72% judge3 majority
+- KU freshness confirmed negative (-4pp): [FRESH:] prefix interferes, reverted to dated plain
+- judge3 basis: baseline revised 62%->66% (judge noise governance); stability 0.98-1.0
+- Scripts: benchmark/lme_qa_route.py (--route), benchmark/judge_pref2.py; doc section 3.10
+- NOT published (user requested hold)

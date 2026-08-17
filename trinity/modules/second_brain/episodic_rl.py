@@ -343,6 +343,84 @@ class EpisodicRLScorer:
         scored = self.score_memories(memory_ids)
         return list(scored.items())[:k]
 
+    # ── 持久化（2026-08-17 P0-2 闭环审计修复）────────────────────────
+    # 此前 RL 奖励/ Q 值只存内存（无 save/load），API/worker 进程重启即清零，
+    # "RL 记忆决策"永远从零开始（学完即忘）。这里导出/恢复完整状态，
+    # 由 MemoryAggregator 持久化时顺带落盘 rl_state.json。
+
+    def to_dict(self) -> Dict[str, Any]:
+        """导出 RL 状态为可序列化 dict（MemoryState → plain dict）。"""
+        return {
+            "version": 1,
+            "global_try_count": self._global_try_count,
+            "states": {
+                mid: {
+                    "memory_id": s.memory_id,
+                    "content_hash": s.content_hash,
+                    "q_value": s.q_value,
+                    "try_count": s.try_count,
+                    "hit_count": s.hit_count,
+                    "last_accessed": s.last_accessed,
+                    "last_q_update": s.last_q_update,
+                    "semantic_score": s.semantic_score,
+                    "ucb_bonus": s.ucb_bonus,
+                    "metadata": s.metadata,
+                }
+                for mid, s in self._states.items()
+            },
+        }
+
+    def save(self, path: str) -> bool:
+        """原子写入 RL 状态到 JSON 文件（tmp + os.replace）。"""
+        import json
+        import os
+
+        try:
+            d = self.to_dict()
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(d, f, ensure_ascii=False, indent=1)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, path)
+            return True
+        except Exception as e:  # noqa: BLE001
+            logger.warning("EpisodicRLScorer save failed (non-fatal): %s", e)
+            return False
+
+    @classmethod
+    def load(cls, path: str) -> "EpisodicRLScorer":
+        """从 JSON 恢复 RL 状态；文件缺失/损坏时返回空引擎（不中断启动）。"""
+        import json
+
+        scorer = cls()
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            scorer._global_try_count = int(d.get("global_try_count", 0))
+            for mid, s in (d.get("states") or {}).items():
+                scorer._states[mid] = MemoryState(
+                    memory_id=s.get("memory_id", mid),
+                    content_hash=s.get("content_hash", ""),
+                    q_value=float(s.get("q_value", scorer.default_q)),
+                    try_count=int(s.get("try_count", 0)),
+                    hit_count=int(s.get("hit_count", 0)),
+                    last_accessed=float(s.get("last_accessed", time.time())),
+                    last_q_update=float(s.get("last_q_update", time.time())),
+                    semantic_score=float(s.get("semantic_score", 0.5)),
+                    ucb_bonus=float(s.get("ucb_bonus", 0.0)),
+                    metadata=dict(s.get("metadata") or {}),
+                )
+            logger.info(
+                "EpisodicRLScorer loaded: %d states, global_try=%d",
+                len(scorer._states), scorer._global_try_count,
+            )
+        except FileNotFoundError:
+            pass
+        except Exception as e:  # noqa: BLE001
+            logger.warning("EpisodicRLScorer load failed (non-fatal): %s", e)
+        return scorer
+
     def statistics(self) -> Dict[str, Any]:
         """返回引擎运行时统计。"""
         total = len(self._states)

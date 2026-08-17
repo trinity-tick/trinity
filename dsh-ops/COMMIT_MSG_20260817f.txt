@@ -1,0 +1,8 @@
+feat(bench): chronos fine-grained event extraction +2pp on route2 (70% vs 68%, judge3)
+
+- LLM event triple extraction (date|subject|verb|object) -> EventCalendar ->
+  DynamicRetrievalGuidance time-filtered timeline injected into temporal QA context
+- judge3 3-vote: route2+chronos 70% vs route2 control 68%, stability 1.0
+- fine-grained LLM event extraction is required for chronos to help (coarse first-sentence events gave 0)
+- Script: benchmark/lme_qa_route_chronos.py (--chronos); doc section 3.11
+- NOT published (user requested hold)

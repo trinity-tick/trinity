@@ -22,12 +22,13 @@ for ($i = 0; $i -lt 3; $i++) {
     if ($res -match "LOCKED") { $locked++ }
     Start-Sleep -Seconds 2
 }
+if ($locked -gt 0) { Write-Log "lock detected: $locked/3 rounds (below cleanup threshold or cleared)" }
 if ($locked -lt 3) { exit 0 }
 
 Write-Log "LOCKED x$locked - starting cleanup"
 
-# 2) 行动1: kill engine_worker(可安全 reconnect)
-$wk = Get-CimInstance Win32_Process -Filter "Name = 'python.exe'" | Where-Object { $_.CommandLine -match "engine_worker" -and $_.ProcessId -ne $PID }
+# 2) 行动1: kill engine_worker + trinity-mcp(客户端会重连;stdio 是反复锁源之一)
+$wk = Get-CimInstance Win32_Process -Filter "Name = 'python.exe'" | Where-Object { ($_.CommandLine -match "engine_worker" -or $_.CommandLine -match "trinity-mcp") -and $_.ProcessId -ne $PID }
 foreach ($p in $wk) { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue; Write-Log "killed engine_worker PID $($p.ProcessId)" }
 Start-Sleep -Seconds 3
 $res2 = & $SysPy $LockDiag 2>&1 | Out-String

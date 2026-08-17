@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -185,7 +186,7 @@ class HybridRetriever:
         """
         strategy = strategy.lower()
         if strategy not in ("fusion", "rrf", "cascade"):
-            strategy = "fusion"
+            strategy = "rrf"  # 2026-08-17 标定: rrf 远优于 fusion
 
         # ── semantic result cache (env-gated, off by default) ───────
         cache = _get_configured_cache()
@@ -224,6 +225,12 @@ class HybridRetriever:
             fused = self._rrf_fuse(vector_norm, bm25_norm, graph_norm, aggr_norm, proc_norm, top_k)
         else:  # cascade
             fused = self._cascade_fuse(vector_norm, bm25_norm, graph_norm, aggr_norm, proc_norm, top_k)
+
+        # ── 2026-08-17 评分校准层（引擎路径, 对标 MEMTIER/AgentPrizm）──
+        # env 门控（默认 off，不改既有 96.8% R@5 基线）:
+        #   TRINITY_CONFIDENCE_SCORER=on  四维置信度校准（来源权威/时效/语义…）
+        #   TRINITY_IMPORTANCE_BOOST=on   importance 动态微调（存储 importance 加权）
+        fused = self._apply_engine_calibration(fused, query)
 
         result: Dict[str, Any] = {
             "results": fused,
@@ -422,6 +429,92 @@ class HybridRetriever:
 
         scored.sort(key=lambda x: x["procedural_score"], reverse=True)
         return scored[:top_k]
+
+    # ── 2026-08-17: 评分校准层（引擎路径）────────────────────────
+
+    def _apply_engine_calibration(
+        self,
+        fused: List[Dict[str, Any]],
+        query: str,
+    ) -> List[Dict[str, Any]]:
+        """RRF/融合后的评分校准（env 门控，默认 off；不改变既有基线）。
+
+        1) TRINITY_CONFIDENCE_SCORER=on → 四维置信度校准：
+           hybrid_score × (0.6 + 0.4 × confidence.overall)，旧记忆/低权威降权。
+        2) TRINITY_IMPORTANCE_BOOST=on → importance 动态微调：
+           hybrid_score += (importance - 0.5) × 0.2（±0.1 有界）。
+        最后按 hybrid_score 重排。
+        """
+        conf_on = os.environ.get("TRINITY_CONFIDENCE_SCORER", "off").strip().lower() == "on"
+        imp_on = os.environ.get("TRINITY_IMPORTANCE_BOOST", "off").strip().lower() == "on"
+        if (not conf_on and not imp_on) or not fused:
+            return fused
+
+        # 跨结果 min-max 归一化（置信度语义匹配维度用）
+        scores = [float(f.get("hybrid_score") or 0.0) for f in fused]
+        lo, hi = min(scores), max(scores)
+        span = (hi - lo) or 1.0
+
+        if conf_on:
+            try:
+                from trinity.modules.second_brain.confidence_scored_retrieval import (
+                    ConfidenceScorer,
+                    SourceType,
+                    ValidityCategory,
+                )
+
+                scorer = ConfidenceScorer()
+
+                def _vc(cat: str):
+                    c = (cat or "").lower()
+                    if "pref" in c:
+                        return ValidityCategory.PERSONAL_PREFERENCE
+                    if "news" in c:
+                        return ValidityCategory.NEWS
+                    if "financ" in c or "market" in c:
+                        return ValidityCategory.FINANCIAL
+                    if "regul" in c or "policy" in c:
+                        return ValidityCategory.REGULATORY
+                    return ValidityCategory.GENERAL_KNOWLEDGE
+
+                for f in fused:
+                    created = f.get("created_at") or 0.0
+                    if isinstance(created, str):
+                        try:
+                            from datetime import datetime
+                            created = datetime.fromisoformat(
+                                created.replace("Z", "+00:00")
+                            ).timestamp()
+                        except Exception:
+                            created = 0.0
+                    acc = int(f.get("access_count") or 0)
+                    conf = scorer.score(
+                        source_type=(
+                            SourceType.USER_CONFIRMED if acc > 0
+                            else SourceType.LLM_GENERATED
+                        ),
+                        citation_count=acc,
+                        citation_agreement=min(1.0, 0.5 + 0.05 * acc),
+                        created_at=float(created or time.time()),
+                        validity_category=_vc(str(f.get("category") or "")),
+                        semantic_similarity=(float(f.get("hybrid_score") or 0.0) - lo) / span,
+                    )
+                    f["hybrid_score"] = float(f.get("hybrid_score") or 0.0) * (0.6 + 0.4 * conf.overall)
+            except Exception as exc:
+                logger.debug("Engine confidence calibration skipped: %s", exc)
+
+        if imp_on:
+            try:
+                for f in fused:
+                    imp = float(f.get("importance") or 0.5)
+                    f["hybrid_score"] = min(
+                        1.0, max(0.0, float(f.get("hybrid_score") or 0.0) + (imp - 0.5) * 0.2)
+                    )
+            except Exception as exc:
+                logger.debug("Engine importance boost skipped: %s", exc)
+
+        fused.sort(key=lambda x: float(x.get("hybrid_score") or 0.0), reverse=True)
+        return fused
 
     # ── fusion strategies ───────────────────────────────────────────
 

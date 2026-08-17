@@ -134,7 +134,14 @@ class SQLiteAdapter(StorageAdapter):
         cursor.execute("PRAGMA journal_mode=WAL;")
         cursor.execute("PRAGMA synchronous=NORMAL;")
         cursor.execute("PRAGMA cache_size=-8000;")   # 8MB cache
-        cursor.execute("PRAGMA busy_timeout=15000;")  # 15s 写锁等待，避免并发锁冲突
+        # 2026-08-17（worker 锁争用根治）: busy_timeout 环境可配——
+        # 高并发写库时 15s×多步写入可叠加 >60s 工具超时；短超时(如 3s)
+        # 快速失败由上层自动重试，避免"60s 卡死"。默认 15000 兼容既有行为。
+        try:
+            busy_ms = int(os.environ.get("TRINITY_SQLITE_BUSY_TIMEOUT_MS", "15000"))
+        except ValueError:
+            busy_ms = 15000
+        cursor.execute(f"PRAGMA busy_timeout={busy_ms};")
         self._conn.commit()
 
     def disconnect(self) -> None:

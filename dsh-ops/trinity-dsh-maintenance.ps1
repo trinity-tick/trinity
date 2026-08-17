@@ -21,14 +21,14 @@ param(
     [string[]]$Tasks = @("health", "evolution"),
     [switch]$ViaDsh,
     [switch]$DryRun,
-    [int]$DecayLimit = 100,
+    [int]$DecayLimit = 500,
     [string]$DecayLLM = "mock",
     [string]$LogDir = "C:\Users\Administrator\.trinity\logs"
 )
 
 # 兼容 powershell -File 传参：命令行里的 "a,b,c" 会以单个字符串到达，
 # 这里统一按逗号拆分 + 校验。
-$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "compact", "selftest", "session-summarize", "session-auto", "all")
+$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "all")
 $normalized = @()
 foreach ($t in $Tasks) { $normalized += $t.Split(',') }
 $normalized = $normalized | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
@@ -183,7 +183,7 @@ print(json.dumps({"phases": phases, "cycle_complete": last.get("cycle_complete")
 $evoPrompt = "在 C:\Users\Administrator\trinity 用 Python 执行一次完整的 Trinity 进化周期：from trinity.evolution import MetaEvolution; evo=MetaEvolution(); 在同一进程内连续 tick 直至 cycle_complete（最多 5 次）; evo.save_state()。然后读取 evo.diagnostics() 汇报执行的相位序列、是否完成周期、总周期数、偏好与模式数量。"
 
 # 记忆衰减 + 压缩（Option A，2026-08-15：--store sqlite 直接作用于 SQLite 运行时大库）
-# 注意：脚本按创建时间取最旧的 N 条（N=--limit），compressor 默认用 mock_llm_compress
+# 注意：脚本按"最冷优先"取 N 条（access_count ASC, created_at ASC，N=--limit），compressor 默认用 mock_llm_compress；DecayLimit 默认 500（P1-1，覆盖 active 约 27%，全量可 -DecayLimit 5000）
 # （非真实 LLM 摘要）。为控制每次运行的影响面，默认限制 DecayLimit=100 条，
 # 并建议接入真实 LLM（MemoryCompressor(llm_callable=...)）后再放开。
 $decayCmd = @"
@@ -202,7 +202,7 @@ $tiersCmd = @"
 import sys, json
 sys.path.insert(0, r"$TrinityRoot")
 import runpy
-sys.argv = ["run_memory_tiers", "--store", "sqlite",
+sys.argv = ["run_memory_tiers", "--store", "sqlite", "--limit", "10000",
             "--output", r"$LogDir\memory_tiers_$Timestamp.json"]
 runpy.run_path(r"$TrinityRoot\scripts\run_memory_tiers.py", run_name="__main__")
 "@
@@ -323,9 +323,23 @@ from auto_session_summary import main
 main()
 "@
 $sessionAutoPrompt = "在 C:\Users\Administrator\trinity 运行 scripts/auto_session_summary.py（会话结束自动沉淀：从结构层 dsh_events 提取已结束/超时无活动会话的事件流，DeepSeek LLM 或抽取式生成 session-auto-summary 记忆，幂等），汇报候选/生成/跳过数。"
+$agentTtlCmd = @"
+import sys
+sys.path.insert(0, r"C:\Users\Administrator\trinity\scripts")
+from cleanup_expired_agents import main
+main()
+"@
+$agentTtlPrompt = "运行 scripts/cleanup_expired_agents.py(TTL 过期 agent 卡片清理,幂等),汇报过期卡片数。"
+$dbHealthCmd = @"
+import sys
+sys.path.insert(0, r"C:\Users\Administrator\trinity\scripts")
+from db_health import main
+sys.exit(main())
+"@
+$dbHealthPrompt = "运行 scripts/db_health.py(SQLite integrity + WAL checkpoint),汇报健康状态。"
 
 # ── 选择任务 ──────────────────────────────────────────────────────────────
-if ($Tasks -contains "all") { $Tasks = @("health", "evolution", "mirror", "decay", "tiers", "consolidate", "dedup", "sync", "compact", "selftest") }
+if ($Tasks -contains "all") { $Tasks = @("health", "evolution", "mirror", "decay", "tiers", "consolidate", "dedup", "sync", "compact", "backup", "selftest") }
 if ($Tasks -contains "compress") { $Tasks = @($Tasks | Where-Object { $_ -ne "compress" }) + "decay" }
 
 if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
@@ -350,6 +364,9 @@ foreach ($t in $Tasks) {
         "selftest"  { Invoke-Task -Name "selftest"  -DirectCommand $selftestCmd -DshPrompt $selftestPrompt }
         "session-summarize" { Invoke-Task -Name "session-summarize" -DirectCommand $sessionSummaryCmd -DshPrompt $sessionSummaryPrompt }
         "session-auto" { Invoke-Task -Name "session-auto" -DirectCommand $sessionAutoCmd -DshPrompt $sessionAutoPrompt }
+        "agent-ttl" { Invoke-Task -Name "agent-ttl" -DirectCommand $agentTtlCmd -DshPrompt $agentTtlPrompt }
+        "db-health" { Invoke-Task -Name "db-health" -DirectCommand $dbHealthCmd -DshPrompt $dbHealthPrompt }
+        "backup"    { Write-Log "backup: WAL 安全备份到 ~/.trinity/backups (保留 14 天)"; & "$PSScriptRoot\trinity-backup.ps1" 2>&1 | ForEach-Object { Write-Log $_ } }
     }
 }
 

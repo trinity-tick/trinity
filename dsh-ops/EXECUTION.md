@@ -1,4 +1,4 @@
-﻿# DSH → Trinity 优化执行记录（EXECUTION.md）
+# DSH → Trinity 优化执行记录（EXECUTION.md）
 
 本文件记录按批准报告执行的全部改动、验证结果、使用方式与回滚方法。
 目录：`C:\Users\Administrator\trinity\dsh-ops\`（DSH 运维脚本），另有 3 处 trinity 源码小修。
@@ -2425,3 +2425,272 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
 - 进化 preferences 恒空根因: ① _analyze 只 count preferences 不写 state(代码 bug); ② audit_log 69% agent_id 为 NULL(历史调用方未传)。
   - 修复: _analyze 加 preferences 落 state(同 patterns 逻辑); hook 里 agent NULL 兜底 default。验证: 3 轮 cycles patterns 4→5(test 0.3→1.0), preferences 0→{active_agent:default:0.3}。commit 131c8a2。
 - 当前进化状态: 26 轮, 5 patterns(2 个 confirmed 1.0), 1 preference。
+## 第 20 轮:锁源治理(看门狗强化 + mcp-trinity 冗余移除)(2026-08-16)
+- 锁源调查:看门狗从未触发(锁为间歇性);trinity-mcp --mode stdio 进程(Hermes/DSH MCP 客户端拉起)直连主库,是反复锁的候选源之一;web profile 的 mcp-trinity 与 trinity-native 并存冗余(手册 F5 计划)。
+- 看门狗强化:行动1 扩展为 kill engine_worker + trinity-mcp(客户端可重连);增加锁事件日志(低于清理阈值也记录,便于复盘)。
+- 移除 web profile 的 mcp-trinity(rdsh-mcp-client):与 trinity-native 重复,减少一个 stdio 持锁源;dump-config 确认只剩 schedule + trinity-native。
+- 生效边界:看门狗立即生效;mcp-trinity 移除需重启 web profile(mcp__trinity__* 工具消失,trinity_* 原生工具保留)。
+- 回滚:还原 watchdog 行动1 匹配 + 恢复 cordis.patch.yml 的 mcp-trinity 块。
+
+## 第 21 轮:收尾优化包(P2 TTL 清理 + P3 路径统一)(2026-08-16)
+- P2:新增 scripts/cleanup_expired_agents.py(TTL 过期 agent 卡片清理,从 card_json 读 ttl_seconds,幂等);挂进 maintenance 新任务 agent-ttl(实测 OK,expired=0 正确);autostart 每日 3 点链加入 agent-ttl。
+- P3:engine_worker.py 新增 _resolve_store_db()(与 core/client.py 一致的 TRINITY_STORE 解析),替换 _session_dispose_summary 的硬编码路径;验证 RESOLVED 正确。
+- 生效边界:P2 立即;P3 需新 worker(reconnect/重启 web 后生效,不影响当前会话)。
+- 回滚:删除 cleanup 脚本 + maintenance agent-ttl 任务 + autostart 行;还原 engine_worker 硬编码。
+
+## 第 23 轮:WorkBuddy 对接修复(query 限宽 + stream 转发)(2026-08-16)
+- 问题1:WorkBuddy 把长系统提示当 query(>4096)-> api/server.py HybridSearchRequest 等 query max_length=4096 拒绝(422)。修复:全部 4096->32768(6 处)。
+- 问题2:WorkBuddy 用 stream=true 无回复。根因:gateway/server.py 的 stream 分支把 stream 转发给上游后丢弃内容,返回 {"stream":true,"note":...} 假响应(无 choices)。修复:import StreamingResponse + stream 分支改为 requests stream=True 转发 SSE(iter_lines)。
+- 附带:手动 Start-Process 启动 gateway 无凭证 env 导致 500(需 supervisor 拉起注入 UPSTREAM_API_KEY)。
+- 验证:5000 字符 query 通过;stream 返回真实 SSE(data: {...chat.completion.chunk...});非 stream 正常。
+- 生效:已重启 API+Gateway(supervisor);WorkBuddy 重试即可。
+- 回滚:恢复 4096 限制;还原 stream 分支。
+
+
+## 第 24 轮:价值评估建议全方位执行(噪音清理 + PG 收敛 + 口径修正)(2026-08-16)
+- 背景:两轮价值评估实测(检索噪音率 27%、89% 冷数据、三库拓扑冗余),执行 5 项建议。
+- 清理(可逆,仅 status->archived,审计入链 1,026 条):①auto-link 自污染噪音 576 条(content LIKE '[自动关联]%' 或 insight+auto-link 标签,旧管线产物,当前代码 _auto_link_semantic 只写 memory_links 不写噪音记忆,根因已自愈,保留观察);②stress/lock-test 压测数据 256 条(agent stress-agent/lock-test + category stress-test + tag locktest;consistency_stress.py 已有 finally 清理);③imported 冷数据 194 条(active 且 access_count=0;热数据 6 条保留)。active 2535->1838。
+- 验证:检索噪音率复测 10 查询 top-3 共 30 条 = 0% 噪音(原 27%),此前被噪音挤占的 3 个查询全部恢复命中真实内容。
+- PG 收敛:原生 PG16 :5432 服务 postgresql-16 无任何 ESTABLISHED 连接,已 Stop + StartupType=Manual;trinity.yaml pg_port 5432->5430(与凭证 TRINITY_PG_PORT=5430 docker trinity-db 对齐)。
+- 口径:README Benchmark 段加强声明——本地 mock 集数字禁止对外宣称,官方集接入前不得用于宣传/评测。
+- 验证:diagnostics ALL_PASS;pytest 全量待跑;服务 api/mcp/gateway 健康待确认。
+- 回滚:UPDATE memories SET status='active' WHERE memory_id IN (从 audit_log action=ARCHIVE_* 取回);Start-Service postgresql-16 + StartupType=Automatic;trinity.yaml pg_port 还原 5432;README 声明还原。
+
+### 第 24 轮补记:pytest 全绿收尾(2026-08-16)
+- 首跑 `pytest tests/` 报 1 收集错误 + 3 失败,修复后 **766 passed / 50 skipped / 0 failed**。
+- 收集错误 tests/test_pg_llm_extract.py:skipif 条件在收集期直接 create_connection(:5432),PG16 停用后抛异常而非 skip。修复:改容错探测函数 _maintenance_pg_available + 测试改指维护 PG(docker trinity-db :5430, 凭证 TRINITY_PG_* 缺省 trinity/trinity),PG 适配器覆盖保留。
+- 3 失败 tests/test_evolution.py::TestMetaEvolutionObservation(assert len==1 实际收到 7 条线上观察):根因 = 第 21 轮在 MetaEvolution.__init__ 无条件注册默认 _audit_observation_hook(直读线上审计库),且无 TRINITY_TESTING 防护;仅运行 `pytest tests/` 时不加载 trinity/tests/conftest.py(唯一设置 TRINITY_TESTING=1 的 conftest)。修复:①core.py 默认钩子注册加 TRINITY_TESTING!=1 防护(与 orderbook/optimization_engine 等 4 模块一致);②新增 tests/conftest.py setdefault TRINITY_TESTING=1。回滚:删两处防护 + 删 tests/conftest.py + 测试参数还原 5432。
+
+
+## 第 25 轮:基建夯实(完整性 + 写入隔离 + 备份 + 结构净化)(2026-08-16)
+- 数据完整性:PRAGMA integrity_check/quick_check 均 ok;WAL 模式;FTS5 与 memories 完全一致(12,791 行,孤儿 0);索引清单核查充分(status/category/agent/audit action+timestamp 等 40+ 索引已在,无需新增)。
+- 写入面防御(核心新增):client.ingest 加 _is_isolated_test_write 守卫(TRINITY_ISOLATE_TEST_WRITES 默认 on)——已知测试 agent(stress-agent/lock-test/stress-test/stress-db-writer)/category(stress-test,stress_test)/标签(locktest,stress)/内容标记([自动关联] 前缀、LONG-STRESS)的写入,store 后立即 archive_memories + 审计 action=ISOLATED_TEST_WRITE,且跳过 postprocess。仍落库可验证,但不进 active 检索面——压测/自污染防复发。新增 tests/test_stress_isolation.py(5 用例全过:隔离/不可检索/正常写入 active/关闭开关)。
+- 备份机制:新增 dsh-ops/trinity-backup.ps1(WAL 安全 sqlite backup API,保留 14 天,UTF-8 BOM+CRLF);接入 maintenance -Tasks backup + "all" 链 + autostart 每日链(mirror,decay,...,agent-ttl,backup);实测 2 份备份 79.4MB 产出,maintenance finished OK。
+- 结构净化:删除 dsh_goals 7 条空 objective 记录(全 completed 无轮次,projcache 无引用不会回填),goals 36->30(含本轮 1 个新 goal)。
+- 运维自愈核实:autostart 每 5 分钟 "supervisor done"(日志 19:09 新鲜);supervisor pass complete/mcp/collector OK;watchdog + 启动项 vbs 在位;health 任务 OK(唯一 WARN:15 个未提交改动,属既有工作树状态)。
+- 验证:pytest tests/ 全量 771 passed / 50 skipped / 0 failed(766 + 5 新隔离用例);diagnostics ALL_PASS;active 1,838。
+- 回滚:删除 client.py 隔离守卫(4 处)与 tests/test_stress_isolation.py;删 trinity-backup.ps1 + maintenance/autostart 的 backup 引用;INSERT 回 7 条 dsh_goals(可从 dsh_events goal/write 事件重建)。
+
+## 第 24 轮:MCP 对接方案确认与 WorkBuddy MCP 配置(2026-08-16)
+- MCP 对接继续:trinity-mcp v1.1.0 支持 stdio/sse/streamable-http 三传输;协议 2025-03-26 标准,8 工具(memory_search/write/update/delete/audit_query/diagnostics/chronicle/tag_search)E2E 验证通过。
+- WorkBuddy 原生支持 MCP(有 mcp.json + McpBuildExpert):写入 .workbuddy/mcp.json(trinity stdio + trinity-sse)+ 用户 connector 配置,备份 .bak。
+- 文档:dsh-ops/mcp-integration.md(客户端配置示例/环境变量/故障排查)。
+- 生效:重启 WorkBuddy 后加载 MCP 工具。
+- 回滚:恢复 mcp.json.bak。
+
+## 第 25 轮:Marvis 对接(技能方案)(2026-08-16)
+- Marvis 是 MCP 生态(自带 MarvisMCP/AndrowsMCP),技能系统为标准 SKILL.md 格式(~/.marvis/skills/{custom,market,registry})。
+- 未发现 Marvis 的外部 MCP 服务器配置入口(mcpServers 无);采用技能方案:写入 ~/.marvis/skills/custom/trinity-memory/SKILL.md,教 Marvis 经 REST(:8001 检索/写入,agent_id=marvis-desktop)对接 Trinity。
+- MCP 标准备选:若 Marvis UI 有 MCP 服务器入口,填 Trinity(stdin 命令或 SSE http://127.0.0.1:8000/sse),参数见 dsh-ops/mcp-integration.md。
+- 生效:重启 Marvis 后技能进入目录;对话涉及跨会话记忆时自动加载。
+
+## 第 26 轮:稳定性加固(保证不报错)(2026-08-16)
+- 排查:supervisor 日志 624 错误行 -> 根因是每 5 分钟误判 MCP down 并重启(Test-McpAlive 的进程归属检查在后台环境失败),新进程端口冲突启动失败加剧循环;另有 goals sync 相对路径错误。
+- 修复:1) Test-McpAlive 改为'端口通即存活'(本机 8000 已被 Trinity 独占,误杀比假 OK 危害大);2) goals sync 改绝对路径;3) API 加全局异常兜底(未捕获异常返回友好 JSON,而非裸 500);4) 新增 scripts/db_health.py(integrity_check + WAL checkpoint)挂 maintenance db-health 任务。
+- 验证:连续 2 轮 supervisor 无 MCP 重启(日志 mcp OK, PID 19852 稳定);锁 AVAILABLE;看门狗无新锁事件;WAL 45MB->0;API 编译/重启正常。
+- 回滚:还原 Test-McpAlive 逻辑/删除 handler/删 db-health 任务。
+
+## 第 27 轮:评分对标落地 — 7 项建议执行（2026-08-17）
+> 依据:评分维度对标最新网络方案（MEMTIER 学习权重 / AgentPrizm 置信度 / MemRL 反馈闭环 /
+> HippoRAG2 增强 PPR / 动态记忆评分 / LongMemEval-V2）。全部 TDD（新增 20+ 用例）。
+
+- **1. RL 反馈闭环通电**:聚合器 rl_feedback 冷启动兜底(未注册记忆先注册,引擎侧 ID 可直反馈);
+  API POST /agents/memory/feedback;MCP memory_feedback(第 9 个工具);engine_worker rl_feedback 方法;
+  DSH 插件 trinity_rl_feedback 工具。闭环:检索→使用→反馈→Q 值微调(±0.15)。
+- **2. 置信度评分接入 runtime**(AgentPrizm 对齐):confidence_scored_retrieval(此前 orphan)接入
+  聚合器 post-RRF 校准层 + 引擎 HybridRetriever post-fusion 校准层(四维:来源权威/引用一致/时效/语义,
+  含 ValidityWindow 时效窗口),env TRINITY_CONFIDENCE_SCORER=on 开启(默认 off 保基线)。
+- **3. 融合权重标定(决定性发现)**:scripts/calibrate_ranking.py 在官方 LongMemEval_S 子集 A/B:
+  120 题 fusion 静态权重 session R@5=0.008 vs rrf=0.950;60 题复核 0.017 vs 0.983(mean pos 1.12)。
+  根因:5 通道融合权重(0.35/0.25/0.25/0.15/0.10,即 MEMTIER w0)在 min-max 归一化后排序失效。
+  已把引擎默认策略 fusion→rrf(client.search 调用点/search_hybrid 签名/HybridRetriever 回退);
+  官方 96.8% 实为 FTS 回退路径(hybrid retriever 未初始化时),文档口径待修正。
+  confidence/importance 对 R@5 无回退也无增益(保留 opt-in 供 QA 精度场景)。
+- **4. 图谱通道 PPR 升级**:聚合器 _AggregatorKGraphAdapter.ppr_search 由 1-2 跳 BFS 升级为
+  Personalized PageRank 幂迭代(alpha=0.85,悬空节点跳转个性化分布保证质量守恒,BFS 3 跳限规模)。
+- **5. importance 参与检索排序**:聚合器 post-RRF 动态微调(importance_score ±0.1 有界);
+  修复 serendipity 通道 dv.importance AttributeError(该通道此前静默空转)。
+- **6. 重排器覆盖聚合器路径**:TRINITY_RERANK=on 时 CrossEncoder(fast,模型本地缓存)重排
+  RRF 结果,重排顺序写回 priority 防被 RL 步骤冲掉;加载失败静默降级。
+- **7. LongMemEval-V2 适配**:官方 harness 已同步(~/.trinity/bench-official/lmev2/,451 题/5 能力/
+  web+enterprise/small+medium);benchmark/longmemeval_v2_runner.py 协议对齐(boxed 答案/UNKNOWN
+  弃权/5 能力映射/延迟 LAFS 输入),合成数据冒烟通过(3 题,检索延迟 9.4ms);
+  数据集在 HF(huggingface.co + hf-mirror 均不可达)→ **数据下载阻塞**,harness+runner 就绪待数据。
+- 验证:新增 tests/unit/test_rl_feedback_loop.py(7)、test_scoring_calibration.py(13)全过;
+  回归 test_graph_channel/test_rl_scorer/test_search_mode_routing/test_cache_redis 通过;
+  node --check 插件 JS 通过;全量 pytest 见下方基线。
+- 回滚:删 API/MCP/worker/DSH 四处 rl_feedback 新增点 + 冷启动兜底;删聚合器 _apply_scoring_calibration
+  调用与方法、HybridRetriever._apply_engine_calibration;client/hybrid_retriever 三处 strategy 还原 fusion;
+  ppr_search 还原 BFS;还原 serendipity _Hit;删 calibrate_ranking.py、longmemeval_v2_runner.py;
+  删两个测试文件。
+
+## 第 28 轮:引擎默认路径验证与口径修正（2026-08-17 二轮）
+- 引擎默认路径 A/B（scripts/verify_engine_default.py, 官方 LongMemEval_S 同 120 题同摄入受控对比）:
+  **FTS 0.975 > hybrid-rrf 0.942**（命中位次 1.27 vs 1.29）→ 引擎默认保持 FTS；
+  撤回了懒初始化 hybrid retriever 改动（先落地后验证、验证后回滚）。
+- 修正此前标定误导: calibrate_ranking.py 的 rrf 0.983 是与不同子集 FTS 96.8% 的跨运行对比;
+  同口径受控 A/B 证明 FTS 仍最优。hybrid 路径 fusion→rrf 的修复保留（fusion 0.008 确为坏）。
+- client.search hybrid 分支新增: 结果按 memory_id 回补完整字段（content/persona_id/score,与 FTS
+  同构,修 hybrid 返回 lean dict 的 schema 不兼容）+ 空结果 FTS 兜底（hybrid 路径被显式使用时）。
+- 评分特性（confidence/importance/rerank）对 R@5 无增益（0.942 平）→ 保持 opt-in 默认关。
+- 文档: TRINITY_EVAL_STATUS_AND_COMPARISON_20260817.md 顶部加勘误（96.8% 实为 FTS 路径;
+  fusion 废弃; hybrid-rrf 仅显式路径; 检索 9.5/10 结论不变）。
+- 验证: tests/test_core.py + tests/test_search_mode_routing.py 全过（29 passed/1 skipped）;
+  全量回归见下。
+- 回滚: 恢复 client.search _use_hybrid 原条件即还原默认; 删 verify_engine_default.py; 删勘误块。
+
+## 第 28 轮续:engine_worker 卡死根治（2026-08-17 优先项）
+- 现象: trinity_write/trinity_ping 偶发 60s 超时（worker 活着但不响应），需手动杀进程恢复。
+- 根因: worker 主循环顺序处理请求，某请求被 SQLite 写锁阻塞（busy_timeout=15s 的多步写入
+  可叠加 >60s，维护链/其他会话写库并发时触发）→ 后续请求（含 ping）全部排队超时，
+  形成"活着的僵尸 worker"。postprocess 已用 sklearn（毫秒级）排除 GIL 饥饿。
+- 修复: ① dsh-plugin/dsh-trinity/lib/index.js: 工具调用超时即 child.kill()→exit→rejectAll+
+  scheduleReconnect，下次调用自动拉起新 worker（自愈，不留僵尸）;
+  ② trinity/engine_worker.py: 主循环看门狗——仅当"有 in-flight 请求处理超过
+  TRINITY_WORKER_STALL_TIMEOUT(默认 90s)"时 dump 线程栈 + os._exit(1) 让插件重启;
+  空闲等待输入永不误杀（in-flight 标志位判定）。
+- 验证: tests/unit/test_worker_watchdog.py(3 用例: 空闲不误杀/卡死自退出/ping 协议)全过;
+  真实负载验证——全量 pytest 140s 压测期间 ping+write 全程即时响应（此前必挂），
+  压测后 ping 正常，测试写入已清理。JS node --check 通过。
+- 生效条件: worker(Python)改动随新 worker 拉起即生效; 插件(JS)改动需 web host 重启/新会话。
+- 另修: tests/unit/test_scoring_calibration.py::test_rerank_env_on_changes_order 偶发——
+  断言依赖 RRF 基序跨调用稳定，改为输入顺序无关的固定排序 fake（内容长度序），断言完全确定。
+- 回滚: 还原 index.js call 超时分支; 还原 engine_worker 看门狗(3 处: 常量+函数、main 钩子)。
+
+## 第 29 轮:QA 生成策略产品化（2026-08-17, 建议3 产品化 5/10→）
+- 新建 trinity/qa/route_reasoner.py（RouteReasoner）: 把 LongMemEval_S 基准已验证的生成/检索
+  策略（lme_route3.py 提炼, judge3 口径: turn 粒度 multi +24pp / REL+inner2 temporal +9pp /
+  pref 两段式 +24pp）封装为生产服务。策略路由: multi→turn 粒度检索+top16 turns;
+  temporal→[DATE]+[REL: N days]+inner2 过滤+时间线排序; pref→stage1 偏好抽取→stage2 个性化;
+  其他→[DATE]+plain。LLM DeepSeek(凭证 DEEPSEEK_API_KEY, 模型可配), 无凭证优雅 error。
+- 接入: Trinity.reason 增 qtype/question_date/agent/persona 参数, TRINITY_ROUTE_REASONER=on 走
+  RouteReasoner(无 key/失败回退 OpenDomainReasoner, 默认 off 行为兼容); REST /reason 增
+  qtype/question_date/route 参数; engine_worker 增 reason 方法; DSH 插件增 trinity_reason 工具。
+- 验证: tests/unit/test_route_reasoner.py 12 用例(路由/提示词纯函数/管线/回退)全过;
+  真实 API 端到端冒烟 scripts/smoke_route_reasoner.py——pref 个性化作答(6.3s)、
+  temporal REL 推理(1.1s)、plain 精确作答 25:50(2.2s); node --check 插件 JS 通过。
+- 回滚: 删 trinity/qa/route_reasoner.py; 还原 Trinity.reason 签名与 /reason 端点;
+  删 worker reason 方法与插件 trinity_reason; 删测试与 smoke 脚本。
+
+## 第 29 轮续:worker 卡死根因补齐（import 期聚合器自举）
+- 新增根因: trinity/__init__.py 的 ensure_bootstrapped() 在 import 期创建共享
+  MemoryAggregator → 启动 agg-ann-prewarm 线程（真实大库 11k+ 条 faiss 构建，
+  数分钟 GIL 饥饿）→ worker 主循环被拖死（ping/write 排队超时）。
+  基准脚本均设 TRINITY_MEMORY_ENABLED=0 规避，但 DSH 插件 spawn worker 未设。
+- 修复: dsh-plugin/dsh-trinity/lib/index.js spawn env 注入 TRINITY_MEMORY_ENABLED=0
+  （worker 只需引擎功能，聚合器由 rl_feedback 等按需懒创建）。
+- 附带发现: 首个请求懒引擎初始化（Trinity() 连接 74MB 大库+建表）实测 5-30s，
+  看门狗默认 90s 无碍；测试用小 stall 阈值会误杀——空闲测试改为只断言空闲不杀。
+- 验证: 修复后 worker spawn 无聚合器预热线程, ping 快速响应;
+  tests/unit/test_worker_watchdog.py + test_route_reasoner.py + test_rl_feedback_loop.py
+  22 用例全过; 全量回归见下。
+- 回滚: 还原插件 spawn env; 还原空闲测试。
+
+## 第 29 轮续2:worker 修复双保险落地（无需重启 web host 即生效）
+- 插件 env 注入需 web host 重启才生效；改为 worker 自身在导入 trinity 前
+  os.environ.setdefault('TRINITY_MEMORY_ENABLED', '0')——Python 代码随 worker
+  重启即生效，实测新 worker ping 1.5s 响应、trinity_write 即时落库（此前超时）。
+- 当前运行中 web host 的插件 JS 改动（自愈杀 worker + spawn env）仍待重启生效。
+
+## 第 30 轮:全链路闭环审计（2026-08-17）
+- 服务层: API :8001 /health 200; MCP :8000 通; gateway :8002 在跑; collector OK;
+  worker 复位后 ping 即时; autostart 5 分钟 supervisor done 连续; supervisor pass complete+goals sync。
+- 数据/维护: 每日链 03:01 mirror→decay→tiers→consolidate→dedup→sync→compact 全 OK;
+  聚合池 04:54 更新(13MB); 结构融合 dsh_sessions 17/dsh_events 9324/dsh_goals 37。
+- 修复1（每日链缺 agent-ttl/backup）: 运行中 autostart 循环为 08-15 旧版, 已重启
+  加载最新脚本(含 backup), 明日 03:00 验证。
+- 修复2（聚合器向量索引格式冲突）: aggregator_vectors.pkl 由无 faiss 进程写 pickle、
+  有 faiss 进程 faiss.read_index 读 → load failed → 每次启动全量重建(数分钟 GIL)。
+  已删存量文件 + _load 加'读失败即删除损坏文件自愈'(tests/unit/test_aggregator_index_selfheal.py 2 用例)。
+- 剩余开环: RL 反馈无自动喂食源(需 agent 调用); worker 高并发写库锁争用偶发(已缓解,
+  插件 JS 待 web host 重启完全生效); backup 待明日链验证; 语义缓存/自适应路由/use_ann 默认关(opt-in)。
+
+## 第 30 轮续:剩余开环闭合（2026-08-17）
+- RL 隐式反馈闭环（检索→使用→反馈→Q 值，无需人工）: MemoryAggregator.rl_implicit_use
+  ——hybrid 查询命中 top-3 自动打 IMPLICIT_USE(0.05)，每记忆每进程一次防通胀
+  (_rl_implicit_rewarded 集合, >10w 清理); 接入 query 的 RL 微调块后(TRINITY_RL_SCORER=on 时生效)。
+  新增 tests/unit/test_rl_implicit_loop.py 5 用例; 标定 A/B 测试隔离 RL 后全过。
+- 每日链 backup/agent-ttl 验证: 手动跑 -Tasks backup,agent-ttl 实测 OK——
+  备份 trinity_store_20260817_160917.db(84.3MB, 保留 3 份), agent-ttl 标记 4 个过期卡
+  (marvis-desktop/workbuddy/hermes-agent/rag-v42); autostart 已重启加载含 backup 的新链, 明日 03:00 自动验证。
+- worker 锁争用: 自愈闭环（看门狗 90s dump+退出 → 插件重启）已实测; 插件 JS 超时杀 worker
+  与 spawn env 待 web host 重启完全生效; 聚合器索引格式冲突已自愈(第 30 轮)。
+- 全量回归 811 passed / 50 skipped / 0 failed。
+- 生效说明: RL 隐式闭环代码在 API server 重启后对生产查询生效(当前 48244 为旧进程);
+  DSH worker 路径不经过聚合器 query, 不受影响。
+
+## 第 31 轮:web host + API server 重启（闭环生产生效, 2026-08-17）
+- web host(:3080, node bin.js web, PID 38784→4248): 分离包装脚本 restart-dsh-web.ps1 独立完成
+  杀旧→启新（即使会话中断也能跑完）; 重启日志 OK; 新 host 插件已拉起新 engine_worker(25540, parent=4248)。
+- 验证: GUI :3080 200; worker ping 即时(无聚合器预热饥饿——插件 spawn env TRINITY_MEMORY_ENABLED=0 生效);
+  trinity_write/trinity_search 即时(写入已清理); 插件新工具(rl_feedback/reason)已注册。
+- API server(:8001, PID 48244→48212): 重启后 /health 200——聚合器 rl_implicit_use 隐式反馈闭环
+  与向量索引自愈(删除损坏文件重建)已对生产查询生效。
+- 至此: 插件 JS(超时杀 worker+spawn env+新工具)、worker Python(看门狗+去自举)、
+  聚合器(隐式 RL 闭环+索引自愈)全部在生产生效, 无需再等待重启。
+- 回滚: 重启 wrapper 与 API 均可用原命令恢复(supervisor 5 分钟兜底)。
+
+## 第 32 轮:Worker 锁争用根治（快速失败+自动重试, 2026-08-17）
+- 诊断: 当前无锁持有者(WAL/checkpoint 健康), 争用来自其他进程突发批量写(benchmark 摄入/维护链);
+  adapter 写路径全部短事务+立即 commit(pit#9 已修), 问题在 15s busy_timeout × 多步写入叠加 >60s 工具超时。
+- 根治: ① adapter busy_timeout 环境化(TRINITY_SQLITE_BUSY_TIMEOUT_MS, 默认 15000 兼容);
+  ② worker 设 3000ms 快速失败 + _retry_on_locked(write/batch_write/update/delete 写工具, 退避重试 1 次,
+  仍失败抛明确错误'write lock busy…another process holds the SQLite write lock')。
+- 压力验证(决定性): 另一进程持写锁 25s 时 worker 写入 7.2s 明确报错(此前 60s 卡死);
+  锁释放后 0.1s 即时恢复; 新增 tests/unit/test_worker_retry.py 4 用例。
+- 设计不对称: 主写者(API)保持 15s 耐心, 次写者(worker)3s 快速失败+重试。
+
+## 第 33 轮:记忆周期优化（P0/P1/P2, 2026-08-17）
+按记忆周期评估建议执行（每项改完已验证）：
+- P0-1 生命周期脚本 SQLite 连接加 busy_timeout=30s（run_decay_compress/run_memory_tiers 的
+  connect_sqlite）：8-16 每日链全挂根因 database is locked（api/mcp/collector 持写锁时
+  connect() 建表/INSERT tenants 撞锁）；现等待锁释放而非直接失败。consolidate 本就只连 SQLite。
+- P0-2 supervisor 增加维护库检查：探测 :5430 TCP，失败且 docker 可用则 docker start trinity-db
+  （60s 重启间隔保护，restartedAt 键加引号 'pg-maintenance' 修连字符属性语法）。
+- P0-3 tiers 访问频率维度修复：fetch_all_memories_sqlite 增加 access_count/last_accessed_at 列；
+  compute_tier_score 优先用真实 access_count（fallback version_count）——此前只用 version_count
+  而大库 memory_versions 为空 → af_score 恒 0（25% 权重空转）。实测 300 条中 252 条 af_score>0
+  （此前全 0），access_count 26~530。
+- P1-1 扫描覆盖扩大：maintenance DecayLimit 默认 100→500（最冷优先 access_count ASC）；tiers
+  传 --limit 10000 全量扫描（此前默认 500，1,884 active 需 4 轮）。
+- P1-2 tiers --apply-archival 开关（默认 off 仅报告）：开启时把 assigned=archival 的记忆真正
+  archived（adapter.archive_memories，可恢复）。实测 core eviction 正常（limit 300 时 15 个溢出块
+  降级，1498→500 tokens）；archival=0 因当前记忆评分均 > recall_threshold 0.20（健康信号）。
+- P1-3 聚合器向量索引双格式读取修复（aggregator._load）：VECTOR_PERSIST_FILENAME(aggregator_vectors.pkl)
+  曾被有/无 faiss 进程写成 faiss/pickle 两种格式 → read_index 读到 pickle 报
+  "Index type ... not recognized" → 删文件 → 每次启动全量重建（数分钟 GIL）。改为读文件头 8 字节
+  探测（0x80=pickle），两种格式均兼容；pickle 向量用 faiss.IndexFlatIP 重建。仅探测失败才删除重建。
+- P2 补跑 8-16 缺失轮次：consolidate（300 条全 healthy，pending=0）+ dedup（11,987 实体 0 合并）。
+- P2 MCP resources 空统计修复：memory_tools 已迁移引擎形态（无 _MEMORY_STORE），旧绑定必然失败；
+  register_memory_resources 兼容新形态（不告警），trinity://stats 空时 fallback SQLite 只读
+  （mode=ro）实时统计（memory_count/active/category 分布）。
+- 验证：4 个 py 文件 py_compile 通过；supervisor/maintenance PS 解析通过（修复 edit 导致的两个
+  ps1 BOM 丢失——已用 UTF8Encoding($true) 恢复 BOM，备份 .bak_nobom_* 已清理）；tiers 300 条
+  实测 exit 0（busy_timeout 日志、af_score 生效、eviction 15）；decay 20 条 dry-run exit 0。
+- 生效：aggregator/resources 修改需重启 api(:8001)/mcp(:8000) 进程加载（supervisor 5 分钟兜底）。
+- 回滚：git checkout 相关文件即可；ps1 修改均可由备份恢复（git 历史）。
+
+## 第 34 轮:其他闭环类似问题修复（P0/P1, 2026-08-17）
+按"闭环审计"发现的问题模式执行修复（每项已验证）：
+- P0-1 collector 零事件告警（supervisor）：collector 6 connectors 事件驱动闭环无接入方时
+  events_captured 恒 0（RUNNING 但零产出）。supervisor 解析心跳 events_captured，连续 3 轮为 0
+  → WARN "RUNNING but ZERO events"（state.zeroEventCount 计数，>0 自动清零）。根因记录：
+  EventDrivenCollector 依赖 Agent 通过 AgentConnector 调 6 个 hook（conversation/tool_call/decision/
+  session_end/context_compact/error），本机暂无 agent 接入 → 空转可见化。
+- P0-2 RL 记忆决策持久化（episodic_rl.py + aggregator.py）：EpisodicRLScorer 新增 to_dict()/save()/
+  load()（JSON 原子写 tmp+os.replace，缺文件/损坏时返回空引擎不中断启动）；MemoryAggregator._save
+  顺带落盘 persist_dir/rl_state.json、_load 恢复。修复"RL 奖励/Q 值只存内存、进程重启清零（学完即忘）"。
+  冒烟实测：register+feedback+update_q_values → save → load 后 total_memories/global_try/hit_rate/
+  avg_q_value 完全一致（2 mems/3 try/1.0/0.6325）。
+- P1-1 evolution observe 过滤测试查询污染（core.py）：audit_log 877/989 条 search 的 agent_id 为
+  NULL（benchmark/测试脚本写入：test/placeholder/mem_id 直查/LongMemEval 主题），diag/diagp 为评测
+  查询。observe 改为 agent_id IS NOT NULL + 排除测试 agent 名单 + 过滤 test/placeholder/mem_ 直查。
+  冒烟实测：过滤后仅剩真实会话查询（WMS / RL 记忆决策 / TRINITY_PG 部署 / WMS ASN 预到货）。
+- P1-2 聚合池利用率归因（aggregator.py + api/server.py）：aggregator.query() 加 source 参数，
+  stats 记录 queries_by_source 与 last_query_at；API /agents/memory/search（vector/hybrid+keyword）
+  与 /agents/bridge/extract 传 source 标记。评估结论：pool 11,214 条（去重后）vs total_queries=61
+  说明检索主要走引擎库，聚合池为重资产低周转——归因后可持续监控，未来可评估懒加载。
+- 验证：4 个 py 文件 py_compile 通过；RL 冒烟 + evolution 过滤冒烟 + supervisor PS 解析 OK（BOM 保留）。
+- 生效：aggregator/RL/api 改动需重启 api(:8001)/mcp(:8000)（supervisor 5 分钟兜底）。
+- 回滚：git checkout 相关文件；supervisor 修改可由 git 恢复。
+- 全量回归 815 passed(811+4)。

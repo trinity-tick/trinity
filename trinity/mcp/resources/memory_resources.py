@@ -54,6 +54,40 @@ def set_session_recorder(recorder: Any) -> None:
     logger.info("ChatSessionRecorder 引用已注入 resources 模块。")
 
 
+def _live_sqlite_stats() -> dict[str, Any]:
+    """2026-08-17（P2-8）：从 SQLite 权威大库只读实时统计。
+
+    新版 memory_tools 已迁移到引擎形态（_engine/_aggregator），不再维护
+    _MEMORY_STORE 内存字典，旧绑定必然失败 → trinity://stats 恒空。
+    这里以只读（mode=ro）连接查询大库，不拿写锁、不干扰运行进程。
+    """
+    import os
+    import sqlite3
+
+    db = os.path.expanduser("~/.trinity/store/trinity_store.db")
+    try:
+        conn = sqlite3.connect("file:" + db.replace("\\", "/") + "?mode=ro", uri=True)
+        conn.execute("PRAGMA busy_timeout=5000")
+        try:
+            total = conn.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
+            active = conn.execute("SELECT COUNT(*) FROM memories WHERE status='active'").fetchone()[0]
+            cat_rows = conn.execute(
+                "SELECT COALESCE(category,'unknown') c, COUNT(*) FROM memories "
+                "GROUP BY c ORDER BY 2 DESC LIMIT 15"
+            ).fetchall()
+            return {
+                "memory_count": total,
+                "active_memories": active,
+                "deleted_memories": total - active,
+                "category_distribution": {r[0]: r[1] for r in cat_rows},
+                "stats_source": "sqlite-live",
+            }
+        finally:
+            conn.close()
+    except Exception as e:  # noqa: BLE001
+        return {"error": f"sqlite live stats failed: {e}", "stats_source": "unbound"}
+
+
 # ---------------------------------------------------------------------------
 # 注册入口
 # ---------------------------------------------------------------------------
@@ -68,11 +102,17 @@ def register_memory_resources(mcp: FastMCP) -> None:
         tools_module = sys.modules.get("trinity.mcp.tools.memory_tools")
         if tools_module is None:
             from trinity.mcp.tools import memory_tools as tools_module
-        ms = tools_module._MEMORY_STORE  # type: ignore[attr-defined]
-        vs = tools_module._VERSION_STORE  # type: ignore[attr-defined]
-        set_backend_references(ms, vs)
-    except Exception:
-        logger.warning("Could not bind memory backend references; resources will show empty stats.")
+        # v8 引擎形态（2026-08-15 重构）：memory_tools 以 _engine/_aggregator
+        # 承载，不再有 _MEMORY_STORE/_VERSION_STORE 内存字典。旧属性缺失不再
+        # 告警——trinity://stats 自动 fallback 到 SQLite 实时统计。
+        if hasattr(tools_module, "_MEMORY_STORE"):
+            ms = tools_module._MEMORY_STORE  # type: ignore[attr-defined]
+            vs = tools_module._VERSION_STORE  # type: ignore[attr-defined]
+            set_backend_references(ms, vs)
+        else:
+            logger.info("memory_tools 引擎形态（无 _MEMORY_STORE），trinity://stats 走 SQLite 实时统计。")
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Could not bind memory backend references (%s); trinity://stats fallback to SQLite live stats.", e)
 
     _register_stats_resource(mcp)
     _register_snapshot_resource(mcp)
@@ -100,6 +140,20 @@ def _register_stats_resource(mcp: FastMCP) -> None:
         total: int = len(_MEMORY_STORE)
         active: int = sum(1 for m in _MEMORY_STORE.values() if m.get("status") == "active")
         deleted: int = total - active
+
+        # 2026-08-17（P2-8）：内存 store 为空（新引擎形态/绑定失败）时，
+        # fallback 到 SQLite 权威大库只读实时统计，避免恒空 stats。
+        stats_extra: dict[str, Any] = {}
+        if total == 0:
+            live = _live_sqlite_stats()
+            if live and "error" not in live:
+                total = int(live["memory_count"])
+                active = int(live["active_memories"])
+                deleted = int(live["deleted_memories"])
+                stats_extra["stats_source"] = live.get("stats_source", "sqlite-live")
+            else:
+                stats_extra["stats_source"] = "unbound"
+                stats_extra["stats_error"] = (live or {}).get("error", "unknown")
 
         # 按 category 分布
         category_dist: dict[str, int] = {}
@@ -132,6 +186,7 @@ def _register_stats_resource(mcp: FastMCP) -> None:
             "layer_distribution": layer_dist,
             "guardian_status": "active" if total > 0 else "idle",
             "session_stats": session_stats,
+            **stats_extra,
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
         logger.info("trinity://stats served: %d memories.", total)

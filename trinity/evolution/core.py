@@ -120,7 +120,8 @@ class MetaEvolution:
         # 让进化"空转"(维护链只传 action=scheduled)变成"真学"。
         # 此前 20 轮周期 preferences/patterns 恒 0,因无任何 observation 输入。
         try:
-            self._observation_hooks.append(self._audit_observation_hook)
+            if os.environ.get("TRINITY_TESTING") != "1":
+                self._observation_hooks.append(self._audit_observation_hook)
         except Exception:
             pass
 
@@ -181,11 +182,24 @@ class MetaEvolution:
             conn.row_factory = sqlite3.Row
             observations = []
             # 最近 24h 的高频搜索查询(前 5)
+            # 2026-08-17（P1-1 闭环审计修复）：排除测试/脚本污染——audit 里
+            # agent_id 为 NULL 的 877/989 条 search 多为 benchmark/测试脚本写入
+            # （"test"/"placeholder"/mem_id 直查/LongMemEval 主题），diag/diagp
+            # 是评测查询；全部过滤后 evolution 只学真实 DSH 会话模式。
+            _TEST_AGENTS = {
+                "diag", "diagp", "stress-agent", "lock-test",
+                "dsh-sess_test_x", "dsh-sess_fusion_test_0001",
+                "bench", "benchmark", "lme", "judge",
+            }
             rows = conn.execute(
                 "SELECT agent_id, details, count(*) c FROM audit_log "
                 "WHERE action='search' AND timestamp > ? "
-                "GROUP BY agent_id, details ORDER BY c DESC LIMIT 5",
-                (time.time() - 86400,)
+                "AND agent_id IS NOT NULL "
+                "AND agent_id NOT IN ({}) "
+                "GROUP BY agent_id, details ORDER BY c DESC LIMIT 5".format(
+                    ",".join("?" * len(_TEST_AGENTS))
+                ),
+                [time.time() - 86400] + sorted(_TEST_AGENTS),
             ).fetchall()
             for r in rows:
                 q = (r["details"] or "")[:200]
@@ -195,6 +209,12 @@ class MetaEvolution:
                     q = str(_d.get("query") or _d.get("q") or q)[:60]
                 except Exception:
                     pass
+                # 排除明显测试查询（占位/记忆直查）
+                _q = q.strip().lower()
+                if _q in ("test", "placeholder", "hi", "hello"):
+                    continue
+                if len(_q) > 15 and _q.startswith("mem_"):
+                    continue
                 if q and not q.isspace():
                     observations.append({
                         "type": "pattern",

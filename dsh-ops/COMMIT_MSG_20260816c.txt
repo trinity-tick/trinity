@@ -1,0 +1,11 @@
+perf(bench): dated-mode optimization on official LongMemEval_S (49.6% -> 54.0%)
+
+- dated mode: [DATE:...] prefix from haystack_dates + temporal step-by-step prompt
+  -> temporal-reasoning 0.286 -> 0.444 (+15.7pp), overall QA 0.496 -> 0.540 (500q)
+- A/B negative result: per-type generation prompts (preference/multi/KU) are net negative
+  (strong baseline + temporal-only step prompt is the best combo)
+- judge2 dual-pass: official templates vs reason-first, agreement 91.7%
+- P2-2: TRINITY_LLM_EXTRACT=on now async by default, TRINITY_LLM_EXTRACT_SYNC=on opt-in
+  (client.py + test contract updated, 5 tests pass)
+- Scripts: benchmark/lme_qa_opt.py, benchmark/lme_judge2.py
+- NOT published (user requested hold)

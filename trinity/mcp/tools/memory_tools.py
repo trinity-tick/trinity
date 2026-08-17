@@ -118,7 +118,34 @@ def register_memory_tools(mcp: FastMCP) -> None:
     _register_trinity_diagnostics(mcp)
     _register_memory_chronicle(mcp)
     _register_memory_tag_search(mcp)
-    logger.info("Registered 8 memory tools (backed by real engine).")
+    _register_memory_feedback(mcp)
+    logger.info("Registered 9 memory tools (backed by real engine).")
+
+
+# ---------------------------------------------------------------------------
+# Tool: memory_feedback (RL 强化信号, MemRL 对齐)
+# ---------------------------------------------------------------------------
+def _register_memory_feedback(mcp: FastMCP) -> None:
+
+    @mcp.tool()
+    @_traced_tool("mcp.memory_feedback")
+    async def memory_feedback(memory_id: str, positive: bool = True) -> dict[str, Any]:
+        """RL memory feedback — record user confirmation/correction to update Q-value.
+
+        对标 MemRL (arxiv.org/abs/2601.03192)：检索-使用-反馈闭环的在线更新。
+        正反馈（用户确认/任务成功）提升该记忆后续检索排序微调权重；
+        负反馈（纠正/任务失败）降低。未注册记忆冷启动注册后记录。
+
+        Args:
+            memory_id: Target memory ID (pool or engine side).
+            positive: True=confirm/success, False=correct/failure (default True).
+
+        Returns:
+            Dict with memory_id, rl, q_value.
+        """
+        agg = _get_aggregator()
+        r = agg.rl_feedback(memory_id, positive=positive)
+        return {"memory_id": memory_id, "positive": positive, **r}
 
 
 # ---------------------------------------------------------------------------

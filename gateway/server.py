@@ -31,6 +31,7 @@ import requests
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 TRINITY_API = os.environ.get("TRINITY_API_URL", "http://127.0.0.1:8001").rstrip("/")
@@ -346,11 +347,20 @@ def chat_completions(body: ChatIn) -> Dict[str, Any]:
         json=payload,
         headers=upstream_headers,
         timeout=120,
+        stream=bool(body.stream),
     )
     if r.status_code >= 400:
         raise HTTPException(status_code=r.status_code, detail=r.text[:400])
     if body.stream:
-        return {"stream": True, "note": "stream 转发需要客户端直连网关流式读取"}
+        # 2026-08-16 修复:正确转发上游 SSE 流(此前返回无内容的假响应,导致客户端"无回复")
+        try:
+            return StreamingResponse(
+                (line for line in r.iter_lines(decode_unicode=False) if line),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            )
+        except GeneratorExit:
+            raise
     return r.json()
 
 
@@ -371,4 +381,4 @@ def list_models() -> Dict[str, Any]:
 
 if __name__ == "__main__":
     port = int(os.environ.get("GATEWAY_PORT", "8002"))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="127.0.0.1", port=port)  # 2026-08-17 安全加固：仅本机

@@ -109,22 +109,95 @@ class _AggregatorKGraphAdapter:
         return {"id": memory_id, "name": memory_id,
                 "properties": {"content": getattr(dv, "content", "")[:200]}}
 
-    def ppr_search(self, query_entities: list, top_k: int = 20, **kwargs) -> list:
-        """轻量 PPR：从种子实体做 1-2 跳 BFS，按度加权返回。"""
+    def ppr_search(
+        self,
+        query_entities: list,
+        top_k: int = 20,
+        alpha: float = 0.85,
+        max_iter: int = 50,
+        tol: float = 1e-6,
+        **kwargs,
+    ) -> list:
+        """Personalized PageRank（幂迭代）— 2026-08-17 由 1-2 跳 BFS 升级。
+
+        对齐 HippoRAG 2 增强 PPR：种子实体注入个性化重启分布 p，
+        v_{t+1} = alpha·Mᵀv_t + (1-alpha)·p，图扩散评分优于固定跳数加权。
+        BFS 先收集 3 跳内子图限定规模（11k 节点图上幂迭代可控）。
+        """
         from collections import Counter
         graph = self._agg._relations_graph
-        scores: Counter = Counter()
+
+        # 1) 种子解析
+        seeds = set()
         for seed in query_entities:
-            seed_id = seed if isinstance(seed, str) else (seed or {}).get("id", "")
-            if not seed_id:
+            sid = seed if isinstance(seed, str) else (seed or {}).get("id", "")
+            if sid:
+                seeds.add(sid)
+        if not seeds:
+            return []
+
+        # 2) BFS 收集 3 跳内可达子图（限定幂迭代规模）
+        nodes = set(seeds)
+        frontier = set(seeds)
+        for _ in range(3):
+            nxt = set()
+            for n in frontier:
+                for nb in graph.get(n, {}):
+                    if nb not in nodes:
+                        nodes.add(nb)
+                        nxt.add(nb)
+            frontier = nxt
+            if not frontier:
+                break
+        if not nodes:
+            return []
+        nodes = list(nodes)
+        idx = {n: i for i, n in enumerate(nodes)}
+        n = len(nodes)
+
+        # 3) 个性化重启分布 + 初始向量（种子均分）
+        p = [0.0] * n
+        for s in seeds:
+            p[idx[s]] = 1.0 / len(seeds)
+        v = list(p)
+
+        # 4) 行归一化转移矩阵（出度均匀分布）
+        # 悬空节点（无出边）跳转到个性化分布 p，保证质量守恒（sum→1）。
+        M = [[0.0] * n for _ in range(n)]
+        for src in nodes:
+            outs = graph.get(src, {})
+            total = len(outs)
+            if total == 0:
+                for j in range(n):
+                    M[idx[src]][j] = p[j]
                 continue
-            scores[seed_id] += 1.0
-            for target in graph.get(seed_id, {}):
-                scores[target] += 0.5
-                for hop2 in graph.get(target, {}):
-                    scores[hop2] += 0.25
-        ranked = scores.most_common(top_k)
-        return [{"id": mid, "score": float(s)} for mid, s in ranked]
+            for nb in outs:
+                j = idx.get(nb)
+                if j is not None:
+                    M[idx[src]][j] = 1.0 / total
+
+        # 5) 幂迭代: v = alpha·Mᵀv + (1-alpha)·p
+        for _ in range(max_iter):
+            nv = [0.0] * n
+            for i in range(n):
+                vi = v[i]
+                if vi <= 0.0:
+                    continue
+                row = M[i]
+                for j in range(n):
+                    mij = row[j]
+                    if mij > 0.0:
+                        nv[j] += alpha * vi * mij
+            for j in range(n):
+                nv[j] += (1.0 - alpha) * p[j]
+            diff = sum(abs(nv[i] - v[i]) for i in range(n))
+            v = nv
+            if diff < tol:
+                break
+
+        # 6) 排序返回
+        ranked = sorted(range(n), key=lambda i: v[i], reverse=True)
+        return [{"id": nodes[i], "score": round(float(v[i]), 6)} for i in ranked[:top_k]]
 
 
 # ── MemoryAggregator ──────────────────────────────────────────────────────
@@ -229,6 +302,10 @@ class MemoryAggregator:
         except Exception as exc:
             self._rl_scorer = None
             logger.info("RL scorer disabled: %s", exc)
+        # ── 2026-08-17（RL 闭环喂食源）: 隐式使用反馈去重集合 ──
+        # 检索命中即视为"使用"（IMPLICIT_USE, reward 0.05），每记忆每进程
+        # 只奖励一次防 Q 值通胀；强信号仍走显式 rl_feedback（TASK_SUCCESS）。
+        self._rl_implicit_rewarded: set = set()
 
         # ── P1-4: Degradation Policy ─────────────────────────────────
         from trinity.agents.degradation import DegradationManager, ServiceTier
@@ -339,6 +416,14 @@ class MemoryAggregator:
                         pickle.dump(vec_data, f)
                 os.replace(vec_tmp, vec_path)
 
+            # ── P0-2: RL 记忆决策状态持久化（2026-08-17）──────────
+            # EpisodicRLScorer 奖励跨重启累积（此前只存内存，进程重启清零）。
+            if self._rl_scorer is not None:
+                try:
+                    self._rl_scorer.save(os.path.join(persist_dir, "rl_state.json"))
+                except Exception:
+                    pass
+
             logger.debug("Aggregator pool persisted (%d memories)", len(self._pool))
         except Exception as exc:
             logger.warning("Aggregator persist failed (non-fatal): %s", exc)
@@ -412,7 +497,16 @@ class MemoryAggregator:
             vec_path = os.path.join(persist_dir, VECTOR_PERSIST_FILENAME)
             if os.path.exists(vec_path):
                 try:
-                    if _HAS_FAISS:
+                    # 2026-08-17（记忆周期优化 P1-3）：VECTOR_PERSIST_FILENAME 曾被
+                    # 不同 faiss 可用性的进程写成两种格式——有 faiss 时 faiss.write_index
+                    # （原生二进制），无 faiss 时 pickle.dump（magic 0x80 开头）。
+                    # 之前按 _HAS_FAISS 固定选一种读法，读到另一种格式即抛
+                    # "Index type ... not recognized"→ 删文件 → 每次启动全量重建
+                    # （数分钟 GIL 饥饿）。改为读文件头 8 字节探测格式，两种都兼容。
+                    with open(vec_path, "rb") as _probe:
+                        _magic = _probe.read(8)
+                    _is_pickle = len(_magic) > 0 and _magic[0] == 0x80  # pickle protocol magic
+                    if _HAS_FAISS and not _is_pickle:
                         import faiss
                         self._faiss_index = faiss.read_index(vec_path)
                         self._vector_dim = self._faiss_index.d
@@ -425,9 +519,40 @@ class MemoryAggregator:
                         self._index_id_map = vec_data.get("id_map", [])
                         vectors = vec_data.get("vectors", [])
                         if vectors:
-                            self._faiss_index = np.array(vectors, dtype=np.float32)
+                            if _HAS_FAISS:
+                                import faiss
+                                _faiss_idx = faiss.IndexFlatIP(self._vector_dim)
+                                _faiss_idx.add(np.ascontiguousarray(np.array(vectors, dtype=np.float32)))
+                                self._faiss_index = _faiss_idx
+                            else:
+                                self._faiss_index = np.array(vectors, dtype=np.float32)
                 except Exception as exc:
-                    logger.warning("Vector index load failed: %s", exc)
+                    # 双格式探测后仍失败（文件真正损坏/截断）：删除损坏文件让
+                    # _prewarm_ann_index 重建正确格式并 _save 落盘，避免每次启动
+                    # "load failed → 全量重建"（数分钟 GIL 饥饿）。
+                    logger.warning(
+                        "Vector index load failed (%s): %s — removing stale file to rebuild",
+                        "faiss" if _HAS_FAISS else "pickle", exc,
+                    )
+                    try:
+                        os.remove(vec_path)
+                    except Exception:
+                        pass
+
+            # ── P0-2: RL 记忆决策状态恢复（2026-08-17）────────────
+            # 与 _save 对称：进程重启后恢复 Q 值/命中统计，避免学完即忘。
+            try:
+                rl_path = os.path.join(persist_dir, "rl_state.json")
+                if os.path.exists(rl_path):
+                    from trinity.modules.second_brain.episodic_rl import EpisodicRLScorer
+                    self._rl_scorer = EpisodicRLScorer.load(rl_path)
+                # 2026-08-17（P2）：无论是否从文件恢复，启动即落盘一次，
+                # 确保 rl_state.json 存在（空状态也可追溯），
+                # 避免"无 RL 反馈就一直不落盘"。
+                if self._rl_scorer is not None:
+                    self._rl_scorer.save(rl_path)
+            except Exception:
+                pass
 
             logger.info(
                 "Aggregator pool restored from disk: %d memories, %d relations",
@@ -671,6 +796,7 @@ class MemoryAggregator:
         limit: int = 50,
         mode: str = "keyword",
         query_text: str = "",
+        source: str = "",
     ) -> List[DimensionVector]:
         """Multi-dimension combined retrieval with optional semantic search.
 
@@ -679,6 +805,8 @@ class MemoryAggregator:
             limit: max results
             mode: "keyword" / "vector" / "hybrid" (default "keyword" for compat)
             query_text: natural-language query for vector/hybrid modes
+            source: 调用来源标识（2026-08-17 P1-2：聚合池利用率归因，
+                    记录到 stats.queries_by_source 与 last_query_at）
 
         Returns:
             List of matching DimensionVectors
@@ -688,6 +816,12 @@ class MemoryAggregator:
             if self._tracer:
                 self._tracer.start_span("query", query_text=query_text, mode=mode)
             self._stats["total_queries"] += 1
+            # 2026-08-17（P1-2 最小优化）：查询来源归因 + 最近使用时间戳，
+            # 让"聚合池 11k 条但 total_queries 仅 61"的利用率可监控、可归因。
+            if source:
+                src_stats = self._stats.setdefault("queries_by_source", {})
+                src_stats[source] = src_stats.get(source, 0) + 1
+            self._stats["last_query_at"] = time.time()
 
             # ── Keyword results (always computed for hybrid) ──
             kw_results = self._engine.query(filters)
@@ -808,12 +942,21 @@ class MemoryAggregator:
                     ][:50]
                     if explore_pool:
                         # 用 WanderRetriever 温度采样（relevance 取 importance 近似）
+                        # 2026-08-17 修复: DimensionVector 无 importance 字段,
+                        # 原 float(dv.importance) 恒抛 AttributeError → 通道静默空转。
                         class _Hit:
                             def __init__(self, dv):
                                 self.dv = dv
-                                self.relevance = float(dv.importance) + 0.01
+                                self.relevance = self._imp(dv)
                                 self.mode = None
                                 self.serendipity_score = 0.0
+
+                            @staticmethod
+                            def _imp(dv):
+                                try:
+                                    return float(dv.importance)
+                                except (AttributeError, TypeError):
+                                    return 0.5
                         hits = [_Hit(dv) for dv in explore_pool]
                         wandered = self._serendipity.wander(hits)
                         ser_dvs = [h.dv for h in wandered if h.dv.memory_id in self._pool]
@@ -824,6 +967,13 @@ class MemoryAggregator:
 
             # RRF Fusion across all active channels
             merged = self._rrf_fusion(ranked_lists, top_k=limit)
+
+            # ── 2026-08-17 评分校准层（对标 MEMTIER/AgentPrizm/动态记忆评分）──
+            # env 门控（默认 off，不改变既有 96.8% R@5 基线；开启需 A/B 验证）:
+            #   TRINITY_CONFIDENCE_SCORER=on  四维置信度校准（来源权威/引用一致/时效/语义）
+            #   TRINITY_IMPORTANCE_BOOST=on   importance 动态微调（写时定值 → 查询时加权）
+            #   TRINITY_RERANK=on             Cross-Encoder 重排（模型本地缓存，失败静默降级）
+            merged = self._apply_scoring_calibration(merged, query_text)
 
             # SecondBrain SelectiveRecall reranker (P0-3, post-RRF boost)
             if self._sb_engine is not None and query_text and merged:
@@ -862,12 +1012,112 @@ class MemoryAggregator:
                 except Exception as exc:
                     logger.debug("RL rerank skipped: %s", exc)
 
+                # ── 2026-08-17（RL 闭环自动喂食）: 检索命中即隐式使用 ──
+                # top 结果打 IMPLICIT_USE 小奖励（0.05，每记忆每进程一次），
+                # 使"检索→使用→反馈→Q 值"闭环无需人工/agent 显式调用。
+                try:
+                    self.rl_implicit_use([r.memory_id for r in merged], limit=3)
+                except Exception as exc:
+                    logger.debug("RL implicit feedback skipped: %s", exc)
+
             logger.debug("query hybrid → %d results (RRF, limiting to %d)", len(merged), limit)
             # ── v7.1.0: Tracing end ──
             if self._tracer:
                 self._tracer.end_span("query")
             self._observability.record_memory_op("query")
             return merged[:limit]
+
+    # ── 2026-08-17: 评分校准层（建议2/5/6 落地）─────────────────────
+
+    def _apply_scoring_calibration(
+        self,
+        merged: List[DimensionVector],
+        query_text: str,
+    ) -> List[DimensionVector]:
+        """RRF 融合后的评分校准（全部 env 门控，默认 off）。
+
+        1) TRINITY_CONFIDENCE_SCORER=on → 四维置信度校准（AgentPrizm 对齐）：
+           priority × (0.6 + 0.4 × confidence.overall)，旧记忆/低权威来源降权。
+        2) TRINITY_IMPORTANCE_BOOST=on → importance 动态微调（写时定值→查询时加权）：
+           priority += (importance - 0.5) × 0.2，±0.1 有界。
+        3) TRINITY_RERANK=on → Cross-Encoder 重排（本地缓存模型，加载失败静默降级）。
+        """
+        if not merged:
+            return merged
+
+        # 1) 四维置信度校准
+        if os.environ.get("TRINITY_CONFIDENCE_SCORER", "off").strip().lower() == "on":
+            try:
+                from trinity.modules.second_brain.confidence_scored_retrieval import (
+                    ConfidenceScorer,
+                    SourceType,
+                    ValidityCategory,
+                )
+
+                scorer = ConfidenceScorer()
+
+                def _validity(cat: str) -> ValidityCategory:
+                    c = (cat or "").lower()
+                    if "pref" in c or "preference" in c:
+                        return ValidityCategory.PERSONAL_PREFERENCE
+                    if "news" in c:
+                        return ValidityCategory.NEWS
+                    if "financ" in c or "market" in c:
+                        return ValidityCategory.FINANCIAL
+                    if "regul" in c or "policy" in c or "law" in c:
+                        return ValidityCategory.REGULATORY
+                    return ValidityCategory.GENERAL_KNOWLEDGE
+
+                for dv in merged:
+                    src = (
+                        SourceType.USER_CONFIRMED
+                        if getattr(dv, "source_count", 0) >= 1
+                        else SourceType.LLM_GENERATED
+                    )
+                    conf = scorer.score(
+                        source_type=src,
+                        citation_count=getattr(dv, "access_count", 0),
+                        citation_agreement=min(
+                            1.0, 0.5 + 0.05 * getattr(dv, "access_count", 0)
+                        ),
+                        created_at=getattr(dv, "created_at", 0.0) or time.time(),
+                        validity_category=_validity(getattr(dv, "category", "")),
+                        semantic_similarity=max(0.0, min(1.0, float(dv.priority))),
+                    )
+                    dv.priority = float(dv.priority) * (0.6 + 0.4 * conf.overall)
+            except Exception as exc:
+                logger.debug("Confidence calibration skipped: %s", exc)
+
+        # 2) importance 动态微调（动态记忆评分对齐）
+        if os.environ.get("TRINITY_IMPORTANCE_BOOST", "off").strip().lower() == "on":
+            try:
+                for dv in merged:
+                    imp = self.importance_score(dv.memory_id)
+                    boost = (imp - 0.5) * 0.2  # ±0.1 有界
+                    dv.priority = min(1.0, max(0.0, float(dv.priority) + boost))
+            except Exception as exc:
+                logger.debug("Importance boost skipped: %s", exc)
+
+        # 3) Cross-Encoder 重排（本地缓存模型；加载失败静默降级为原序）
+        if os.environ.get("TRINITY_RERANK", "off").strip().lower() == "on":
+            try:
+                from trinity.vector_index.reranker import CrossEncoderReranker
+
+                rk = CrossEncoderReranker(model_name="fast")
+                items = [{"id": d.memory_id, "text": d.content, "_dv": d} for d in merged]
+                reranked = rk.rerank(query_text, items, top_k=len(items), id_key="id")
+                # 重排顺序写回 priority（映射 [0.5,1.0] 保序），
+                # 否则后续 RL 步骤按 priority 重排会把重排结果冲掉。
+                order = {r["id"]: i for i, r in enumerate(reranked)}
+                for d in merged:
+                    if d.memory_id in order:
+                        rank = order[d.memory_id]
+                        d.priority = 0.5 + 0.5 * (1.0 - rank / max(1, len(reranked)))
+                merged.sort(key=lambda d: order.get(d.memory_id, 1 << 30))
+            except Exception as exc:
+                logger.debug("Reranker skipped: %s", exc)
+
+        return merged
 
     def rl_feedback(self, memory_id: str, positive: bool = True) -> Dict[str, Any]:
         """记录 RL 强化信号（用户确认/纠正 → 更新 Q 值）。
@@ -883,6 +1133,10 @@ class MemoryAggregator:
             return {"rl": False, "q_value": 0.5}
         try:
             from trinity.modules.second_brain.episodic_rl import FeedbackSignal
+            # 冷启动兜底（2026-08-17, RL 反馈闭环）: 未注册记忆先注册，
+            # 使 API/MCP/DSH 对引擎侧（非聚合池）记忆也能直接反馈不崩溃。
+            if memory_id not in self._rl_scorer._states:
+                self._rl_scorer.register_memory(memory_id, semantic_score=0.5)
             signal = FeedbackSignal.TASK_SUCCESS if positive else FeedbackSignal.TASK_FAILURE
             self._rl_scorer.record_feedback(memory_id, signal)
             self._rl_scorer.update_q_values()
@@ -891,6 +1145,39 @@ class MemoryAggregator:
         except Exception as exc:
             logger.debug("rl_feedback failed: %s", exc)
             return {"rl": False, "q_value": 0.5}
+
+    def rl_implicit_use(self, memory_ids: List[str], limit: int = 3) -> int:
+        """RL 闭环自动喂食源（2026-08-17）: 检索命中即视为"使用"。
+
+        给 top 结果打 IMPLICIT_USE 小奖励（reward_implicit=0.05），使
+        检索→使用→反馈→Q 值 闭环无需人工/agent 显式调用。每记忆每进程
+        只奖励一次（_rl_implicit_rewarded 防通胀，集合 >10w 时清理）。
+        强信号仍走 rl_feedback（TASK_SUCCESS/FAILURE）。
+
+        Returns:
+            实际奖励的记忆条数。
+        """
+        if self._rl_scorer is None:
+            return 0
+        from trinity.modules.second_brain.episodic_rl import FeedbackSignal
+
+        rewarded = 0
+        for mid in (memory_ids or [])[:limit]:
+            if not mid or mid in self._rl_implicit_rewarded:
+                continue
+            try:
+                if mid not in self._rl_scorer._states:
+                    self._rl_scorer.register_memory(mid, semantic_score=0.5)
+                self._rl_scorer.record_feedback(mid, FeedbackSignal.IMPLICIT_USE)
+                self._rl_implicit_rewarded.add(mid)
+                rewarded += 1
+            except Exception:
+                continue
+        if len(self._rl_implicit_rewarded) > 100000:
+            self._rl_implicit_rewarded.clear()
+        if rewarded:
+            self._rl_scorer.update_q_values()
+        return rewarded
 
     def get_by_agent(
         self,

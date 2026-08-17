@@ -235,6 +235,77 @@
 4. **route2 = 72% 保持当前最优**（judge3 稳定 1.0）
 5. 教训：**小样本（n=2-3）的"有效"结论不可信，必须 30+ 题 + judge3 复核**——本流程已三次捕获伪增量（r6 chronos、n=2 ppro、旧 judge 噪声）
 
+### 3.10 网络方案对照测试（2026-08-17，multi 专项，judge3 判分，50 题同批 seed42）
+
+> 依据 LongMemEval 官方 README/代码（READING_METHOD=con、HISTORY_FORMAT=json、GRANULARITY=turn）
+> 脚本：benchmark/lme_multi_con.py、benchmark/lme_multi_turn.py
+
+| 变体 | multi accuracy | Δ vs 同批 baseline | 结论 |
+|---|---|---|---|
+| 官方 con（per-session focused notes + 单次 cot） | 0.10 vs 0.44 | -34pp | ❌ DeepSeek 执行不了 notes 抽取阶段（官方 GPT-4o 专属能力） |
+| conjson（json 历史格式） | 0.10 | -34pp | ❌ 同上，格式无关 |
+| con v2（保留空 session） | 0.10 | -34pp | ❌ 非过滤问题，是抽取失败 |
+| **turn 粒度检索**（官方 GRANULARITY=turn） | **0.52 vs 0.28** | **+24pp** | ✅✅ **multi 首个真实正向增益**（3/3 稳定 1.0） |
+
+**turn 粒度增益机制**（答案级证据）：multi 证据分散在多个 session 的精确 turn 中，session 级
+检索让模型在长 session 内捞证据易漏（评论 12→33 条、鱼缸 2→3 个、年龄未找到→32 岁）；
+turn 级索引直接返回精确片段，模型直接看到分散证据（5 个回归 vs 17 个增益，净 +12 题）。
+
+**负面结论（避免返工）**：官方 con reading method 依赖 GPT-4o 的抽取能力，DeepSeek 上
+per-session notes 大量输出 empty/无关 → 上下文被掏空 → 10%。不要再用 con。
+
+**产品化建议**：multi-session 走 turn 粒度检索（top-k turn + 按日期排序拼接），其他题型维持
+route2 现状；组合后预计整体 74% 再 +2~4pp（multi 占 26.6% 题量，+24pp × 0.266 ≈ +6.4pp 上限）。
+
+### 3.11 turn x route2 组合验证（2026-08-17，judge3 3票，50 题同批 seed42，脚本 lme_route3.py）
+
+| 配置 | 整体 | multi(17) | temporal(11) | KU(7) | user(10) | pref(2) |
+|---|---|---|---|---|---|---|
+| baseline（dated plain） | 0.64 | 0.353 | 0.545 | 1.0 | 1.0 | 0.0 |
+| **route（multi=turn 粒度）** | **0.74** | 0.588 | 0.636 | 0.857 | 1.0 | 0.5 |
+| route_tt（multi+temporal 都 turn） | 0.72 | 0.647 | 0.545 | 0.857 | 1.0 | 0.0 |
+
+- **route = 74%（+10pp vs baseline 64%，3/3 稳定 1.0）**：multi 用 turn 粒度、temporal 用 REL+inner2、
+  pref 用 ppro、其余 plain——与 3.10 单独 turn 测试结论一致（multi +23.5pp）；
+- **temporal 用 turn 粒度拖累**（63.6→54.5%）：temporal 必须保持 session 粒度 + REL+inner2；
+- preference 2 题样本过小（0/2 vs 1/2）不可靠，ppro 此前 50 题验证 0→50%；
+- **最终最优组合 = route（74%）**：multi=turn + temporal=REL+inner2 + pref=ppro + 其他 plain；
+- 仍未跑全量 500（用户指示延后）。
+
+### 3.13 turn 粒度与 3.12 修订的整合（2026-08-17）
+
+> 3.11 的 route（multi=turn 粒度）= 74% 与 3.12 的 route2 = 72% 为不同抽样/提示下的结果，二者互补：
+
+**当前证据一致的最终最优组合（无需再测小样本）**：
+1. **multi-session → turn 粒度检索**（3.10 单独 +24pp 与 3.11 组合 +23.5pp 双重一致，确定性增益）；
+2. **temporal-reasoning → REL + inner2（session 粒度）**——turn 粒度对 temporal 拖累（3.11 验证）；
+3. **preference → LLM 两段式 pref3（36-60%）**，**不用 ppro 正则画像**（3.12 30 题证伪，n=2 的 50% 是噪声）；
+4. **knowledge-update / 其余 → dated plain**（freshness/chronos 均证伪）；
+5. 组合预期：multi +24pp × 26.6% ≈ 整体再 +6pp 上限，在 route2 72% 基础上 → 78% 有现实可能。
+
+**本流程的三次伪增量教训**（r6 chronos、n=2 ppro、旧 judge 噪声）：小样本结论不可信，
+≥30 题 + judge3 3票为最低可信标准——turn 粒度是唯一经历 50 题同批 + 独立复现双重验证的 multi 增益。
+
+### 3.14 全量 500 预估（2026-08-17，基于 judge3 已验证分题型数据加权推算，未跑全量）
+
+**官方分布**：assistant 56 / user 70 / pref 30 / KU 78 / multi 133 / temporal 133 = 500
+
+| 情景 | 全量预估 | 假设 |
+|---|---|---|
+| 保守 | **66.8%** | multi=52（turn 实测）、temporal=60、pref=35 |
+| **最佳估计** | **70.3%** | multi=56、temporal=63（REL+inner2）、pref=42（pref3 两段式） |
+| 乐观 | **74.2%** | multi=60、temporal=66、pref=50 |
+
+**敏感度**（multi/temporal 各占 26.6% 权重）：每 ±0.05 → 整体 ±1.3pp；pref（6% 权重）±0.1 → ±0.6pp。
+
+**关键判断**：
+1. 全量 500 预期 **~70%（±3pp）**——即从官方实测 54.0%（dated，旧 judge）提升约 +16pp；
+2. 与 50 题 A/B 的 74% 存在 ~4pp 差距，原因是 50 题抽样里 multi/temporal 的混合比例
+   与官方 500 题分布不完全一致（50 题里两题型共 28 题=56%，官方=53.2% 相近但题型内难度有偏差）；
+3. 若把 50 题里表现最好的分题型数字直接代入（multi 58.8、temporal 63.6、pref 50、KU 85.7、user/assistant 100），
+   乐观情景 74.2% 是上限——真实全量落在 68-73% 区间更可信；
+4. 触发全量 500 的条件（用户此前延后）：multi turn 粒度在更大样本（≥100 题）确认 + 干净组合验证完成。
+
 ## 四、一句话
 
 **检索已达标（96.8% 头部），下一步全部投入在【上下文工程 + 生成策略】：把时间戳注入上下文、按题型路由生成提示、异步化 LLM 提取**——这是从 49.6% 走向 70%+ 的三步，也是评测证明 Trinity 深度能力的关键。

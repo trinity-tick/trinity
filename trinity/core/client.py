@@ -380,9 +380,11 @@ class Trinity:
             # ── 真实 mode 路由（GEN-2，修复"mode 参数装饰性"）──────────
             #   keyword/exact → FTS5 关键词（保持默认行为）
             #   semantic       → 向量检索（可用时）；不可用回退 FTS5
-            #   hybrid         → 47 通道融合（仅当 hybrid retriever 已初始化，
-            #                    否则回退 FTS5 以保持默认路径不变）
+            #   hybrid         → 5 通道融合（rrf；仅当 hybrid retriever 已初始化）
             #   graph          → 图谱检索（adapter 支持时）；否则回退 FTS5
+            # 2026-08-17 二轮验证（scripts/verify_engine_default.py, 同 120 题同摄入 A/B）:
+            #   FTS R@5=0.975 > hybrid-rrf 0.942 → 引擎默认保持 FTS；
+            #   hybrid 仅对显式初始化/调用 search_hybrid 的路径生效（strategy 已标定 fusion→rrf）。
             _vector_available = (
                 hasattr(self._adapter, "_fts_available")
                 and self._adapter._fts_available()
@@ -418,13 +420,51 @@ class Trinity:
                     )
             elif _use_hybrid:
                 try:
+                    self.hybrid_retriever  # 懒初始化（BM25 后台预热，非阻塞）
                     raw_results = self.search_hybrid(
-                        query=query, top_k=top_k, strategy="fusion",
+                        # 2026-08-17 标定（120 题官方子集）: fusion 静态权重 R@5=0.008,
+                        # rrf R@5=0.950 → 默认改为 rrf（见 scripts/calibrate_ranking.py）
+                        query=query, top_k=top_k, strategy="rrf",
                         agent_id=agent_id, persona_id=persona_id,
                         tenant_id=tenant_id,
                     ).get("results", [])
                 except Exception:
                     raw_results = []
+                if not raw_results:
+                    # hybrid 空结果（BM25 未就绪/通道退化）→ FTS 兜底防丢召回
+                    try:
+                        raw_results = self._adapter.search_memories(
+                            query=query,
+                            persona_id=persona_id or None,
+                            tenant_id=tenant_id or self.tenant_id,
+                            agent_id=agent_id or None,
+                            app_id=app_id,
+                            session_id=session_id,
+                            category=category,
+                            top_k=top_k,
+                        )
+                    except Exception:
+                        raw_results = []
+                else:
+                    # hybrid 结果为 lean dict（memory_id/hybrid_score…），按 memory_id
+                    # 回补完整字段（content/persona_id/score/created_at…），与 FTS 路径
+                    # 返回同构，保证调用方（DSH/MCP/API/测试）schema 兼容。
+                    try:
+                        enriched = []
+                        for m in raw_results:
+                            mid = m.get("memory_id")
+                            full = {}
+                            if mid and self._adapter:
+                                try:
+                                    full = self._adapter.get_memory(mid) or {}
+                                except Exception:
+                                    full = {}
+                            rec = {**full, **m}
+                            rec.setdefault("score", rec.get("hybrid_score", 0.0))
+                            enriched.append(rec)
+                        raw_results = enriched
+                    except Exception:
+                        pass
             elif _use_graph:
                 try:
                     raw_results = self._adapter.search_graph(
@@ -1879,7 +1919,35 @@ class Trinity:
     def selfmem_strategy(self, actions: List[str]) -> Dict[str, Any]:
         return self.bridge("strategy", actions=actions)
 
-    def reason(self, query: str, multi_hop: bool = False, top_k: int = 5) -> Dict[str, Any]:
+    def reason(
+        self,
+        query: str,
+        multi_hop: bool = False,
+        top_k: int = 5,
+        qtype: Optional[str] = None,
+        question_date: Optional[str] = None,
+        agent_id: Optional[str] = None,
+        persona_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """开放域推理。
+
+        2026-08-17 产品化: TRINITY_ROUTE_REASONER=on 时走 RouteReasoner——
+        封装基准已验证的生成策略（multi→turn 粒度 / temporal→REL+inner2 /
+        pref→两段式 / 其他→dated plain，见 trinity/qa/route_reasoner.py）；
+        无凭证/失败回退 OpenDomainReasoner。默认 off（行为兼容）。
+        """
+        if os.environ.get("TRINITY_ROUTE_REASONER", "off").strip().lower() == "on":
+            try:
+                from trinity.qa.route_reasoner import RouteReasoner
+
+                rr = RouteReasoner(search_fn=self.search)
+                if rr.available:
+                    return rr.answer(
+                        query, qtype=qtype, question_date=question_date,
+                        agent_id=agent_id, persona_id=persona_id,
+                    )
+            except Exception:
+                pass  # 回退
         if self._engine:
             from trinity.modules.open_domain.reasoner import OpenDomainReasoner
             reasoner = OpenDomainReasoner()
@@ -2498,7 +2566,7 @@ class Trinity:
         self,
         query: str,
         top_k: int = 10,
-        strategy: str = "fusion",
+        strategy: str = "rrf",  # 2026-08-17 标定: rrf 远优于 fusion（0.950 vs 0.008）
         agent_id: Optional[str] = None,
         persona_id: Optional[str] = None,
         tenant_id: Optional[str] = None,
