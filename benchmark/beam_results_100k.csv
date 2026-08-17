@@ -1,0 +1,2 @@
+scale,memory_count,queries,qps,p50_ms,p95_ms,p99_ms,mean_lat_ms,min_lat_ms,max_lat_ms,mean_recall_at_5
+100K,110000,50,0.99,984.6,1224.79,1337.35,1005.77,830.9,1382.18,1.0

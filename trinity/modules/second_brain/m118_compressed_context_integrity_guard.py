@@ -1,4 +1,8 @@
+# DEPRECATED: This experimental module (M118) is not registered in __init__.py
+# and has no known internal consumers. It is retained for reference only.
+# Last assessed: 2026-08-08. Remove in a future cleanup cycle if unused.
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 M118 CompressedContextIntegrityGuard — 压缩上下文完整性守护
 
 综合 COMA (Context Memory Augmentation) + SeKV (Selective Key-Value) 洞察，

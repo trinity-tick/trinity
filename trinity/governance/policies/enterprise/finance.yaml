@@ -1,0 +1,39 @@
+# Trinity 企业治理模板 — 财务部门（2026-08-15, V2 动作 B）
+# 场景：财务记忆高敏隔离；财务内部 agent 共享；仅财务主管可读；审计强制。
+# 用法：GovernanceEngine.load_policy("trinity/governance/policies/enterprise/finance.yaml")
+policy:
+  name: enterprise-finance
+  description: 财务部门记忆：高敏隔离、部门内共享、主管定向授权、强制审计
+  rules:
+    # 1) 兜底隔离
+    - scope: isolated
+      subject: "*"
+      target: "*"
+      action: "*"
+      audit: true
+    # 2) 财务部门内共享
+    - scope: shared
+      subject: "fin-*"
+      target: "fin-*"
+      action: "*"
+      audit: true
+    # 3) 报表数据：仅 fin-analyst 可写，fin-* 可读
+    - scope: shared
+      subject: "fin-analyst"
+      target: "financial-reports"
+      action: write
+      audit: true
+    - scope: shared
+      subject: "fin-*"
+      target: "financial-reports"
+      action: read
+      audit: true
+    # 4) 预算数据：仅 fin-manager 可读（更高敏感）
+    - scope: shared
+      subject: "fin-manager"
+      target: "budget-data"
+      action: "*"
+      audit: true
+  defaults:
+    audit: true
+    allow: false

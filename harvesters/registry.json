@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "plugins": [
+    {
+      "id": "file-harvester",
+      "module": "harvesters.plugins.file_harvester",
+      "enabled": true,
+      "config": {
+        "dirs": [],
+        "category": "file_harvested",
+        "tags": ["file"],
+        "importance": 0.5
+      }
+    }
+  ]
+}

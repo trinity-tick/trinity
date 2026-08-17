@@ -1,4 +1,6 @@
 """
+# status: experimental (2026-08-15 audit: lazy-loader for SecondBrain; pairs with
+#   registry.py, not wired into runtime path - engine facade is the active path)
 Optimized SecondBrain loader with lazy module loading.
 Replaces the monolithic SecondBrainV636 constructor.
 """
@@ -10,7 +12,7 @@ from typing import Any, Dict, Optional
 
 from trinity.modules.second_brain.registry import get_registry, ModuleRegistry
 from trinity.modules.second_brain.guardian import GuardianChainV50
-from trinity.modules.second_brain.retrieval import RetrievalSystemV47
+from trinity.modules.second_brain.guardian_retrieval import RetrievalSystemV47
 
 
 class SecondBrainLoader:

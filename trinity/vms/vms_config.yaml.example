@@ -1,0 +1,69 @@
+# Trinity VMS Configuration Example
+# ==================================
+# Copy this file and adjust values for your deployment.
+#
+# Usage:
+#   vms = VMS.from_config("vms_config.yaml")
+#
+# or via environment variables:
+#   TRINITY_VMS_CONFIG=/path/to/vms_config.yaml
+
+# ── Memory Backend ──────────────────────────────────────────────────────
+# Supported: sqlite | postgres | memory
+memory_backend: sqlite
+
+# ── Search Engine ───────────────────────────────────────────────────────
+# Supported: vector | hybrid | cross_modal
+search_engine: hybrid
+
+# ── Ann Index ───────────────────────────────────────────────────────────
+# Enable approximate nearest neighbour for vector search (>10K memories).
+# Set to true to use hnswlib / FAISS HNSW.
+ann_enabled: false
+
+# ── Framework Adapters ──────────────────────────────────────────────────
+# Which agent frameworks to pre-load adapters for.
+adapters:
+  - langchain
+  # - crewai
+  # - autogen
+
+# ── Connection Strings ──────────────────────────────────────────────────
+# PostgreSQL (required when memory_backend == "postgres")
+# connection_string: "postgresql://user:pass@localhost:5432/trinity"
+
+# SQLite (default when memory_backend == "sqlite")
+# sqlite_db_path: "C:/Users/Administrator/.trinity/data/trinity_store.db"
+
+# ── Pool Configuration (PostgreSQL only) ────────────────────────────────
+pool:
+  min: 2
+  max: 10
+
+# ── Identity Provider ───────────────────────────────────────────────────
+identity:
+  # drift detection threshold for identity anchors
+  drift_threshold: 0.15
+  # seconds between auto-drift checks (0 = disabled)
+  auto_check_interval: 0
+
+# ── Auditor ─────────────────────────────────────────────────────────────
+audit:
+  enabled: true
+  # constitutional invariants: strict / relaxed
+  mode: strict
+
+# ── Compression ─────────────────────────────────────────────────────────
+compression:
+  max_tokens: 4096
+  compression_threshold: 0.8
+
+# ── Task Broker ─────────────────────────────────────────────────────────
+tasks:
+  max_concurrent: 100
+  default_timeout: 300  # seconds
+
+# ── Logging ─────────────────────────────────────────────────────────────
+logging:
+  level: INFO  # DEBUG | INFO | WARNING | ERROR
+  file: ""     # empty = stdout only

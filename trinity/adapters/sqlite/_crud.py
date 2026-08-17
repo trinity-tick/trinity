@@ -1,0 +1,538 @@
+"""SQLite adapter - memory CRUD & lifecycle mixin (split from sqlite.py, 2026-08-17).
+
+Part of the SQLiteAdapter package decomposition. Behavior identical to the
+pre-split single-file implementation.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import logging
+import os
+import re
+import sqlite3
+import functools
+import threading
+import time
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+from ...security.crypto import get_storage_cipher, StorageCipher  # type: ignore[attr-defined]
+from .._util import _safe_write
+
+logger = logging.getLogger("trinity.adapters.sqlite")
+
+
+class _CrudMixin:
+    @_safe_write
+    def store_memory(
+        self,
+        content: str,
+        persona_id: str = "default",
+        session_id: Optional[str] = None,
+        tenant_id: str = "default",
+        agent_id: str = "default",
+        app_id: Optional[str] = None,
+        role: str = "user",
+        importance: float = 0.5,
+        tags: Optional[List[str]] = None,
+        category: str = "general",
+        memory_layer: Optional[str] = None,
+        auto_redact_pii: bool = False,
+        ttl_seconds: Optional[int] = None,
+        modality: str = "text",
+        metadata: Optional[Dict[str, Any]] = None,
+        source_uri: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        with self._write_lock:
+
+            conn = self._conn
+            if not conn:
+                raise RuntimeError("Not connected. Call connect() first.")
+
+            memory_id = f"mem_{uuid.uuid4().hex[:16]}"
+            version_id = f"ver_{uuid.uuid4().hex[:12]}"
+            if not session_id:
+                session_id = f"sess_{uuid.uuid4().hex[:12]}"
+            tags_json = json.dumps(tags or [])
+            now = datetime.now(timezone.utc).isoformat()
+
+            # ── PII 检测与脱敏 ──────────────────────────────────────────
+            pii_info = None
+            stored_content = content
+            if auto_redact_pii:
+                result = self._detect_pii(content)
+                stored_content = result["redacted"]
+                pii_found = {k: v for k, v in result["found"].items() if v}
+                if pii_found:
+                    pii_info = pii_found
+
+            sha256_hash = self._compute_sha256(stored_content)
+            tokenized = self._tokenize_content_for_fts(stored_content)
+            plain_content = stored_content
+            # B5 存储加密：content 列写密文；tokenized 明文；hash 基于明文
+            stored_content = self._encrypt_content(stored_content)
+            tokenized = self._tokenized_for_storage(plain_content, tokenized)
+
+            self._batch_buffer.append({
+                "memory_id": memory_id,
+                "session_id": session_id,
+                "persona_id": persona_id,
+                "tenant_id": tenant_id,
+                "agent_id": agent_id,
+                "app_id": app_id,
+                "content": stored_content,
+                "role": role,
+                "importance": importance,
+                "tags_json": tags_json,
+                "category": category,
+                "memory_layer": memory_layer,
+                "sha256_hash": sha256_hash,
+                "now": now,
+                "ttl_seconds": ttl_seconds,
+                "modality": modality,
+                "metadata_json": json.dumps(metadata or {}, ensure_ascii=False),
+                "source_uri": source_uri,
+            })
+
+            conn.execute("""
+                INSERT INTO memories
+                (memory_id, session_id, persona_id, tenant_id, agent_id, app_id, content,
+                 tokenized_content, role,
+                 importance, tags, category, memory_layer, sha256_hash, status, version,
+                 ttl_seconds, last_accessed_at, access_count, importance_score,
+                 content_hash, conflict_group_id, is_resolved,
+                 modality, metadata, source_uri,
+                 created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 1, ?, ?, 0, 0.0,
+                        ?, NULL, 0, ?, ?, ?, ?, ?)
+            """, (memory_id, session_id, persona_id, tenant_id, agent_id, app_id, stored_content,
+                  tokenized, role,
+                  importance, tags_json, category, memory_layer, sha256_hash, ttl_seconds, now,
+                  sha256_hash, modality, json.dumps(metadata or {}, ensure_ascii=False),
+                  source_uri, now, now))
+
+            conn.execute("""
+                INSERT INTO memory_versions
+                (version_id, memory_id, content, sha256_hash, operation, created_at)
+                VALUES (?, ?, ?, ?, 'CREATE', ?)
+            """, (version_id, memory_id, stored_content, sha256_hash, now))
+
+            # ── 审计日志（只写一次） ────────────────────────────────────
+            self._write_audit_log(
+                action="STORE_MEMORY",
+                memory_id=memory_id,
+                persona_id=persona_id,
+                content_hash=sha256_hash,
+                metadata={
+                    "has_pii": pii_info is not None,
+                    "pii_types": list(pii_info.keys()) if pii_info else [],
+                    "auto_redacted": auto_redact_pii,
+                    "session_id": session_id,
+                },
+            )
+
+            # 批量提交管理：加入缓冲区，达到条件再 commit
+            self._maybe_flush()
+
+            return {
+                "memory_id": memory_id,
+                "version_id": version_id,
+                "sha256_hash": sha256_hash,
+                "timestamp": now,
+                "persona_id": persona_id,
+                "session_id": session_id,
+                "app_id": app_id,
+                "auto_redacted": auto_redact_pii and pii_info is not None,
+                "pii_redacted_types": list(pii_info.keys()) if pii_info else [],
+            }
+    def get_memory(self, memory_id: str) -> Optional[Dict[str, Any]]:
+        """查询单条记忆（2026-08-15 v2：线程本地只读连接）。"""
+        conn = self._get_read_conn()
+        if not conn:
+            return None
+
+        cursor = conn.execute(
+            "SELECT * FROM memories WHERE memory_id = ?", (memory_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        if d.get("content"):
+            d["content"] = self._decrypt_content(d["content"])
+        return d
+    def get_memory_owners(self, memory_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+        """批量查询记忆的归属与状态（hybrid 检索隔离后过滤用）。
+
+        返回 {memory_id: {status, agent_id, persona_id, tenant_id}}；
+        不在库中的 id 不出现（调用方据此区分"池记忆/幽灵"）。
+
+        2026-08-15（压测修复 v2）：线程本地只读连接（纯读，无锁）。
+        """
+        if not memory_ids:
+            return {}
+        conn = self._get_read_conn()
+        if not conn:
+            return {}
+        placeholders = ",".join("?" * len(memory_ids))
+        rows = conn.execute(
+            f"SELECT memory_id, status, agent_id, persona_id, tenant_id "
+            f"FROM memories WHERE memory_id IN ({placeholders})",
+            list(memory_ids),
+        ).fetchall()
+        return {
+            r["memory_id"]: {
+                "status": r["status"],
+                "agent_id": r["agent_id"],
+                "persona_id": r["persona_id"],
+                "tenant_id": r["tenant_id"],
+            }
+            for r in rows
+        }
+    def get_persona_memories(
+        self, persona_id: str, agent_id: Optional[str] = None, limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        conn = self._conn
+        if not conn:
+            return []
+
+        if agent_id:
+            cursor = conn.execute("""
+                SELECT * FROM memories
+                WHERE persona_id = ? AND agent_id = ? AND status = 'active'
+                ORDER BY created_at DESC
+                LIMIT ?
+            """, (persona_id, agent_id, limit))
+        else:
+            cursor = conn.execute("""
+                SELECT * FROM memories
+                WHERE persona_id = ? AND status = 'active'
+                ORDER BY created_at DESC
+                LIMIT ?
+            """, (persona_id, limit))
+        rows = [dict(row) for row in cursor.fetchall()]
+        for r in rows:
+            if r.get("content"):
+                r["content"] = self._decrypt_content(r["content"])
+        return rows
+    @_safe_write
+    def delete_memory(self, memory_id: str) -> bool:
+        with self._write_lock:
+
+            conn = self._conn
+            if not conn:
+                return False
+
+            cursor = conn.execute(
+                "SELECT memory_id, persona_id, sha256_hash FROM memories WHERE memory_id = ?",
+                (memory_id,)
+            )
+            row = cursor.fetchone()
+            if not row:
+                return False
+
+            persona_id = row["persona_id"]
+            content_hash = row["sha256_hash"]
+
+            conn.execute(
+                "UPDATE memories SET status = 'deleted', updated_at = datetime('now') WHERE memory_id = ?",
+                (memory_id,)
+            )
+            conn.execute("""
+                INSERT INTO memory_versions (version_id, memory_id, content, sha256_hash, operation, created_at)
+                SELECT ? || '_del', memory_id, content, sha256_hash, 'DELETE', datetime('now')
+                FROM memories WHERE memory_id = ?
+            """, (memory_id, memory_id))
+
+            # ── 审计日志 ────────────────────────────────────────────────
+            self._write_audit_log(
+                action="DELETE_MEMORY",
+                memory_id=memory_id,
+                persona_id=persona_id,
+                content_hash=content_hash,
+            )
+            conn.commit()
+            return True
+    @_safe_write
+    def update_memory(
+        self,
+        memory_id: str,
+        content: Optional[str] = None,
+        importance: Optional[float] = None,
+        tags: Optional[List[str]] = None,
+        category: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Update an existing memory with version tracking (conflict-preserving).
+
+        Old version rows stay in memory_versions untouched; a new version row
+        with operation 'UPDATE' is appended. The memories row is bumped to
+        version + 1 with recomputed sha256/content_hash/tokenized_content.
+        An UPDATE_MEMORY audit log entry is written.
+
+        Returns:
+            The updated memory row as a dict, or None if memory_id not found.
+        """
+        with self._write_lock:
+
+            conn = self._conn
+            if not conn:
+                return None
+
+            cursor = conn.execute(
+                "SELECT * FROM memories WHERE memory_id = ?", (memory_id,)
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            current = dict(row)
+
+            now = datetime.now(timezone.utc).isoformat()
+            version_id = f"ver_{uuid.uuid4().hex[:12]}"
+
+            new_content = content if content is not None else self._decrypt_content(current.get("content", ""))
+            new_importance = (
+                importance if importance is not None
+                else float(current.get("importance", 0.5))
+            )
+            current_tags = current.get("tags") or "[]"
+            new_tags = (
+                tags if tags is not None
+                else (json.loads(current_tags) if isinstance(current_tags, str) else current_tags)
+            )
+            new_category = (
+                category if category is not None
+                else current.get("category", "general")
+            )
+
+            sha256_hash = self._compute_sha256(new_content)
+            tokenized = self._tokenize_content_for_fts(new_content)
+            plain_content = new_content
+            # B5 存储加密：content 列写密文；tokenized 明文；hash 基于明文
+            new_content = self._encrypt_content(new_content)
+            tokenized = self._tokenized_for_storage(plain_content, tokenized)
+
+            conn.execute("""
+                UPDATE memories
+                SET content = ?, tokenized_content = ?, importance = ?, tags = ?,
+                    category = ?, sha256_hash = ?, content_hash = ?,
+                    version = version + 1, updated_at = ?
+                WHERE memory_id = ?
+            """, (new_content, tokenized, new_importance,
+                  json.dumps(new_tags, ensure_ascii=False),
+                  new_category, sha256_hash, sha256_hash, now, memory_id))
+
+            conn.execute("""
+                INSERT INTO memory_versions
+                (version_id, memory_id, content, sha256_hash, operation, created_at)
+                VALUES (?, ?, ?, ?, 'UPDATE', ?)
+            """, (version_id, memory_id, new_content, sha256_hash, now))
+
+            self._write_audit_log(
+                action="UPDATE_MEMORY",
+                memory_id=memory_id,
+                persona_id=current.get("persona_id"),
+                content_hash=sha256_hash,
+                metadata={"old_version": current.get("version", 1)},
+            )
+            conn.commit()
+
+            cursor = conn.execute(
+                "SELECT * FROM memories WHERE memory_id = ?", (memory_id,)
+            )
+            updated = cursor.fetchone()
+            if not updated:
+                return None
+            d = dict(updated)
+            if d.get("content"):
+                d["content"] = self._decrypt_content(d["content"])
+            return d
+    @_safe_write
+    def archive_memories(self, memory_ids: List[str]) -> int:
+        """批量将记忆标记为 archived（衰减压缩回写；与 PostgreSQLAdapter 同接口）。"""
+        if not memory_ids:
+            return 0
+        with self._write_lock:
+            conn = self._conn
+            if not conn:
+                return 0
+            now = datetime.now(timezone.utc).isoformat()
+            placeholders = ",".join("?" * len(memory_ids))
+            cur = conn.execute(
+                f"UPDATE memories SET status = 'archived', updated_at = ? "
+                f"WHERE memory_id IN ({placeholders})",
+                [now] + list(memory_ids),
+            )
+            conn.commit()
+            return cur.rowcount
+    def get_version_chain(self, memory_id: str) -> List[Dict[str, Any]]:
+        conn = self._conn
+        if not conn:
+            return []
+
+        cursor = conn.execute("""
+            SELECT * FROM memory_versions
+            WHERE memory_id = ?
+            ORDER BY created_at ASC
+        """, (memory_id,))
+        rows = [dict(row) for row in cursor.fetchall()]
+        for r in rows:
+            if r.get("content"):
+                r["content"] = self._decrypt_content(r["content"])
+        return rows
+    def get_all_memories(self, agent_id: Optional[str] = None, limit: int = 200) -> List[Dict[str, Any]]:
+        """Get all active memories across all personas/tenants, optionally filtered by agent_id.
+
+        2026-08-15（压测修复 v2）：线程本地只读连接（纯读，无锁）。
+        """
+        conn = self._get_read_conn()
+        if not conn:
+            return []
+
+        if agent_id:
+            cursor = conn.execute("""
+                SELECT * FROM memories
+                WHERE status = 'active' AND agent_id = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+            """, (agent_id, limit))
+        else:
+            cursor = conn.execute("""
+                SELECT * FROM memories
+                WHERE status = 'active'
+                ORDER BY created_at DESC
+                LIMIT ?
+            """, (limit,))
+        rows = [dict(row) for row in cursor.fetchall()]
+        for r in rows:
+            if r.get("content"):
+                r["content"] = self._decrypt_content(r["content"])
+        return rows
+    @_safe_write
+    def touch_memory(self, memory_id: str) -> bool:
+        """更新指定记忆的 last_accessed_at 和 access_count。
+
+        Args:
+            memory_id: 要触达的记忆 ID。
+
+        Returns:
+            是否成功更新。
+        """
+        with self._write_lock:
+
+            conn = self._conn
+            if not conn:
+                return False
+
+            now = datetime.now(timezone.utc).isoformat()
+            cursor = conn.execute("""
+                UPDATE memories
+                SET last_accessed_at = ?,
+                    access_count = access_count + 1,
+                    updated_at = ?
+                WHERE memory_id = ?
+            """, (now, now, memory_id))
+            conn.commit()
+            return cursor.rowcount > 0
+    def _touch_batch(self, memory_ids: List[str]) -> None:
+        """批量累积搜索命中的记忆访问（异步写，读路径零阻塞）。
+
+        2026-08-15（压测修复）：原实现同步 UPDATE+commit（每次检索都写库，
+        实测占读延迟 ~40%）。改为入内存队列，由 _touch_flush_loop 后台线程
+        定期批量 flush（一次 UPDATE…IN + 一次 commit）。语义保持：
+        access_count 按命中次数累加；last_accessed_at 取 flush 时刻。
+        失败静默，不影响搜索主流程。
+        """
+        if not memory_ids:
+            return
+        with self._write_lock:
+            for mid in memory_ids:
+                self._touch_queue[mid] = self._touch_queue.get(mid, 0) + 1
+        self._touch_pending.set()
+    def _touch_flush_loop(self) -> None:
+        """后台线程：周期 flush touch 队列（batch UPDATE + 一次 commit）。"""
+        while not self._touch_stop.wait(1.0):
+            try:
+                self._flush_touch_queue()
+            except Exception:
+                pass  # 静默失败
+    def _flush_touch_queue(self) -> None:
+        """把累积的 touch 队列批量写入（幂等；空队列直接返回）。"""
+        with self._write_lock:
+            if not self._touch_queue:
+                self._touch_pending.clear()
+                return
+            conn = self._conn
+            if not conn:
+                return
+            queue = self._touch_queue
+            self._touch_queue = {}
+            self._touch_pending.clear()
+            try:
+                now = datetime.now(timezone.utc).isoformat()
+                mids = list(queue.keys())
+                counts = queue
+                placeholders = ",".join("?" for _ in mids)
+                # 单条 UPDATE 按计数累加（executemany + 一次 commit）
+                conn.executemany(
+                    "UPDATE memories SET access_count = access_count + ?, "
+                    "last_accessed_at = ?, updated_at = ? WHERE memory_id = ?",
+                    [(counts[mid], now, now, mid) for mid in mids],
+                )
+                conn.commit()
+            except Exception:
+                # flush 失败：回填队列避免丢失（下一轮重试）
+                # 2026-08-16 修复:必须先 rollback——python sqlite3 在 execute 异常后
+                # 连接留在未提交事务中(不自动回滚), 悬挂写事务会永久占 SQLite 写锁
+                # (worker 超时/锁复发根因, 与 skill 坑 #9 同源)。
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                for mid, cnt in queue.items():
+                    self._touch_queue[mid] = self._touch_queue.get(mid, 0) + cnt
+    def age_memories(self) -> Dict[str, Any]:
+        """手动触发老化扫描，清理 TTL 过期的记忆（软删除）。
+
+        Returns:
+            Dict with aged_count and details.
+        """
+        # 2026-08-16 修复:加 _write_lock + 异常 rollback——此前无锁保护且
+        # UPDATE 抛异常时不回滚, 会悬挂写事务占锁(与 touch flush 同源)。
+        with self._write_lock:
+            conn = self._conn
+            if not conn:
+                return {"aged_count": 0, "error": "Not connected"}
+
+            now = datetime.now(timezone.utc).isoformat()
+            cursor = conn.execute("""
+                SELECT memory_id FROM memories
+                WHERE status = 'active'
+                  AND ttl_seconds IS NOT NULL
+                  AND created_at IS NOT NULL
+                  AND datetime(created_at, '+' || ttl_seconds || ' seconds') < datetime(?)
+            """, (now,))
+            expired_ids = [row["memory_id"] for row in cursor.fetchall()]
+
+            if not expired_ids:
+                return {"aged_count": 0, "timestamp": now}
+
+            try:
+                placeholders = ",".join("?" for _ in expired_ids)
+                conn.execute(f"""
+                    UPDATE memories
+                    SET status = 'expired', updated_at = ?
+                    WHERE memory_id IN ({placeholders})
+                """, [now] + expired_ids)
+                conn.commit()
+            except Exception:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                raise
+
+            return {"aged_count": len(expired_ids), "timestamp": now, "expired_ids": expired_ids}

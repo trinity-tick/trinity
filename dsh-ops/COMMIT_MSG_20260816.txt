@@ -1,0 +1,9 @@
+feat(bench): official LongMemEval_S 500q run + honest README + productization doc
+
+- Official LongMemEval_S (ICLR 2025, 500q) measured via hf-mirror dataset:
+  session R@5=0.968, turn R@5=0.922, hit pos 1.3 (hybrid, top-5)
+- QA chain finding: truncated context gave 1.8%; full evidence context 78% (50q validation)
+- Real LLM write-time extraction verified (TRINITY_LLM_EXTRACT=on + DeepSeek: 14 entities / 11 relations)
+- README/README.zh: removed borrowed Exabase 96.4% / Hindsight 64.1% claims; added real numbers + disclaimers
+- docs/PRODUCTIZATION_20260816.md: audit-compliance memory layer wedge
+- NOT published (user requested hold); local commit only

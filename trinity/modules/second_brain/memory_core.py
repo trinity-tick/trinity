@@ -1,10 +1,12 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 Trinity Second Brain — Memory Core (M101-M106)
 ===============================================
 HippocampalComplementaryMemory, IdentityPreservingConsolidator,
 ReasoningDriftAuditor, ContextObjectManager, MultiHeadMemoryPartition,
 ThreeLayerHierarchicalMemory
 """
+from __future__ import annotations
 
 import os, sys, time, math, random, uuid, json, hashlib
 from dataclasses import dataclass, field

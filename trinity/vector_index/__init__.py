@@ -37,6 +37,9 @@ from trinity.vector_index.sparse import (
 from trinity.vector_index.reranker import (
     CrossEncoderReranker,
 )
+from trinity.vector_index.graph_vector_hybrid import (
+    GraphVectorHybridRetriever,
+)
 
 __all__ = [
     "VectorIndex",
@@ -51,4 +54,5 @@ __all__ = [
     "BM25SparseRetriever",
     "fuse_scores_sparse_dense",
     "CrossEncoderReranker",
+    "GraphVectorHybridRetriever",
 ]

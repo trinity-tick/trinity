@@ -1,0 +1,62 @@
+# Marvis Adapter Configuration
+# =============================
+# Trinity-Marvist A2A bridge settings.
+# Loaded automatically by MarvisAdapter on initialization.
+#
+# Environment variable overrides are supported:
+#   TRINITY_BASE_URL   → trinity_base_url
+#   MARVIS_AGENT_ID    → marvis_agent_id
+
+# ── Trinity Connection ─────────────────────────────────────────────────
+trinity_base_url: "http://localhost:8001"     # Trinity API server address
+trinity_timeout_sec: 30                        # HTTP request timeout (seconds)
+
+# ── Marvis Agent Identity ─────────────────────────────────────────────
+marvis_agent_id: "marvis-main"                 # Marvis orchestrator agent ID
+marvis_agent_name: "Marvis Main Orchestrator"  # Display name
+
+# ── Memory Defaults ───────────────────────────────────────────────────
+default_ttl: null                              # Default memory TTL (null = permanent)
+default_modality: "text"                       # Default memory modality
+default_recall_limit: 5                        # Default recall result count
+
+# ── Trust & Audit ─────────────────────────────────────────────────────
+trust_threshold: 0.6                           # Minimum trust score for auto-dispatch (0.0–1.0)
+audit_enabled: true                            # Whether to audit sub-agent actions by default
+audit_sample_rate: 1.0                         # Fraction of actions to audit (1.0 = all)
+
+# ── Sub-Agent Registry ────────────────────────────────────────────────
+# Pre-registered sub-agents known to Marvis. Each entry maps an agent name
+# to its capabilities. Used for bootstrapping before dynamic discovery.
+sub_agent_registry:
+  # search-agent:
+  #   capabilities:
+  #     - web_search
+  #     - deep_research
+  #   description: "Web and deep research agent"
+  #
+  # file-agent:
+  #   capabilities:
+  #     - file_operations
+  #     - document_analysis
+  #   description: "Local file system agent"
+  #
+  # computer-agent:
+  #   capabilities:
+  #     - system_control
+  #     - desktop_automation
+  #   description: "Windows system control agent"
+  #
+  # app-agent:
+  #   capabilities:
+  #     - app_management
+  #     - app_interaction
+  #   description: "Application and game operations agent"
+
+# ── Dispatch Defaults ─────────────────────────────────────────────────
+dispatch_default_priority: 5                   # Default task priority (1–10)
+dispatch_timeout_sec: 300                      # Default task deadline (seconds)
+
+# ── Context Sync ──────────────────────────────────────────────────────
+context_sync_enabled: true                     # Auto-sync context before dispatch
+context_max_keys: 50                           # Max keys per context sync

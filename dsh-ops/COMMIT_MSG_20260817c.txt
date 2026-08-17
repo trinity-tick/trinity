@@ -1,0 +1,8 @@
+feat(bench): activate reserved modules (ppro/chronos/freshness/intent/evidence) 50q A/B
+
+- reserve(5 modules) 66% vs dated baseline 64% on same-batch 50q (seed42)
+- ppro_profile_retrieval effective: preference 0% -> 50% (UserProfileDeriver + LLM reply)
+- chronos/freshness no delta at current coarse granularity (needs fine event extraction)
+- intent/evidence only nominally activated
+- Script: benchmark/lme_qa_opt_reserve.py (--reserve); doc section 3.9
+- NOT published (user requested hold)

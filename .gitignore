@@ -77,6 +77,14 @@ out.txt
 t.txt
 test_*.py
 !tests/test_*.py
+!tests/unit/test_*.py
+# Debug residue (2026-08-15): aggregator/jieba/e2e scratch output
+agg*.txt
+_jieba*.txt
+_jieba*.py
+_fv*.txt
+_c.txt
+_e2e_out.txt
 
 # Local config (not committed)
 .github_token
@@ -90,3 +98,46 @@ site/
 # WMS design docs (not Trinity core)  
 docs/wms_*  
 docs/dashboards/ 
+
+# Backups & editor artifacts (2026-08-14 hygiene pass)
+*.bak
+*.bak_*
+*.orig
+*.rej
+*.p43_*
+*.p46_*
+*.p48_*
+*.p49_*
+
+# Local debug/test scratch files (2026-08-14 hygiene pass)
+_c.txt
+_e2e_out.txt
+_fv*.txt
+_jieba*.txt
+_jieba_*.py
+agg*.txt
+proc_test*.txt
+simple_test*.txt
+sig.txt
+temp_test*.py
+test_proc*
+test_stderr.txt
+test_mcp_err.txt
+test123.txt
+check_agg.py
+diag_test.txt
+
+# Runtime output dirs (2026-08-14 hygiene pass)
+output/
+temp/
+trinity/output/
+
+trinity.yaml
+# ���� Trinity ���ã��� PG ���ӣ���ƾ֤���� ~/.dsh/.credentials.yaml �����
+
+*.db-shm
+*.db-wal
+# 备份/临时目录（2026-08-15 housekeeping）
+backup/
+__pycache__/
+*.pyc

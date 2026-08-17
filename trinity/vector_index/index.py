@@ -33,6 +33,34 @@ class SearchResult:
     distance: float = 0.0
 
 
+@dataclass
+class PQConfig:
+    """Product Quantization configuration for memory-efficient FAISS indexing.
+
+    PQ compresses high-dimensional vectors into compact codes by splitting
+    each vector into M sub-vectors and quantizing each independently.
+
+    Attributes:
+        M: Number of sub-vectors (must divide dimension evenly).
+        nbits: Number of bits per sub-vector centroid index (8-16).
+        use_ivf: Whether to combine PQ with IVF (inverted file) for fast search.
+        nlist: Number of IVF centroids (only used if use_ivf=True).
+    """
+    M: int = 32
+    nbits: int = 8
+    use_ivf: bool = True
+    nlist: int = 100
+
+    @property
+    def compression_ratio(self) -> float:
+        """Approximate memory savings ratio vs full-precision float32."""
+        pq_bytes = self.M * self.nbits // 8
+        return f"~{pq_bytes / (1024 * 4) * 100:.1f}% of original"
+
+    def __repr__(self) -> str:
+        return f"PQConfig(M={self.M}, nbits={self.nbits}, IVF={self.use_ivf})"
+
+
 class VectorIndex(ABC):
     """Abstract base for vector indexes."""
 
@@ -205,6 +233,7 @@ class FaissIndex(VectorIndex):
         self._index_type = index_type
         self._nlist = nlist
         self._hnsw_config = hnsw_config or HNSWConfig()
+        self._pq_config: Optional[PQConfig] = None
         self._index = None
         self._id_map: Dict[int, str] = {}  # faiss_id -> our_id
         self._next_faiss_id = 0
@@ -225,6 +254,18 @@ class FaissIndex(VectorIndex):
         metric = (self._faiss.METRIC_INNER_PRODUCT if self._metric == "cosine"
                   else self._faiss.METRIC_L2)
 
+        if self._index_type == "pq":
+            pq = self._pq_config or PQConfig()
+            self._index = self._faiss.IndexPQ(self._dim, pq.M, pq.nbits)
+            logger.info("Built IndexPQ (M=%d, nbits=%d, compression=%s)",
+                        pq.M, pq.nbits, pq.compression_ratio)
+        elif self._index_type == "ivfpq":
+            pq = self._pq_config or PQConfig()
+            quantizer = self._faiss.IndexFlatIP(self._dim)
+            self._index = self._faiss.IndexIVFPQ(quantizer, self._dim, pq.nlist, pq.M, pq.nbits)
+            self._index.nprobe = min(pq.nlist, 10)
+            logger.info("Built IndexIVFPQ (M=%d, nbits=%d, nlist=%d, nprobe=%d, compression=%s)",
+                        pq.M, pq.nbits, pq.nlist, self._index.nprobe, pq.compression_ratio)
         if self._index_type == "flat":
             self._index = self._faiss.IndexFlatIP(self._dim)
         elif self._index_type == "ivf":
@@ -240,9 +281,20 @@ class FaissIndex(VectorIndex):
         else:
             self._index = self._faiss.IndexFlatIP(self._dim)
 
+    def train(self, vectors: np.ndarray) -> None:
+        """Train the index (required for PQ/IVF indexes)."""
+        if self._index is not None and not self._index.is_trained:
+            if isinstance(self._index, (self._faiss.IndexPQ, self._faiss.IndexIVFPQ, self._faiss.IndexIVFFlat)):
+                logger.info("Training PQ index with %d vectors...", len(vectors))
+                self._index.train(vectors)
+                logger.info("PQ index trained successfully")
+
     def _add_vector(self, entry: IndexEntry):
         if not self._faiss_available:
             return
+        # Auto-train PQ/IVF indexes on first add
+        if self._index is not None and not self._index.is_trained:
+            self.train(entry.vector.reshape(1, -1).astype(np.float32))
         vec = entry.vector.reshape(1, -1).astype(np.float32)
         if self._metric == "cosine":
             self._faiss.normalize_L2(vec)
@@ -446,6 +498,7 @@ def create_index(
     metric: str = "cosine",
     index_type: str = "hnsw",
     hnsw_config: Optional[HNSWConfig] = None,
+    pq_config: Optional[PQConfig] = None,
     **kwargs,
 ) -> VectorIndex:
     """Create a vector index with the specified backend.
@@ -455,8 +508,10 @@ def create_index(
                  "numpy", "chromadb"
         dim: Embedding dimension.
         metric: "cosine" or "l2".
-        index_type: For FAISS backend: "hnsw" (default), "flat", "ivf".
+        index_type: For FAISS backend: "hnsw" (default), "flat", "ivf",
+            "pq" (product quantization), "ivfpq" (IVF+PQ).
         hnsw_config: HNSW hyperparameters (M, efConstruction, efSearch).
+        pq_config: Optional PQ configuration for pq/ivfpq index types.
 
     Returns:
         Configured VectorIndex instance.
@@ -465,8 +520,11 @@ def create_index(
         return NumpyBruteForceIndex(dim, metric, **kwargs)
 
     if backend == "faiss":
-        return FaissIndex(dim, metric, index_type=index_type,
-                          hnsw_config=hnsw_config, **kwargs)
+        idx = FaissIndex(dim, metric, index_type=index_type,
+                         hnsw_config=hnsw_config, **kwargs)
+        if pq_config:
+            idx._pq_config = pq_config
+        return idx
 
     if backend == "annoy":
         return AnnoyIndex(dim, metric, **kwargs)
@@ -477,8 +535,11 @@ def create_index(
     if backend == "auto":
         try:
             import faiss
-            return FaissIndex(dim, metric, index_type=index_type,
-                              hnsw_config=hnsw_config, **kwargs)
+            idx = FaissIndex(dim, metric, index_type=index_type,
+                             hnsw_config=hnsw_config, **kwargs)
+            if pq_config:
+                idx._pq_config = pq_config
+            return idx
         except ImportError:
             pass
         try:

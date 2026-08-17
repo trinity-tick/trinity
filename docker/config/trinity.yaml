@@ -5,12 +5,12 @@
 
 storage:
   path: /app/data
-  db_type: sqlite  # or: postgresql
+  db_type: postgresql  # migrated from sqlite
   pg_host: ${TRINITY_PG_HOST:-localhost}
   pg_port: ${TRINITY_PG_PORT:-5432}
   pg_db: ${TRINITY_PG_DB:-trinity}
-  pg_user: ${TRINITY_PG_USER:-trinity}
-  pg_password: ${TRINITY_PG_PASSWORD:-trinity}
+  pg_user: ${TRINITY_PG_USER:-postgres}
+  pg_password: ${TRINITY_PG_PASSWORD:-postgres}
 
 server:
   mcp:

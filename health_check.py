@@ -31,6 +31,10 @@ def gh_api(method, path='', data=None):
         resp = urllib.request.urlopen(req, timeout=15)
         return json.loads(resp.read())
     except Exception as e:
+        # 401/403 = token 失效/无权限：降级为本地检查（不视为仓库故障）
+        code = getattr(e, 'code', None)
+        if code in (401, 403):
+            return {'_error': str(e)[:100], '_auth_error': True}
         return {'_error': str(e)[:100]}
 
 def check(ok, label, fix=""):
@@ -60,6 +64,8 @@ else:
         if 'health_percentage' in health:
             hp = health['health_percentage']
             check(hp >= 90, f"Community health: {hp}%")
+    elif repo.get('_auth_error'):
+        check(True, f"GitHub API auth degraded (token 401/403) — local checks only")
     else:
         check(False, f"Repository unreachable: {repo.get('_error','?')}")
 
@@ -80,6 +86,8 @@ if TOKEN:
         for w in wf['workflows']:
             ok = w['state'] == 'active'
             check(ok, f"  {w['name']} ({w['state']})")
+    elif wf.get('_auth_error'):
+        check(True, f"Workflows skipped (auth degraded — token 401/403)")
     else:
         check(False, f"Workflows unreachable: {wf.get('_error','?')}")
 

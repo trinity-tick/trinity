@@ -1,0 +1,686 @@
+{
+  "benchmark": "LoCoMo",
+  "test_set": "C:\\Users\\Administrator\\trinity\\benchmark\\locomo_test_set.json",
+  "top_k": 5,
+  "num_questions": 50,
+  "elapsed_seconds": 11.417,
+  "overall": {
+    "Recall@5": 0.1,
+    "Precision@5": 0.02,
+    "MRR": 0.0237
+  },
+  "by_category": {
+    "single-session-user": {
+      "Recall@5": 0.2857,
+      "Precision@5": 0.0571,
+      "MRR": 0.0702,
+      "count": 14
+    },
+    "single-session-assistant": {
+      "Recall@5": 0.0,
+      "Precision@5": 0.0,
+      "MRR": 0.0,
+      "count": 19
+    },
+    "multi-session-reasoning": {
+      "Recall@5": 0.1429,
+      "Precision@5": 0.0286,
+      "MRR": 0.0286,
+      "count": 7
+    },
+    "temporal-reasoning": {
+      "Recall@5": 0.0,
+      "Precision@5": 0.0,
+      "MRR": 0.0,
+      "count": 4
+    },
+    "knowledge-update": {
+      "Recall@5": 0.0,
+      "Precision@5": 0.0,
+      "MRR": 0.0,
+      "count": 3
+    },
+    "preference-tracking": {
+      "Recall@5": 0.0,
+      "Precision@5": 0.0,
+      "MRR": 0.0,
+      "count": 3
+    }
+  },
+  "details": [
+    {
+      "question_id": "q0",
+      "question": "在季度复盘与规划中，助手回复了什么内容？",
+      "answer": "P1 总投入 22 人天，产出：Recall@5 从 0.72 提升到 0.87，P99 延迟从 450ms 降到 180ms，记忆换入换出命中率 91%。Ro...",
+      "category": "single-session-assistant",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q1",
+      "question": "在产品路线图讨论中，助手回复了什么内容？",
+      "answer": "v6.8 已完成的模块：Federated Memory Query (P1-4)、增量 KG 更新 (P1-3)、主动预取 (P1-1)。正在开发：自主分页 ...",
+      "category": "single-session-assistant",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q2",
+      "question": "星辰科技的合同金额最初是 480 万还是 430 万？",
+      "answer": "480 万为合同总金额，430 万为合同额度（需在额度内消化新增功能）",
+      "category": "knowledge-update",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q3",
+      "question": "在客户需求变更处理的对话中，用户问了什么问题？",
+      "answer": "那就好。把数据导出的排期发给 David，优先级 P0。",
+      "category": "single-session-user",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q4",
+      "question": "在季度复盘与规划的对话中，用户问了什么问题？",
+      "answer": "P2 目前的进度呢？",
+      "category": "single-session-user",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q5",
+      "question": "在Q3 工作汇报准备中，助手回复了什么内容？",
+      "answer": "华南区上周毛利率为 32.7%，确实受芯片短缺影响环比下降 3.1%。建议在汇报中突出供应链优化方案。...",
+      "category": "single-session-assistant",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q6",
+      "question": "v6.8 的 P1-2 模块开发状态是已完成还是进行中？",
+      "answer": "进行中，预计 8 月 15 日提测",
+      "category": "knowledge-update",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q7",
+      "question": "用户更倾向于用哪种方式处理新增功能？",
+      "answer": "在现有合同额度内消化而非新增合同",
+      "category": "preference-tracking",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q8",
+      "question": "在技术架构评审中，助手回复了什么内容？",
+      "answer": "10 万节点下 compute_diff 延迟 P50=1.2s, P95=3.8s。瓶颈在 properties 深度比较，已计划用属性哈希指纹优化到 P95...",
+      "category": "single-session-assistant",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q9",
+      "question": "在Q3 工作汇报准备中，助手回复了什么内容？",
+      "answer": "根据上周数据，华东区毛利率为 38.2%，环比上升 1.5 个百分点。...",
+      "category": "single-session-assistant",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q10",
+      "question": "在客户需求变更处理的对话中，用户问了什么问题？",
+      "answer": "是的，430 万的合同额度内消化。他们最迟什么时候要？",
+      "category": "single-session-user",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q11",
+      "question": "华南区毛利率下降的原因是什么？",
+      "answer": "芯片短缺导致供应链问题，环比下降 3.1%",
+      "category": "multi-session-reasoning",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q12",
+      "question": "在技术架构评审中，助手回复了什么内容？",
+      "answer": "上次压测（8 月 1 日）共有 12 个 Agent 参与，RRF 融合延迟 P99 为 87ms。目标是在 50 个 Agent 下保持 P99 < 200m...",
+      "category": "single-session-assistant",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q13",
+      "question": "在季度复盘与规划中，助手回复了什么内容？",
+      "answer": "P2 进度：P2-1 LoCoMo 基准评测（进行中）、P2-2 记忆压缩评估（待开始）、P2-3 Web Dashboard（待开始）、P2-4 记忆回放训练...",
+      "category": "single-session-assistant",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q14",
+      "question": "在客户需求变更处理中，助手回复了什么内容？",
+      "answer": "已记录：数据导出功能 P0 优先级，目标 9 月 1 日交付，分配到 David。同时通知了陈总预计排期。...",
+      "category": "single-session-assistant",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q15",
+      "question": "联邦查询模块的 RRF 算法参数 k 当前取值是多少，Recall@5 是多少？",
+      "answer": "k=60, Recall@5=0.874",
+      "category": "multi-session-reasoning",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 1.0,
+      "precision": 0.2,
+      "mrr": 0.2
+    },
+    {
+      "question_id": "q16",
+      "question": "在Q3 工作汇报准备的对话中，用户问了什么问题？",
+      "answer": "另外，华东区新签的客户「星辰科技」合同金额是多少？",
+      "category": "single-session-user",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q17",
+      "question": "在Q3 工作汇报准备中，助手回复了什么内容？",
+      "answer": "方案关键点：1) 建立双供应商体系 2) 安全库存从 2 周提升到 4 周 3) 与物流商协商优先配送协议。...",
+      "category": "single-session-assistant",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q18",
+      "question": "上一次联邦查询压测是什么时候？",
+      "answer": "8 月 1 日",
+      "category": "temporal-reasoning",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q19",
+      "question": "在产品路线图讨论的对话中，用户问了什么问题？",
+      "answer": "下周的产品评审会要确定 v6.8 的发布范围，目前已经完成了哪些功能？",
+      "category": "single-session-user",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 1.0,
+      "precision": 0.2,
+      "mrr": 0.2
+    },
+    {
+      "question_id": "q20",
+      "question": "在客户需求变更处理中，助手回复了什么内容？",
+      "answer": "API 集成需求已于 7 月 25 日交付 v1.0，目前运行稳定。陈总对 API 文档的清晰度表示满意。...",
+      "category": "single-session-assistant",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q21",
+      "question": "在客户需求变更处理的对话中，用户问了什么问题？",
+      "answer": "时间很紧。他们之前提到的 API 集成需求怎么样了？",
+      "category": "single-session-user",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 1.0,
+      "precision": 0.2,
+      "mrr": 0.25
+    },
+    {
+      "question_id": "q22",
+      "question": "星辰科技的项目总合同金额是多少？",
+      "answer": "480 万元",
+      "category": "multi-session-reasoning",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q23",
+      "question": "在Q3 工作汇报准备中，助手回复了什么内容？",
+      "answer": "星辰科技的合同金额为 480 万元，分三期支付，首期 200 万已到账。...",
+      "category": "single-session-assistant",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q24",
+      "question": "涉及芯片短缺问题的会话有哪些？",
+      "answer": "Q3 工作汇报准备（华南区供应链问题）",
+      "category": "multi-session-reasoning",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q25",
+      "question": "在产品路线图讨论中，助手回复了什么内容？",
+      "answer": "P1-2 自主分页由 David 负责，预计 8 月 15 日提测。风险点：上下文窗口预算算法需要更多边界测试。...",
+      "category": "single-session-assistant",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q26",
+      "question": "在Q3 工作汇报准备的对话中，用户问了什么问题？",
+      "answer": "我们要准备 Q3 的工作汇报了，上周华东区的毛利率是多少？",
+      "category": "single-session-user",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q27",
+      "question": "P1 阶段总共完成了哪四个模块？",
+      "answer": "主动预取、自主分页、增量KG更新、联邦记忆查询",
+      "category": "multi-session-reasoning",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q28",
+      "question": "在产品路线图讨论中，助手回复了什么内容？",
+      "answer": "衰减算法的 bug 已于 8 月 3 日修复。目前不需要加资源，但建议从 QA 组借调一人做专项测试。...",
+      "category": "single-session-assistant",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q29",
+      "question": "星辰科技的上线日期是哪天？",
+      "answer": "9 月 15 日",
+      "category": "temporal-reasoning",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q30",
+      "question": "在季度复盘与规划的对话中，用户问了什么问题？",
+      "answer": "那星辰科技的项目，他们满意吗？",
+      "category": "single-session-user",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 1.0,
+      "precision": 0.2,
+      "mrr": 0.3333
+    },
+    {
+      "question_id": "q31",
+      "question": "在客户需求变更处理中，助手回复了什么内容？",
+      "answer": "根据之前的沟通记录，星辰科技的上线日期是 9 月 15 日，数据导出功能需要在 9 月 1 日前交付。...",
+      "category": "single-session-assistant",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q32",
+      "question": "P1-2 自主分页的提测日期是什么时候？",
+      "answer": "8 月 15 日",
+      "category": "temporal-reasoning",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q33",
+      "question": "在产品路线图讨论中，助手回复了什么内容？",
+      "answer": "修复方案：将 ImportanceDecay 的半衰期计算从 float32 改为 float64，修复了累积舍入误差。不会影响已有数据，仅在重新计算衰减时应用...",
+      "category": "single-session-assistant",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q34",
+      "question": "在技术架构评审的对话中，用户问了什么问题？",
+      "answer": "联邦查询模块的 RRF 融合算法，我们需要验证在大规模 Agent 下的性能。有多少个 Agent 参与了上次的压测？",
+      "category": "single-session-user",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q35",
+      "question": "CTO 王总对 P1 的投入产出比评价是什么？",
+      "answer": "非常正面，RoI 很高",
+      "category": "preference-tracking",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q36",
+      "question": "在技术架构评审中，助手回复了什么内容？",
+      "answer": "当前默认 rrf_k=60，这是 LoCoMo 论文推荐的标准值。我们在上次 benchmark 中对比了 k=30/60/90，k=60 时 Recall@5...",
+      "category": "single-session-assistant",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q37",
+      "question": "v6.8 的衰减算法 bug 修复日期？",
+      "answer": "8 月 3 日",
+      "category": "temporal-reasoning",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q38",
+      "question": "在技术架构评审的对话中，用户问了什么问题？",
+      "answer": "当前 RRF 排名融合的 k 参数用的是多少？",
+      "category": "single-session-user",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q39",
+      "question": "星辰科技 API 集成是什么时候交付的？",
+      "answer": "7 月 25 日交付 v1.0",
+      "category": "multi-session-reasoning",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q40",
+      "question": "陈总对哪项交付最满意？",
+      "answer": "API 文档的清晰度",
+      "category": "preference-tracking",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q41",
+      "question": "在Q3 工作汇报准备的对话中，用户问了什么问题？",
+      "answer": "好的，帮我把这个优化方案的关键点列出来。",
+      "category": "single-session-user",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 1.0,
+      "precision": 0.2,
+      "mrr": 0.2
+    },
+    {
+      "question_id": "q42",
+      "question": "在客户需求变更处理中，助手回复了什么内容？",
+      "answer": "数据导出功能复杂度评估：约 15 人天，涉及 CSV/Excel/PDF 三种格式。是否需要在现有合同框架内处理？...",
+      "category": "single-session-assistant",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q43",
+      "question": "在季度复盘与规划中，助手回复了什么内容？",
+      "answer": "星辰科技项目：合同 480 万，已交付 API 集成和核心平台，数据导出功能排期到 9 月 1 日。陈总对进度表示满意，正在洽谈二期合作。...",
+      "category": "single-session-assistant",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q44",
+      "question": "在产品路线图讨论的对话中，用户问了什么问题？",
+      "answer": "P1-2 的自主分页是谁在负责？预计什么时候提测？",
+      "category": "single-session-user",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q45",
+      "question": "在季度复盘与规划中，助手回复了什么内容？",
+      "answer": "P1 完成项：P1-1 主动预取模块、P1-2 自主分页模块、P1-3 增量 KG 更新、P1-4 联邦记忆查询。全部已通过验证。...",
+      "category": "single-session-assistant",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q46",
+      "question": "衰减算法的 bug 是什么时候修复的，修复方案是什么？",
+      "answer": "8月3日修复，float32改float64消除累积舍入误差",
+      "category": "multi-session-reasoning",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q47",
+      "question": "在产品路线图讨论的对话中，用户问了什么问题？",
+      "answer": "需要加资源吗？David 上周不是说内存管理模块的衰减算法有 bug？",
+      "category": "single-session-user",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q48",
+      "question": "David 负责的衰减算法 bug 是否已修复？",
+      "answer": "已于 8 月 3 日修复",
+      "category": "knowledge-update",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    },
+    {
+      "question_id": "q49",
+      "question": "在客户需求变更处理的对话中，用户问了什么问题？",
+      "answer": "星辰科技的陈总刚打电话来，说他们希望合同增加一个数据导出的定制功能。",
+      "category": "single-session-user",
+      "top_k": 5,
+      "num_retrieved": 5,
+      "recall": 0.0,
+      "precision": 0.0,
+      "mrr": 0.0
+    }
+  ],
+  "retriever": "MemoryAggregator hybrid (keyword+vector+RRF)",
+  "ingested_turns": 38,
+  "engine_stats": {
+    "total_memories": 38,
+    "total_relations": 0,
+    "avg_confidence": 0.5,
+    "avg_priority": 0.5881,
+    "source_distribution": {
+      "locomo-bench": 38
+    },
+    "category_distribution": {
+      "episodic": 38
+    },
+    "topic_distribution_top20": {
+      "david": 4,
+      "bug": 3,
+      "api": 3,
+      "rrf": 3,
+      "web": 2,
+      "dashboard": 2,
+      "日交付": 2,
+      "优先级": 2,
+      "agent": 2,
+      "locomo": 2,
+      "recall": 2,
+      "compute_diff": 2,
+      "我们要准备": 1,
+      "的工作汇报了": 1,
+      "上周华东区的毛利率是多少": 1,
+      "根据上周数据": 1,
+      "华东区毛利率为": 1,
+      "环比上升": 1,
+      "个百分点": 1,
+      "那华南区呢": 1
+    },
+    "distinct_topics": 150,
+    "engine_stats": {
+      "total_indexed": 38,
+      "total_queries": 50,
+      "total_boosts": 0,
+      "total_relations": 0,
+      "pruned": 0,
+      "total_vectors": 38,
+      "categories": {
+        "episodic": 38
+      },
+      "scopes": {
+        "locomo": 38
+      },
+      "distinct_topics": 150,
+      "distinct_sources": 1,
+      "avg_confidence": 0.5
+    },
+    "retrieval_channels": {
+      "keyword": true,
+      "vector": true,
+      "second_brain": true,
+      "retrieval_v47": true,
+      "exabase": true,
+      "beamlight": true
+    },
+    "observability": {
+      "uptime_seconds": 29.0,
+      "uptime_human": "0h 0m",
+      "health": "healthy",
+      "last_health_check": "2026-08-14T10:28:03.876184",
+      "requests": {
+        "total": 0,
+        "errors": 0,
+        "error_rate": 0.0,
+        "avg_latency_ms": 0.0
+      },
+      "operations": {},
+      "memory_ops": {
+        "ingest": 38,
+        "query": 50
+      }
+    },
+    "total_ingested": 38,
+    "total_merged": 0,
+    "total_queries": 50,
+    "total_cleanups": 0,
+    "cleaned_items": 0
+  }
+}

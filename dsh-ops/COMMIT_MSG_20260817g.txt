@@ -1,0 +1,9 @@
+docs(bench): 3.12 large-sample judge3 recheck - chronos/multi-entity/ppro all falsified or flat
+
+- route2 confirmed best: 72% (judge3 stable 1.0) after fixing control prompt (was 68% with buggy EVENT hint)
+- chronos fine-grained: 70% vs control 72% -> no gain (r6 +2pp was control-prompt artifact)
+- multi entity-expansion retrieval: 40% = baseline (bottleneck is synthesis, not recall)
+- preference ppro heuristic profile: 10% on full 30q (n=2 50% was noise; needs LLM two-stage pref3 36-60%)
+- Lesson: small-sample positive results must be rechecked with 30+ q and judge3
+- Scripts: benchmark/lme_multi_retr.py, lme_qa_route_chronos.py (--only-type); doc 3.12
+- NOT published (user requested hold)

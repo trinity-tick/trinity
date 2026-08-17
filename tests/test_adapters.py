@@ -153,6 +153,53 @@ class TestDelete:
         assert "DELETE" in operations
 
 
+# ── Update ──────────────────────────────────────────────────────────────
+
+class TestUpdate:
+    """Test SQLiteAdapter.update_memory (conflict-preserving versioning)."""
+
+    def test_update_changes_content_and_version(self, adapter):
+        """update_memory should change content and bump version."""
+        result = adapter.store_memory("original content", persona_id="upd")
+        mid = result["memory_id"]
+        assert result["sha256_hash"]
+
+        updated = adapter.update_memory(mid, content="revised content")
+        assert updated is not None
+        assert updated["memory_id"] == mid
+        assert updated["content"] == "revised content"
+        assert updated["version"] == 2
+        assert updated["sha256_hash"] != result["sha256_hash"]
+
+    def test_update_adds_version_record(self, adapter):
+        """Updating should append an UPDATE version record."""
+        result = adapter.store_memory("versioned update", persona_id="vu")
+        mid = result["memory_id"]
+        adapter.update_memory(mid, content="newer content")
+
+        versions = adapter.get_version_chain(mid)
+        operations = [v["operation"] for v in versions]
+        assert "CREATE" in operations
+        assert "UPDATE" in operations
+        assert operations.count("UPDATE") == 1
+
+    def test_update_nonexistent(self, adapter):
+        """Updating a non-existent memory should return None."""
+        updated = adapter.update_memory("nonexistent_id", content="x")
+        assert updated is None
+
+    def test_update_preserves_old_version(self, adapter):
+        """Old version row should be retained (conflict-preserving)."""
+        result = adapter.store_memory("v1 content", persona_id="vp")
+        mid = result["memory_id"]
+        adapter.update_memory(mid, content="v2 content")
+
+        versions = adapter.get_version_chain(mid)
+        contents = [v["content"] for v in versions]
+        assert "v1 content" in contents
+        assert "v2 content" in contents
+
+
 # ── Version chain ───────────────────────────────────────────────────────
 
 class TestVersionChain:

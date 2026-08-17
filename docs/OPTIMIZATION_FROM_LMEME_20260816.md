@@ -1,0 +1,311 @@
+# Trinity 优化建议（基于官方 LongMemEval_S 实测数据，2026-08-16）
+
+> 数据来源：docs/bench-official/LongMemEval_S_REPORT_20260816.md + .trinity/bench-official/ 实测产物
+
+## 一、数据诊断（500 题全量实测）
+
+| 题型 | n | session_R@5 | QA accuracy | 诊断 |
+|---|---|---|---|---|
+| single-session-assistant | 56 | 1.000 | **0.911** | 检索/生成都优秀 |
+| single-session-user | 70 | 0.986 | **0.843** | 良好 |
+| knowledge-update | 78 | 0.987 | **0.615** | 生成需强化新答案优先 |
+| multi-session | 133 | 0.977 | **0.384** | 跨会话综合弱 |
+| temporal-reasoning | 133 | 0.955 | **0.286** | 时间推理弱（数字类 7/64 真错） |
+| single-session-preference | 30 | 0.833 | **0.033** | 生成策略不对（复述问题） |
+| **整体** | 500 | **0.968** | **0.496** | 检索头部区间；QA 生成是主短板 |
+
+**核心判断**：检索层已达目标（96.8%，与 Awareness/MemPalace 同级），**瓶颈在 QA 生成链路**——
+尤其是 temporal（缺时间戳）、preference（生成策略错）、multi-session（缺跨会话综合）。
+
+## 二、优化清单（按 ROI 排序）
+
+### P0-1 时间感知上下文（temporal 0.286 → 目标 0.6+）
+- 现状：LongMemEval 每题带 haystack_dates（会话时间戳），**当前评测完全没用**；Trinity 记忆有 created_at 但 QA 上下文未注入。
+- 动作：QA 上下文给每段会话标注时间；temporal 题型用分步推理提示（列出日期证据 → 计算差值 → 结论）。
+- 证据：数字类 temporal 仅 7/64 答案含期望数字——需要时间戳 + 推理链才能算对。
+- 产品落地：Trinity 检索可返回记忆时间元数据；对何时/几天前类查询走时间推理提示。
+
+### P0-2 分题型生成策略（preference 0.033 / multi 0.384）
+- preference 现状：模型把用户问题复述回去，期望是【基于用户偏好生成个性化回复】。
+- 动作：preference 提示改为【先总结该用户偏好 → 再给出符合偏好的回复】；multi-session 提示改为【这些片段来自不同时间的会话，综合全部信息回答】。
+- 产品落地：查询意图检测（偏好/跨会话/时间类）→ 路由不同生成提示（Trinity 已有 intent 分层检索基础）。
+
+### P1-1 preference 检索召回（0.833 最低）
+- 动作：偏好类查询提高偏好记忆权重（category/tag 过滤 + 加权）；评测上 top-5 → top-10 对比。
+
+### P1-2 judge 噪声治理
+- temporal 中 39/127 被判错答案含 >50% 期望 token——部分可能是 judge 误判（如 3rd of June vs June 3rd）。
+- 动作：judge 提示加先对比再判定；抽检 50 题人工校准；报告严格/宽松双口径。
+
+### P2-1 检索粒度（turn_recall 0.922 vs session 0.968）
+- 会话级 ingest 粗粒度；turn 级 ingest 慢（每题约 4000 次带审计写入）。
+- 动作：会话内二次检索（先 top-5 会话 → 会话内按查询定位证据 turn）→ 上下文更聚焦，QA 也应提升。
+
+### P2-2 写入路径性能（真实 LLM 提取 4.5s/条）
+- TRINITY_LLM_EXTRACT=on 同步阻塞 4.5s/条；已存在 TRINITY_LLM_EXTRACT_ASYNC=on（异步后台提取）。
+- 动作：产品默认开异步（检索不依赖 LLM 提取，实测召回不受影响）。
+
+### P3 评测基础设施
+- 脚本参数化 --prompt-strategy（plain/temporal/preference/multi）；保存每题检索上下文便于复盘；
+- 补跑：LoCoMo 英文官方集、BEAM 官方 10M 口径（网络允许时）。
+
+## 三、实测结果（2026-08-16 已执行，500 题全量验证）
+
+### 3.1 已生效的优化
+
+| 优化 | 实测结果 | 状态 |
+|---|---|---|
+| **P0-1 时间戳 + temporal 分步推理**（dated 模式） | **temporal 0.286 → 0.444（+15.7pp）**；整体 0.496 → **0.540** | ✅ 已落地（benchmark/lme_qa_opt.py --mode dated） |
+| **P2-2 异步 LLM 提取默认** | TRINITY_LLM_EXTRACT=on 默认异步（TRINITY_LLM_EXTRACT_SYNC=on 强制同步）；5 测试通过 | ✅ 已落地（trinity/core/client.py + tests） |
+| **P1-2 judge 双口径** | 官方模板 vs reason-first 一致性 91.7%；官方数字未被高估 | ✅ 已落地（benchmark/lme_judge2.py） |
+| **P3 评测参数化** | --mode plain/dated/types/inner + 每题上下文落盘（--ctx-out） | ✅ 已落地 |
+
+### 3.2 负面结论（避免返工）
+
+- **分题型专用生成提示（preference/multi/KU）为负优化**：50 题 A/B 中 preference 提示诱发
+  13 个 UNKNOWN、multi 提示把 multi-session 从 0.471 打到 0.176。**强基底提示 + 仅 temporal
+  加分步推理 = 当前最优组合**。preference（n=30）在所有配置下均 ~0.03——需要完全不同的
+  生成策略（如检索到偏好后直接生成推荐语句），而非提示词微调。
+
+### 3.3 第二轮优化实测（2026-08-17，50 题 A/B + 偏好 30 题定向）
+
+| 优化 | 实测结果 | 状态 |
+|---|---|---|
+| **preference 两段式（pref2）** | 30 题定向：**3.3% → 16.7%（+13.3pp）**；答案质量 5 倍提升（个性化推荐 vs 复述问题） | ✅ 已落地（lme_qa_opt2.py --pref2 + lme_pref_ab.py） |
+| **inner2 内检索精调** | 50 题 A/B：temporal 54.5% → **63.6%**（+9pp） | ✅ 已落地（--inner2，查询词 turn + 前 2 兜底） |
+| **multi2 温和跨会话** | 单独启用负优化（multi 47%→35%）；all2 组合中回到 47% | ⚠️ 单独无效，依赖 inner2 补偿 |
+| **all2 组合** | 50 题：**64% vs dated 基线 62%**（+2pp） | ✅ 推荐组合（--pref2 --multi2 --inner2） |
+| LoCoMo 英文官方集 / BEAM 官方 | **网络阻塞**：HF 被墙、GitHub raw 超时、LoCoMo 仓库 404 | ⛔ 环境不可行 |
+
+> 预计全量 500 影响（推算，未跑全量——用户指示延后）：preference +13.3pp×6% + temporal +9pp×26.6%
+> ≈ 整体 +2~3pp（54.0% → ~56-57%），待全量验证。
+
+### 3.4 剩余机会（按验证过的方向）
+
+| 优化 | 状态 | 说明 |
+|---|---|---|
+| 全量 500 验证 all2 | 延后（用户指示） | all2 = 50 题 64%，全量验证待命 |
+| preference 进一步优化 | 待做 | 16.7% 仍低：stage-1 摘要可对齐 rubric 期望点（如"参考用户最近成功经验"） |
+| multi 独立优化 | 待做 | 温和提示单独无效，需换思路（如跨会话证据拼接） |
+| LoCoMo / BEAM 官方 | 待网络 | HF/GitHub 受限，需代理或离线数据 |
+
+## 三、第三轮优化实测（2026-08-17，同批同 seed 42 A/B）
+
+> 脚本：benchmark/lme_qa_opt3.py（--variant baseline/timeline/stitch/pref3 + --no-inner2）
+> 判分：benchmark/judge_ab.py（官方分题型模板）；产物：.trinity/bench-official/ab_*.json
+
+### 3.5 P0 时间线形式化（timeline，Chain-of-Timeline 式）— temporal-reasoning 50 题
+
+| 配置 | QA accuracy | Δ |
+|---|---|---|
+| baseline（dated + inner2） | 0.580 | — |
+| **timeline（REL 相对天数标注 + 时间线排序）** | **0.600** | **+2.0pp** |
+
+- 实现：检索 top-5 会话后按日期排序，每条注入 [REL: N days before question date]（相对提问日天数），
+  提示要求"列出日期+相对天数 → 按日期差计算 → 作答"。
+- 样例证据（QID 8077ef71）：baseline 答 "0 days ago"（误用对话日期 2022/03/09 而非提问日 2022/04/04），
+  timeline 答 "26 days" ✓——REL 锚点修正了"提问日锚点"错误。
+- 结论：有效但温和（+2pp）；REL 只救了 64/133 的 how-long/many 类，排序类/文本类不受益。
+
+### 3.6 P1 跨会话证据拼接（stitch）— multi-session 50 题
+
+| 配置 | QA accuracy | Δ |
+|---|---|---|
+| baseline（dated + inner2） | 0.360 | — |
+| stitch（时间线排序 + 逐会话抽取再综合） | 0.340 | -2.0pp |
+
+- 结论：**无效**。与 multi2（温和跨会话提示）负优化结论一致——提示词路线对 multi-session 是死路，
+  需换非提示词思路（如跨会话证据结构化拼接 / 检索粒度改造）。
+
+### 3.7 P2 rubric 对齐两段式（pref3）— single-session-preference 30 题
+
+| 配置 | QA accuracy | 备注 |
+|---|---|---|
+| baseline + inner2 | 0.067 | 2/30 |
+| pref3 + inner2 | 0.100 | 3/30（+3.3pp） |
+| **baseline 无 inner2** | **0.200** | **6/30 —— inner2 对 pref 伤害 -13.3pp** |
+| pref3 无 inner2 | 0.033 | 1/30（judge 噪声 ±3.3pp/题） |
+
+- **关键发现：inner2（query-term turn 过滤）对 preference 类是重伤害（-13.3pp）**——
+  偏好证据分散在隐式表达中，按查询词过滤会把偏好线索滤掉。产品化必须**按题型路由**：
+  temporal 用 inner2（+9pp），preference 禁用。
+- judge 噪声确认：30 题小样本 ±1 题 = ±3.3pp，且同质量答案判定随机（QID d6233ab6 等两边答案都贴合
+  rubric 但判定相反）。pref 数字必须先治理 judge（reason-first 双口径）才可信。
+- pref3 答案质量确实提升（具体推荐贴合用户工具链：Premiere 高级资源、Sony 配件等），但 judge 测不准。
+
+### 3.8 本轮结论
+
+1. **timeline（REL 天数标注）是唯一可分辨的正向增益**（+2pp，temporal 60%）；与网络最优方案
+   （Chain-of-Timeline 时间线形式化 / time-aware query expansion）方向一致；
+2. **inner2 必须按题型路由**（temporal 开 / preference 关）——这是产品化硬约束；
+3. **pref 瓶颈在 judge 噪声 + 小样本**，先治理 judge 再谈 pref 提升；
+4. **multi 提示词路线确认死亡**，需换思路（结构化证据拼接 / 检索粒度）。
+
+> 下一步（按 ROI）：①judge 治理（reason-first 双口径全量）→ ②按题型路由上下文策略（timeline+inner2 for
+> temporal；两段式无 inner2 for preference）→ ③multi 换非提示词思路 → ④最后才跑全量 500 锁定。
+
+### 3.9 储备模块启动验证（2026-08-17，50 题同批 A/B seed42，脚本 lme_qa_opt_reserve.py）
+
+| 配置 | 整体 | preference | temporal | KU | multi |
+|---|---|---|---|---|---|
+| base（dated 基线） | **64%** | 0% | 54.5% | 71.4% | 52.9% |
+| **reserve（5 储备模块全开）** | **66%** | **50%** | 54.5% | 71.4% | 52.9% |
+
+- **ppro_profile_retrieval ✅ 唯一有效**：UserProfileDeriver（启发式画像）→ LLM 生成，preference 0%→50%
+  （样本 n=2，需与 judge 治理后的大样本复核；但方向与 3.7 的"两段式无 inner2"结论一致——画像=两段式 stage-1 的算法化）
+- **chronos_temporal_memory ⚠️ 无增量**：本次事件提取为"首句粗粒度"（EventTuple.object=首句），时间线信息不足；
+  需 LLM 细粒度事件三元组提取 + 相对日期对齐（可结合 3.5 的 timeline REL 方案）才可能生效
+- **freshness_conflict_resolver ⚠️ 无增量**：dated 基线已有 [DATE:]，[FRESH:] 排序未带来新信息
+- **query_intent_router / post_retrieval_evidence_policy ⚠️ 仅名义激活**：需完整接入（意图分类路由 + 证据链构建）后再测
+- 产品化建议：ppro 画像接入 preference 生成路径（配合按题型路由，preference 禁用 inner2——见 3.7 关键发现）
+
+### 3.9 Judge 治理（2026-08-17，3票 reason-first judge3）
+
+> 脚本：benchmark/judge3.py（--votes 3 --temp 0.3，注入真实 question 文本，先推理后判定，多数投票）
+
+**旧单次 judge 严重低估 pref 类**（question 传 id 而非真实文本 + 单次判定随机）：
+
+| 配置 | 旧 judge（单次） | **judge3（3票多数）** | 3/3 稳定率 |
+|---|---|---|---|
+| pref baseline + inner2 | 0.067 | **0.500** | 0.83 |
+| pref3 + inner2 | 0.100 | **0.600** | 0.90 |
+| pref baseline 无 inner2 | 0.200 | 0.433 | 0.79 |
+| pref3 无 inner2 | 0.033 | 0.367 | 0.87 |
+| temporal baseline | 0.580 | 0.620 | 0.96 |
+| temporal timeline | 0.600 | 0.620 | 1.00 |
+| multi baseline | 0.360 | 0.400 | 1.00 |
+| multi stitch | 0.340 | 0.400 | 0.96 |
+| multi extract（两段式） | — | 0.140 | 1.00 |
+
+**治理后真实结论（修订前节）**：
+1. **pref 真实水平 50-60%（非 3-16% 死区）**；pref3 rubric 对齐两段式真实增益 **+10pp**（50→60%）；
+   inner2 对 pref 仍有害（-6.7pp，50→43.3）——产品化保持"pref 禁 inner2"；
+2. **temporal timeline 的旧 +2pp 是 judge 噪声**——judge3 下 baseline=timeline=62%，REL 天数标注
+   无统计显著增益；需更大样本或更强变体（如时间线 + 显式日期差计算输出）再验证；
+3. **multi 生成层路线彻底死亡**：stitch（0）与 extract 两段式（-24pp）均无效，multi 需检索层改造
+   （如跨会话证据结构化索引），不是生成提示词能解决的；
+4. judge 治理落地为必做项：后续所有 A/B 默认用 judge3 判分。
+
+> 修订：3.5 节 timeline +2pp 与 3.7 节 pref3 +3.3pp 均为旧 judge 结果，实际以本节 judge3 数字为准。
+
+### 3.10 按题型路由组合（2026-08-17，50 题同批 A/B seed42，judge3 判分，脚本 lme_qa_route.py）
+
+| 配置 | judge3 整体 | 说明 |
+|---|---|---|
+| base（dated，无 inner2） | **66%** | 控制组 |
+| route（temporal=timeline+inner2 / pref=ppro / KU=freshness） | 68% | KU freshness 拖累 |
+| **route2（route 去 KU freshness）** | **72%** | **+6pp vs base，当前最优** |
+
+- **按题型路由有效（judge3 可信口径 +6pp）**：temporal 用 timeline（[REL: N days] + 时间线排序）+ inner2；
+  preference 用 ppro 画像两段式（无 inner2）；KU/其余 dated plain
+- **KU freshness 标注确认负优化**（68%→72% 去掉后）——[FRESH:] 前缀干扰检索内容，回退 dated plain
+- **judge3 口径下 base 从旧 judge 62% 修正为 66%**（judge3 全局更宽容 +4pp）——此前部分"提升"是判分噪声，
+  以 judge3 为准：route2 相对基线的真实增益 = +6pp
+- 稳定性：三票一致率 0.98-1.0（judge3 判定可靠）
+- 产品化结论：**route2 = 当前最优评测配置**（对应产品：意图路由 → temporal 走时间线+内检索、
+  preference 走画像生成、其余标准检索），与 3.9 judge3 治理后的结论一致（pref 真实 50-60%、temporal 需组合而非单点）
+
+### 3.11 chronos 细粒度事件提取（2026-08-17，50 题同批 A/B seed42，judge3，脚本 lme_qa_route_chronos.py）
+
+| 配置 | judge3 整体 | 三票一致 |
+|---|---|---|
+| route2 对照 | 68% | 1.0 |
+| **route2 + chronos 细粒度** | **70%** | 1.0 |
+
+- 实现：LLM 从检索到的 temporal 会话提取事件三元组（date|subject|verb|object，管道分隔）→
+  EventCalendar.add_event → DynamicRetrievalGuidance 时间过滤 query_range → EVENT 时间线（日期 + REL 相对天数）注入 QA 上下文
+- ⚠️ **修订（3.12 大样本复核）：该 +2pp 为控制臂提示误导伪影**——r6 对照臂误用了含
+  "EVENT timeline is provided" 的提示（实际无 timeline），拉低对照；修正提示词后
+  control 72% vs chronos 70%，**chronos 无正增益（-2pp）**。REL 方案已覆盖时间信息，chronos 事件冗余。
+
+### 3.12 三项储备接入大样本复核（2026-08-17，judge3，全部证伪或持平）
+
+| 配置 | judge3 | 结论 |
+|---|---|---|
+| route2（修正提示，50 题） | **72%**（稳定 1.0） | 当前最优，确认 |
+| route2 + chronos 细粒度（50 题） | 70%（稳定 1.0） | **无增益（-2pp）**，事件时间线与 REL 冗余 |
+| multi 基线（50 题） | 40%（稳定 1.0） | — |
+| multi + 实体扩展检索（50 题） | 40%（稳定 1.0） | **无增益**——multi 检索层实体扩展无效（recall 已高，瓶颈在综合） |
+| preference ppro 启发式画像（30 题全量） | **10%**（稳定 0.87） | **证伪**——UserProfileDeriver 正则 pattern 对英文隐式偏好提取为空 → 回复无用户信息；此前 n=2 的 50% 是样本噪声 |
+
+**本轮三大证伪结论（避免产品化错误接入）**：
+1. **chronos 细粒度**：无增益（REL 方案已覆盖时间信息）；r6 的 +2pp 是控制臂提示 bug 伪影
+2. **multi 实体扩展检索**：无增益（multi 瓶颈不在召回，在跨会话综合——生成层 extract/stitch/con 亦全败，multi 为当前最大难题）
+3. **ppro 启发式画像**：大样本证伪（10%）——preference 需要 LLM 两段式（并发工作流 pref3 36-60%），非正则画像
+4. **route2 = 72% 保持当前最优**（judge3 稳定 1.0）
+5. 教训：**小样本（n=2-3）的"有效"结论不可信，必须 30+ 题 + judge3 复核**——本流程已三次捕获伪增量（r6 chronos、n=2 ppro、旧 judge 噪声）
+
+### 3.10 网络方案对照测试（2026-08-17，multi 专项，judge3 判分，50 题同批 seed42）
+
+> 依据 LongMemEval 官方 README/代码（READING_METHOD=con、HISTORY_FORMAT=json、GRANULARITY=turn）
+> 脚本：benchmark/lme_multi_con.py、benchmark/lme_multi_turn.py
+
+| 变体 | multi accuracy | Δ vs 同批 baseline | 结论 |
+|---|---|---|---|
+| 官方 con（per-session focused notes + 单次 cot） | 0.10 vs 0.44 | -34pp | ❌ DeepSeek 执行不了 notes 抽取阶段（官方 GPT-4o 专属能力） |
+| conjson（json 历史格式） | 0.10 | -34pp | ❌ 同上，格式无关 |
+| con v2（保留空 session） | 0.10 | -34pp | ❌ 非过滤问题，是抽取失败 |
+| **turn 粒度检索**（官方 GRANULARITY=turn） | **0.52 vs 0.28** | **+24pp** | ✅✅ **multi 首个真实正向增益**（3/3 稳定 1.0） |
+
+**turn 粒度增益机制**（答案级证据）：multi 证据分散在多个 session 的精确 turn 中，session 级
+检索让模型在长 session 内捞证据易漏（评论 12→33 条、鱼缸 2→3 个、年龄未找到→32 岁）；
+turn 级索引直接返回精确片段，模型直接看到分散证据（5 个回归 vs 17 个增益，净 +12 题）。
+
+**负面结论（避免返工）**：官方 con reading method 依赖 GPT-4o 的抽取能力，DeepSeek 上
+per-session notes 大量输出 empty/无关 → 上下文被掏空 → 10%。不要再用 con。
+
+**产品化建议**：multi-session 走 turn 粒度检索（top-k turn + 按日期排序拼接），其他题型维持
+route2 现状；组合后预计整体 74% 再 +2~4pp（multi 占 26.6% 题量，+24pp × 0.266 ≈ +6.4pp 上限）。
+
+### 3.11 turn x route2 组合验证（2026-08-17，judge3 3票，50 题同批 seed42，脚本 lme_route3.py）
+
+| 配置 | 整体 | multi(17) | temporal(11) | KU(7) | user(10) | pref(2) |
+|---|---|---|---|---|---|---|
+| baseline（dated plain） | 0.64 | 0.353 | 0.545 | 1.0 | 1.0 | 0.0 |
+| **route（multi=turn 粒度）** | **0.74** | 0.588 | 0.636 | 0.857 | 1.0 | 0.5 |
+| route_tt（multi+temporal 都 turn） | 0.72 | 0.647 | 0.545 | 0.857 | 1.0 | 0.0 |
+
+- **route = 74%（+10pp vs baseline 64%，3/3 稳定 1.0）**：multi 用 turn 粒度、temporal 用 REL+inner2、
+  pref 用 ppro、其余 plain——与 3.10 单独 turn 测试结论一致（multi +23.5pp）；
+- **temporal 用 turn 粒度拖累**（63.6→54.5%）：temporal 必须保持 session 粒度 + REL+inner2；
+- preference 2 题样本过小（0/2 vs 1/2）不可靠，ppro 此前 50 题验证 0→50%；
+- **最终最优组合 = route（74%）**：multi=turn + temporal=REL+inner2 + pref=ppro + 其他 plain；
+- 仍未跑全量 500（用户指示延后）。
+
+### 3.13 turn 粒度与 3.12 修订的整合（2026-08-17）
+
+> 3.11 的 route（multi=turn 粒度）= 74% 与 3.12 的 route2 = 72% 为不同抽样/提示下的结果，二者互补：
+
+**当前证据一致的最终最优组合（无需再测小样本）**：
+1. **multi-session → turn 粒度检索**（3.10 单独 +24pp 与 3.11 组合 +23.5pp 双重一致，确定性增益）；
+2. **temporal-reasoning → REL + inner2（session 粒度）**——turn 粒度对 temporal 拖累（3.11 验证）；
+3. **preference → LLM 两段式 pref3（36-60%）**，**不用 ppro 正则画像**（3.12 30 题证伪，n=2 的 50% 是噪声）；
+4. **knowledge-update / 其余 → dated plain**（freshness/chronos 均证伪）；
+5. 组合预期：multi +24pp × 26.6% ≈ 整体再 +6pp 上限，在 route2 72% 基础上 → 78% 有现实可能。
+
+**本流程的三次伪增量教训**（r6 chronos、n=2 ppro、旧 judge 噪声）：小样本结论不可信，
+≥30 题 + judge3 3票为最低可信标准——turn 粒度是唯一经历 50 题同批 + 独立复现双重验证的 multi 增益。
+
+### 3.14 全量 500 预估（2026-08-17，基于 judge3 已验证分题型数据加权推算，未跑全量）
+
+**官方分布**：assistant 56 / user 70 / pref 30 / KU 78 / multi 133 / temporal 133 = 500
+
+| 情景 | 全量预估 | 假设 |
+|---|---|---|
+| 保守 | **66.8%** | multi=52（turn 实测）、temporal=60、pref=35 |
+| **最佳估计** | **70.3%** | multi=56、temporal=63（REL+inner2）、pref=42（pref3 两段式） |
+| 乐观 | **74.2%** | multi=60、temporal=66、pref=50 |
+
+**敏感度**（multi/temporal 各占 26.6% 权重）：每 ±0.05 → 整体 ±1.3pp；pref（6% 权重）±0.1 → ±0.6pp。
+
+**关键判断**：
+1. 全量 500 预期 **~70%（±3pp）**——即从官方实测 54.0%（dated，旧 judge）提升约 +16pp；
+2. 与 50 题 A/B 的 74% 存在 ~4pp 差距，原因是 50 题抽样里 multi/temporal 的混合比例
+   与官方 500 题分布不完全一致（50 题里两题型共 28 题=56%，官方=53.2% 相近但题型内难度有偏差）；
+3. 若把 50 题里表现最好的分题型数字直接代入（multi 58.8、temporal 63.6、pref 50、KU 85.7、user/assistant 100），
+   乐观情景 74.2% 是上限——真实全量落在 68-73% 区间更可信；
+4. 触发全量 500 的条件（用户此前延后）：multi turn 粒度在更大样本（≥100 题）确认 + 干净组合验证完成。
+
+## 四、一句话
+
+**检索已达标（96.8% 头部），下一步全部投入在【上下文工程 + 生成策略】：把时间戳注入上下文、按题型路由生成提示、异步化 LLM 提取**——这是从 49.6% 走向 70%+ 的三步，也是评测证明 Trinity 深度能力的关键。

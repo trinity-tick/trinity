@@ -1,0 +1,14 @@
+{
+  "name": "@deepseek-ai/dsh-trinity",
+  "version": "0.1.0-rc.6",
+  "description": "Native Trinity engine integration for DeepSeek Harness — spawns trinity_engine_worker.py and registers trinity_* tools (no MCP layer)",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-tools": "0.1.0-rc.6",
+    "@deepseek-ai/schemastery": "0.1.0-rc.6"
+  }
+}

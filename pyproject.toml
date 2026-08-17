@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "trinity-memory"
-version = "6.37.0"
-description = "Trinity: A Triune Architecture for AGI Long-Term Memory — 122 modules, 50-tier guardian chain, 47 retrieval channels"
+version = "8.2.0"
+description = "Trinity v8.2.0: Memory Operating System — Multi-Agent Shared Memory, 50-Layer Guardian Chain, 129-Paper Brain-Inspired Alignment, GraphQL API, Raft Cluster, BM25+Jieba Chinese Retrieval"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
@@ -38,13 +38,15 @@ classifiers = [
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.24.0",
+    "jieba>=0.42.1",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=7.4.0", "pytest-cov>=5.0.0", "ruff>=0.1.0", "scikit-learn>=1.0.0", "Pillow>=10.0.0"]
+sdk = ["requests>=2.28.0"]
 mcp = ["mcp>=1.0.0"]
-api = ["fastapi>=0.100.0", "uvicorn>=0.20.0"]
-all = ["trinity-memory[mcp,api]"]
+api = ["fastapi>=0.100.0", "uvicorn>=0.20.0", "strawberry-graphql>=0.224.0"]
+all = ["trinity-memory[sdk,mcp,api]"]
 
 [project.urls]
 Homepage = "https://github.com/trinity-tick/trinity"
@@ -63,7 +65,8 @@ include = ["trinity*"]
 "trinity" = ["py.typed", "api/static/*"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+# 与 pytest.ini 保持一致（pytest.ini 优先）；此前写 ["tests"] 造成 testpaths 二义性
+testpaths = ["trinity/tests"]
 python_files = ["test_*.py"]
 addopts = "-v --tb=short"
 

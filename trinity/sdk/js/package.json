@@ -1,0 +1,16 @@
+{
+  "name": "@trinity-sdk/js",
+  "version": "8.2.0",
+  "description": "Trinity TypeScript SDK — memory, agent, knowledge graph, and retrieval API",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "node dist/self_test.js"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "typescript": "^5.0.0"
+  },
+  "license": "MIT"
+}

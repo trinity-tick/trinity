@@ -1,0 +1,84 @@
+# =============================================================================
+# Trinity Memory Gateway — 一键全栈编排
+#   docker compose -f gateway/docker-compose.yml up -d
+#
+# 服务:
+#   trinity-db      PostgreSQL 16 (多租户存储)
+#   trinity-api     Trinity REST API
+#   trinity-gateway OpenAI/Mem0 兼容记忆网关 (:8002)
+# =============================================================================
+
+services:
+  trinity-db:
+    image: postgres:16-alpine
+    container_name: trinity-db
+    ports:
+      - "5430:5432"
+    volumes:
+      - trinity-pgdata:/var/lib/postgresql/data
+      - ../docker/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    environment:
+      POSTGRES_DB: trinity
+      POSTGRES_USER: trinity
+      POSTGRES_PASSWORD: trinity
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trinity"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - gateway-net
+
+  trinity-api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: trinity-api
+    ports:
+      - "8001:8001"
+    volumes:
+      - trinity-data:/app/data
+    environment:
+      PYTHONUNBUFFERED: "1"
+      TRINITY_PG_HOST: trinity-db
+      TRINITY_PG_PORT: "5432"
+      TRINITY_PG_DB: trinity
+      TRINITY_PG_USER: trinity
+      TRINITY_PG_PASSWORD: trinity
+    command: api --port 8001
+    depends_on:
+      trinity-db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - gateway-net
+
+  trinity-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trinity-gateway
+    ports:
+      - "8002:8002"
+    environment:
+      TRINITY_API_URL: http://trinity-api:8001
+      UPSTREAM_BASE_URL: ${UPSTREAM_BASE_URL:-https://api.openai.com/v1}
+      UPSTREAM_API_KEY: ${UPSTREAM_API_KEY:-}
+      DEFAULT_MODEL: ${DEFAULT_MODEL:-gpt-4o-mini}
+      MEMORY_CONTEXT_K: "5"
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      trinity-api:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - gateway-net
+
+volumes:
+  trinity-data:
+  trinity-pgdata:
+
+networks:
+  gateway-net:
+    driver: bridge

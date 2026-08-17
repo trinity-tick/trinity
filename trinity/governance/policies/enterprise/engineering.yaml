@@ -1,0 +1,35 @@
+# Trinity 企业治理模板 — 研发部门（2026-08-15, V2 动作 B）
+# 场景：研发记忆默认隔离但代码知识库跨部门只读共享；研发内部自由协作；
+#      委托检索允许（跨部门查公开知识）。
+# 用法：GovernanceEngine.load_policy("trinity/governance/policies/enterprise/engineering.yaml")
+policy:
+  name: enterprise-engineering
+  description: 研发部门记忆：内部协作、代码知识库跨部门只读、委托检索
+  rules:
+    # 1) 兜底隔离
+    - scope: isolated
+      subject: "*"
+      target: "*"
+      action: "*"
+      audit: true
+    # 2) 研发部门内共享
+    - scope: shared
+      subject: "eng-*"
+      target: "eng-*"
+      action: "*"
+      audit: true
+    # 3) 代码知识库跨部门只读（任何部门可读 eng-kb）
+    - scope: shared
+      subject: "*"
+      target: "eng-kb"
+      action: read
+      audit: true
+    # 4) 委托检索：任何 agent 可委托（查公开知识）
+    - scope: delegated
+      subject: "*"
+      target: "*"
+      action: delegate
+      audit: true
+  defaults:
+    audit: true
+    allow: false

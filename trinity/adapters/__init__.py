@@ -23,6 +23,7 @@ __all__ = [
     "SQLiteAdapter",
     "PostgreSQLAdapter",
     "get_adapter",
+    "configure_adapter",
 ]
 
 

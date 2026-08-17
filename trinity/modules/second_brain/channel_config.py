@@ -1,4 +1,5 @@
 """
+# status: orphan (2026-08-15 audit, not in runtime path)
 Channel Configuration — cleans up the 47-channel retrieval system.
 
 Original: 47 channels, of which only channels 1-4 are actively used

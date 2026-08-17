@@ -1,4 +1,8 @@
 """
+# status: experimental (2026-08-15 audit: loader pair built but NOT wired into
+#   runtime path; engine.py facade (P0 refactor) already solved the monolith by
+#   re-exporting 52 classes from split engine_* files, so lazy loading is
+#   optional future optimization, not current need)
 Lazy Module Registry for SecondBrain
 =====================================
 代替直接 import 全部122个模块，使用代理对象按需实例化。

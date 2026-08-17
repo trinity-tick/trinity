@@ -1,0 +1,11 @@
+perf(bench): round-2 optimizations - pref2 two-stage + inner2 filtering (50q A/B 64% vs 62%)
+
+- pref2: two-stage preference generation (pref summary -> personalized reply)
+  -> preference 30q targeted A/B: 3.3% -> 16.7% (+13.3pp), 5x answer quality
+- inner2: refined inner-session turn filtering -> temporal 54.5% -> 63.6% on 50q
+- all2 combo (pref2+multi2+inner2): 50q 64% vs dated baseline 62%
+- multi2 alone is net negative (multi 47%->35%); kept only inside all2
+- LoCoMo/BEAM data acquisition: blocked by network (HF walled, GitHub raw timeout)
+- Scripts: benchmark/lme_qa_opt2.py, benchmark/lme_pref_ab.py
+- Full 500 run deferred per user instruction
+- NOT published (user requested hold)

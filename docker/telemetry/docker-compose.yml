@@ -1,0 +1,32 @@
+# Trinity Telemetry — Jaeger all-in-one (OTLP)
+#
+# Project name: trinity-telemetry (kept separate from the trinity-* runtime
+# containers so `docker compose down` here never touches trinity-api/mcp/db).
+#
+# Why Jaeger only (no otel-collector):
+#   trinity.telemetry.tracer posts OTLP/HTTP JSON to {endpoint}/v1/traces.
+#   Jaeger all-in-one natively accepts OTLP HTTP on :4318, so a separate
+#   collector adds no value for this setup. Add one later if you need
+#   buffering/filtering between Trinity and Jaeger.
+#
+# Start:   docker compose -p trinity-telemetry -f docker/telemetry/docker-compose.yml up -d
+# Stop:    docker compose -p trinity-telemetry -f docker/telemetry/docker-compose.yml down
+# UI:      http://127.0.0.1:16686
+
+name: trinity-telemetry
+
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: trinity-telemetry-jaeger
+    environment:
+      # Explicitly enable the OTLP receivers (gRPC :4317, HTTP :4318).
+      COLLECTOR_OTLP_ENABLED: "true"
+      # In-memory storage keeps this self-contained; restart loses traces.
+      COLLECTOR_OTLP_HTTP_READ_TIMEOUT: "10s"
+    ports:
+      - "16686:16686"   # Jaeger UI (Web)
+      - "4317:4317"     # OTLP gRPC (otel SDKs)
+      - "4318:4318"     # OTLP HTTP — used by trinity.telemetry.tracer
+      - "5778:5778"     # Jaeger agent config HTTP
+    restart: unless-stopped

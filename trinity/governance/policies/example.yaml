@@ -1,0 +1,33 @@
+# Trinity 治理示例策略 — 默认隔离 + 指定共享 + 委托（B3, 2026-08-15）
+# 用法：GovernanceEngine.load_policy("trinity/governance/policies/example.yaml")
+policy:
+  name: default-isolation
+  description: 默认记忆隔离；alpha↔beta 显式共享；允许委托检索
+  rules:
+    # 1) 隔离：任何 agent 只能读写自己（同名 target）
+    - scope: isolated
+      subject: "*"
+      target: "*"
+      action: "*"
+      audit: true
+    # 2) 共享：alpha↔beta 显式 read 白名单。特异性优先：具体 subject/target/action
+    #    规则（specificity=3）覆盖上面的通配隔离（specificity=0），与规则顺序无关。
+    - scope: shared
+      subject: beta
+      target: alpha
+      action: read
+      audit: true
+    - scope: shared
+      subject: alpha
+      target: beta
+      action: read
+      audit: true
+    # 3) 委托：任何 agent 可委托检索（write 委托任务）
+    - scope: delegated
+      subject: "*"
+      target: "*"
+      action: delegate
+      audit: true
+  defaults:
+    audit: true
+    allow: false

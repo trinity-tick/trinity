@@ -1,0 +1,235 @@
+# Trinity Agent Brain Configuration
+# ===================================
+# v6.95.0 — Dimension-aware configuration with Aggregator & 8-Dimension Indexing
+#
+# Per-agent memory strategies for the autonomous brain loop.
+#
+# Each agent profile defines:
+#   - memory_priority: weight multiplier (1.0 = baseline)
+#   - focus_keywords: content signals that boost importance score
+#   - max_memories: cap on stored events per agent
+#   - importance_threshold: minimum score for should_remember()
+#   - decay_rate: exponential decay coefficient for should_forget()
+#   - bridge_strategy: A2A embedded context configuration (v6.94.0)
+#   - memory_layer_weights: priority weights for 3-layer memory (v6.94.0)
+
+brain:
+  cycle_interval: 5.0            # seconds — main loop polling interval
+  maintenance_interval: 300.0    # seconds — cleanup/reindex frequency
+  auto_consolidate_interval: 60.0    # seconds — decay scoring frequency
+  conflict_check_interval: 120.0     # seconds — consensus voting frequency
+  max_memories_default: 10000
+  importance_threshold: 0.3
+  forget_decay_rate: 0.01
+
+  # Bridge defaults (v6.94.0)
+  bridge:
+    context_size: 2048            # tokens — max embedded context per dispatch
+    top_k: 10                     # number of relevant memories to retrieve
+    promotion_threshold: 0.35     # Promotion Gate persistence threshold
+
+agents:
+  file-agent:
+    memory_priority: 1.2
+    focus_keywords:
+      - file
+      - document
+      - path
+      - folder
+      - directory
+      - pdf
+      - docx
+      - xlsx
+      - invoice
+      - contract
+      - report
+      - rename
+      - move
+      - copy
+      - delete
+      - archive
+    max_memories: 10000
+    importance_threshold: 0.3
+    decay_rate: 0.01
+    bridge_strategy:
+      context_size: 4096
+      memory_types: [policy, fact, episodic]
+      promotion_threshold: 0.30
+    memory_layer_weights:
+      working: 0.2
+      episodic: 0.5
+      semantic: 0.3
+
+  browser:
+    memory_priority: 1.1
+    focus_keywords:
+      - url
+      - website
+      - page
+      - download
+      - http
+      - https
+      - search
+      - login
+      - form
+      - button
+      - link
+      - navigation
+    max_memories: 8000
+    importance_threshold: 0.3
+    decay_rate: 0.015
+    bridge_strategy:
+      context_size: 4096
+      memory_types: [fact, episodic, trace]
+      promotion_threshold: 0.35
+    memory_layer_weights:
+      working: 0.3
+      episodic: 0.5
+      semantic: 0.2
+
+  app-agent:
+    memory_priority: 1.0
+    focus_keywords:
+      - app
+      - install
+      - uninstall
+      - open
+      - launch
+      - settings
+      - permission
+      - update
+      - version
+      - package
+    max_memories: 5000
+    importance_threshold: 0.35
+    decay_rate: 0.02
+    bridge_strategy:
+      context_size: 2048
+      memory_types: [preference, episodic]
+      promotion_threshold: 0.40
+    memory_layer_weights:
+      working: 0.4
+      episodic: 0.4
+      semantic: 0.2
+
+  computer-agent:
+    memory_priority: 1.0
+    focus_keywords:
+      - system
+      - settings
+      - process
+      - service
+      - registry
+      - disk
+      - memory
+      - cpu
+      - network
+      - driver
+      - update
+      - reboot
+      - shutdown
+    max_memories: 5000
+    importance_threshold: 0.35
+    decay_rate: 0.02
+    bridge_strategy:
+      context_size: 4096
+      memory_types: [policy, fact, episodic]
+      promotion_threshold: 0.35
+    memory_layer_weights:
+      working: 0.2
+      episodic: 0.4
+      semantic: 0.4
+
+  search-agent:
+    memory_priority: 1.3
+    focus_keywords:
+      - research
+      - paper
+      - report
+      - analysis
+      - comparison
+      - review
+      - survey
+      - benchmark
+      - dataset
+    max_memories: 8000
+    importance_threshold: 0.25
+    decay_rate: 0.01
+    bridge_strategy:
+      context_size: 8192
+      memory_types: [fact, episodic]
+      promotion_threshold: 0.25
+    memory_layer_weights:
+      working: 0.2
+      episodic: 0.3
+      semantic: 0.5
+
+  main:
+    memory_priority: 1.0
+    focus_keywords:
+      - task
+      - delegate
+      - result
+      - error
+      - summary
+    max_memories: 10000
+    importance_threshold: 0.3
+    decay_rate: 0.01
+    bridge_strategy:
+      context_size: 16384
+      memory_types: [policy, preference, fact, episodic]
+      promotion_threshold: 0.30
+    memory_layer_weights:
+      working: 0.3
+      episodic: 0.3
+      semantic: 0.4
+
+  # ── Aggregator & Dimensions (v6.95.0) ──────────────────────────────
+
+  aggregator:
+    similarity_merge_threshold: 0.75   # Jaccard 相似度合并阈值
+    max_pool_size: 100000              # 共享池容量上限
+    clean_expired_max_age_hours: 720   # 过期清理阈值（30天）
+    global_context_limit: 100          # 全局上下文最大返回数
+
+  dimensions:
+    # 8-dimension weights for priority scoring
+    source_weight: 0.10        # 来源维度权重
+    topic_weight: 0.15         # 主题维度权重
+    temporal_weight: 0.10      # 时间维度权重
+    confidence_weight: 0.25    # 置信度维度权重
+    relational_weight: 0.15    # 关系维度权重
+    category_weight: 0.10      # 类别维度权重
+    scope_weight: 0.05         # 作用域维度权重
+    priority_weight: 0.10      # 优先级维度权重
+    default_confidence: 0.5
+    confidence_boost_per_agent: 0.15
+    max_confidence: 1.0
+    priority_recency_halflife: 3600.0
+    topic_max_topics: 8
+    cross_agent_promotion_enabled: true  # 跨Agent多源确认自动提升优先级
+
+  # ── Active Collection (v8.3.0) ──────────────────────────────────────
+
+active_collection:
+  enabled: true                        # 是否启用主动采集
+  scan_interval: 30                    # BackgroundScanner 扫描间隔（秒）
+  importance_threshold: 0.15           # 事件重要性最低阈值
+  dedup_window: 300                    # 内容去重窗口（秒）
+  max_events_per_flush: 50             # 单次 flush 最大事件数
+
+  hooks:
+    conversation_start: true           # 会话开始
+    tool_call: true                    # 工具调用
+    decision_point: true               # 重要决策
+    session_end: true                  # 会话结束
+    context_compact: true              # 上下文压缩
+    error_event: true                  # 错误事件
+
+  listen_agents:                       # 被监听的 Agent 列表
+    - main
+    - file-agent
+    - browser
+    - app-agent
+    - computer-agent
+    - search-agent

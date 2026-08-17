@@ -78,17 +78,18 @@ class TestSearch:
     """Test Trinity.search with adapter backend."""
 
     def test_search_empty_adapter(self, tmp_path):
-        """Search with no data should return empty list."""
+        """Search with no data should return empty result list."""
         mem = Trinity(adapter="sqlite", store_path=str(tmp_path))
-        results = mem.search("anything")
-        assert isinstance(results, list)
-        assert len(results) == 0
+        result = mem.search("anything")
+        assert isinstance(result, dict)
+        assert result["results"] == []
+        assert result["pushed_memories"] == []
 
     def test_search_after_ingest(self, tmp_path):
         """Search should find ingested content."""
         mem = Trinity(adapter="sqlite", store_path=str(tmp_path))
         mem.ingest("user prefers dark mode", persona_id="test_user")
-        results = mem.search("dark mode", persona_id="test_user")
+        results = mem.search("dark mode", persona_id="test_user")["results"]
         assert len(results) >= 1
         assert "dark" in results[0]["content"]
 
@@ -98,7 +99,7 @@ class TestSearch:
         mem.ingest("Alice likes hiking", persona_id="alice")
         mem.ingest("Bob likes coding", persona_id="bob")
 
-        alice_results = mem.search("likes", persona_id="alice")
+        alice_results = mem.search("likes", persona_id="alice")["results"]
         for r in alice_results:
             assert r["persona_id"] == "alice"
 
@@ -107,14 +108,14 @@ class TestSearch:
         mem = Trinity(adapter="sqlite", store_path=str(tmp_path))
         for i in range(10):
             mem.ingest(f"test memory number {i}", persona_id="tester")
-        results = mem.search("test", persona_id="tester", top_k=3)
-        assert len(results) <= 3
+        results = mem.search("test", persona_id="tester", top_k=3)["results"]
+        assert 0 < len(results) <= 3
 
     def test_search_includes_score(self, tmp_path):
         """Search results should include a score field."""
         mem = Trinity(adapter="sqlite", store_path=str(tmp_path))
         mem.ingest("machine learning is fun", persona_id="ml_user")
-        results = mem.search("machine learning", persona_id="ml_user")
+        results = mem.search("machine learning", persona_id="ml_user")["results"]
         assert len(results) >= 1
         assert "score" in results[0]
 
@@ -237,20 +238,20 @@ class TestTenant:
         mem.ingest("tenant a data", tenant_id="tenant_a", persona_id="u1")
         mem.ingest("tenant b data", tenant_id="tenant_b", persona_id="u1")
 
-        results_a = mem.search("data", tenant_id="tenant_a", persona_id="u1")
+        results_a = mem.search("data", tenant_id="tenant_a", persona_id="u1")["results"]
         # Search results include content but not tenant_id in the returned dict
         assert len(results_a) >= 1
         for r in results_a:
             assert "content" in r
 
-        results_b = mem.search("data", tenant_id="tenant_b", persona_id="u1")
+        results_b = mem.search("data", tenant_id="tenant_b", persona_id="u1")["results"]
         assert len(results_b) >= 1
         for r in results_b:
             assert "content" in r
 
         # Verify isolation: cross-tenant search should find nothing
-        cross_a = mem.search("data", tenant_id="tenant_a", persona_id="u1")
-        cross_b = mem.search("data", tenant_id="tenant_b", persona_id="u1")
+        cross_a = mem.search("data", tenant_id="tenant_a", persona_id="u1")["results"]
+        cross_b = mem.search("data", tenant_id="tenant_b", persona_id="u1")["results"]
         # Items are isolated by tenant_id in the WHERE clause
         assert len(cross_a) >= 1
         assert len(cross_b) >= 1

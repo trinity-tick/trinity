@@ -23,6 +23,7 @@ import time
 import uuid
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any, Callable
 from collections import defaultdict
 
@@ -104,6 +105,137 @@ class ConflictResolution:
             tags=list(set(local.tags + remote.tags)),
         )
         return merged
+
+
+# ---------------------------------------------------------------------------
+# Adapter 支撑的记忆存储（A2A 同步的落盘 + 检索层）
+# ---------------------------------------------------------------------------
+
+class AdapterMemoryStore:
+    """MemoryEntry 存储，底层挂在 StorageAdapter（如 SQLiteAdapter）上。
+
+    作为 A2A 同步的"本地仓库"：
+      - 内存字典维护 memory_id -> MemoryEntry 的权威索引（幂等 + 冲突合并）
+      - 每条记忆镜像写入底层 adapter（SQLite memories 表），可用
+        adapter.search_memories() 直接检索
+      - put() 幂等：同一 memory_id 且 sha256 相同的内容重复写入不会产生
+        重复行；内容不同时按 resolver（默认 newest_wins）解决冲突后 upsert
+
+    Usage::
+
+        store = AdapterMemoryStore(adapter, resolver=ConflictResolution.resolve_newest_wins)
+        store.put(entry)
+        hits = store.search("dark mode", top_k=5)
+    """
+
+    def __init__(self, adapter, resolver: Optional[Callable] = None):
+        self.adapter = adapter
+        self.resolver = resolver or ConflictResolution.resolve_newest_wins
+        self._entries: Dict[str, MemoryEntry] = {}
+
+    # ── 读写 ─────────────────────────────────────────────────────────
+
+    def put(self, entry: MemoryEntry) -> MemoryEntry:
+        """写入/更新一条记忆（幂等 + 冲突解决），返回最终生效的条目。"""
+        existing = self._entries.get(entry.memory_id)
+        if existing is not None:
+            if existing.sha256_hash == entry.sha256_hash:
+                return existing  # 幂等：内容未变，直接返回，不重复落盘
+            entry = self.resolver(existing, entry)
+        self._entries[entry.memory_id] = entry
+        self._upsert_adapter(entry)
+        return entry
+
+    def get(self, memory_id: str) -> Optional[MemoryEntry]:
+        """按 memory_id 取当前生效条目。"""
+        return self._entries.get(memory_id)
+
+    def list(self) -> List[MemoryEntry]:
+        """返回全部条目（权威索引视图）。"""
+        return list(self._entries.values())
+
+    def count(self, agent_id: Optional[str] = None) -> int:
+        """条目计数；传 agent_id 时只统计来自该 agent 的条目。"""
+        if agent_id is None:
+            return len(self._entries)
+        return sum(1 for e in self._entries.values() if e.source_agent == agent_id)
+
+    def search(self, query: str, top_k: int = 10) -> List[Dict[str, Any]]:
+        """通过底层 adapter 检索（返回 list[dict]，与 adapter 返回一致）。"""
+        try:
+            rows = self.adapter.search_memories(query, top_k=top_k)
+            return list(rows)[:top_k]
+        except Exception as e:
+            logger.warning("AdapterMemoryStore.search failed: %s", e)
+            return []
+
+    # ── 镜像到底层 adapter ──────────────────────────────────────────
+
+    def _upsert_adapter(self, entry: MemoryEntry) -> None:
+        """按 memory_id upsert 到 SQLite memories 表，保证检索一致性。
+
+        复用 adapter 自身的连接（与 trinity.memory.memory_agent 等模块
+        相同的内部约定）：Windows 下对 WAL 库开第二个写连接会触发
+        "database is locked"，因此不走独立 sqlite3 连接。
+        FTS5 触发器随 INSERT/UPDATE 自动维护全文索引。
+        """
+        conn = getattr(self.adapter, "_conn", None)
+        if conn is None:
+            logger.warning("AdapterMemoryStore: adapter 未连接，跳过镜像 %s", entry.memory_id)
+            return
+        try:
+            now = datetime.now(timezone.utc).isoformat()
+            session_id = f"sess_{uuid.uuid4().hex[:12]}"
+            tags_json = json.dumps(entry.tags, ensure_ascii=False)
+            metadata_json = json.dumps({
+                "a2a": True,
+                "a2a_memory_id": entry.memory_id,
+                "source_agent": entry.source_agent,
+                "version": entry.version,
+                "timestamp": entry.timestamp,
+            }, ensure_ascii=False)
+            conn.execute("""
+                INSERT INTO memories (
+                    memory_id, session_id, persona_id, tenant_id, agent_id,
+                    content, tokenized_content, role, importance, tags,
+                    category, memory_layer, sha256_hash, status, version,
+                    ttl_seconds, last_accessed_at, access_count,
+                    importance_score, content_hash, conflict_group_id,
+                    is_resolved, modality, metadata, source_uri,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, NULL, 'assistant', ?, ?, 'general',
+                          'a2a', ?, 'active', 1, NULL, ?, 0, 0.0, NULL, NULL,
+                          0, 'text', ?, NULL, ?, ?)
+                ON CONFLICT(memory_id) DO UPDATE SET
+                    content = excluded.content,
+                    persona_id = excluded.persona_id,
+                    tenant_id = excluded.tenant_id,
+                    agent_id = excluded.agent_id,
+                    importance = excluded.importance,
+                    tags = excluded.tags,
+                    sha256_hash = excluded.sha256_hash,
+                    version = excluded.version,
+                    metadata = excluded.metadata,
+                    updated_at = excluded.updated_at
+            """, (
+                entry.memory_id, session_id, entry.persona_id, entry.tenant_id,
+                entry.source_agent, entry.content, entry.importance, tags_json,
+                entry.sha256_hash, now, metadata_json, now, now,
+            ))
+            conn.execute("""
+                INSERT INTO memory_versions
+                    (version_id, memory_id, content, sha256_hash, operation, created_at)
+                VALUES (?, ?, ?, ?, 'A2A_SYNC', ?)
+            """, (f"ver_{uuid.uuid4().hex[:12]}", entry.memory_id, entry.content,
+                  entry.sha256_hash, now))
+            conn.commit()
+        except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            logger.warning("AdapterMemoryStore._upsert_adapter failed for %s: %s",
+                           entry.memory_id, e)
 
 
 # ---------------------------------------------------------------------------
@@ -205,6 +337,17 @@ class A2AMemorySync:
     def heartbeat(self):
         """发送心跳，保持注册状态"""
         self.registry.heartbeat(self.local_agent_id)
+
+    def store_local(self, entry: MemoryEntry) -> bool:
+        """将一条记忆写入本地存储（走 local_store 回调）。
+
+        供本地生产方写入：例如 AdapterMemoryStore 的 put 方法会幂等落盘
+        并镜像到 adapter，供后续检索。
+        """
+        if not self._local_store:
+            logger.warning("[A2A] %s 未配置 local_store，无法本地写入", self.local_agent_id)
+            return False
+        return bool(self._local_store(entry))
 
     # ------------------------------------------------------------------
     # 发现远端实例
@@ -336,6 +479,71 @@ class A2AMemorySync:
             success=success_count > 0,
             entries_count=success_count,
             conflicts=conflict_count,
+        )
+        self.sync_log.append(result)
+        return result
+
+    # ------------------------------------------------------------------
+    # 记忆接收（对端推送 -> 本地合并）
+    # ------------------------------------------------------------------
+
+    def receive_packet(self, packet_json: str,
+                       store: Optional[AdapterMemoryStore] = None) -> SyncResult:
+        """接收并合并一条 memory.store 传输包（幂等 + 冲突解决）。
+
+        解析 A2A 传输包（AgentRegistry.receive_transfer）取出 entry，
+        交给本地 store（AdapterMemoryStore）落盘：
+          - 同一 memory_id + 相同 sha256 重复接收不产生重复条目（幂等）
+          - 同一 memory_id 内容不同时视为版本冲突，由 store 的 resolver
+            （默认 newest_wins）解决后写入
+
+        Args:
+            packet_json: prepare_transfer 生成的传输包 JSON 字符串。
+            store: 可选 AdapterMemoryStore；为 None 时退回 local_store 回调。
+
+        Returns:
+            SyncResult(action="receive", ...)，conflicts>0 表示发生冲突。
+        """
+        data = AgentRegistry.receive_transfer(packet_json)
+        if not data:
+            result = SyncResult(action="receive", peer="unknown",
+                                success=False, error="传输包解析失败")
+            self.sync_log.append(result)
+            return result
+
+        payload = data.get("payload") or {}
+        peer = data.get("source_agent_id", "unknown")
+        if payload.get("action") != "memory.store" or "entry" not in payload:
+            result = SyncResult(action="receive", peer=peer, success=False,
+                                error=f"未知动作: {payload.get('action')}")
+            self.sync_log.append(result)
+            return result
+
+        try:
+            entry = MemoryEntry(**payload["entry"])
+        except (TypeError, ValueError) as e:
+            result = SyncResult(action="receive", peer=peer, success=False,
+                                error=f"entry 字段无效: {e}")
+            self.sync_log.append(result)
+            return result
+
+        conflict = 0
+        if store is not None:
+            existing = store.get(entry.memory_id)
+            if existing is not None and existing.sha256_hash != entry.sha256_hash:
+                conflict = 1
+            store.put(entry)
+            stored_ok = True
+        elif self._local_store:
+            stored_ok = bool(self._local_store(entry))
+        else:
+            stored_ok = False
+
+        result = SyncResult(
+            action="receive", peer=peer,
+            success=stored_ok, entries_count=1,
+            conflicts=conflict,
+            error="" if stored_ok else "本地存储回调未配置/失败",
         )
         self.sync_log.append(result)
         return result
