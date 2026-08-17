@@ -2811,6 +2811,10 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
 - **FINAL v2 综合（pref-inner2 + temporal-fix + RR 其他）= 68.6%（343/500）**，较基线 63.2% **+5.4pp**；分题型：SS-A 96.4 / SS-U 92.9 / KU 69.2 / temporal 65.4 / **SS-P 56.7（+36.7pp）** / multi 49.6（+6.0pp）。
 - 新增产物：`rr_pref_inner2_30.json` + `judge3_rr_pref_inner2_30.json` + `rr_multi_turn24_133.json` + `judge3_rr_multi_turn24_133.json`。
 - **multi 第三 A/B（2026-08-17 深夜）——日期前缀 + 时间排序：14.3%（证伪）**。自定义 runner 在 turn 粒度基础上给证据加 `[DATE:]` 前缀并按时间排序后重新截断 top-16 → judge3 全量 133 题仅 14.3%（vs turn16 49.6%）。根因：检索层 top-16 已是相关片段，强制重排+截断破坏跨会话证据完整性。**确认 turn 粒度（RouteReasoner 原版，top_k=16 不重排）为 multi 最优实现；≥55% 仅剩命题化/推理链路线（大工程，OPTIMIZATION_PLAN 已规划）**。
+- **multi 第四 A/B（2026-08-18 凌晨）——命题化路线两条验证**：
+  - 慢版（每 session 一次 LLM 提取）：multi 平均 47.2 session × 133 题 ≈ 6275 次提取调用，实测 3.2 分钟/题（80 题 15329s），全量需 7+ 小时——**成本不可接受，弃用**。
+  - 快版（按题聚合提炼，15000 字符截断）：133 题 433s 完成 → judge3 **0.75%（1/133）灾难性失败**。根因：聚合截断丢失 47 个 session 中绝大部分关键事实。
+  - **结论：命题化路线在现有实现下对 multi 无效或成本不可行；multi 49.6%（turn16）确认为当前可达上限，≥55% 需要全新的写入时命题化管线（重构 ingest 链路，非 A/B 可验证）**。
 
 ### C. collector 零事件告警处理
 - 诊断确认**无源非故障**：collector 3428 scanner cycles / 0 errors（扫描器健康）；6 个 BUILTIN_AGENTS（main/file-agent/browser/app-agent/computer-agent/search-agent）只是监听目录；`agent_config.yaml` 不存在（走默认列表）；无 agent 运行时向缓存目录写事件。
