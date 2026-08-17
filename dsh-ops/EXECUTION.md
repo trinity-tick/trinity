@@ -2773,7 +2773,13 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
 
 ### F. 全量 500 题 QA 基线（route2 + judge3）
 - 隔离 worktree `trinity-qa-500`（冻结代码 @4ad1cff）+ PYTHONPATH 指向 worktree，`lme_qa_route.py --limit 0 --route` 生成全量 500 答案；两次运行（首次 410/500 时任务中断，重启后完成）。
-- 下一步：judge3 三票判分锁定 QA 基线（~70% 预估）。
+
+### F2. 全量 500 题 QA 基线结果（judge3 三票，2026-08-17 晚）
+- 生成：frozen worktree（trinity-qa-500 @4ad1cff）`lme_qa_route.py --limit 0 --route`，500/500 完成（2531s，3 条 ERR）。
+- 判分：`judge3.py`（reason-first 3 票 majority），stability 3/3 = **97.3%**。
+- **全量 majority accuracy = 63.2%（316/500）**——低于此前 50 题 route2 估计的 72%，差异即小样本乐观偏差，现以全量为准。
+- 分题型：single-session-assistant 98.2% / single-session-user 91.4% / knowledge-update 64.1% / temporal-reasoning 62.4% / **multi-session 43.6%（最大短板）** / **single-session-preference 20.0%**。
+- 产物：`.trinity/bench-official/lme_route2_full500.json` + `judge3_route2_full500.json`。
 
 ### 验证与回滚
 - 全量回归：`python -m pytest tests/ -q` → 815 passed / 50 skipped。
