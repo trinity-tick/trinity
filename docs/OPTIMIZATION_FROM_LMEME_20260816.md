@@ -159,6 +159,52 @@
 - **query_intent_router / post_retrieval_evidence_policy ⚠️ 仅名义激活**：需完整接入（意图分类路由 + 证据链构建）后再测
 - 产品化建议：ppro 画像接入 preference 生成路径（配合按题型路由，preference 禁用 inner2——见 3.7 关键发现）
 
+### 3.9 Judge 治理（2026-08-17，3票 reason-first judge3）
+
+> 脚本：benchmark/judge3.py（--votes 3 --temp 0.3，注入真实 question 文本，先推理后判定，多数投票）
+
+**旧单次 judge 严重低估 pref 类**（question 传 id 而非真实文本 + 单次判定随机）：
+
+| 配置 | 旧 judge（单次） | **judge3（3票多数）** | 3/3 稳定率 |
+|---|---|---|---|
+| pref baseline + inner2 | 0.067 | **0.500** | 0.83 |
+| pref3 + inner2 | 0.100 | **0.600** | 0.90 |
+| pref baseline 无 inner2 | 0.200 | 0.433 | 0.79 |
+| pref3 无 inner2 | 0.033 | 0.367 | 0.87 |
+| temporal baseline | 0.580 | 0.620 | 0.96 |
+| temporal timeline | 0.600 | 0.620 | 1.00 |
+| multi baseline | 0.360 | 0.400 | 1.00 |
+| multi stitch | 0.340 | 0.400 | 0.96 |
+| multi extract（两段式） | — | 0.140 | 1.00 |
+
+**治理后真实结论（修订前节）**：
+1. **pref 真实水平 50-60%（非 3-16% 死区）**；pref3 rubric 对齐两段式真实增益 **+10pp**（50→60%）；
+   inner2 对 pref 仍有害（-6.7pp，50→43.3）——产品化保持"pref 禁 inner2"；
+2. **temporal timeline 的旧 +2pp 是 judge 噪声**——judge3 下 baseline=timeline=62%，REL 天数标注
+   无统计显著增益；需更大样本或更强变体（如时间线 + 显式日期差计算输出）再验证；
+3. **multi 生成层路线彻底死亡**：stitch（0）与 extract 两段式（-24pp）均无效，multi 需检索层改造
+   （如跨会话证据结构化索引），不是生成提示词能解决的；
+4. judge 治理落地为必做项：后续所有 A/B 默认用 judge3 判分。
+
+> 修订：3.5 节 timeline +2pp 与 3.7 节 pref3 +3.3pp 均为旧 judge 结果，实际以本节 judge3 数字为准。
+
+### 3.10 按题型路由组合（2026-08-17，50 题同批 A/B seed42，judge3 判分，脚本 lme_qa_route.py）
+
+| 配置 | judge3 整体 | 说明 |
+|---|---|---|
+| base（dated，无 inner2） | **66%** | 控制组 |
+| route（temporal=timeline+inner2 / pref=ppro / KU=freshness） | 68% | KU freshness 拖累 |
+| **route2（route 去 KU freshness）** | **72%** | **+6pp vs base，当前最优** |
+
+- **按题型路由有效（judge3 可信口径 +6pp）**：temporal 用 timeline（[REL: N days] + 时间线排序）+ inner2；
+  preference 用 ppro 画像两段式（无 inner2）；KU/其余 dated plain
+- **KU freshness 标注确认负优化**（68%→72% 去掉后）——[FRESH:] 前缀干扰检索内容，回退 dated plain
+- **judge3 口径下 base 从旧 judge 62% 修正为 66%**（judge3 全局更宽容 +4pp）——此前部分"提升"是判分噪声，
+  以 judge3 为准：route2 相对基线的真实增益 = +6pp
+- 稳定性：三票一致率 0.98-1.0（judge3 判定可靠）
+- 产品化结论：**route2 = 当前最优评测配置**（对应产品：意图路由 → temporal 走时间线+内检索、
+  preference 走画像生成、其余标准检索），与 3.9 judge3 治理后的结论一致（pref 真实 50-60%、temporal 需组合而非单点）
+
 ## 四、一句话
 
 **检索已达标（96.8% 头部），下一步全部投入在【上下文工程 + 生成策略】：把时间戳注入上下文、按题型路由生成提示、异步化 LLM 提取**——这是从 49.6% 走向 70%+ 的三步，也是评测证明 Trinity 深度能力的关键。
