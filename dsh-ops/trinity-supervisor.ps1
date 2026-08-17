@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Trinity 进程监督器 — 确保 trinity-api / trinity-mcp(SSE) / collector / gateway 常驻。
 
@@ -211,12 +211,12 @@ if (Test-Path $SysPy) {
         if ($out -match 'events_captured=(\d+)') { $ev = [int]$Matches[1] }
         if ($ev -gt 0) {
             Write-Log "collector OK (events_captured=$ev)"
-            $state.zeroEventCount = 0
+            $state | Add-Member -NotePropertyName zeroEventCount -NotePropertyValue 0 -Force  # 2026-08-17 修复：PSCustomObject 不能直接加新属性
         } else {
             $z = 0
-            if ($state.zeroEventCount) { $z = [int]$state.zeroEventCount }
+            if ($state.PSObject.Properties['zeroEventCount']) { $z = [int]$state.zeroEventCount }
             $z += 1
-            $state.zeroEventCount = $z
+            $state | Add-Member -NotePropertyName zeroEventCount -NotePropertyValue $z -Force
             if ($z -ge 3) {
                 Write-Log "collector RUNNING but ZERO events ($z consecutive, 6 connectors idle) - event-driven loop has no attached agents; check hook integration" "WARN"
             } else {

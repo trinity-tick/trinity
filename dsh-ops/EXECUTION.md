@@ -2693,4 +2693,33 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
 - 验证：4 个 py 文件 py_compile 通过；RL 冒烟 + evolution 过滤冒烟 + supervisor PS 解析 OK（BOM 保留）。
 - 生效：aggregator/RL/api 改动需重启 api(:8001)/mcp(:8000)（supervisor 5 分钟兜底）。
 - 回滚：git checkout 相关文件；supervisor 修改可由 git 恢复。
+
+## 第 35 轮:安全加固（端口收敛 + 鉴权）与收尾（2026-08-17）
+稳定性自检发现的高危暴露面修复（全部已验证）：
+- P0-1 存储层端口收敛：trinity-db 映射 0.0.0.0:5430 → 127.0.0.1:5430（重建，volume 数据保留）；
+  原生 Windows Redis 服务（redis.windows-service.conf）bind 空+无密码 → bind 127.0.0.1 重启
+  （修复过程中踩坑：Redis 配置不支持行尾注释，首次加注释导致启动失败，去掉后正常，PONG ✓）；
+  docker smartcos-redis 映射 0.0.0.0:6379/6380 → 127.0.0.1:16379/16380（避开原生 6379 占用，重建成功）。
+- P0-2 API 绑定 127.0.0.1：supervisor 启动参数加 --host 127.0.0.1（server.py 默认 0.0.0.0）。
+  注：auth.py 的 require_api_key 在 server.py 中零使用（鉴权未接入 147 个路由），设置 TRINITY_API_KEY
+  不会生效——已记录为后续优化项（需逐路由挂 Depends 或中间件）。
+- P0-3 Gateway：server.py uvicorn host 0.0.0.0 → 127.0.0.1；生成 32 字符 GATEWAY_API_KEY 写入
+  ~/.dsh/.credentials.yaml（BOM 保留），supervisor 注入循环加 GATEWAY_API_KEY；实测 no_key=401 / with_key=200。
+- P1 收尾：清理 7 个孤儿 .bak 文件（__init__.p43_*.bak / __init__.py.p46_*.bak / sqlite.py.bak_graphfix 等）；
+  git 提交 ab1cae1（security+stability，80 个改动），工作区 0 未提交。
+- P2 RL 启动落盘：aggregator._load 恢复 RL 状态后无条件 save 一次 rl_state.json，
+  确保文件存在（空状态也可追溯），避免"无反馈不落盘"。
+- 验证：netstat 确认 8001/8002/5430/6379/16379 全部仅监听 127.0.0.1；API /health 200；
+  gateway 鉴权 401/200；supervisor 语法 OK + BOM 保留；aggregator py_compile 通过。
+- 生效：api/gateway 已重启加载新绑定（supervisor 拉起，PID 37132/36520）。
+- 回滚：compose/conf/server.py 改动均可 git 恢复或反向编辑；凭证 key 可从 .credentials.yaml 删除。
+### 第 35 轮补记:supervisor zeroEventCount 修复（2026-08-17 17:34）
+- 运行巡检发现:零事件告警的 $state.zeroEventCount = $z 在 PSCustomObject（Read-State 的 JSON
+  反序列化产物）上无法添加新属性 → 每次轮次抛异常（"在此对象上找不到属性"），计数从不累积
+  （日志恒显示 "1 consecutive"），告警实际未生效（与 restartedAt 同款坑，但后者已转 hashtable，
+  zeroEventCount 是新增顶层属性未处理）。
+- 修复:三处赋值改 $state | Add-Member -NotePropertyName zeroEventCount -NotePropertyValue X -Force；
+  读取改 $state.PSObject.Properties['zeroEventCount'] 兼容旧 state 文件。语法 OK + BOM 保留。
+- 验证:手动跑一轮 supervisor 无报错，17:33:42 日志 collector OK 正常；计数从 1 重新累积，
+  连续 3 轮零事件后触发 WARN（约 15 分钟后可见）。
 - 全量回归 815 passed(811+4)。
