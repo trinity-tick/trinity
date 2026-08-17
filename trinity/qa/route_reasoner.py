@@ -140,9 +140,20 @@ def build_prompt(
                 "user": "Conversation excerpts:" + ctx_text + "\n\nQuestion: " + question + "\nAnswer:"}
 
     if strategy == "pref":
-        ctx_plain = "\n" + "===SESSION===" + "\n".join(
-            (e.get("content") or "").strip() for e in evidence[:5] if (e.get("content") or "").strip()
-        )
+        # 2026-08-17 优化：与 opt3 pref3（全量 SS-P 60%）对齐——inner2 过滤 + 保留 top-5 证据
+        ctx_pref: List[str] = []
+        for e in evidence[:5]:
+            c = (e.get("content") or "").strip()
+            if not c:
+                continue
+            turns = _split_turns(c)[:inner2_max_turns]
+            kept = []
+            for t_ in turns:
+                tl = t_.lower()
+                if any(term in tl for term in q_terms) or len(kept) < 2:
+                    kept.append(t_[:1000])
+            ctx_pref.append("\n".join(kept[:8]) if kept else c[:12000])
+        ctx_plain = "\n" + "===SESSION===" + "\n".join(ctx_pref)
         return {"system": PREF_STAGE1.format(question=question),
                 "user": "Conversation excerpts:" + ctx_plain[:12000]}
 
