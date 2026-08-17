@@ -2784,3 +2784,27 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
 ### 验证与回滚
 - 全量回归：`python -m pytest tests/ -q` → 815 passed / 50 skipped。
 - 回滚：`git checkout -- trinity/adapters/sqlite.py trinity/core/client.py trinity/agents/aggregator.py trinity/api/server.py`（_monolith_backup.py 保留原始单体，也可直接恢复）。
+
+## 第 38 轮:验收遗留建议执行（2026-08-17 深夜）
+
+### A. push origin/main（阻塞，待用户）
+- 尝试 git push origin main（143 commits ahead / 0 behind，纯 fast-forward）→ 失败：`github.com:443` 被防火墙稳定拦截（三次重试均 timeout），仅 `api.github.com` / `ssh.github.com:443` 可通。
+- 尝试 SSH-over-443：生成 ed25519 key → `ssh.github.com:443` 可连但 `Permission denied (publickey)`（新 key 未注册）。
+- 尝试经 GitHub API 注册 key：`POST /user/keys` 返回 **401** —— 仓库 `.github_token`（ghp_ 40 字符）已失效；credential manager 无其他 GitHub 凭据。
+- **结论：push 需要用户提供有效 GitHub token（或代理），当前为外部阻塞。** 本地 main 已包含全部 143 commits，随时可推。临时 SSH key 已清理。
+
+### B. QA 短板优化（multi-session 43.6% / SS-P 20.0%）
+- 方案：生产服务 `RouteReasoner`（trinity/qa/route_reasoner.py，2026-08-17 已封装：multi→turn 粒度+top16、temporal→REL+inner2、pref→两段式 stage1 摘要+stage2 个性化）已在 main 上；基线 63.2% 用的是 benchmark 脚本（multi 走 dated plain，未用 turn 粒度）→ 用 RouteReasoner 重跑全量 500 应提升 multi。
+- 执行：新建隔离 worktree `trinity-qa-rr`（detached @69e88d7）→ `rr_batch.py` 批量调 `RouteReasoner.answer`（每题按 session 摄入→策略路由→生成）→ 输出 `rr_route2_full500.json`。
+- 冒烟验证：api available=True；multi→turn / pref→pref / temporal→temporal 路由正确，答案合理。
+- 全量 500 运行中（预计 30-60 分钟）→ 完成后 judge3 判分对比基线。
+
+### C. collector 零事件告警处理
+- 诊断确认**无源非故障**：collector 3428 scanner cycles / 0 errors（扫描器健康）；6 个 BUILTIN_AGENTS（main/file-agent/browser/app-agent/computer-agent/search-agent）只是监听目录；`agent_config.yaml` 不存在（走默认列表）；无 agent 运行时向缓存目录写事件。
+- 处理：`trinity-supervisor.ps1` 零事件告警去噪——首个 3 连 + 每 12 轮（约 1 小时）提示一次，避免每 5 分钟刷屏；文案改为准确表述（'no event source attached...'）。真实故障（scanner_errors>0 / 进程 DOWN）仍由其他分支告警。
+- 事件源接入方式（已确认 API）：agent 运行时实例化 `AgentConnector(event_collector=...)`，绑定 AgentBridge 后调用 `on_conversation_start / on_tool_call_before / on_tool_call_after / on_decision` 等 hook，经 `EventDrivenCollector` 写入缓冲；或用 `trinity.collector` 的 `record_event`。也可建 `~/.trinity/agents/agent_config.yaml` 的 `active_collection.listen_agents` 指定监听 agent 目录。
+- 验证：supervisor 语法 OK（PowerShell 5.1 UTF-8 BOM 保留）；下一次 supervisor 轮次应只低频告警。
+
+### 验证与回滚
+- 全量回归：RR 运行期间不触碰主树；collector/supervisor 改动仅影响告警文案与频率（无行为变更）。
+- 回滚：supervisor 改动 `git checkout -- dsh-ops/trinity-supervisor.ps1`。

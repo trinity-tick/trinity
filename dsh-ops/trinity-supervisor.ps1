@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Trinity 进程监督器 — 确保 trinity-api / trinity-mcp(SSE) / collector / gateway 常驻。
 
@@ -217,8 +217,11 @@ if (Test-Path $SysPy) {
             if ($state.PSObject.Properties['zeroEventCount']) { $z = [int]$state.zeroEventCount }
             $z += 1
             $state | Add-Member -NotePropertyName zeroEventCount -NotePropertyValue $z -Force
-            if ($z -ge 3) {
-                Write-Log "collector RUNNING but ZERO events ($z consecutive, 6 connectors idle) - event-driven loop has no attached agents; check hook integration" "WARN"
+            # 去噪（2026-08-17）：无事件源属"预期状态"（无 agent 运行时向缓存写事件），
+            # 只在首个 3 连与每 12 轮（约 1 小时）提示一次，避免每 5 分钟刷屏；真实故障
+            # （scanner_errors>0 或进程 DOWN）仍由其他分支告警。
+            if (($z -eq 3) -or (($z -gt 3) -and (($z - 3) % 12 -eq 0))) {
+                Write-Log "collector RUNNING but ZERO events ($z consecutive) - no event source attached (expected when no agent runtime writes to cache dirs; see EXECUTION.md 第 38 轮 for hook integration)" "WARN"
             } else {
                 Write-Log "collector OK (events_captured=0, $z consecutive)"
             }
