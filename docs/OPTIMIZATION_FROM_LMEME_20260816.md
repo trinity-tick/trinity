@@ -214,10 +214,26 @@
 
 - 实现：LLM 从检索到的 temporal 会话提取事件三元组（date|subject|verb|object，管道分隔）→
   EventCalendar.add_event → DynamicRetrievalGuidance 时间过滤 query_range → EVENT 时间线（日期 + REL 相对天数）注入 QA 上下文
-- **结论：chronos 细粒度在 route2 之上 +2pp（68%→70%，judge3 三票一致）——正增量，接入有效**
-- 对比储备模块首轮（粗粒度"首句事件"0 增益）：**细粒度 LLM 事件提取是 chronos 生效的必要条件**
-- 累计评测配置演进（judge3 口径）：dated 66% → route2 68-72% → route2+chronos 70%+
-  （chronos 与 route2 的最优组合尚需合并验证；全量 500 按用户指示不跑）
+- ⚠️ **修订（3.12 大样本复核）：该 +2pp 为控制臂提示误导伪影**——r6 对照臂误用了含
+  "EVENT timeline is provided" 的提示（实际无 timeline），拉低对照；修正提示词后
+  control 72% vs chronos 70%，**chronos 无正增益（-2pp）**。REL 方案已覆盖时间信息，chronos 事件冗余。
+
+### 3.12 三项储备接入大样本复核（2026-08-17，judge3，全部证伪或持平）
+
+| 配置 | judge3 | 结论 |
+|---|---|---|
+| route2（修正提示，50 题） | **72%**（稳定 1.0） | 当前最优，确认 |
+| route2 + chronos 细粒度（50 题） | 70%（稳定 1.0） | **无增益（-2pp）**，事件时间线与 REL 冗余 |
+| multi 基线（50 题） | 40%（稳定 1.0） | — |
+| multi + 实体扩展检索（50 题） | 40%（稳定 1.0） | **无增益**——multi 检索层实体扩展无效（recall 已高，瓶颈在综合） |
+| preference ppro 启发式画像（30 题全量） | **10%**（稳定 0.87） | **证伪**——UserProfileDeriver 正则 pattern 对英文隐式偏好提取为空 → 回复无用户信息；此前 n=2 的 50% 是样本噪声 |
+
+**本轮三大证伪结论（避免产品化错误接入）**：
+1. **chronos 细粒度**：无增益（REL 方案已覆盖时间信息）；r6 的 +2pp 是控制臂提示 bug 伪影
+2. **multi 实体扩展检索**：无增益（multi 瓶颈不在召回，在跨会话综合——生成层 extract/stitch/con 亦全败，multi 为当前最大难题）
+3. **ppro 启发式画像**：大样本证伪（10%）——preference 需要 LLM 两段式（并发工作流 pref3 36-60%），非正则画像
+4. **route2 = 72% 保持当前最优**（judge3 稳定 1.0）
+5. 教训：**小样本（n=2-3）的"有效"结论不可信，必须 30+ 题 + judge3 复核**——本流程已三次捕获伪增量（r6 chronos、n=2 ppro、旧 judge 噪声）
 
 ## 四、一句话
 

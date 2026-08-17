@@ -5,9 +5,10 @@ from datetime import datetime
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data', default=r'C:\Users\Administrator\.trinity\bench-official\longmemeval_s_cleaned.json')
-parser.add_argument('--limit', type=int, default=50)
+parser.add_argument('--limit', type=int, default=0)
 parser.add_argument('--seed', type=int, default=42)
 parser.add_argument('--chronos', action='store_true')
+parser.add_argument('--only-type', default='')
 parser.add_argument('--out', default=r'C:\Users\Administrator\.trinity\bench-official\lme_chronos.json')
 args = parser.parse_args()
 
@@ -37,6 +38,8 @@ chronos = importlib.import_module('trinity.modules.second_brain.chronos_temporal
 
 with open(args.data, 'r', encoding='utf-8') as f:
     data = json.load(f)
+if args.only_type:
+    data = [q for q in data if q['question_type'] == args.only_type]
 if args.limit:
     import random; random.seed(args.seed); data = random.sample(data, args.limit)
 print('chronos=' + str(args.chronos), '| n=' + str(len(data)), flush=True)
@@ -47,6 +50,13 @@ GEN_SYS_PLAIN = ("You are a meticulous assistant with access to full past conver
     "Do not say UNKNOWN unless you have read every excerpt and the information is truly absent. "
     "Answer with just the fact, no preamble.")
 GEN_SYS_TEMPORAL = ("You are a meticulous assistant answering a question that requires temporal reasoning across past conversations. "
+    "Each excerpt is prefixed with a DATE marker and a REL marker (days before the question date). "
+    "Read ALL excerpts carefully. The answer IS somewhere in them. "
+    "Step 1: list every relevant dated fact (date + relative days). "
+    "Step 2: compute the answer using date differences / most recent event / explicit day counts. "
+    "Step 3: answer with just the exact fact. "
+    "Do not say UNKNOWN unless the information is truly absent.")
+GEN_SYS_TEMPORAL_EV = ("You are a meticulous assistant answering a question that requires temporal reasoning across past conversations. "
     "Each excerpt is prefixed with a DATE marker and a REL marker (days before the question date). "
     "A chronological EVENT timeline is also provided. "
     "Read ALL excerpts and the timeline carefully. The answer IS somewhere in them. "
@@ -178,7 +188,7 @@ for qi, q in enumerate(data):
             except Exception as exc:
                 answer = 'ERR:' + type(exc).__name__
         else:
-            sys_p = GEN_SYS_TEMPORAL if qtype == 'temporal-reasoning' else GEN_SYS_PLAIN
+            sys_p = (GEN_SYS_TEMPORAL_EV if args.chronos else GEN_SYS_TEMPORAL) if qtype == 'temporal-reasoning' else GEN_SYS_PLAIN
             try:
                 answer = llm_chat(sys_p, 'Conversation excerpts:' + chr(10) + ctx_text + chr(10) + chr(10) + 'Question: ' + question + chr(10) + 'Answer:', max_tokens=350)
             except Exception as exc:
