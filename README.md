@@ -32,7 +32,7 @@ protocols on top.
 └──────────────────────────────────────────────────────────┘
 ```
 
-**526 Python files · 243K+ lines · 147 API endpoints · 705 tests passing**
+**528 Python files · 206K+ lines · 147 API endpoints · 815 tests passing**
 
 ---
 
@@ -46,7 +46,7 @@ pip install -e .
 # 验证
 python -c "import trinity; print(trinity.__version__)"   # → 8.2.0
 
-# 全量测试（705 passed / 50 skipped / 0 failed）
+# 全量测试（815 passed / 50 skipped / 0 failed，系统 Python 3.14）
 python -m pytest tests/ -q
 ```
 
@@ -107,7 +107,9 @@ python scripts/memory_portability.py import-zep --file zep_export.json --persona
 | **LongMemEval_S（官方 ICLR 2025，500 题）** | **session R@5 = 0.968 · turn R@5 = 0.922 · hit pos 1.3** | 官方数据集实测（hf-mirror 获取），hybrid top-5 |
 | SQuAD v1.1 (adapted) | R@5 = **98.3%** | 180 题 passage selection（本地） |
 | LoCoMo (subset) | R@5 = **0.88** | 38 题会话聚合（中文本地集） |
-| pytest | **732 passed / 0 failed** | 全量 |
+| pytest | **815 passed / 0 failed** | 全量 |
+| **LongMemEval_S 500 题 QA（judge3 三票，route2）** | **63.2%（316/500）** | 全量锁定 2026-08-17；SS-A 98.2 / SS-U 91.4 / KU 64.1 / TR 62.4 / MS 43.6 / SS-P 20.0 |
+| LongMemEval_S 500 题 QA（dated，旧 judge） | 54.0% | 2026-08-16 全量实测 |
 
 > 📊 官方 LongMemEval_S 详情与分题型：docs/bench-official/LongMemEval_S_REPORT_20260816.md
 > **QA accuracy（DeepSeek judged，官方模板，500 题）= 54.0%**（dated 优化：时间戳+全量证据+
