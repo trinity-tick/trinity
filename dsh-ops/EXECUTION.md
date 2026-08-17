@@ -2810,6 +2810,7 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
 - **multi 调参 A/B**：turn_top_k=24 → **45.1%**（133 题，judge3），比 turn16 的 49.6% 低 -4.5pp（更多 turn 引入噪音）→ **确认 turn_top_k=16 为更优点，保持默认**。multi 49.6%（+6.0pp vs 基线 43.6%），未达 55% 目标；已知瓶颈在跨会话综合（命题化/推理链为后续大工程，OPTIMIZATION_PLAN 已规划）。
 - **FINAL v2 综合（pref-inner2 + temporal-fix + RR 其他）= 68.6%（343/500）**，较基线 63.2% **+5.4pp**；分题型：SS-A 96.4 / SS-U 92.9 / KU 69.2 / temporal 65.4 / **SS-P 56.7（+36.7pp）** / multi 49.6（+6.0pp）。
 - 新增产物：`rr_pref_inner2_30.json` + `judge3_rr_pref_inner2_30.json` + `rr_multi_turn24_133.json` + `judge3_rr_multi_turn24_133.json`。
+- **multi 第三 A/B（2026-08-17 深夜）——日期前缀 + 时间排序：14.3%（证伪）**。自定义 runner 在 turn 粒度基础上给证据加 `[DATE:]` 前缀并按时间排序后重新截断 top-16 → judge3 全量 133 题仅 14.3%（vs turn16 49.6%）。根因：检索层 top-16 已是相关片段，强制重排+截断破坏跨会话证据完整性。**确认 turn 粒度（RouteReasoner 原版，top_k=16 不重排）为 multi 最优实现；≥55% 仅剩命题化/推理链路线（大工程，OPTIMIZATION_PLAN 已规划）**。
 
 ### C. collector 零事件告警处理
 - 诊断确认**无源非故障**：collector 3428 scanner cycles / 0 errors（扫描器健康）；6 个 BUILTIN_AGENTS（main/file-agent/browser/app-agent/computer-agent/search-agent）只是监听目录；`agent_config.yaml` 不存在（走默认列表）；无 agent 运行时向缓存目录写事件。
