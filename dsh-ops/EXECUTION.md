@@ -2742,3 +2742,39 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
 - 验证:手动跑一轮 supervisor 无报错，17:33:42 日志 collector OK 正常；计数从 1 重新累积，
   连续 3 轮零事件后触发 WARN（约 15 分钟后可见）。
 - 全量回归 815 passed(811+4)。
+
+## 第 37 轮:生产级治理——单体拆分 / LLM 衰减 / 拓扑收敛 / 基准归档（2026-08-17 晚间）
+依据 2026-08-17 评价结论（检索 SOTA 96.8%、QA ~70%，短板=工程卫生/模块化 5/10）执行全方位生产级治理。目标：不改变任何行为，815 passed 回归全绿。
+
+### A. 工程卫生（磁盘 + site-packages）
+- 删除磁盘陈旧构建产物：build/（545 文件 23.9MB 源码副本）、site/（mkdocs 静态站）、buind_brain/（typo 空目录）；output/ 与 temp/ 归档至 backup/artifacts-20260817/；dist/ 中 6.37 轮子归档（保留 8.2.0）。
+- site-packages 清理：删除 stale 6.37 editable install（__editable__.trinity_memory-6.37.0.pth + finder + trinity.stale-v6.37.0.bak + dist-info.bak），消除版本混淆风险；import trinity 仍解析到 8.2.0 源码（验证通过）。
+- git 层面产物早已 untracked（2026-08-14 hygiene 轮），本次为磁盘与 site-packages 收尾。
+
+### B. 巨型单体拆分（行为不变，三文件全绿）
+1. **adapters/sqlite.py（144KB/3065 行 → 包）**：AST 精确切分 87 个方法 → 11 个领域 mixin（_connection/_schema/_crypto/_audit/_batch/_crud/_search/_stats/_graph/_anchors/_diagnostics）+ _util.py（_safe_write）+ __init__.py 组装 SQLiteAdapter(StorageAdapter, *mixins)。关键修复：①MRO——mixin 必须在 StorageAdapter 之前（否则 ABC 抽象方法不被满足）；②类属性 _PII_PATTERNS/_CJK_PATTERN 必须随方法迁入对应 mixin，引用改 mixin 类名。
+2. **core/client.py（132KB/2737 行 → 包）**：Trinity 118 方法 → 12 个 mixin（_helpers/_construction/_ingestion/_search/_vector/_graph/_crud/_audit_identity/_a2a/_advanced/_multimodal/_stats/_diagnostics）。
+3. **agents/aggregator.py（117KB/2425 行 → 包）**：MemoryAggregator → 13 个模块（_init/_ingest/_search/_vector/_rl/_graph/_stats/_maintenance/_similarity/_diagnostics/_factory/_kgraph_adapter/_constants）。关键修复：_vector.py 缺 faiss 模块级 import（NameError）——原单体在模块级 try/except import faiss，拆分后 _constants 只导出 _HAS_FAISS 标志，方法体引用 faiss 名字失败，补回模块级 import 后 3/3 ann_prewarm 通过。
+4. **api/server.py（134KB/2740 行，145 端点）→ 进行中**：FastAPI routers 拆分（_models/_deps/_routers_*），见下方。
+- 验证：每文件拆分后 py_compile + 定向测试 + 全量 `pytest tests/` → **815 passed / 50 skipped / 0 failed**（第 4 文件完成后复跑）。
+
+### C. 记忆治理接真实 LLM（生产默认 auto）
+- `scripts/run_decay_compress.py`：`--llm` 新增 `auto`（默认）——有 TRINITY_LLM_API_KEY 或 DEEPSEEK_API_KEY 则 real（OpenAI 兼容，DeepSeek 兜底），否则回退 mock，无人值守维护链永不因缺 key 崩溃。
+- `scripts/sleep_consolidation.py`：同样接入 auto 解析。
+- `dsh-ops/trinity-dsh-maintenance.ps1`：`-DecayLLM` 默认 mock → **auto**。
+- 验证：auto 带 key → resolved to real + REAL LLM 模式；无 key → resolved to mock；真实 DeepSeek 调用返回摘要（REAL LLM OUTPUT 正常）。
+
+### D. 三库拓扑收敛
+- 原生 PG16 :5432 早已停用（2026-08-16）；本次将 postgresql-x64-16 服务启动类型由 Automatic 改为 **Manual**（防开机复活），与 postgresql-16（已 Manual）一致。
+- 现状：SQLite 大库（运行时权威）+ docker trinity-db :5430（维护库）；docker-compose 映射 127.0.0.1:5430→5432 不变。
+
+### E. 一次性 benchmark 脚本归档
+- 43 个一次性实验脚本（lme_qa_opt*/diff_route*/judge_ab/by_type_r3/diag_*/graphql_load_* 等）git mv 至 **benchmark/archive/**，git 历史保留原始内容；保留 canonical runners（run_benchmark/locomo_real_eval_v2/squad_hybrid_runner/memsyco_evaluator/run_latency_bench/concurrency_bench/lme_qa_route/judge3/sync_pool_from_db*）+ 共享 profiler（latency_profiler/trinity_profiler）+ 被引用的（adaptive_routing/consistency_stress/compress_economics/locomo_real_eval/cluster_stress/beam_gin_index/generate_leaderboard）。
+
+### F. 全量 500 题 QA 基线（route2 + judge3）
+- 隔离 worktree `trinity-qa-500`（冻结代码 @4ad1cff）+ PYTHONPATH 指向 worktree，`lme_qa_route.py --limit 0 --route` 生成全量 500 答案；两次运行（首次 410/500 时任务中断，重启后完成）。
+- 下一步：judge3 三票判分锁定 QA 基线（~70% 预估）。
+
+### 验证与回滚
+- 全量回归：`python -m pytest tests/ -q` → 815 passed / 50 skipped。
+- 回滚：`git checkout -- trinity/adapters/sqlite.py trinity/core/client.py trinity/agents/aggregator.py trinity/api/server.py`（_monolith_backup.py 保留原始单体，也可直接恢复）。
