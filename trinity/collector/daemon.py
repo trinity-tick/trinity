@@ -280,15 +280,20 @@ class CollectorDaemon:
                 stats = self._get_scanner_stats()
                 scanner = stats.get("scanner", {})
                 collector = stats.get("collector", {})
+                # 2026-08-18: DSH 结构层事件源统计（空转可见化）
+                dsh = stats.get("dsh_events") or {}
 
                 logger.info(
                     "Heartbeat: state=%s | events_captured=%d flushed=%d "
-                    "scanner_cycles=%d scanner_errors=%d",
+                    "scanner_cycles=%d scanner_errors=%d | dsh: seen=%d emitted=%d last_id=%s",
                     self._state,
                     collector.get("events_captured", 0),
                     collector.get("events_flushed", 0),
                     scanner.get("scan_cycles", 0),
                     scanner.get("errors", 0),
+                    dsh.get("events_seen", 0),
+                    dsh.get("events_emitted", 0),
+                    dsh.get("last_id", "-"),
                 )
                 last_heartbeat = time.time()
 

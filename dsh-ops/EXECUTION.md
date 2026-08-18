@@ -2864,3 +2864,59 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
 
 - 检测到另一 DSH 会话（web 宿主 PID 37116）在并行修改仓库：dsh_events_source.py（DSH 结构层事件接入 collector，解决零事件）、docker-compose 数据隔离厘清、docs/DEPLOYMENT_TOPOLOGY_20260818.md、autostart 等（时间戳 2026-08-18 10:08-10:14）。
 - 本会话未触碰这些改动（26 个未提交文件属并行工作流）；潜在冲突点在共享文件（active_collector.py 等），需协调提交顺序。
+
+
+## 第 40 轮：四项运维优化完成（2026-08-18，并行工作流收口）
+
+> 与第 39 轮"附带发现"衔接：本会话（web 宿主）完成 4 项优化，改动文件与
+> 第 39 轮会话无冲突（该会话已确认未触碰这些文件）。
+
+### A. collector 事件源接入（零事件 → 真实数据源）
+- **根因**：EventDrivenCollector 的 6 个 hook 无生产者；BackgroundScanner 只扫
+  空缓存目录；且默认 SQLiteAdapter() 的 db_path="trinity_store.db" 会解析到
+  cwd 小库（已知坑 #9）——即使有事件也会写错库。
+- **实现**：
+  - 新增 trinity/memory/dsh_events_source.py：轮询结构层 dsh_events 表，
+    选择性映射高价值事件到 hook（user/message→conversation_start 0.25、
+    goal/write 与持久化工具→decision_point 0.45、tool/result 错误与
+    turn/end 中止→error_event 0.60）；游标用 **id(rowid)**（seq 按会话分配
+    非全局单调，实测新事件 seq=98k 而旧事件 seq=1.13M，不可用）；
+    首次运行只向前初始化（跳过历史回填）。
+  - active_collector.py CollectorManager：显式指向权威大库 + connect() 预置
+    adapter（否则 flush 静默失败）+ 创建/启停/统计 DshEventsSource。
+  - daemon.py 心跳新增 dsh 统计（seen/emitted/last_id），空转可见化。
+  - agent_config.yaml 新增 active_collection.dsh_events 配置段。
+- **验证**：12 个新单测全过（tests/unit/test_dsh_events_source.py）；
+  守护进程心跳实测 dsh: seen=17 emitted=1 last_id=14018（游标实时推进、
+  高价值事件被捕获）；collector 自检 10/10 PASS。
+
+### B. docker 并存部署厘清（防改错库）
+- **结论（实证）**：docker-compose.yml（仓库根，project=trinity）的
+  trinity-api(:8005)/mcp(:8006)/dash(:3000) 数据在 volume trinity-data，
+  与宿主权威大库完全隔离；唯一共享是 trinity-db :5430（维护库 PG）。
+- 新增 docs/DEPLOYMENT_TOPOLOGY_20260818.md（含"改库前先确认目标"清单）；
+  docker-compose.yml 头部加数据隔离警示；不擅自停栈（保留 dash/API）。
+
+### C. active 集治理（10.5% → 10.9%，WARN=0）
+- 审计发现 16 条 importance>=0.8 且 access>=10 的记忆被 archive_echo/
+  archive_dedup/UPDATE_MEMORY 连带归档（非 decay）；恢复 11 条确属误归档的
+  （高访问真知识，如 WMS 项目108 微服务对标 imp=0.95 acc=281）；另 5 条为
+  archive_dedup 精确重复/echo meta（恢复反而污染检索），脚本已排除此类。
+- 新增 scripts/restore_high_value_memories.py（幂等，audit restore_knowledge）
+  与 scripts/active_set_health.py（比例/高价值归档告警）；maintenance 新增
+  active-health 任务并入每日 03:00 链；autostart 每日链同步更新。
+- 实测：active 1364→1414，archived_high_imp_high_access=0（无告警）。
+
+### D. 卫生与文档
+- ~/.trinity/store 92 个遗留文件（7 月一次性脚本/cursors/旧备份 35MB/tts.mp3
+  等）移至 _legacy_20260818/（已确认无任何引用，含 ps1/vbs/bat/json 全查）；
+  仅留 trinity_store.db* 与备份目录。
+- trinity.yaml 头部文档修正（SQLite 权威 + PG:5430 维护库 + PG16:5432 停用）。
+- supervisor 零事件告警文案更新（已有事件源，静默期属预期）。
+
+### 验证与回滚
+- pytest：tests/unit/test_dsh_events_source.py 12 过；+ smoke 合计 47 过 7 跳；
+  collector 自检 10/10；引擎诊断 ALL_PASS（122 模块）；db_health integrity=ok；
+  API :8001 healthy。
+- 回滚：git checkout -- 对应文件即可；store 遗留文件在
+  ~/.trinity/store/_legacy_20260818/（可移回）。

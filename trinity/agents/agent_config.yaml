@@ -233,3 +233,20 @@ active_collection:
     - app-agent
     - computer-agent
     - search-agent
+
+  # ── DSH 结构层事件源 (v8.3.1, 2026-08-18) ─────────────────────────
+  # 把 DSH 会话事件流(dsh_events, 运行时权威库)接入 Active Collector，
+  # 让采集通道不再空转。选择性捕获高价值事件，避免淹没记忆库：
+  #   user/message -> conversation_start(0.25) / goal/write、持久化类
+  #   tool/call -> decision_point(0.45) / tool/result 错误、turn/end
+  #   中止 -> error_event(0.60)
+  dsh_events:
+    enabled: true                      # 是否启用 DSH 事件源
+    store_path: "~/.trinity/store/trinity_store.db"   # 运行时权威库
+    cursor_file: "~/.trinity/data/dsh_events_cursor.json"  # 增量游标
+    poll_interval: 30                  # 轮询间隔（秒）
+    captures:                          # 选择性捕获开关
+      user_messages: true
+      goal_write: true
+      persist_tools: true
+      errors: true

@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Trinity 进程监督器 — 确保 trinity-api / trinity-mcp(SSE) / collector / gateway 常驻。
 
@@ -217,13 +217,14 @@ if (Test-Path $SysPy) {
             if ($state.PSObject.Properties['zeroEventCount']) { $z = [int]$state.zeroEventCount }
             $z += 1
             $state | Add-Member -NotePropertyName zeroEventCount -NotePropertyValue $z -Force
-            # 去噪（2026-08-17）：无事件源属"预期状态"（无 agent 运行时向缓存写事件），
-            # 只在首个 3 连与每 12 轮（约 1 小时）提示一次，避免每 5 分钟刷屏；真实故障
-            # （scanner_errors>0 或进程 DOWN）仍由其他分支告警。
+            # 去噪（2026-08-17/18）：2026-08-18 起已接入 DSH 结构层事件源
+            # （active_collection.dsh_events），events_captured=0 表示近周期内
+            # 无"高价值事件"（user/message、goal/write、持久化工具、错误）——属预期
+            # 状态而非无源；真实故障（scanner_errors>0 或进程 DOWN）仍由其他分支告警。
             if (($z -eq 3) -or (($z -gt 3) -and (($z - 3) % 12 -eq 0))) {
-                Write-Log "collector RUNNING but ZERO events ($z consecutive) - no event source attached (expected when no agent runtime writes to cache dirs; see EXECUTION.md 第 38 轮 for hook integration)" "WARN"
+                Write-Log "collector RUNNING but ZERO high-value events ($z consecutive) - DSH event source attached (only user-message/goal/error/persist events captured; quiet period is expected)" "WARN"
             } else {
-                Write-Log "collector OK (events_captured=0, $z consecutive)"
+                Write-Log "collector OK (events_captured=0, $z consecutive; DSH source active)"
             }
         }
     } else {

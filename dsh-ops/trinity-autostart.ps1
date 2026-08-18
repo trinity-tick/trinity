@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Trinity DSH 自启循环 — 无需管理员权限的"计划任务"替代品。
 
@@ -87,7 +87,7 @@ while ($true) {
     # ── 每日 03:00-03:10：decay + tiers + sync（需 PG）──────────
     $today = $now.ToString("yyyyMMdd")
     if ((Test-Path $Maintenance) -and $now.Hour -eq 3 -and $now.Minute -lt 10 -and $lastDaily -ne $today) {
-        Invoke-Script -Path $Maintenance -ArgsList @("-Tasks", "mirror,decay,tiers,consolidate,dedup,sync,compact,agent-ttl,backup") -Label "maintenance(decay,tiers,sync)"
+        Invoke-Script -Path $Maintenance -ArgsList @("-Tasks", "mirror,decay,tiers,consolidate,dedup,sync,compact,agent-ttl,active-health,backup") -Label "maintenance(decay,tiers,sync)"
         $lastDaily = $today
     }
 

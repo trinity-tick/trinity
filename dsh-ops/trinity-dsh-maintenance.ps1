@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Trinity DSH 维护驱动器 — 由 Windows 计划任务或手动调用。
 
@@ -28,7 +28,7 @@ param(
 
 # 兼容 powershell -File 传参：命令行里的 "a,b,c" 会以单个字符串到达，
 # 这里统一按逗号拆分 + 校验。
-$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "all")
+$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "all")
 $normalized = @()
 foreach ($t in $Tasks) { $normalized += $t.Split(',') }
 $normalized = $normalized | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
@@ -338,6 +338,15 @@ sys.exit(main())
 "@
 $dbHealthPrompt = "运行 scripts/db_health.py(SQLite integrity + WAL checkpoint),汇报健康状态。"
 
+# Active 集健康（2026-08-18）：active 占比 + 归档高价值记忆告警
+$activeHealthCmd = @"
+import sys
+sys.path.insert(0, r"C:\Users\Administrator\trinity\scripts")
+from active_set_health import main
+sys.exit(main())
+"@
+$activeHealthPrompt = "运行 scripts/active_set_health.py(active 集健康: total/active/archived 占比, 归档高价值记忆告警, 有告警提示 restore_high_value_memories.py),汇报指标。"
+
 # ── 选择任务 ──────────────────────────────────────────────────────────────
 if ($Tasks -contains "all") { $Tasks = @("health", "evolution", "mirror", "decay", "tiers", "consolidate", "dedup", "sync", "compact", "backup", "selftest") }
 if ($Tasks -contains "compress") { $Tasks = @($Tasks | Where-Object { $_ -ne "compress" }) + "decay" }
@@ -366,6 +375,7 @@ foreach ($t in $Tasks) {
         "session-auto" { Invoke-Task -Name "session-auto" -DirectCommand $sessionAutoCmd -DshPrompt $sessionAutoPrompt }
         "agent-ttl" { Invoke-Task -Name "agent-ttl" -DirectCommand $agentTtlCmd -DshPrompt $agentTtlPrompt }
         "db-health" { Invoke-Task -Name "db-health" -DirectCommand $dbHealthCmd -DshPrompt $dbHealthPrompt }
+        "active-health" { Invoke-Task -Name "active-health" -DirectCommand $activeHealthCmd -DshPrompt $activeHealthPrompt }
         "backup"    { Write-Log "backup: WAL 安全备份到 ~/.trinity/backups (保留 14 天)"; & "$PSScriptRoot\trinity-backup.ps1" 2>&1 | ForEach-Object { Write-Log $_ } }
     }
 }

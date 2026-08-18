@@ -2,13 +2,19 @@
 # Trinity — Docker Compose
 # =============================================================================
 # Start all services:
-#   docker compose up -d
+#   docker compose --profile full up -d
 #
 # Services:
 #   trinity-mcp     — MCP server (memory tools via Model Context Protocol)
 #   trinity-api     — REST API server (FastAPI)
 #   trinity-db      — PostgreSQL (for multi-tenant mode)
 #   trinity-dash    — Web management dashboard
+#
+# ⚠️ 数据隔离（2026-08-18 厘清，见 docs/DEPLOYMENT_TOPOLOGY_20260818.md）：
+#   - 本栈的 SQLite 数据在 volume trinity-data（容器内 /app/data），
+#     与宿主权威库 ~/.trinity/store/trinity_store.db 完全隔离、互不读写。
+#   - 唯一共享：trinity-db :5430 被原生 maintenance 用作维护库（PG 镜像）。
+#   - 改库前先确认目标：:8001=原生 API / :8005=本栈 API / :3000=dash。
 # =============================================================================
 
 services:

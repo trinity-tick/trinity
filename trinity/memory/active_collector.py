@@ -861,12 +861,35 @@ class CollectorManager:
         adapters: Optional[Dict[str, AgentConnector]] = None,
         scan_interval: float = DEFAULT_SCAN_INTERVAL,
     ):
-        self._shared_collector = EventDrivenCollector()
+        # 2026-08-18：显式把共享 collector 指向运行时权威大库
+        # (~/.trinity/store/trinity_store.db)。默认 SQLiteAdapter() 的
+        # db_path="trinity_store.db" 会解析到 cwd 小库（已知坑 #9），
+        # 采集事件将写入错误存储。env TRINITY_STORE_PATH 可覆盖。
+        store_path = os.environ.get(
+            "TRINITY_STORE_PATH",
+            os.path.expanduser("~/.trinity/store/trinity_store.db"),
+        )
+        try:
+            from trinity.adapters.sqlite import SQLiteAdapter
+            _adapter = SQLiteAdapter(db_path=store_path)
+            _adapter.connect()  # 预置 adapter 不会走 _ensure_adapter 的懒连接，必须显式 connect
+            self._shared_collector = EventDrivenCollector(store_adapter=_adapter)
+        except Exception as e:
+            logger.warning("CollectorManager: explicit big-store adapter failed (%s), using auto", e)
+            self._shared_collector = EventDrivenCollector()
         self._connectors: Dict[str, AgentConnector] = {}
         self._scanner = BackgroundScanner(
             self._shared_collector, scan_interval=scan_interval
         )
         self._init_connectors(adapters or {})
+        # 2026-08-18：DSH 结构层事件源（agent_config.yaml 的
+        # active_collection.dsh_events.enabled 控制，默认开）。
+        self._dsh_source = None
+        try:
+            from trinity.memory.dsh_events_source import create_source
+            self._dsh_source = create_source(self._shared_collector)
+        except Exception as e:
+            logger.error("CollectorManager: dsh event source init failed: %s", e)
 
     def _init_connectors(self, adapters: Dict[str, AgentConnector]):
         for agent_name in BUILTIN_AGENTS:
@@ -884,15 +907,19 @@ class CollectorManager:
     def start(self):
         """启动后台扫描器。"""
         self._scanner.start()
+        if self._dsh_source is not None:
+            self._dsh_source.start()
 
     def stop(self):
         """停止后台扫描器并 flush 所有缓冲。"""
         self._scanner.stop()
+        if self._dsh_source is not None:
+            self._dsh_source.stop()
         for connector in self._connectors.values():
             connector.flush()
 
     def statistics(self) -> Dict[str, Any]:
-        return {
+        stats = {
             "scanner": self._scanner.statistics(),
             "collector": self._shared_collector.statistics(),
             "connectors": {
@@ -900,6 +927,9 @@ class CollectorManager:
                 for name, conn in self._connectors.items()
             },
         }
+        if self._dsh_source is not None:
+            stats["dsh_events"] = self._dsh_source.statistics()
+        return stats
 
 
 # ── Self-Test ─────────────────────────────────────────────────────────────
