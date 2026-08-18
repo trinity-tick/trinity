@@ -2825,3 +2825,42 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
 ### 验证与回滚
 - 全量回归：RR 运行期间不触碰主树；collector/supervisor 改动仅影响告警文案与频率（无行为变更）。
 - 回滚：supervisor 改动 `git checkout -- dsh-ops/trinity-supervisor.ps1`。
+
+---
+
+## 第 39 轮:模型能力与判分口径验证（2026-08-18，goal-4b2）
+
+> 目的：用数据决定 multi ≥55% 的命题化管线重构是否值得投入。产物详见 docs/MODEL_AB_VERIFICATION_20260818.md。
+
+### A. 生成模型 A/B（同批 74 题，seed42，RouteReasoner，judge3 三票）
+
+| 模型 | majority | ERR | 结论 |
+|---|---|---|---|
+| deepseek-chat（当前生产） | **59.5%（44/74）** | 0 | 非推理模型，content 直出 |
+| deepseek-v4-pro | 24.3%（18/74） | **53** | 推理模型：输出在 reasoning_content，content 为空 + finish_reason=length |
+
+- **v4-pro 不是 drop-in 替代**——推理模型响应格式不同（reasoning_content + 推理耗尽 max_tokens），需专门适配；deepseek-chat（v4-flash 类）是当前正确生产选择。
+- 探测发现：三个模型在简单与 temporal 题上均正确，能力接近；差异在格式与长文本推理。
+
+### B. 判分口径对照（同批 74 题 deepseek-chat 答案）
+
+| 判分方式 | 准确率 | 说明 |
+|---|---|---|
+| judge3 三票 majority（reason-first） | **59.5%** | 当前生产口径 |
+| 单票（简化提示） | 51.4% | 提示词不同 → -8.1pp |
+| 单票（judge3 的 reason-first 提示） | 44.6% | 同提示但单票 → 比三票 -14.9pp |
+
+- **三票 majority 显著提升判分稳定性（+14.9pp vs 同提示单票）**；差异主要来自提示词设计与票数，非 judge 模型本身。
+- 网络方案 80-90% 用 GPT-4o 单票口径，与我们的 DeepSeek 三票口径不可直接对比；口径解释的差距有限，真实差距在生成能力/方法。
+
+### C. 决策结论
+
+1. **模型升级路线暂不成立**：v4-pro 需推理格式适配，收益未验证，成本高于命题化。
+2. **判分口径不能解释主要差距**：三票口径本身稳健。
+3. **命题化重构仍是 multi ≥55% 的主要候选**，需全新设计（写路径一次性提取摊销成本）；预期收益按全量口径打折。
+4. 建议：若追求 multi 单项突破 → 命题化重构值得（独立大工程）；若追求整体性价比 → 当前 68.6% 已是稳固基线，可优先落地并行工作流的 dsh_events_source（真实事件源）。
+
+### D. 附带发现：并行工作流
+
+- 检测到另一 DSH 会话（web 宿主 PID 37116）在并行修改仓库：dsh_events_source.py（DSH 结构层事件接入 collector，解决零事件）、docker-compose 数据隔离厘清、docs/DEPLOYMENT_TOPOLOGY_20260818.md、autostart 等（时间戳 2026-08-18 10:08-10:14）。
+- 本会话未触碰这些改动（26 个未提交文件属并行工作流）；潜在冲突点在共享文件（active_collector.py 等），需协调提交顺序。
