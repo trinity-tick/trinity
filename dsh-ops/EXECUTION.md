@@ -2956,3 +2956,21 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
 
 ### C. active 集
 - 维持每日链监控（active-health），不人为干预；当前 10.9%，archived_high_imp_high_access=0。
+
+
+## 第 43 轮：DSH 运行体检与修复（2026-08-18）
+
+### A. 体检发现（DSH = Trinity 插件宿主，首次系统性检查）
+- **僵尸 web 宿主**：PID 48860（npx @deepseek-ai/dsh web 启动失败残留，无端口、33MB、父进程已退出的 cmd）与工作宿主 PID 37116（node ...\@deepseek-ai\dsh\lib\bin.js web，监听 3080）并存。
+- **错误日志刷屏**：~/.dsh/logs/web.err.log 653KB、548 个 ERROR，全部为 Cannot find module 'C:\Users\Administrator\web' —— npx 把 web 当模块 require，启动必失败。
+- 版本配套正常（dsh-trinity 0.1.0-rc.6 == @deepseek-ai/dsh 0.1.0-rc.6）；工作宿主/worker 父子链正常。
+
+### B. 处理
+1. 杀掉僵尸 48860（不影响工作宿主/当前会话）；清空 web.err.log（保留一行说明）。
+2. 新增 dsh-ops/DSH_RUNTIME_MAINTENANCE.md：正确启动方式（dsh web，禁用 npx ... web）、进程拓扑、日志、常见问题恢复、自启说明。
+3. 新增 dsh-ops/start-dsh-web.ps1（守卫：3080 已监听则跳过，否则拉起 dsh web 并记日志）+ dsh-ops/dsh-web-autostart.vbs（已装入 Startup，下次登录生效，不重启当前 37116）。
+4. 踩坑记录：tools.write 正常，但 JS 源码里 Windows 路径需写双反斜杠（单反斜杠会被 JS 转义吞掉，如 \U→U、\n→换行）；ps1 必须 UTF-8 BOM（已知坑 #2），首版无 BOM 导致中文注释按 ANSI 读损坏。
+
+### C. 验证
+- 守卫脚本实测：日志 "port 3080 already listening (pid=37116) - skip autostart"，未拉起第二个宿主；3080 仍归 37116。
+- 当前会话（37116）全程未受影响。
