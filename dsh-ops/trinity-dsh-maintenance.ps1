@@ -21,7 +21,7 @@ param(
     [string[]]$Tasks = @("health", "evolution"),
     [switch]$ViaDsh,
     [switch]$DryRun,
-    [int]$DecayLimit = 500,
+    [int]$DecayLimit = 2000,  # 2026-08-18 闭环优化：全量覆盖 active 1,422
     [string]$DecayLLM = "auto",
     [string]$LogDir = "C:\Users\Administrator\.trinity\logs"
 )

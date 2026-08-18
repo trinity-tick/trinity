@@ -2756,6 +2756,28 @@ consolidate→dedup→sync→compact 全 OK) / backup(89.4MB,14天) / collector�
 - 验证: evolution core.py py_compile 通过; API 200 全链路。
 - 提交: 本次改动 evolution/core.py。
 - 回滚: git checkout trinity/evolution/core.py。
+
+## 第 38 轮:两个部分闭环优化到完全闭环（2026-08-18）
+### A. collector 消化入库闭环（修复）
+- 根因: EventDrivenCollector.flush 只在 stop() 或 buffer>=50 阈值时触发；BackgroundScanner
+  _scan_once 每轮扫描后从不 flush——运行中事件（emitted 39-50）从未落库（flushed 恒 0），
+  消化链路断裂。
+- 修复: _scan_loop 每轮 _scan_once 后主动调用 event_collector.flush()（置于锁外避免死锁）。
+- 验证: 单元级 3 条注入事件（conversation_start/decision_point/error_event）→ flush → 隔离库
+  3 条全部落库（in_db: 3），链路完整。
+- 说明: 生产 collector 现 connected DSH 事件流（dsh_events_source.py, 2026-08-18 接入），
+  seen 持续增长但 emitted=0 属**选择性映射设计**——只捕获高价值事件（user/message、
+  goal/write、PERSIST_TOOLS 持久化工具、tool/result 错误、turn/end 中止），
+  当前工作流工具（run_code/read/write）不在清单属正常；遇高价值事件即 emit+flush 落库。
+### B. 记忆周期 decay 闭环（就绪）
+- DecayLimit 默认 500 → 2000（全量覆盖 active 1,422）。
+- real LLM 验证: run_decay_compress --store sqlite --limit 2000 --llm real
+  → "Compressor initialized (REAL LLM mode)" + Fetched 1,423 active + Scan healthy=1,423
+  + pending=0 + exit 0——真实 LLM 模式就绪、全量扫描覆盖；当前无待压缩记忆（记忆健康），
+  后续有 pending 时将走 DeepSeek 真实摘要。
+- 关联: collector restart 后旧进程内存缓冲事件丢失（未落库即被杀）——属一次性现象，
+  新进程已含修复。
+- 回滚: git checkout trinity/memory/active_collector.py / dsh-ops/trinity-dsh-maintenance.ps1。
 ### 第 35 轮补记:supervisor zeroEventCount 修复（2026-08-17 17:34）
 - 运行巡检发现:零事件告警的 $state.zeroEventCount = $z 在 PSCustomObject（Read-State 的 JSON
   反序列化产物）上无法添加新属性 → 每次轮次抛异常（"在此对象上找不到属性"），计数从不累积

@@ -644,6 +644,14 @@ class BackgroundScanner:
             except Exception as e:
                 self._stats.errors += 1
                 logger.error("BackgroundScanner: scan error: %s", e)
+            # 2026-08-18（闭环激活）: 每轮扫描后主动 flush 缓冲事件到 SQLite。
+            # 此前 flush 只在 stop() 或 buffer>=50 阈值时触发——运行中事件
+            # (emitted 39-50) 从未落库（flushed 恒 0），消化链路断裂。
+            # 此处位于锁外（_scan_once 内部持锁，flush 也持锁，避免死锁）。
+            try:
+                self.event_collector.flush()
+            except Exception as e:
+                logger.debug("BackgroundScanner: flush skipped: %s", e)
             self._stop_event.wait(self.scan_interval)
 
     def _scan_once(self):
