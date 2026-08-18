@@ -3153,3 +3153,49 @@ consolidate→dedup→sync→compact 全 OK) / backup(89.4MB,14天) / collector�
 - 50 题 A/B（seed42 + judge3）：提取挂入 benchmark 摄入钩子 → 隔离库 verbatim vs proposition 对比；
   出口：multi 49.6%→55%+ 且 temporal/pref 不倒退 → 才进 M4 全量。
 - 需真实 LLM ~50+ 次提取调用（成本可控，deepseek-chat）。
+
+
+## 第 47 轮：命题化 M3 执行中（2026-08-18 续）
+
+- A/B 脚本 scripts/run_prop_ab.py（seed42 同批 50 题，A=verbatim 基线 / B=verbatim+命题提取，route 逻辑同 lme_qa_route）
+- A 基线：50/50 完成 → .trinity/bench-official/prop_ab_A_verbatim.json（87s）
+- B 命题组：运行中（q27/50）；修复链：
+  ①命题 LLM 输出 JSON 截断（max_tokens 600→1500→4000 + 输入裁 3000 + 提示词限 8 条 + 截断补全容错）→ parse failed=0；
+  ②run_prop_ab.py 无用 import（ppro_profile_retrieval 已随重构移除）删除；
+  ③extract_and_store 对 UNIQUE 冲突容错（mock 重复跳过）
+- 诊断验证：真实 LLM 提取长文本（15k 字符）→ 7 条命题解析成功；短文本 4/4
+- 待 B 完成 → judge3 三票判分 A/B 对比（multi 49.6%→55%+ 且 temporal/pref 不倒退 → M4）
+
+
+## 第 48 轮：命题化 M3 —— 50 题 A/B 证伪（2026-08-18）
+
+### 方法
+- scripts/run_prop_ab.py：seed42 同批 50 题（multi 17/temporal 11/SS-U 10/KU 7/SS-A 3/SS-P 2）
+- A 基线：verbatim 摄入（[DATE:] 前缀）+ route2 风格检索生成
+- B 命题组：verbatim + 写路径命题提取（真实 LLM deepseek-chat，4 类命题，category=proposition 并存）
+- judge3 三票 majority 判分
+
+### 结果（judge3 三票）
+| 题型 | A verbatim | B +命题 | delta |
+|---|---|---|---|
+| 整体 | 60.0% (30/50) | 50.0% (25/50) | **-10.0pp** |
+| multi-session | 52.9% (9/17) | 29.4% (5/17) | **-23.5pp** |
+| temporal | 45.5% (5/11) | 36.4% (4/11) | -9.1pp |
+| KU / SS-U / SS-A / SS-P | 不变 | 不变 | 0 |
+
+- B 无任何题型超越 A（B-only=0）；5 个"B 错 A 对"全是 multi/temporal。
+- 命题条目数：B 库含真实 LLM 命题为主 + 少量 mock（API 偶发断连/无命题文本回退）。
+
+### 结论（证伪）
+1. **写路径命题并存版不成立**：命题条目进入检索后污染 top-5（挤占 verbatim 完整上下文），
+   multi 聚合需要完整证据链而原子命题不足——与 round 39 快版 0.75% 灾难同因。
+2. 出口标准（multi≥55% 且不倒退）未达标 → **M4 全量不启动**。
+3. 印证 round 39 裁定：命题化需**检索端全新设计**（命题路由/替换，非并存 A/B 可验证）。
+4. 收益：71 分钟 + ~600 次 LLM 调用，避免 M4 全量更大投入——证伪纪律兑现。
+5. QA 维持 68.6% 基线不变。
+
+### 资产（本次新增）
+- trinity/memory/proposition_extractor.py（4 类命题提取器，开关隔离，可复用）
+- tests/unit/test_proposition_extractor.py（11 测试）
+- scripts/run_prop_ab.py（A/B runner，可复用于任何检索/摄入实验）
+- .trinity/bench-official/prop_ab_A/B + judge3_prop_ab.json（原始证据）

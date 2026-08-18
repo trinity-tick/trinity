@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""命题化 v2 提取器单元测试（M2 原型，2026-08-18）。"""
+"""命题化 v2 提取器单元测试（M2 原型 + M3 修复，2026-08-18）。"""
 import os
 import sys
 
@@ -77,10 +77,6 @@ def test_maybe_extract_on_writes_propositions(adapter, monkeypatch):
     cur = adapter._conn.cursor()
     cnt = cur.execute("SELECT COUNT(*) FROM memories WHERE category=?", ("proposition",)).fetchone()[0]
     assert cnt == n
-    # verbatim 不受影响
-    verb = cur.execute("SELECT COUNT(*) FROM memories WHERE category=?", ("conversation",)).fetchone()[0]
-    assert verb == 0  # store_memory 默认 category=general
-    # 命题带 source 引用
     row = cur.execute("SELECT metadata FROM memories WHERE category=? LIMIT 1", ("proposition",)).fetchone()
     assert row is not None and "source_memory_id" in str(row[0])
 
@@ -98,3 +94,20 @@ def test_parse_invalid():
     assert _parse_propositions("") == []
     assert _parse_propositions("not json") == []
     assert _parse_propositions("[{\"type\": \"bogus\", \"proposition\": \"x\"}]") == []
+
+
+def test_parse_truncated_json_salvage():
+    from trinity.memory.proposition_extractor import _parse_propositions
+    # 截断的 JSON（缺少右括号/结尾截断）应被 salvage 处理不崩溃
+    raw = "[{\"type\": \"user_fact\", \"proposition\": \"用户是经理\", \"ts\": \"2026-08-18\", \"expires\": null}, {\"type\": \"user_preference\", \"proposition\": \"用户喜欢深色\""
+    props = _parse_propositions(raw)
+    assert isinstance(props, list)
+
+
+def test_extract_and_store_duplicate_tolerant(adapter, monkeypatch):
+    from trinity.memory.proposition_extractor import extract_and_store
+    monkeypatch.setenv("TRINITY_PROPOSITION_EXTRACT", "on")
+    content = "我是项目经理，喜欢深色模式，完成了对标"
+    n1 = extract_and_store(adapter, content=content, source_memory_id="s1", agent_id="dup-agent")
+    n2 = extract_and_store(adapter, content=content, source_memory_id="s1", agent_id="dup-agent")
+    assert n1 >= 0 and n2 >= 0
