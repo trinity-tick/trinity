@@ -2974,3 +2974,17 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
 ### C. 验证
 - 守卫脚本实测：日志 "port 3080 already listening (pid=37116) - skip autostart"，未拉起第二个宿主；3080 仍归 37116。
 - 当前会话（37116）全程未受影响。
+
+
+## 第 44 轮：服务器 + 多机实时记忆汇聚方案（2026-08-18）
+
+- 需求：服务器装 Trinity 作权威汇聚端；每台电脑独立 Trinity 实例；记忆实时同步汇聚统一处理。
+- 已核实：/agents/memory/bulk_write（{entries:[MemoryWriteRequest]}，max 100/批，必填 agent_id+content）、
+  /memories（content 必填，含 tenant_id/agent_id/metadata/source_uri）、SDK 三语、federation_sync.py 批处理。
+- 方案（docs/SERVER_MULTI_NODE_SYNC.md）：
+  - 架构：服务器（API+PG 权威）← HTTPS+Bearer ← 各机（本地 Trinity + sync-agent）
+  - 同步：轮询增量推送（游标+批推，秒级 3-6s，幂等去重，断线续传）——复用 collector 增量模式，服务器零改造
+  - 服务器：docker 部署（端口修正 8001:8001 + PG 权威 + API Key 鉴权 + HTTPS 反代）
+  - 可行性：服务器端全现成（端点/去重/隔离/审计/SDK），唯一新组件 sync-agent（~250-300 行 Python，低风险）
+  - 实施：P0 本机模拟双实例验证（半天）→ P1 服务器部署（1-2天）→ P2 单机试点 → P3 多机推广
+- 决策点（待用户）：同步方向（单向/双向）、实时粒度（轮询/钩子）、服务器环境（公网/内网）、P0 时机
