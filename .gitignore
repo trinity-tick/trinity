@@ -141,3 +141,8 @@ trinity.yaml
 backup/
 __pycache__/
 *.pyc
+
+# Internal strategy docs (2026-08-18 privacy pass)
+docs/TRINITY_COMMERCIAL_PLAN_*
+docs/FUTURE_PLAN_*
+scripts/_read_j3.py
