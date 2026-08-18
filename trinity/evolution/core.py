@@ -424,6 +424,13 @@ class MetaEvolution:
             "target": os.path.join(self.skill_dir, "heartbeat-state.md"),
         })
 
+        # 2026-08-18（闭环激活）: 确认的模式/偏好沉淀为可检索记忆（execute 产出真实落库）
+        if analysis.get("patterns_detected", 0) > 0 or analysis.get("preferences_found", 0) > 0:
+            actions.append({
+                "type": "persist_evolution",
+                "priority": "medium",
+            })
+
         return {
             "actions": actions,
             "total_actions": len(actions),
@@ -446,6 +453,8 @@ class MetaEvolution:
                     results.append(self._update_corrections_file(action))
                 elif action["type"] == "heartbeat":
                     results.append(self._heartbeat_check(action))
+                elif action["type"] == "persist_evolution":
+                    results.append(self._persist_evolution(action))
                 else:
                     results.append({"action": action["type"], "status": "skipped"})
             except Exception as e:
@@ -538,6 +547,57 @@ skill_scores: {len(self.state.skill_scores)}
             f.write(content)
 
         return {"action": "heartbeat", "status": "done", "file": path}
+
+    def _persist_evolution(self, action: Dict) -> Dict:
+        """2026-08-18（闭环激活）: 把确认的模式/偏好沉淀为可检索记忆。
+
+        此前 execute 只写 skill_dir 的 markdown 文件（不可检索、无记忆库足迹），
+        corrections_log / skill_scores 恒空——进化"只学不做"。此方法将高置信
+        patterns/preferences 写入 SQLite 大库（category=evolution），使进化
+        周期产生真实、可追踪、可检索的产出。
+        """
+        try:
+            _NOISE = ("test", "placeholder", "find documents about", "index gpu", "mem_")
+            confirmed = []
+            for pat, score in sorted(self.state.active_patterns.items(), key=lambda x: -x[1]):
+                if score > 0.5 and not any(_n in str(pat).lower() for _n in _NOISE):
+                    confirmed.append(f"- {pat} (confidence: {score:.1f})")
+            for pref, score in sorted(self.state.active_preferences.items(), key=lambda x: -x[1]):
+                if score > 0.8:
+                    confirmed.append(f"- 偏好: {pref} (confidence: {score:.1f})")
+            if not confirmed:
+                return {"action": "persist_evolution", "status": "skipped", "reason": "no confirmed patterns"}
+
+            from trinity.adapters.sqlite import SQLiteAdapter
+            content = (
+                f"[evolution] 进化周期 #{self.state.total_cycles} 沉淀 "
+                f"({datetime.now().strftime('%Y-%m-%d %H:%M')})\n"
+                + "\n".join(confirmed)
+            )
+            adapter = SQLiteAdapter(db_path=os.path.join(
+                os.path.expanduser("~"), ".trinity", "store", "trinity_store.db"))
+            adapter.connect()
+            try:
+                conn = getattr(adapter, "_conn", None)
+                if conn is not None:
+                    conn.execute("PRAGMA busy_timeout=30000")
+                res = adapter.store_memory(
+                    content=content, persona_id="default", session_id="evolution",
+                    agent_id="evolution", role="agent", importance=0.7,
+                    tags=["evolution", "pattern", f"cycle-{self.state.total_cycles}"],
+                    category="evolution",
+                )
+                self.state.skill_scores["evolution_persist"] = float(
+                    len(self.state.skill_scores) + 1)
+                return {
+                    "action": "persist_evolution", "status": "done",
+                    "memory_id": res.get("memory_id", "?"),
+                    "patterns": len(confirmed),
+                }
+            finally:
+                adapter.disconnect()
+        except Exception as e:  # noqa: BLE001
+            return {"action": "persist_evolution", "status": "error", "error": str(e)[:120]}
 
     # ── Diagnostics ─────────────────────────────────────────────────
 

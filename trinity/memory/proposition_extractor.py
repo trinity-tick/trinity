@@ -67,7 +67,7 @@ def _llm_json_call(system: str, user: str, timeout: float = 60.0) -> str:
             {"role": "user", "content": user},
         ],
         "temperature": 0.1,
-        "max_tokens": int(os.environ.get("TRINITY_PROPOSITION_MAX_TOKENS", "600")),
+        "max_tokens": int(os.environ.get("TRINITY_PROPOSITION_MAX_TOKENS", "1500")),
     }
     req = urllib.request.Request(
         cfg["base_url"] + "/chat/completions",

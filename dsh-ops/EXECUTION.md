@@ -2732,6 +2732,30 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
   RL 微调（Q bonus ±0.15）现在有真实 Q 值输入。
 - 生效：aggregator 改动已随 API 重启加载。
 - 回滚：git checkout trinity/agents/aggregator.py。
+
+## 第 37 轮:运行闭环基线固化 + 两开环激活（2026-08-18）
+### A. 14 个运行闭环基线（运行结构审计）
+完全闭环(11): supervisor自愈 / autostart / lock-watchdog / 每日链(03:03 mirror→decay→tiers→
+consolidate→dedup→sync→compact 全 OK) / backup(89.4MB,14天) / collector采集(events_captured=42,
+从恒0转有产出) / collector告警(存活+产出双检) / RL反馈(4记忆,global_try=6,q=0.55→0.595,落盘)
+/ DSH结构同步(dsh_goals 44/44, events 13,487) / Gateway(246请求,鉴权401/200) / evolution 37周期。
+部分闭环(2): collector 消化入库待确认; 记忆周期 decay 仍 mock LLM/扫描500。
+### B. 开环激活
+1. **进化执行层激活**（core.py）: _plan 在确认 patterns/preferences 时增加 persist_evolution 动作;
+   _execute 新增 _persist_evolution——高置信模式/偏好沉淀为可检索记忆(category=evolution,
+   agent_id=evolution, importance 0.7) 写入 SQLite 大库; skill_scores 记录沉淀计数;
+   沉淀时过滤 test/placeholder/mem_ 等噪音 pattern。实测: cycle 38 完成, 进化记忆落库
+   mem_ff8488c3b1a94bca("[evolution] 进化周期 #37 沉淀..."), skill_scores evolution_persist=1.0。
+   此前 execute 只写 skill_dir markdown 不可检索——现进化有真实可追踪产出。
+2. **记忆市场交易激活**（调用级验证）: 挂单(POST /market/list, memory=dict)→购买(POST /market/buy)
+   →成交(tx_agent-B_agent-A_ast_38460972a7d4, price 5.0)→交易历史→信誉(trade_success_rate=1.0)。
+   市场从"只挂牌不流动"变为真实交易闭环。注意: MarketListRequest.memory 为 Dict(记忆对象)。
+### C. 关联变化
+- 08-17 并行工作流已将 api/server.py(134KB monolith) 重构为 api/server/ 包(12 domain routers,
+  commit 97b362c, 815 tests 绿)——grep 路径注意 trinity/api/server/ 目录。
+- 验证: evolution core.py py_compile 通过; API 200 全链路。
+- 提交: 本次改动 evolution/core.py。
+- 回滚: git checkout trinity/evolution/core.py。
 ### 第 35 轮补记:supervisor zeroEventCount 修复（2026-08-17 17:34）
 - 运行巡检发现:零事件告警的 $state.zeroEventCount = $z 在 PSCustomObject（Read-State 的 JSON
   反序列化产物）上无法添加新属性 → 每次轮次抛异常（"在此对象上找不到属性"），计数从不累积
