@@ -2988,3 +2988,16 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
   - 可行性：服务器端全现成（端点/去重/隔离/审计/SDK），唯一新组件 sync-agent（~250-300 行 Python，低风险）
   - 实施：P0 本机模拟双实例验证（半天）→ P1 服务器部署（1-2天）→ P2 单机试点 → P3 多机推广
 - 决策点（待用户）：同步方向（单向/双向）、实时粒度（轮询/钩子）、服务器环境（公网/内网）、P0 时机
+
+
+## 第 45 轮：服务器 + 多机实时记忆同步详细方案 v2（基于网络最优方案）
+
+- 网络调研：Mem0 Edge（中心化记忆+边缘 agent）、Mem0 Self-Host Docker、Multi-Agent Memory Patterns 2026、
+  SAMEP（arXiv 2507.10562 跨实例记忆交换协议）、MCP/A2A/REST 协议矩阵。
+- 详细方案 docs/SERVER_MULTI_NODE_SYNC_DETAILED.md（v2，124+ 行）：
+  - 架构：中心化权威 + 本地写缓存（Mem0 Edge 变体）——服务器(API+PG+Redis+维护链) ← HTTPS+Bearer ← 各机(本地 Trinity + sync-agent)
+  - 服务器部署：docker-compose 服务器版（端口 8001 直出、占位符环境变量、PG 权威、仅生产服务）、HTTPS 反代 + API Key、初始化清单 5 步
+  - 各机部署：本地 Trinity(SQLite) + trinity-sync-agent（sync-agent.yaml 配置、游标格式、bulk_write 请求体、运行循环伪代码、幂等/断线/首轮全量语义）
+  - 协议一致性：content_hash 幂等 + updated_at 冲突 + 审计链（对齐 SAMEP）；REST 主通道 + MCP/A2A 二期
+  - 数据流/运维/安全/网络对照/分阶段(P0半天→P3)/工作量（sync-agent ~250-300 行，服务器零改造）
+- 决策点待确认：单向/双向、3s 轮询/钩子、公网/内网、P0 时机
