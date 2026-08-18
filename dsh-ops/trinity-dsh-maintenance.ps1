@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Trinity DSH 维护驱动器 — 由 Windows 计划任务或手动调用。
 
@@ -28,7 +28,7 @@ param(
 
 # 兼容 powershell -File 传参：命令行里的 "a,b,c" 会以单个字符串到达，
 # 这里统一按逗号拆分 + 校验。
-$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "all")
+$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "all")  # 2026-08-18 SRE: slo 报告任务
 $normalized = @()
 foreach ($t in $Tasks) { $normalized += $t.Split(',') }
 $normalized = $normalized | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
@@ -230,6 +230,16 @@ runpy.run_path(r"$TrinityRoot\scripts\entity_dedup.py", run_name="__main__")
 "@
 $dedupPrompt = "在 C:\Users\Administrator\trinity 运行 python scripts/entity_dedup.py --threshold 0.90（实体归一化去重，结果写入 .trinity\logs），汇报合并数与关系迁移；先备份再执行。"
 
+# SLO 报告（2026-08-18, SRE 制度化）：采集可用性/性能/数据 SLO 指标
+$sloCmd = @"
+import sys, os
+sys.path.insert(0, r"$TrinityRoot")
+import runpy
+sys.argv = ["slo_report", "--out", r"$LogDir"]
+runpy.run_path(r"$TrinityRoot\scripts\slo_report.py", run_name="__main__")
+"@
+$sloPrompt = "在 C:\Users\Administrator\trinity 运行 python scripts/slo_report.py 生成 SLO 报告（服务可用性/检索写入延迟/备份 RPO/数据一致性），汇报关键指标。"
+
 # 结构层 compaction（2026-08-15）：已结束会话 dsh_events 按 turn 聚合，控制表增长
 $compactCmd = @"
 import sys
@@ -374,6 +384,7 @@ foreach ($t in $Tasks) {
         "session-summarize" { Invoke-Task -Name "session-summarize" -DirectCommand $sessionSummaryCmd -DshPrompt $sessionSummaryPrompt }
         "session-auto" { Invoke-Task -Name "session-auto" -DirectCommand $sessionAutoCmd -DshPrompt $sessionAutoPrompt }
         "agent-ttl" { Invoke-Task -Name "agent-ttl" -DirectCommand $agentTtlCmd -DshPrompt $agentTtlPrompt }
+        "slo"      { Invoke-Task -Name "slo"      -DirectCommand $sloCmd      -DshPrompt $sloPrompt }  # 2026-08-18 SRE
         "db-health" { Invoke-Task -Name "db-health" -DirectCommand $dbHealthCmd -DshPrompt $dbHealthPrompt }
         "active-health" { Invoke-Task -Name "active-health" -DirectCommand $activeHealthCmd -DshPrompt $activeHealthPrompt }
         "backup"    { Write-Log "backup: WAL 安全备份到 ~/.trinity/backups (保留 14 天)"; & "$PSScriptRoot\trinity-backup.ps1" 2>&1 | ForEach-Object { Write-Log $_ } }

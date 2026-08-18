@@ -2847,6 +2847,21 @@ consolidate→dedup→sync→compact 全 OK) / backup(89.4MB,14天) / collector�
   回归 test_core+test_stress_isolation+test_failure_modes 34 passed/1 skipped。
 - 性能: 每次写入 +1 次 FTS 召回 + jieba 分词（毫秒级），可接受；可选开关。
 - 回滚: git checkout trinity/adapters/sqlite/_crud.py。
+
+## 第 43 轮:SRE 制度化（SLO 采集器 + 故障演练脚本, 2026-08-18）
+- scripts/slo_report.py: SLO 指标采集器——服务可用性(api/mcp/gateway 探针) + 性能
+  (检索 P50/P95、写入 P50 轻量实测) + 数据 SLO(integrity/FTS/写锁/备份 RPO<=24h) +
+  可用性摘要; 输出 JSON + MD 到 ~/.trinity/logs/slo_report_<ts>.{json,md}。
+  实测: integrity ok / fts True / backup_age 12h RPO ok / write_lock 1.2ms。
+- maintenance 新任务 slo: 接入 allowed + sloCmd + dispatch；实跑 slo : OK。
+  （踩坑: edit 工具写入时 JS 转义吞掉反斜杠导致 run_path 路径损坏，已用 \\ 修复;
+   BOM 再次被 edit 破坏，已恢复 UTF8Encoding($true)。）
+- dsh-ops/drill_selfheal.ps1: 可重复故障演练——kill api/mcp/gateway/collector →
+  等待 supervisor 自愈(≤600s) → 验证恢复 → 输出报告 + 记录 drill-selfheal.log。
+  语法 OK; 第 2 次正式演练 2026-08-18 15:02 完成: **PASS, 179.1s 恢复**
+  （api/mcp/gateway 全恢复; 第 1 次 41 轮 320s——恢复时间取决于 kill 与 supervisor
+  轮询相位, 0-5min 范围符合 SLO 预算）。
+- 回滚: git checkout scripts/slo_report.py / dsh-ops/drill_selfheal.ps1 / trinity-dsh-maintenance.ps1。
 ### 第 35 轮补记:supervisor zeroEventCount 修复（2026-08-17 17:34）
 - 运行巡检发现:零事件告警的 $state.zeroEventCount = $z 在 PSCustomObject（Read-State 的 JSON
   反序列化产物）上无法添加新属性 → 每次轮次抛异常（"在此对象上找不到属性"），计数从不累积
