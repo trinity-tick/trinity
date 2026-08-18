@@ -2931,3 +2931,28 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
   - goal-25064570（命题化）→ **保持 active，改写为"命题化 v2 设计"**（phase=design）：round39 已证伪现实现（慢版 7h/快版 0.75%/turn16 49.6% 天花板），不启动 50 题 A/B；后续若推进，先产出 docs/PROPOSITION_V2_DESIGN.md（写路径一次性提取设计）。
 - 剩余 active goals：goal-07e5a3c6（pref stage-1，疑似被 round38 pref inner2 覆盖）、goal-98aabada（08-15 全方位优化方向，多数已被后续轮次覆盖）——未处理，如需要可同样复核收尾。
 - active 集：维持监控（每日链 active-health），不人为干预，随真实使用自然回升。
+
+
+## 第 42 轮：剩余 goal 复核收尾 + 命题化 v2 设计稿（2026-08-18）
+
+### A. 剩余 2 个 active goal 复核收尾（全部 active goals 处理完毕）
+- goal-07e5a3c6（第三轮优化 pref/multi/temporal A/B）→ **completed**：4 项全被 round38/39 覆盖
+  （①pref stage-1→pref inner2 SS-P 56.7% vs 旧 16.7%；②multi 两段式→turn16 49.6% + 命题化转 v2；
+   ③temporal→[DATE:] 修复 65.4%；④top-5→inner2 已用）。
+- goal-98aabada（08-15 全方位优化方向 P0/P1/P2）→ **completed**：③④⑥⑧ 完成、②⑦ 大部分完成；
+  残留低优先级性能项（①Redis 语义缓存/RRF 并行/CB36 307ms、⑤KV 剪枝参数化）列为可选后续。
+- 至此 44 goals：active 仅 1 个（命题化 v2 设计候选），其余均 completed。
+
+### B. 命题化 v2 设计稿（goal-25064570 M1 达成，phase=design round=1）
+- 新增 docs/PROPOSITION_V2_DESIGN.md：
+  - 证伪链回顾（慢版 7h / 快版 0.75% / turn16 49.6% / v4-pro 24.3% / 判分口径稳健）；
+  - 核心设计：**写路径一次性命题化提取**（ingest 时 LLM 提取 4 类原子命题：用户偏好/用户事实/用户做过/agent 做过，
+    带时间戳与来源引用，与 verbatim 并存），把检索时 6275 次/题摊销为每会话 1-5 次（降 3 个数量级）；
+  - TRINITY_PROPOSITION_EXTRACT 开关默认 off（行为不变，风险隔离）；
+  - 收益预估按全量口径打折（multi 49.6%→55-60%，整体 68.6%→70-72% 乐观）；
+  - 里程碑 M2 原型（5 题冒烟）→ M3 50 题 A/B（seed42+judge3，multi≥55% 且 temporal/pref 不倒退）→ M4 全量；
+  - 风险与缓解（提取质量回退 verbatim、去重、异步化、成本限流）。
+- goal-25064570 更新：round=1，下一步待用户决定是否启动 M2 原型（默认不启动，纯文档级推进）。
+
+### C. active 集
+- 维持每日链监控（active-health），不人为干预；当前 10.9%，archived_high_imp_high_access=0。
