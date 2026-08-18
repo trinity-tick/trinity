@@ -2794,6 +2794,23 @@ consolidate→dedup→sync→compact 全 OK) / backup(89.4MB,14天) / collector�
   test_core 25 passed/1 skipped exit 0；test_active_modules_smoke exit 0（两文件并跑偶发
   -1073741819 原生库崩溃为环境因素，单独跑均过）。
 - 回滚：git checkout 相关文件（git 历史保留 monolith backup）。
+
+## 第 40 轮:孤儿模块瘦身（257 ORPHAN 物理归档, 2026-08-18）
+- 方案: 按 module_audit.json 的 orphan 清单（257 个零引用储备模块）物理移动到
+  trinity/research/second_brain/（trinity 包外归档目录，无 __init__.py → 脱离包发现，
+  run_all_self_tests 不再扫描、audit_modules 不再计为 second_brain 模块）。
+- 结果: second_brain 303 模块 → 46 模块（42 ACTIVE / 1 EXPERIMENTAL / 3 ORPHAN）；
+  归档 257 个（257/257 移动成功，0 失败）。归档代码完整保留（git 历史 + research/ 目录）。
+- 验证: audit_modules 重跑 46 模块确认; Engine/EpisodicRLScorer/run_diagnostics import OK;
+  pytest test_core+test_rl_scorer 30 passed/1 skipped exit 0;
+  self_test 从 55 模块降至 54（vectile 等 orphan FAIL 项消失），剩余 FAIL/TIMEOUT
+  （embeddings.engine/pipeline/ann_index/vector_index/quantization/reranker）为 faiss 环境
+  问题（活跃模块，非结构范畴）。
+- 剩余 3 个 orphan（audit_trail/p1_preamble/workflow_memory）: p1_preamble 在 ENGINE_CHAIN
+  但判定边缘，保留待下次审计。
+- 收益: second_brain 包树 -84% 模块数（303→46），包结构清晰度大幅提升；
+  self_test 扫描与维护负担下降; 运行路径（42 ACTIVE）不受影响。
+- 回滚: git checkout 恢复文件位置（git mv 历史保留）。
 ### 第 35 轮补记:supervisor zeroEventCount 修复（2026-08-17 17:34）
 - 运行巡检发现:零事件告警的 $state.zeroEventCount = $z 在 PSCustomObject（Read-State 的 JSON
   反序列化产物）上无法添加新属性 → 每次轮次抛异常（"在此对象上找不到属性"），计数从不累积
