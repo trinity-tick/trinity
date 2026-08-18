@@ -25,6 +25,12 @@ from .._util import _safe_write
 
 logger = logging.getLogger("trinity.adapters.sqlite")
 
+# 2026-08-18（conflict 检测改进，agent-memory-bench 对齐）：
+# 写入时相似性冲突检测的相似度阈值（search_memories 的 FTS5 归一化 score）。
+# 可经 TRINITY_CONFLICT_SIM_THRESHOLD 覆盖；TRINITY_CONFLICT_DETECT=off 可关闭。
+CONFLICT_SIM_THRESHOLD = 0.5  # 保留（兼容）；实际用 token 重叠
+CONFLICT_TOKEN_OVERLAP = 0.6  # jieba token 集合重叠率阈值（conflict 检测）
+
 
 class _CrudMixin:
     @_safe_write
@@ -138,6 +144,14 @@ class _CrudMixin:
             # 批量提交管理：加入缓冲区，达到条件再 commit
             self._maybe_flush()
 
+            # 2026-08-18（conflict 检测改进）：写入后相似性冲突检测——
+            # 高相似但内容不同的旧记忆自动分配 conflict_group_id（候选冲突组）。
+            if os.environ.get("TRINITY_CONFLICT_DETECT", "on") != "off":
+                try:
+                    self._assign_conflicts(memory_id, stored_content)
+                except Exception:
+                    pass
+
             return {
                 "memory_id": memory_id,
                 "version_id": version_id,
@@ -149,6 +163,61 @@ class _CrudMixin:
                 "auto_redacted": auto_redact_pii and pii_info is not None,
                 "pii_redacted_types": list(pii_info.keys()) if pii_info else [],
             }
+    def _assign_conflicts(self, new_memory_id: str, content: str) -> int:
+        """2026-08-18（agent-memory-bench conflict 模式对齐）：写入后检测
+        高相似但内容不同的旧记忆，分配相同 conflict_group_id（is_resolved=0）。
+
+        相似度用 jieba 分词 token 集合重叠率（FTS5 BM25 对"语义相近但关键
+        信息不同"的矛盾记忆给分过低，不适合做矛盾检测——如"端口是 5432"
+        vs "端口是 5430" 只共享前缀词，BM25 分数 ~0）。
+
+        Returns:
+            分配的冲突组数量。
+        """
+        try:
+            hits = self.search_memories(query=content, top_k=10)  # 候选召回（放宽）
+        except Exception:
+            return 0
+        new_tokens = self._token_set(content)
+        overlap_threshold = float(
+            os.environ.get("TRINITY_CONFLICT_OVERLAP", CONFLICT_TOKEN_OVERLAP))
+        assigned = 0
+        for r in hits:
+            mid = r.get("memory_id")
+            if not mid or mid == new_memory_id:
+                continue
+            old_content = str(r.get("content", ""))
+            if old_content == content:
+                continue  # 完全相同内容（唯一约束已挡，防御）
+            old_tokens = self._token_set(old_content)
+            if not new_tokens or not old_tokens:
+                continue
+            inter = len(new_tokens & old_tokens)
+            overlap = inter / max(len(new_tokens), len(old_tokens))
+            if overlap >= overlap_threshold:
+                group = "conf_" + hashlib.md5(
+                    "|".join(sorted([new_memory_id, mid])).encode()
+                ).hexdigest()[:12]
+                with self._write_lock:
+                    self._conn.execute(
+                        "UPDATE memories SET conflict_group_id=?, is_resolved=0 "
+                        "WHERE memory_id IN (?, ?)",
+                        (group, new_memory_id, mid),
+                    )
+                    self._conn.commit()
+                assigned += 1
+        return assigned
+
+    @staticmethod
+    def _token_set(text: str):
+        """jieba 分词 + 去空白，返回 token 集合（用于冲突相似度）。"""
+        try:
+            import jieba
+            tokens = [t.strip() for t in jieba.cut(str(text)) if t.strip()]
+        except Exception:
+            tokens = [t.strip() for t in re.split(r"[\s,，。；;：:、]+", str(text)) if t.strip()]
+        return set(tokens)
+
     def get_memory(self, memory_id: str) -> Optional[Dict[str, Any]]:
         """查询单条记忆（2026-08-15 v2：线程本地只读连接）。"""
         conn = self._get_read_conn()

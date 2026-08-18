@@ -2832,6 +2832,21 @@ consolidate→dedup→sync→compact 全 OK) / backup(89.4MB,14天) / collector�
 - 并行工作流持续模块化: core/client/、adapters/sqlite/ 已拆包（grep 路径注意）。
 - 提交: 本轮回溯 test_failure_modes.py / docs/SLO.md / supervisor.ps1（Send-Alert + BOM 恢复）。
 - 回滚: git checkout 相关文件。
+
+## 第 42 轮:冲突检测改进（agent-memory-bench conflict 从 xfail 转 pass, 2026-08-18）
+- 缺口: 写入层不自动分配 conflict_group_id（引擎层 CB46 有解决路径但需触发），
+  agent-memory-bench 的 conflict 失败模式未通过。
+- 改进（adapters/sqlite/_crud.py）: store_memory 写入后调用 _assign_conflicts——
+  用 search_memories 召回候选（top_k=10），对内容不同且 jieba token 集合重叠率
+  >= TRINITY_CONFLICT_OVERLAP(默认 0.6) 的旧记忆，分配相同 conflict_group_id
+  （stable hash, is_resolved=0）。TRINITY_CONFLICT_DETECT=off 可关闭。
+- 为什么不用 FTS score: BM25 对"语义相近但关键信息不同"的矛盾（"端口 5432" vs
+  "端口 5430"）给分 ~0，不适用矛盾检测；token 重叠率更可靠。
+- 验证: test_failure_modes 4 passed（retraction/collision/recall/conflict 全过）；
+  语义正确性——矛盾案例重叠 0.75 触发、同主题互补 0.571 不触发（不误伤）；
+  回归 test_core+test_stress_isolation+test_failure_modes 34 passed/1 skipped。
+- 性能: 每次写入 +1 次 FTS 召回 + jieba 分词（毫秒级），可接受；可选开关。
+- 回滚: git checkout trinity/adapters/sqlite/_crud.py。
 ### 第 35 轮补记:supervisor zeroEventCount 修复（2026-08-17 17:34）
 - 运行巡检发现:零事件告警的 $state.zeroEventCount = $z 在 PSCustomObject（Read-State 的 JSON
   反序列化产物）上无法添加新属性 → 每次轮次抛异常（"在此对象上找不到属性"），计数从不累积

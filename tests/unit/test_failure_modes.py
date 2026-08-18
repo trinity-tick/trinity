@@ -78,13 +78,9 @@ def test_recall_relevant_memories(adapter):
         assert _count(adapter, query.split()[0]) >= 1, f"recall failed for {query}"
 
 
-@pytest.mark.xfail(reason="写入层不自动分配 conflict_group_id（引擎层 CB46 提供解决路径），记录为已知缺口", strict=False)
 def test_conflict_group_assignment(adapter):
-    """写入层冲突组分配：当前为已知缺口（引擎层 CB46 提供解决路径）。
-
-    此测试标记为 xfail——记录 Trinity 在写入层不自动分配 conflict_group_id，
-    agent-memory-bench 的 conflict 项需通过引擎层触发路径覆盖。
-    """
+    """写入层冲突组分配（2026-08-18 改进后）：高相似但内容不同的记忆
+    在 store_memory 时自动分配相同 conflict_group_id（候选冲突组）。"""
     _store(adapter, "数据库端口是 5432", tags=["conflict"])
     _store(adapter, "数据库端口是 5430", tags=["conflict"])
     rows = adapter._conn.execute(
