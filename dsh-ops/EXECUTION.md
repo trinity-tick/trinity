@@ -2778,6 +2778,22 @@ consolidate→dedup→sync→compact 全 OK) / backup(89.4MB,14天) / collector�
 - 关联: collector restart 后旧进程内存缓冲事件丢失（未落库即被杀）——属一次性现象，
   新进程已含修复。
 - 回滚: git checkout trinity/memory/active_collector.py / dsh-ops/trinity-dsh-maintenance.ps1。
+
+## 第 39 轮:结构优化（死代码清理 + orphan 索引更新, 2026-08-18）
+- 清理 4 个 _monolith_backup.py（api/server/adapters/sqlite/agents/aggregator/core/client 拆分遗留，
+  约 11K 行死代码，全库零引用确认后删除；git 历史可恢复）。
+- 清理 29 个 .bak/.p*.bak 残留（second_brain 等模块历史备份）+ 3 个 __pycache__ .pyc +
+  2 个空目录（trinity/backends、api/templates；data/cache 运行时目录保留）。
+- ORPHAN_MODULES_INDEX.md 更新为 8-18 audit 口径：303 模块中 45 ACTIVE / 1 EXPERIMENTAL /
+  257 ORPHAN（详情 ~/.trinity/logs/module_audit.json）。
+- 大文件拆分评估：engine_data_pipeline.py(2,294 行) 实为单类 ProgressiveCascade（内聚度高、
+  逐方法拆分收益低）→ 记录"暂不拆"，避免引入间接层；postgresql.py(2,042 行) 适配器同样暂不拆。
+- 聚合池收敛评估：total_queries=61（08-17→08-18 无增长，利用率确认低）→ 记录"维持现状，
+  建议懒加载"（不强制改动，避免影响 API 兼容层）。
+- 验证：核心 import 冒烟 OK（Trinity/MemoryAggregator/MetaEvolution/TrustExchange）；
+  test_core 25 passed/1 skipped exit 0；test_active_modules_smoke exit 0（两文件并跑偶发
+  -1073741819 原生库崩溃为环境因素，单独跑均过）。
+- 回滚：git checkout 相关文件（git 历史保留 monolith backup）。
 ### 第 35 轮补记:supervisor zeroEventCount 修复（2026-08-17 17:34）
 - 运行巡检发现:零事件告警的 $state.zeroEventCount = $z 在 PSCustomObject（Read-State 的 JSON
   反序列化产物）上无法添加新属性 → 每次轮次抛异常（"在此对象上找不到属性"），计数从不累积

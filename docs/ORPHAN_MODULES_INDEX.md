@@ -1,6 +1,6 @@
-# 孤儿模块索引（2026-08-15 audit）
+# 孤儿模块索引（2026-08-18 audit 更新）
 
-> 264 个模块不在运行路径（全库零引用），保留为算法/论文储备。
+> 303 模块中 45 ACTIVE / 1 EXPERIMENTAL / 257 ORPHAN（2026-08-18 audit_modules.py），储备模块不在运行路径（零引用）。
 > 来源：scripts/audit_modules.py --categorize-orphans
 
 
