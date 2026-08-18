@@ -2920,3 +2920,14 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
   API :8001 healthy。
 - 回滚：git checkout -- 对应文件即可；store 遗留文件在
   ~/.trinity/store/_legacy_20260818/（可移回）。
+
+
+## 第 41 轮：goal 状态收尾（2026-08-18，无代码改动）
+
+- 复核 4 个历史 active goal，按证据收尾（用户确认"根据建议推进"）：
+  - goal-b2e7759f（价值兑现）→ **completed**：官方 500 题真实数字(63.2%/68.6%)、README 诚实化、PRODUCTIZATION 均已完成。
+  - goal-b39e365d（DSH 融合）→ **completed**：goal 自动同步/trajectory 类型/compaction 全部完成；MCP 冗余开关未做，随 round40 拓扑文档关闭（并存属预期设计）。
+  - goal-9f4d81d7（第三轮优化）→ **completed**：GEN-3 被 round38 pref inner2 覆盖、multi turn16 确认、SESS-1 已入维护链；CH-1 残留为低优先级可选。
+  - goal-25064570（命题化）→ **保持 active，改写为"命题化 v2 设计"**（phase=design）：round39 已证伪现实现（慢版 7h/快版 0.75%/turn16 49.6% 天花板），不启动 50 题 A/B；后续若推进，先产出 docs/PROPOSITION_V2_DESIGN.md（写路径一次性提取设计）。
+- 剩余 active goals：goal-07e5a3c6（pref stage-1，疑似被 round38 pref inner2 覆盖）、goal-98aabada（08-15 全方位优化方向，多数已被后续轮次覆盖）——未处理，如需要可同样复核收尾。
+- active 集：维持监控（每日链 active-health），不人为干预，随真实使用自然回升。
