@@ -3001,3 +3001,25 @@ WAL 膨胀至 34MB；只读正常（memories 11,698 可读），仅写被阻塞�
   - 协议一致性：content_hash 幂等 + updated_at 冲突 + 审计链（对齐 SAMEP）；REST 主通道 + MCP/A2A 二期
   - 数据流/运维/安全/网络对照/分阶段(P0半天→P3)/工作量（sync-agent ~250-300 行，服务器零改造）
 - 决策点待确认：单向/双向、3s 轮询/钩子、公网/内网、P0 时机
+
+
+## 第 46 轮：命题化 v2 M2 原型落地（2026-08-18）
+
+### 实现
+- 新增 trinity/memory/proposition_extractor.py：
+  - 4 类原子命题（user_preference/user_fact/user_done/agent_done）LLM 提取（OpenAI 兼容，deepseek-chat，stdlib urllib）；
+  - 无 key 自动降级 mock（规则式，冒烟可重复）；TRINITY_PROPOSITION_EXTRACT 开关默认 off（行为不变）；
+  - 落库：category=proposition、tags=[proposition,type]、metadata={proposition_type,temporal,source_memory_id}、
+    importance 按类型映射（preference 0.75/fact 0.70/done 0.65/agent 0.60）；
+  - 写路径钩子 maybe_extract_after_store（M2 入口）。
+- 新增 tests/unit/test_proposition_extractor.py（9 测试：类型/开关/四类分类/落库/verbatim 隔离/解析容错）。
+
+### 验证
+- 真实 LLM（deepseek-chat）：5 样本 → 12 命题，**12/12 类型有效**（身份/偏好/完成/agent 动作分类准确，ts 齐全）；
+- 端到端冒烟（临时库）：5 verbatim + 4 proposition 落库，verbatim 不受影响；
+- 单测 9/9 通过；pytest 定向回归 OK。
+
+### 下一步（M3，待用户确认）
+- 50 题 A/B（seed42 + judge3）：提取挂入 benchmark 摄入钩子 → 隔离库 verbatim vs proposition 对比；
+  出口：multi 49.6%→55%+ 且 temporal/pref 不倒退 → 才进 M4 全量。
+- 需真实 LLM ~50+ 次提取调用（成本可控，deepseek-chat）。
