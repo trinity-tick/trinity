@@ -2811,6 +2811,27 @@ consolidate→dedup→sync→compact 全 OK) / backup(89.4MB,14天) / collector�
 - 收益: second_brain 包树 -84% 模块数（303→46），包结构清晰度大幅提升；
   self_test 扫描与维护负担下降; 运行路径（42 ACTIVE）不受影响。
 - 回滚: git checkout 恢复文件位置（git mv 历史保留）。
+
+## 第 41 轮:网络标准补强（失败模式基准 + SRE 骨架, 2026-08-18）
+### A. 失败模式基准（agent-memory-bench 四类对齐）
+新增 tests/unit/test_failure_modes.py（隔离临时库，不污染生产）：
+- retraction 撤回 ✓: 删除后搜索 0 命中、status=deleted（通过）
+- collision 碰撞 ✓: 相同内容重复写入被 UNIQUE(persona,agent,content_hash) 阻止（数据库级防护，通过）
+- recall 召回 ✓: 3/3 主题查询全部命中（通过）
+- conflict 冲突 ⚠️ xfail: 写入层不自动分配 conflict_group_id——**诚实发现的缺口**；
+  引擎层 CB46 conflict_resolution 提供解决路径（诊断 true），但写入层无自动触发；
+  标记 xfail 记录，后续可在 store_memory 加相似性冲突检测。
+结果: 3 passed + 1 xfailed。
+### B. SRE 骨架
+- docs/SLO.md: 服务级 SLO（api/mcp/gateway 可用性 99.9%/99.5% + 延迟 P95）、
+  数据 SLO（RPO<=24h/RTO<=1h/一致性）、error budget（43min/月）。
+- supervisor Send-Alert: WARN/ERROR 级别自动 POST 到 TRINITY_ALERT_WEBHOOK（可选，未设置不启用）。
+- 故障演练: kill 全服务（api/mcp/gateway/collector）→ **320s（5.3min）全部自愈恢复**
+  （supervisor 5 分钟轮询周期上限，符合设计；本次为轮询相位边界情况）。
+### C. 关联
+- 并行工作流持续模块化: core/client/、adapters/sqlite/ 已拆包（grep 路径注意）。
+- 提交: 本轮回溯 test_failure_modes.py / docs/SLO.md / supervisor.ps1（Send-Alert + BOM 恢复）。
+- 回滚: git checkout 相关文件。
 ### 第 35 轮补记:supervisor zeroEventCount 修复（2026-08-17 17:34）
 - 运行巡检发现:零事件告警的 $state.zeroEventCount = $z 在 PSCustomObject（Read-State 的 JSON
   反序列化产物）上无法添加新属性 → 每次轮次抛异常（"在此对象上找不到属性"），计数从不累积

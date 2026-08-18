@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Trinity 进程监督器 — 确保 trinity-api / trinity-mcp(SSE) / collector / gateway 常驻。
 
@@ -78,6 +78,17 @@ function Write-Log {
     param([string]$Message, [string]$Level = "INFO")
     $line = "{0} [{1}] {2}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Level, $Message
     Add-Content -Path (Join-Path $LogDir "dsh-supervisor.log") -Value $line -Encoding UTF8
+    if ($Level -in @("WARN", "ERROR")) { Send-Alert $Message $Level }  # 2026-08-18 SRE: 关键告警推送
+}
+
+# 2026-08-18（SRE 骨架）：关键告警 webhook 推送（设置 TRINITY_ALERT_WEBHOOK 后启用）。
+function Send-Alert {
+    param([string]$Message, [string]$Level)
+    if (-not $env:TRINITY_ALERT_WEBHOOK) { return }
+    try {
+        $body = @{ level = $Level; message = $Message; ts = (Get-Date -Format "o"); service = "trinity-supervisor" } | ConvertTo-Json
+        Invoke-RestMethod -Uri $env:TRINITY_ALERT_WEBHOOK -Method Post -ContentType "application/json" -Body $body -TimeoutSec 5 -ErrorAction Stop | Out-Null
+    } catch { }
 }
 
 function Read-State {

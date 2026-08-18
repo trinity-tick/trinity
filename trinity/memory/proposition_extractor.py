@@ -37,9 +37,9 @@ PROPOSITION_SYSTEM_PROMPT = """你是一个记忆命题提取器。把用户/助
    - user_fact: 用户的身份、事实信息（如"我是项目经理"）
    - user_done: 用户做过的事（如"我完成了对标分析"）
    - agent_done: 助手/agent 做过的事（如"我生成了文档"）
-3. 只输出 JSON 数组，不要其他文字：
+3. 只输出一个 JSON 数组，不要任何其他文字、不要 markdown、不要解释：
    [{"type": "user_preference", "proposition": "用户喜欢深色模式", "ts": "2026-08-18", "expires": null}]
-4. 无命题可提取时输出 []
+4. 最多输出 8 条命题；无命题可提取时输出 []
 5. ts 用对话时间或当前日期；expires 未知则为 null
 
 示例输入：用户："我是供应链项目经理，我喜欢用深色模式，我昨天完成了 WMS 对标"
@@ -67,7 +67,7 @@ def _llm_json_call(system: str, user: str, timeout: float = 60.0) -> str:
             {"role": "user", "content": user},
         ],
         "temperature": 0.1,
-        "max_tokens": int(os.environ.get("TRINITY_PROPOSITION_MAX_TOKENS", "1500")),
+        "max_tokens": int(os.environ.get("TRINITY_PROPOSITION_MAX_TOKENS", "4000")),
     }
     req = urllib.request.Request(
         cfg["base_url"] + "/chat/completions",
@@ -94,8 +94,12 @@ def _parse_propositions(text: str) -> List[Dict[str, Any]]:
     try:
         data = json.loads(t)
     except (ValueError, TypeError):
-        logger.warning("proposition parse failed: %s", text[:120])
-        return []
+        # 截断容错：尝试补全右括号后再解析
+        try:
+            data = json.loads(t + "]" * (t.count("[") - t.count("]")))
+        except (ValueError, TypeError):
+            logger.warning("proposition parse failed: %s", text[:120])
+            return []
     out = []
     for item in data if isinstance(data, list) else []:
         if not isinstance(item, dict):
@@ -143,7 +147,7 @@ def extract_enabled() -> bool:
 def extract_propositions(content: str, role: str = "user") -> List[Dict[str, Any]]:
     if _get_llm_config():
         try:
-            raw = _llm_json_call(PROPOSITION_SYSTEM_PROMPT, "对话内容(role=" + role + "):\n" + (content or "")[:6000])
+            raw = _llm_json_call(PROPOSITION_SYSTEM_PROMPT, "对话内容(role=" + role + "):\n" + (content or "")[:3000])
             props = _parse_propositions(raw)
             if props:
                 return props

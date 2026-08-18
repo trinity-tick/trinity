@@ -46,9 +46,6 @@ else:
 
 from trinity import Trinity
 mem = Trinity()
-import importlib
-ppro = importlib.import_module("trinity.modules.second_brain.ppro_profile_retrieval")
-freshness = importlib.import_module("trinity.modules.second_brain.freshness_conflict_resolver")
 
 with open(args.data, "r", encoding="utf-8") as f:
     data = json.load(f)
