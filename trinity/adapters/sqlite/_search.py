@@ -39,11 +39,16 @@ class _SearchMixin:
         session_id: Optional[str] = None,
         category: Optional[str] = None,
         top_k: int = 10,
+        touch: bool = True,
     ) -> List[Dict[str, Any]]:
         """搜索记忆。
 
         优先使用 FTS5 全文搜索，如果不可用则回退到 LIKE 模糊搜索。
         支持 agent_id / persona_id / session_id / app_id / category 的任意 AND 组合。
+
+        touch（默认 True）：命中记忆异步入队 touch（access_count+1）。
+        内部维护操作（如写路径的冲突检测检索）应传 touch=False，避免把
+        "写入时自碰"误记为真实访问（污染 access_count 语义）。
 
         2026-08-15（压测修复 v2）：改用线程本地只读连接（_get_read_conn）——
         WAL 下多读并行、零锁竞争；touch 已异步化（入队），读路径无写。
@@ -96,7 +101,9 @@ class _SearchMixin:
             results = self._search_like(query, params, where, top_k)
 
         # ── 自动 touch：异步入队（2026-08-15 起读路径零写阻塞）────
-        if results:
+        # touch=False：内部维护检索（如写路径冲突检测）不把命中记作访问，
+        # 避免刚写入的记忆被自身冲突检索 touch 成 access_count=1。
+        if touch and results:
             memory_ids = [r["memory_id"] for r in results]
             self._touch_batch(memory_ids)
 

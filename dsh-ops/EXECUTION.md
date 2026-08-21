@@ -3356,3 +3356,30 @@ consolidate→dedup→sync→compact 全 OK) / backup(89.4MB,14天) / collector�
 
 结论：本轮零回归。2 个失败指向 touch/access_count 计数路径的既有缺陷，
 留待专门修复项（涉及异步 touch 竞态 / 写事务，不宜在本轮顺手改动）。
+
+### 追加：修复 touch/access_count 两处预存失败（本轮第七段，写路径自碰 bug）
+
+#### 根因（决定性定位）
+`store_memory` → `_assign_conflicts`（写后冲突检测）→ `search_memories(query=content, top_k=10)`。
+该检索命中刚写入的记忆自身 → `_search.py` 自动 `_touch_batch(hits)` 入队 → 后台 flush 线程把
+新建记忆 touch 成 `access_count=1`。导致：
+- 每条新记忆"写入即 access_count=1"（污染"访问次数"语义）；
+- `test_accumulation_exact`：store 触发的那次 touch 与测试的 +3 叠加 → 0->4（期望 +3）；
+- `test_crash_recovery::test_touch_loss_boundary`：crash 时序下 touch 半落地 → 非 0/1 异常值。
+
+验证手段：stop 后台 flush 线程后 store 得 access_count=0（正确）；开启则=1。
+
+#### 修复（minimal，2 文件 +9/-2）
+- `trinity/adapters/sqlite/_search.py`：`search_memories` 增加 `touch: bool = True` 参数，
+  只有 `touch and results` 才 `_touch_batch`。默认不变（真实检索仍 touch）。
+- `trinity/adapters/sqlite/_crud.py`：`_assign_conflicts` 改传 `touch=False`
+  （冲突检测属维护检索，不得把写入自碰记为访问）。
+
+#### 验证
+- 两个原失败测试 → 通过（2 passed）。
+- 相关子集（crash/sqlite_connpool/adapters/core）= 61 passed / 1 skipped。
+- **全量基线：852 passed / 55 skipped / 0 failed**（修复前 850p/55s/2f，零回归）。
+- Jaeger span flush 报错属无害遥测（本机无 Jaeger），不影响判定。
+
+#### 回滚
+还原 `_search.py` 的 touch 参数分支 与 `_crud.py` 的 `touch=False` 即可回到"自碰"旧行为。

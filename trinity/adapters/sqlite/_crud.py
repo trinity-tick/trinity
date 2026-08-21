@@ -175,7 +175,7 @@ class _CrudMixin:
             分配的冲突组数量。
         """
         try:
-            hits = self.search_memories(query=content, top_k=10)  # 候选召回（放宽）
+            hits = self.search_memories(query=content, top_k=10, touch=False)  # 候选召回（放宽）
         except Exception:
             return 0
         new_tokens = self._token_set(content)
