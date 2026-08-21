@@ -3329,3 +3329,12 @@ consolidate→dedup→sync→compact 全 OK) / backup(89.4MB,14天) / collector�
 #### 使用/回滚
 - 使用：配好远端 `sync-agent.yaml` 后 `-Tasks agent-sync` 或并入每日链。
 - 回滚：从 maintenance 删除 agent-sync 分支与 $allowed 项；还原 sync-agent load_config。
+
+### 追加：仓库卫生 — 分组提交（本轮第五段）
+
+覆盖运维短板 #4（大量未提交历史改动 + 未跟踪目录）：
+- **Commit `360e13b`**（feat(sync)）：本轮 sync-agent 全部交付 + maintenance agent-sync + 9 单测 + BOM 修复。
+- **Commit `530df92`**（chore(retrieval+ops)）：已评估的 hybrid_retriever strength boost（默认 off）+ 配套单测 + 历史脚本 backfill_dsh_sessions.py / trinity-live.ps1。
+- 已删除冗余回滚备份 `hybrid_retriever.py.bak-20260820`（改动已入 git 可回滚，备份冗余）。
+- 工作树恢复 **clean**；提交后 15 个相关单测全 PASS，无回归。
+- 提交前逐文件做明文密钥扫描（password/api_key/sk-*/私钥），全部 clean，无敏感信息入库。
