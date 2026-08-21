@@ -3338,3 +3338,21 @@ consolidate→dedup→sync→compact 全 OK) / backup(89.4MB,14天) / collector�
 - 已删除冗余回滚备份 `hybrid_retriever.py.bak-20260820`（改动已入 git 可回滚，备份冗余）。
 - 工作树恢复 **clean**；提交后 15 个相关单测全 PASS，无回归。
 - 提交前逐文件做明文密钥扫描（password/api_key/sk-*/私钥），全部 clean，无敏感信息入库。
+
+### 追加：完整 pytest 基线确认（本轮第六段，锁定无回归）
+
+运行：`python -m pytest tests -m "not slow and not integration and not e2e" -q --tb=line`
+（TRINITY_TESTING=1 隔离，本地目录）
+结果：**850 passed / 55 skipped / 2 failed / 215s**
+
+两个失败（均为预存问题，非本轮引入，单独隔离运行仍复现）：
+1. `tests/test_crash_recovery.py::test_touch_loss_boundary` — access_count 期望 0 实读 5
+2. `tests/test_sqlite_connpool_touch.py::TestAsyncTouch::test_accumulation_exact` — touch 期望 +3 实 +4
+
+归因证明（git）：
+- 本轮 3 个 commit（360e13b/530df92/f1b2417）仅改 11 个文件，全部在 dsh-ops/*、tests/unit/*、hybrid_retriever.py；
+- 未触碰 touch / access_count / sqlite / crash_recovery / connpool 任何逻辑；
+- 相关文件最后一次改动在旧 commit（bee4b44/f6130da/4cdb420/fbaa019）。
+
+结论：本轮零回归。2 个失败指向 touch/access_count 计数路径的既有缺陷，
+留待专门修复项（涉及异步 touch 竞态 / 写事务，不宜在本轮顺手改动）。
