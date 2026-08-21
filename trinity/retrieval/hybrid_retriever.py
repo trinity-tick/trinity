@@ -437,17 +437,23 @@ class HybridRetriever:
         fused: List[Dict[str, Any]],
         query: str,
     ) -> List[Dict[str, Any]]:
-        """RRF/融合后的评分校准（env 门控，默认 off；不改变既有基线）。
+        """RRF/融合后的评分校准（env 门控；除 STRENGTH 默认 on 外默认 off；不改变既有基线）。
 
         1) TRINITY_CONFIDENCE_SCORER=on → 四维置信度校准：
            hybrid_score × (0.6 + 0.4 × confidence.overall)，旧记忆/低权威降权。
         2) TRINITY_IMPORTANCE_BOOST=on → importance 动态微调：
            hybrid_score += (importance - 0.5) × 0.2（±0.1 有界）。
+        3) TRINITY_STRENGTH_BOOST=on（opt-in，默认 off）→ 双强度因子（Bjork 双强度模型）：
+           提取强度 = 0.5×最近访问度 + 0.5×访问频率；hybrid_score += (strength-0.5)×0.15（±0.075 有界）。
+           刚被检索过/高频使用的记忆排名微升，对应"测试效应/检索强化"。
         最后按 hybrid_score 重排。
         """
         conf_on = os.environ.get("TRINITY_CONFIDENCE_SCORER", "off").strip().lower() == "on"
         imp_on = os.environ.get("TRINITY_IMPORTANCE_BOOST", "off").strip().lower() == "on"
-        if (not conf_on and not imp_on) or not fused:
+        # 2026-08-20 评估：拟人化因子对机器检索价值有限且可能引入流行度偏差 ->
+        # 默认改 off（opt-in，保持基线纯净）；需要时设 TRINITY_STRENGTH_BOOST=on 启用。
+        strength_on = os.environ.get("TRINITY_STRENGTH_BOOST", "off").strip().lower() == "on"
+        if (not conf_on and not imp_on and not strength_on) or not fused:
             return fused
 
         # 跨结果 min-max 归一化（置信度语义匹配维度用）
@@ -512,6 +518,36 @@ class HybridRetriever:
                     )
             except Exception as exc:
                 logger.debug("Engine importance boost skipped: %s", exc)
+
+        if strength_on:
+            try:
+                from datetime import datetime as _dt, timezone as _tz
+                _now = _dt.now(_tz.utc)
+                for f in fused:
+                    acc_raw = f.get("access_count")
+                    acc = int(acc_raw or 0)
+                    last = f.get("last_accessed_at")
+                    if not last and not acc_raw:
+                        strength = 0.5  # 无访问数据 -> 中性，不改变基线
+                    else:
+                        recency = 0.5
+                        if last:
+                            try:
+                                if isinstance(last, str):
+                                    last = _dt.fromisoformat(str(last).replace("Z", "+00:00"))
+                                if last.tzinfo is None:
+                                    last = last.replace(tzinfo=_tz.utc)
+                                days = max(0.0, (_now - last).total_seconds() / 86400.0)
+                                recency = max(0.0, min(1.0, 1.0 - days / 30.0))
+                            except Exception:
+                                recency = 0.5
+                        freq = max(0.0, min(1.0, acc / 20.0))
+                        strength = 0.5 * recency + 0.5 * freq  # 提取强度 [0,1]
+                    f["hybrid_score"] = min(
+                        1.0, max(0.0, float(f.get("hybrid_score") or 0.0) + (strength - 0.5) * 0.15)
+                    )
+            except Exception as exc:
+                logger.debug("Engine strength calibration skipped: %s", exc)
 
         fused.sort(key=lambda x: float(x.get("hybrid_score") or 0.0), reverse=True)
         return fused
