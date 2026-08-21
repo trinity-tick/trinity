@@ -3199,3 +3199,133 @@ consolidate→dedup→sync→compact 全 OK) / backup(89.4MB,14天) / collector�
 - tests/unit/test_proposition_extractor.py（11 测试）
 - scripts/run_prop_ab.py（A/B runner，可复用于任何检索/摄入实验）
 - .trinity/bench-official/prop_ab_A/B + judge3_prop_ab.json（原始证据）
+
+## 第 49 轮：检索双强度因子（Bjork 双强度模型）落地（2026-08-20）
+
+### 背景
+- 用户要求"以 Trinity 的方式 + 脑科学 + 全部记忆方法"生成人处理知识方案；
+  经源码核实：touch()（检索命中更新 access_count/last_accessed_at）、多因子遗忘
+  （access boost + recency protection，2026-08-15 已有）、置信度/重要度校准
+  （env 门控默认 off）均已在位，但混合检索排名缺少"提取强度"因子——
+  Bjork 双强度模型只做了一半（存储强度有，提取强度未进排名）。
+
+### 改动（1 文件）
+| 文件 | 改动 |
+|---|---|
+| trinity/retrieval/hybrid_retriever.py | _apply_engine_calibration 新增双强度因子，env: TRINITY_STRENGTH_BOOST（默认 on） |
+| | 提取强度 = 0.5×最近访问度(30 天线性) + 0.5×访问频率(20 次封顶)；hybrid_score += (strength-0.5)×0.15（±0.075 有界） |
+| | 无访问数据 -> 中性不改变基线；坏时间戳/负计数容错；整体 try/except 降级 |
+
+- 备份：trinity/retrieval/hybrid_retriever.py.bak-20260820
+
+### 验证（系统 Python 实测，测试脚本已清理）
+- 用例1：最近+高频(acc=12, 今日访问) 0.70 -> 0.7443 排第一；旧且无访问 0.70 -> 0.625；无访问数据保持 0.70（中性）
+- 用例2：TRINITY_STRENGTH_BOOST=off -> 分数完全不变
+- 用例4：坏时间戳/负计数/缺字段 -> 不崩，分数有界
+- ALL TESTS PASSED
+- 正式单测（方案 A 落地）：tests/unit/test_hybrid_retriever_strength.py，5 用例
+  （热门记忆排前/无数据中性/旧记忆降权/关闭不变/坏数据容错），pytest 全绿（2.79s）
+
+### 生效与回滚
+- 生效：2026-08-20 15:02 已重启 api(:8001, PID 43772) 与 mcp sse(:8000, PID 71908)，health 200，新模块已加载
+- 生效：api/mcp 进程下次重启后加载新模块（运行中进程仍用旧模块，不影响运行）
+- 关闭：环境变量 TRINITY_STRENGTH_BOOST=off 回到基线
+- 回滚：还原 hybrid_retriever.py.bak-20260820
+
+### 评估决策（2026-08-20，方案 A：保留能力、默认关闭）
+- 评估结论：拟人化遗忘/流行度因子对机器检索价值有限、无基准实测收益、可能引入流行度偏差；
+  保留能力但不默认启用，符合项目"不改变基线"原则；不再向"模拟人脑遗忘"方向继续投入。
+- 变更：TRINITY_STRENGTH_BOOST 默认 on -> off（opt-in）；docstring 同步；
+  新增单测 test_default_is_off_preserves_baseline；pytest 6/6 通过。
+- 后续方向：改造转向可测量项（冲突/干扰检测、离线整合/抽象），用基准 A/B 数据驱动决策。
+
+---
+
+## 本轮（2026-08-21 晚）多机同步落地（round45 设计 → 实证）
+
+### 任务
+按网络最优方案评估后，落地 round45「服务器 + 多机实时记忆同步」设计的核心组件
+（此前仅设计稿，无代码）。范围遵循用户指示：全量基准不跑。
+
+### 改动清单（新增 2 个文件）
+| 文件 | 说明 |
+|---|---|
+| `dsh-ops\trinity-sync-agent.py` | 多机同步代理：游标持久化 + updated_at 增量 + 批量推送 + 退避重试 + P0 自检；`--loop/--one/--p0` |
+| `dsh-ops\sync-agent.yaml.template` | 配置模板（server.url/api_key/machine + sync 参数 + cursor + source.db） |
+
+设计要点：
+- 源：本地引擎库 SQLite（`memories` 表 active + updated_at>cursor），只读 ro 连接，不写本地库；
+- 目标：POST /agents/memory/bulk_write（聚合池，服务器零改造，现成端点）；
+- agent_id 用 `机器名:memory_id` 前缀 → 服务器按 agent_id 隔离不冲突；
+- 幂等：聚合池 ingest 为相似度 merge（天然幂等），重复推送安全；游标幂等双保险；
+- 对齐网络方案：Mem0 Edge(本地写缓存)+SAMEP(游标/审计/隔离)。
+
+### 验证结果（P0 概念验证，不跑全量基准）
+- 临时 SQLite 模拟「电脑 B」(2 条 active) → 本机 :8001 模拟服务器；
+- 首轮推送 `written=2 failed=0`，游标推进；二轮 `noop`（幂等，不重复）;
+- 服务器聚合池检索 `status=200 total=3`（推送内容可检索）;
+- 真实库只读采样(limit5)字段映射正确：`agent_id=pc:<memory_id>`，category/importance/tags/metadata 完整。
+
+### 使用与回滚
+- 使用：配置 `sync-agent.yaml` 后 `python dsh-ops\trinity-sync-agent.py --loop`（守护进程建议
+  计划任务/VBS 自启）；单步 `--one`，P0 自检 `--p0`，覆盖服务器 `--api`、覆盖源库 `--source`。
+- 回滚：删除 `dsh-ops\trinity-sync-agent.py`、`sync-agent.yaml.template`、游标文件、
+  P0 临时库即可；无对服务器/源码的侵入性改动，不改变现有基线。
+
+### 追加：多机同步产品化部署资产（本轮第二段）
+
+补 3 个文件把 sync-agent 从"可运行代码"变成"可部署能力"（全无基准依赖）：
+| 文件 | 说明 |
+|---|---|
+| `dsh-ops\SYNC_AGENT_DEPLOY.md` | 部署说明：前置 / 手动 / 计划任务 / VBS 自启 / 日志 / 回滚 / 安全边界 |
+| `dsh-ops\install-sync-agent-schedule.bat` | 免提权计划任务（onlogon + --loop）一键注册 |
+| （含先前 `sync-agent.yaml.template`） | 配置模板 |
+
+关键安全边界（已写进文档）：**默认不启用**；server.url 必须指向**远端服务器**，不得填
+本机 127.0.0.1（否则会把本地大库推回本机聚合池，污染检索面）。
+
+### 附带诊断结论（本轮新增，非 bug）
+- `/memories`（引擎库）POST 需 `X-Agent-ID` 请求头 + JSON body，正确调用即 200；
+  此前 DSH 侧"记忆写不进"的 401 实为缺 `X-Agent-ID` 头，属调用方式问题，非系统故障。
+- `/agents/memory/*`（聚合池）用 `X-Agent-Role: admin` 头，export/bulk_write/search 均可用。
+- 已写入的 1 条诊断测试记忆（mem_ea8e22790ddd4693, category=test）可忽略（test 类不参与生产检索）。
+- 运维清单第 5 项（run_diagnostics CI 冒烟）经核实已存在（tests/test_core.py TestDiagnostics），无需新增。
+
+### 追加：sync-agent 单元测试（本轮第三段，回归保护）
+
+新增 `tests\unit\test_sync_agent.py`（8 用例，0.61s，全部 PASS）：
+- fetch_delta 增量读取（只取 active、游标过滤、updated_at 升序、缺失库返回空）
+- build_entries 字段映射（agent_id 机器名:memory_id 前缀隔离、tags/metadata 完整）
+- load_cursor/save_cursor 游标持久化（缺失/非法容错）
+- config 解析（无文件默认值、yaml 子集解析）
+
+覆盖的正是多机同步组件的纯逻辑，无服务器/无 LLM/无基准依赖；
+不改生产代码、只新增测试，无回归风险。
+运行：`python -m pytest tests\unit\test_sync_agent.py -q`
+
+### 追加：多机同步接入 maintenance + 两个鲁棒性修复（本轮第四段）
+
+#### 改动
+1. `dsh-ops\trinity-dsh-maintenance.ps1` 新增可选任务 `-Tasks agent-sync`：
+   - 调用 `trinity-sync-agent.py --one`（单轮推送）；
+   - **安全守卫**：仅当 `~/.trinity/sync-agent.yaml` 存在 且 `server.url` 不是本机环回
+     (127.0.0.1/localhost/::1) 时执行；否则 SKIP——绝不默认把本地大库推回本机聚合池污染检索面。
+   - 未纳入 `all`（默认不跑），用户显式 `-Tasks agent-sync` 才启用。
+2. `dsh-ops\trinity-sync-agent.py` 修复 load_config：剥 UTF-8 BOM + 统一换行符。
+3. `tests\unit\test_sync_agent.py` 新增 BOM 解析用例（现 9 用例，全 PASS）。
+
+#### 修的两个真实 bug（本段发现）
+- **BOM 解析 bug**：Windows 上创建的 sync-agent.yaml 常带 UTF-8 BOM，原 load_config 首行
+  `\ufeffserver:` 不被识别为 section → server.url 解析为 None → 安全守卫失效（可能误推）。
+  已修复（解析前 lstrip BOM + CRLF 归一），单测覆盖。
+- **maintenance 脚本 BOM 被剥离**：edit 工具重写后文件丢 UTF-8 BOM，PS 5.1 按 ANSI 读中文
+  注释乱码破坏 heredoc 解析。已用 `[IO.File]::WriteAllText(..., UTF8Encoding($true))` 补回 BOM。
+
+#### 验证
+- `-Tasks agent-sync` 无配置 → SKIP，exit 0；配置指向 127.0.0.1 → SKIP（安全守卫命中）。
+- pytest tests/unit/test_sync_agent.py → 9 passed。
+- maintenance 脚本 ParseFile → PARSE OK。
+
+#### 使用/回滚
+- 使用：配好远端 `sync-agent.yaml` 后 `-Tasks agent-sync` 或并入每日链。
+- 回滚：从 maintenance 删除 agent-sync 分支与 $allowed 项；还原 sync-agent load_config。

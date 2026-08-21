@@ -28,7 +28,7 @@ param(
 
 # 兼容 powershell -File 传参：命令行里的 "a,b,c" 会以单个字符串到达，
 # 这里统一按逗号拆分 + 校验。
-$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "all")  # 2026-08-18 SRE: slo 报告任务
+$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "agent-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "all")  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步
 $normalized = @()
 foreach ($t in $Tasks) { $normalized += $t.Split(',') }
 $normalized = $normalized | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
@@ -269,6 +269,37 @@ sys.exit(0 if all(c == 0 for c in codes) else 1)
 "@
 $syncPrompt = "执行 Trinity 双向同步：1) 运行 python C:\Users\Administrator\.trinity\sync_hermes_trinity.py 同步 Hermes 记忆；2) 在 C:\Users\Administrator\trinity 运行 python -m trinity.collector sync 做 Marvis 一次性同步；汇报两边统计与错误。"
 
+# 多机实时同步（2026-08-21 落地）：本地引擎库 → 远端服务器聚合池（--one 单轮）。
+# 关键安全边界：仅当 ~/.trinity/sync-agent.yaml 存在 且 server.url 不是本机/内网环回时运行；
+# 否则 SKIP（幂等无害），绝不默认把本地大库推回本机聚合池。
+$agentSyncCmd = @"
+import os, sys, json
+from pathlib import Path
+import importlib.util
+cfg_file = Path.home() / ".trinity" / "sync-agent.yaml"
+if not cfg_file.exists():
+    print("AGENT-SYNC SKIP: no ~/.trinity/sync-agent.yaml (同步未配置) — 请见 dsh-ops/SYNC_AGENT_DEPLOY.md")
+    sys.exit(0)
+# 载入 sync-agent 配置做安全守卫
+spec = importlib.util.spec_from_file_location("tsa", r"$TrinityRoot\dsh-ops\trinity-sync-agent.py")
+tsa = importlib.util.module_from_spec(spec); spec.loader.exec_module(tsa)
+cfg = tsa.load_config(str(cfg_file))
+url = (cfg.get("server") or {}).get("url", "").lower()
+blocked = [u for u in ("127.0.0.1", "localhost", "::1", "[::1]") if u in url]
+if blocked and url.startswith("http"):
+    print("AGENT-SYNC SKIP: 目标为本地环回 %s（%s）—— 请改为远端服务器 URL, 避免把本地大库推回本机聚合池污染检索面" % (blocked[0], url))
+    sys.exit(0)
+# 允许：指向远端服务器时执行一轮
+import subprocess
+r = subprocess.run([sys.executable, r"$TrinityRoot\dsh-ops\trinity-sync-agent.py", "--one", "--config", str(cfg_file)],
+                   capture_output=True, text=True, timeout=300)
+print("AGENT-SYNC exit", r.returncode)
+print((r.stdout or "")[-2000:])
+print((r.stderr or "")[-1000:])
+sys.exit(r.returncode)
+"@
+$agentSyncPrompt = "执行 Trinity 多机同步 agent 一轮（python dsh-ops/trinity-sync-agent.py --one --config ~/.trinity/sync-agent.yaml）。若配置文件不存在或目标为本机环回则 SKIP；否则把本地引擎库 active 记忆增量推送到远端服务器聚合池，汇报推送条数与状态。"
+
 # SQLite 大库 → PG 幂等镜像（2026-08-15 接入：保证 decay/tiers 扫描覆盖运行时全量 active）
 $mirrorCmd = @"
 import sys
@@ -379,6 +410,7 @@ foreach ($t in $Tasks) {
         "consolidate" { Invoke-Task -Name "consolidate" -DirectCommand $consolidateCmd -DshPrompt $consolidatePrompt }
         "dedup"      { Invoke-Task -Name "dedup"      -DirectCommand $dedupCmd      -DshPrompt $dedupPrompt }
         "sync"      { Invoke-Task -Name "sync"      -DirectCommand $syncCmd   -DshPrompt $syncPrompt }
+        "agent-sync" { Invoke-Task -Name "agent-sync" -DirectCommand $agentSyncCmd -DshPrompt $agentSyncPrompt }  # 2026-08-21 多机同步
         "compact"   { Invoke-Task -Name "compact"   -DirectCommand $compactCmd  -DshPrompt $compactPrompt }
         "selftest"  { Invoke-Task -Name "selftest"  -DirectCommand $selftestCmd -DshPrompt $selftestPrompt }
         "session-summarize" { Invoke-Task -Name "session-summarize" -DirectCommand $sessionSummaryCmd -DshPrompt $sessionSummaryPrompt }

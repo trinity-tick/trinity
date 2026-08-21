@@ -1,0 +1,15 @@
+# trinity-sync-agent.yaml — 配置模板
+# 复制到 ~/.trinity/sync-agent.yaml（或在命令行 --config 指定）后按需修改。
+server:
+  url: http://127.0.0.1:8001      # 服务器 Trinity API（HTTPS 反代后填 https://...）
+  api_key: ""                     # 若服务器开启了 TRINITY_API_KEY，填本机专用 Key
+  machine: pc-1                   # 本机标识，写入 agent_id 前缀 + metadata.sync_source
+sync:
+  interval_seconds: 3             # 准实时轮询（网络推荐 3s）
+  batch_size: 100                 # 单批推送条数（API 上限 100）
+  max_per_cycle: 500              # 每轮最多推送
+cursor:
+  file: C:/Users/Administrator/.trinity/sync-agent-cursor.json   # 游标持久化
+# 可选：显式指定源库；留空则自动解析 ~/.trinity/store/trinity_store.db
+source:
+  db: ""
