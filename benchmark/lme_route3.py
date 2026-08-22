@@ -22,6 +22,14 @@ parser.add_argument('--limit', type=int, default=50)
 parser.add_argument('--seed', type=int, default=42)
 parser.add_argument('--route', action='store_true')
 parser.add_argument('--temp-turn', action='store_true')
+parser.add_argument('--multi-prompt', action='store_true',
+                    help='2026-08-21: multi 分支用聚合/计数专用提示（PlugMem 对照；与 --multi-sort 独立）')
+parser.add_argument('--multi-sort', action='store_true',
+                    help='2026-08-21: multi 分支证据按日期排序（与 --multi-prompt 独立，分离变量）')
+parser.add_argument('--gen-compress', action='store_true',
+                    help='2026-08-21: 生成前按 DATE 分组 LLM 压缩为紧凑 recap（网络证据 +8~10pp）')
+parser.add_argument('--gen-classify', action='store_true',
+                    help='2026-08-21: 生成提示加问题分类段 factual vs recommendation（网络证据 pref +20pp）')
 parser.add_argument('--qtype', default='', help='filter by question_type (empty = all)')
 parser.add_argument('--exclude-qtype', default='', help='exclude question_type (empty = none)')
 parser.add_argument('--out', default=r'C:\Users\Administrator\.trinity\bench-official\route3.json')
@@ -73,6 +81,30 @@ GEN_SYS_PLAIN = ("You are a meticulous assistant with access to full past conver
     "Find it and answer with the exact fact (name, number, date, title). "
     "Do not say UNKNOWN unless you have read every excerpt and the information is truly absent. "
     "Answer with just the fact, no preamble.")
+GEN_SYS_CLASSIFY = (GEN_SYS_PLAIN + " " +
+    "First classify the question: (A) Factual lookup: answer strictly from the excerpts; if the fact is absent, say UNKNOWN. "
+    "(B) Recommendation/advice: extract signals about the user from the excerpts and ground your suggestion in named specifics. "
+    "Never refuse a recommendation question with \"the history doesn't include recommendations about X\".")
+COMPRESS_SYS = ("You compress past conversation excerpts into a tight factual recap. "
+    "Preserve every concrete fact: names, numbers, dates, choices, user preferences, and actions. "
+    "Do not add or infer anything. Output 1-3 short sentences, no preamble.")
+
+def compress_by_date(ctx):
+    """2026-08-21: 按 [DATE:] 分组，每组 LLM 压缩为 recap，按日期排序返回。"""
+    groups = {}
+    for c in ctx:
+        m = re.search(r'\[DATE: (\d{4}/\d{2}/\d{2})\]', c)
+        d = m.group(1) if m else 'unknown'
+        groups.setdefault(d, []).append(c)
+    recaps = []
+    for d in sorted(groups):
+        chunk = chr(10).join(groups[d])[:6000]
+        try:
+            recap = llm_chat(COMPRESS_SYS, 'Conversation excerpts:\n' + chunk, max_tokens=200)
+        except Exception:
+            recap = groups[d][0][:200]
+        recaps.append('[DATE: ' + d + '] ' + recap)
+    return recaps
 GEN_SYS_TEMPORAL = ("You are a meticulous assistant answering a question that requires temporal reasoning across past conversations. "
     "Each excerpt is prefixed with a DATE marker and a REL marker (days before the question date) showing when the conversation happened. "
     "Read ALL excerpts carefully. The answer IS somewhere in them. "
@@ -80,6 +112,11 @@ GEN_SYS_TEMPORAL = ("You are a meticulous assistant answering a question that re
     "Step 2: compute the answer using date differences / most recent event / explicit day counts. "
     "Step 3: answer with just the exact fact. "
     "Do not say UNKNOWN unless the information is truly absent.")
+GEN_SYS_MULTI = ("You are a meticulous assistant answering a question that requires aggregating evidence "
+    "across MULTIPLE past conversation sessions. Each excerpt has a DATE marker. "
+    "The question asks for a COUNT or a LIST. Count DISTINCT items only: the same item mentioned "
+    "in several sessions counts once, but similar-looking items that are actually different are separate. "
+    "Answer with just the exact fact (the number or the list), no explanation, no step-by-step, no formatting.")
 
 records = []
 t0 = time.time()
@@ -143,10 +180,20 @@ for qi, q in enumerate(data):
             seen.add(c)
             ctx.append(c)
         if use_turn:
-            # turn context: keep first 16 turns, sorted by date
+            # turn context: keep first 16 turns, sorted by date (2026-08-21: 实际排序)
             ctx = ctx[:16]
+            if args.multi_sort:
+                # 独立变量：证据按日期排序（跨会话时间线）
+                def _date_key(c):
+                    m = re.search(r'\[DATE: ([^\]]+)\]', c)
+                    d = parse_date(m.group(1)) if m else None
+                    return d if d else datetime.min
+                ctx = sorted(ctx, key=_date_key)
+            if args.gen_compress:
+                ctx = compress_by_date(ctx)
             ctx_text = chr(10) + '===TURN===' + chr(10).join(ctx)
-            answer = llm_chat(GEN_SYS_PLAIN, 'Conversation excerpts:' + chr(10) + ctx_text + chr(10) + chr(10) + 'Question: ' + question + chr(10) + 'Answer:', max_tokens=350)
+            sys_p = GEN_SYS_MULTI if args.multi_prompt else (GEN_SYS_CLASSIFY if args.gen_classify else GEN_SYS_PLAIN)
+            answer = llm_chat(sys_p, 'Conversation excerpts:' + chr(10) + ctx_text + chr(10) + chr(10) + 'Question: ' + question + chr(10) + 'Answer:', max_tokens=350)
         elif args.route and qtype == 'temporal-reasoning':
             # REL + inner2 + timeline sort
             ctx2 = []
@@ -193,8 +240,11 @@ for qi, q in enumerate(data):
             except Exception as exc:
                 answer = 'ERR:' + type(exc).__name__
         else:
+            if args.gen_compress:
+                ctx = compress_by_date(ctx)
             ctx_text = chr(10) + '===SESSION===' + chr(10).join(ctx)
-            answer = llm_chat(GEN_SYS_PLAIN, 'Conversation excerpts:' + chr(10) + ctx_text + chr(10) + chr(10) + 'Question: ' + question + chr(10) + 'Answer:', max_tokens=350)
+            sys_p = GEN_SYS_CLASSIFY if args.gen_classify else GEN_SYS_PLAIN
+            answer = llm_chat(sys_p, 'Conversation excerpts:' + chr(10) + ctx_text + chr(10) + chr(10) + 'Question: ' + question + chr(10) + 'Answer:', max_tokens=350)
         records.append({'question_id': qid, 'question_type': qtype, 'expected': expected[:300], 'answer': answer[:500]})
     except Exception as exc:
         records.append({'question_id': qid, 'question_type': qtype, 'expected': expected[:300], 'answer': 'ERR:' + type(exc).__name__})

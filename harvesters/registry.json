@@ -6,10 +6,12 @@
       "module": "harvesters.plugins.file_harvester",
       "enabled": true,
       "config": {
-        "dirs": [],
-        "category": "file_harvested",
-        "tags": ["file"],
-        "importance": 0.5
+        "dirs": [
+          "C:/Users/Administrator/.trinity/kb_harvest"
+        ],
+        "category": "kb_harvested",
+        "tags": ["knowledge-base", "file", "wms"],
+        "importance": 0.65
       }
     }
   ]

@@ -175,7 +175,14 @@ class _CrudMixin:
             分配的冲突组数量。
         """
         try:
-            hits = self.search_memories(query=content, top_k=10, touch=False)  # 候选召回（放宽）
+            # 2026-08-21（性能修复）：召回查询截断——_search_fts 会把 query 逐词
+            # 拼成 "词"* OR MATCH，超长中文 content 会切出数千词条导致单次 ingest
+            # 冲突检测达分钟级（benchmark ingest 卡死根因）。冲突检测只需召回
+            # 候选（token 重叠判断在下方用完整 content 计算），前缀截断语义不变；
+            # TRINITY_CONFLICT_QUERY_MAX=0 可关闭召回（跳过冲突检测查询）。
+            qmax = int(os.environ.get("TRINITY_CONFLICT_QUERY_MAX", "300"))
+            recall_query = content if qmax <= 0 else content[:qmax]
+            hits = self.search_memories(query=recall_query, top_k=10, touch=False)  # 候选召回（放宽）
         except Exception:
             return 0
         new_tokens = self._token_set(content)
@@ -210,10 +217,21 @@ class _CrudMixin:
 
     @staticmethod
     def _token_set(text: str):
-        """jieba 分词 + 去空白，返回 token 集合（用于冲突相似度）。"""
+        """jieba 分词 + 去空白，返回 token 集合（用于冲突相似度）。
+
+        2026-08-21（性能修复）：只对前 TRINITY_CONFLICT_TOKEN_MAX（默认 2000）
+        字符分词——超长文本（数万字会话）全量 jieba.cut 单次可达数秒，而
+        冲突检测每次 ingest 要算 1 次新内容 + 每条候选（top_k=10），叠加成
+        分钟级。冲突检测的语义是"主题级高重叠"，前 2000 字符已代表主题；
+        短文本（<2000 字符）行为完全不变。
+        """
         try:
             import jieba
-            tokens = [t.strip() for t in jieba.cut(str(text)) if t.strip()]
+            tmax = int(os.environ.get("TRINITY_CONFLICT_TOKEN_MAX", "2000"))
+            src = str(text)
+            if tmax > 0 and len(src) > tmax:
+                src = src[:tmax]
+            tokens = [t.strip() for t in jieba.cut(src) if t.strip()]
         except Exception:
             tokens = [t.strip() for t in re.split(r"[\s,，。；;：:、]+", str(text)) if t.strip()]
         return set(tokens)

@@ -161,6 +161,10 @@ class _SearchMixin:
         已取读连接；本方法自取，兼容独立调用）。
         """
         terms = self._tokenize_fts_query(query)
+        # 2026-08-21（性能防御）：OR 词条上限——超长查询（如写路径冲突检测的
+        # 全文召回）会切出数千词条导致 FTS5 MATCH 分钟级。截断到前 64 词，
+        # 召回语义不变（FTS 本就是近似召回；正常用户短查询不受影响）。
+        terms = terms[:64]
         # 2026-08-15（压测修复）：转义 FTS5 查询特殊字符（" 引号等），
         # 防止 MATCH 语法错误导致 "bad parameter or other API misuse"。
         safe_terms = [t.replace('"', '""') for t in terms if t.strip()]

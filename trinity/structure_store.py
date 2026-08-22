@@ -94,6 +94,12 @@ CREATE TABLE IF NOT EXISTS dsh_schedules (
     updated_at REAL NOT NULL
 );
 """
+# ── 时间戳单位契约（2026-08-21 明确，消费方务必遵守）──
+# - dsh_events.time / dsh_todos.time / dsh_headers.time = 事件源直传的
+#   epoch **毫秒**（DSH 插件 JS Date.now() 语义），无值回退 time.time() 秒。
+#   消费方（compact_structure 等）只做透传/聚合，切勿混算秒与毫秒。
+# - dsh_sessions.created_at/updated_at、dsh_goals.*、dsh_schedules.* =
+#   epoch **秒**（time.time() 语义）。时效判断（如 compact --min-days）一律用秒列。
 
 
 def _structure_conn() -> sqlite3.Connection:

@@ -86,6 +86,24 @@ def route_for(qtype: Optional[str]) -> str:
     return "plain"
 
 
+def _ensure_date_prefix(content: str, created_at: Any) -> str:
+    """内容无 [DATE:] 时用记忆 created_at 补日期前缀（temporal 策略前提）。
+
+    2026-08-21：生产摄入可能未带时间戳（08-17 全量 60.4% 的 temporal 39.1%
+    回退根因）。created_at 兼容 "YYYY-MM-DD ..." 与 "YYYY/MM/DD ..."。
+    """
+    if not content or "[DATE:" in content:
+        return content
+    if not created_at:
+        return content
+    m = re.match(r"(\d{4})-(\d{2})-(\d{2})", str(created_at))
+    if not m:
+        m = re.match(r"(\d{4})/(\d{2})/(\d{2})", str(created_at))
+    if not m:
+        return content
+    return "[DATE: %s/%s/%s] %s" % (m.group(1), m.group(2), m.group(3), content)
+
+
 def _split_turns(text: str) -> List[str]:
     return re.split(r"\n(?=\[(?:user|assistant|system)\])", text)
 
@@ -211,6 +229,11 @@ class RouteReasoner:
             if not c or c in seen:
                 continue
             seen.add(c)
+            # 2026-08-21：temporal 策略前提是证据带 [DATE:]——生产摄入可能未带
+            # 时间戳（08-17 全量 60.4% 的 temporal 39.1% 回退根因），用记忆
+            # created_at 自动补齐日期前缀，保证 REL/时间线排序可用。
+            h = dict(h)
+            h["content"] = _ensure_date_prefix(c, h.get("created_at"))
             out.append(h)
         return out
 
