@@ -241,6 +241,10 @@ from ._routers_compress import router as compress_router  # noqa: E402
 from ._routers_market import router as market_router  # noqa: E402
 from ._routers_evolution import router as evolution_router  # noqa: E402
 from ._routers_structure import router as structure_router  # noqa: E402
+from ._routers_offload import router as offload_router  # noqa: E402
+from ._routers_explain import router as explain_router  # noqa: E402
+from ._routers_persona import router as persona_router  # noqa: E402
+from ._routers_audit_purge import router as audit_purge_router  # noqa: E402
 
 def _register_router_routes(router) -> None:
     """Register an APIRouter's routes directly on the app router (flattened).
@@ -287,11 +291,28 @@ except Exception as _gql_err:  # pragma: no cover — 缺依赖时仅降级不�
 
 
 _register_router_routes(structure_router)
+_register_router_routes(offload_router)
+_register_router_routes(explain_router)
+_register_router_routes(persona_router)
+_register_router_routes(audit_purge_router)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CLI
 # ═══════════════════════════════════════════════════════════════════════════
+def _tls_uvicorn_kwargs() -> Dict[str, str]:
+    """Pure env->uvicorn kwargs mapping for optional TLS.
+
+    Both TRINITY_TLS_CERT and TRINITY_TLS_KEY must be set to enable TLS;
+    otherwise no SSL kwargs are returned (behaviour identical to no TLS).
+    """
+    cert = os.environ.get("TRINITY_TLS_CERT", "").strip()
+    key = os.environ.get("TRINITY_TLS_KEY", "").strip()
+    if cert and key:
+        return {"ssl_certfile": cert, "ssl_keyfile": key}
+    return {}
+
+
 def main():
     if not _HAS_FASTAPI:
         print("ERROR: fastapi not installed. Run: pip install trinity-memory[api]")
@@ -301,11 +322,16 @@ def main():
     parser.add_argument("--host", default="0.0.0.0", help="Host")
     parser.add_argument("--reload", action="store_true", help="Enable auto-reload")
     args = parser.parse_args()
-    print(f"Trinity API Server v{app.version} starting on http://{args.host}:{args.port}")
-    print(f"Dashboard: http://{args.host}:{args.port}/")
-    print(f"API docs:  http://{args.host}:{args.port}/docs")
-    print(f"Metrics:   http://{args.host}:{args.port}/metrics")
-    uvicorn.run("trinity.api.server:app", host=args.host, port=args.port, reload=args.reload)
+    tls_kwargs = _tls_uvicorn_kwargs()
+    scheme = "https" if tls_kwargs else "http"
+    print(f"Trinity API Server v{app.version} starting on {scheme}://{args.host}:{args.port}")
+    print(f"Dashboard: {scheme}://{args.host}:{args.port}/")
+    print(f"API docs:  {scheme}://{args.host}:{args.port}/docs")
+    print(f"Metrics:   {scheme}://{args.host}:{args.port}/metrics")
+    if tls_kwargs:
+        logger.info("TLS enabled (%s)", os.environ.get("TRINITY_TLS_CERT"))
+    uvicorn.run("trinity.api.server:app", host=args.host, port=args.port,
+                reload=args.reload, **tls_kwargs)
 
 
 if __name__ == "__main__":

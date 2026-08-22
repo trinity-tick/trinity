@@ -28,7 +28,7 @@ param(
 
 # 兼容 powershell -File 传参：命令行里的 "a,b,c" 会以单个字符串到达，
 # 这里统一按逗号拆分 + 校验。
-$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "agent-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "all")  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步
+$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "all")  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
 $normalized = @()
 foreach ($t in $Tasks) { $normalized += $t.Split(',') }
 $normalized = $normalized | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
@@ -93,7 +93,8 @@ function Invoke-Task {
         [string]$Name,
         [string]$DirectCommand,
         [string]$DshPrompt,
-        [string]$WorkDir = $TrinityRoot
+        [string]$WorkDir = $TrinityRoot,
+        [string]$LeaseJob = ""   # 2026-08-21 P0-1: 非空则经 scripts/with_lease.py 认领租约后再执行（并发重复任务 SKIP）
     )
     if ($DryRun) {
         Write-Log "[DRY-RUN] $Name : $DirectCommand"
@@ -133,11 +134,18 @@ function Invoke-Task {
             $Global:FAILED += $Name
             return
         }
-        $out = & $Py $tmpPy 2>&1
+        if ($LeaseJob) {
+            # P0-1 租约守卫：并发重复任务直接 SKIP，不在 SQLite 写锁上排队
+            $out = & $Py "$TrinityRoot\scripts\with_lease.py" --job $LeaseJob -- $Py $tmpPy 2>&1
+        } else {
+            $out = & $Py $tmpPy 2>&1
+        }
         $code = $LASTEXITCODE
         $out | ForEach-Object { Write-Log "  $_" }
         Remove-Item $tmpPy -Force -ErrorAction SilentlyContinue
-        if ($code -ne 0) { $Global:FAILED += $Name; Write-Log "$Name : FAILED (exit $code)" "WARN" }
+        if ($LeaseJob -and ($out -match 'with_lease: SKIP')) {
+            Write-Log "$Name : SKIP (lease held by another maintenance run)" "WARN"
+        } elseif ($code -ne 0) { $Global:FAILED += $Name; Write-Log "$Name : FAILED (exit $code)" "WARN" }
         else { Write-Log "$Name : OK" }
     }
     Write-Log "===== end: $Name ====="
@@ -240,17 +248,51 @@ runpy.run_path(r"$TrinityRoot\scripts\slo_report.py", run_name="__main__")
 "@
 $sloPrompt = "在 C:\Users\Administrator\trinity 运行 python scripts/slo_report.py 生成 SLO 报告（服务可用性/检索写入延迟/备份 RPO/数据一致性），汇报关键指标。"
 
-# 结构层 compaction（2026-08-15）：已结束会话 dsh_events 按 turn 聚合，控制表增长
+# 结构层 compaction（2026-08-15；2026-08-21 P0-3 改 token 预算模式：每会话保留
+# 最近 32768 token 明细原文，更早部分按 turn 聚合为 compacted_turn 摘要；
+# 尾部超预算时优先裁 tool/result → tool/call，用户/助手段落永不裁）
 $compactCmd = @"
 import sys
 sys.path.insert(0, r"$TrinityRoot")
 import runpy
-sys.argv = ["compact_structure", "--min-days", "1"]
+sys.argv = ["compact_structure", "--budget-tokens", "32768"]
 runpy.run_path(r"$TrinityRoot\scripts\compact_structure.py", run_name="__main__")
 "@
-$compactPrompt = "在 C:\Users\Administrator\trinity 运行 python scripts/compact_structure.py --min-days 1（结构层 compaction：已结束会话的 dsh_events 按 turn 聚合为摘要，控制表增长），汇报压缩会话数与移除明细数。"
+$compactPrompt = "在 C:\Users\Administrator\trinity 运行 python scripts/compact_structure.py --budget-tokens 32768（结构层 compaction token 预算模式：非 active 会话保留最近 32768 token 明细 + 更早部分聚合为 compacted_turn，控制表增长），汇报压缩会话数与移除明细数。"
+
+# 大库 → 聚合池 watermark 增量同步（2026-08-21 P0-2；维护窗口任务，不进 all 链）
+$poolSyncCmd = @"
+import sys, urllib.request
+# 安全守卫：API 在线时聚合池由 API 进程持有（内存池+脏写持久化），直接写盘会被覆盖
+try:
+    urllib.request.urlopen("http://127.0.0.1:8001/health", timeout=3)
+    print("POOL-SYNC SKIP: trinity-api 在线(:8001)，聚合池由 API 进程持有——请在维护窗口（服务停止）运行")
+    sys.exit(0)
+except Exception:
+    pass
+import runpy
+sys.argv = ["sync_pool_from_db_v2"]
+runpy.run_path(r"$TrinityRoot\benchmark\sync_pool_from_db_v2.py", run_name="__main__")
+"@
+$poolSyncPrompt = "运行 benchmark/sync_pool_from_db_v2.py（大库→聚合池 watermark 增量同步，rowid 水位；API 在线时 SKIP 守卫），汇报水位/跳过/新增统计。"
+
+# 聚合池 vs 引擎库一致性校验（2026-08-21 治理层，只读）：不改任何库/池文件。
+# drift = missing_in_pool + extra_in_pool + hash_mismatch；--fail-threshold 默认 1
+# （drift>1 → exit 1；0=从不失败）。只读任务，不加入 all 链，均由用户显式调用。
+$consistencyCmd = @"
+import sys, subprocess
+r = subprocess.run([sys.executable, r"$TrinityRoot\scripts\consistency_check.py", "--json",
+                    "--fail-threshold", "1"], cwd=r"$TrinityRoot", capture_output=True, text=True)
+print((r.stdout or "").strip()[:4000])
+if r.stderr:
+    print("STDERR:", r.stderr.strip()[-1000:])
+sys.exit(r.returncode)
+"@
+$consistencyPrompt = "运行 scripts/consistency_check.py（聚合池 trinity/data/aggregator_pool.json vs 引擎库 ~/.trinity/store/trinity_store.db 的只读一致性校验，输出 missing/extra/hash_mismatch/drift/source_breakdown），汇报各项漂移计数；退出码按 --fail-threshold 判定。"
 
 # 双向同步：Hermes ↔ Trinity + Marvis 一次性同步
+# 2026-08-21 外部依赖容错：HERMES（本地）失败 → 任务 FAILED；MARVIS（推 docker
+# 栈 :8005）失败 → 降级 WARN 不 FAILED（docker 停机时属预期，hermes 同步不受影响）。
 $syncCmd = @"
 import sys, subprocess
 codes = []
@@ -262,9 +304,13 @@ codes.append(r1.returncode)
 r2 = subprocess.run([sys.executable, "-m", "trinity.collector", "sync"], cwd=r"$TrinityRoot",
                     capture_output=True, text=True)
 print("MARVIS SYNC exit", r2.returncode)
-print(r2.stdout[-2000:] if r2.stdout else "")
-print(r2.stderr[-1000:] if r2.stderr else "")
-codes.append(r2.returncode)
+if r2.returncode != 0:
+    print(r2.stdout[-2000:] if r2.stdout else "")
+    print(r2.stderr[-1000:] if r2.stderr else "")
+    print("MARVIS SYNC DEGRADED: exit %d (docker 栈 :8005 不可达时属预期，hermes 双向同步已完成)" % r2.returncode)
+else:
+    print(r2.stdout[-2000:] if r2.stdout else "")
+    print(r2.stderr[-1000:] if r2.stderr else "")
 sys.exit(0 if all(c == 0 for c in codes) else 1)
 "@
 $syncPrompt = "执行 Trinity 双向同步：1) 运行 python C:\Users\Administrator\.trinity\sync_hermes_trinity.py 同步 Hermes 记忆；2) 在 C:\Users\Administrator\trinity 运行 python -m trinity.collector sync 做 Marvis 一次性同步；汇报两边统计与错误。"
@@ -301,8 +347,16 @@ sys.exit(r.returncode)
 $agentSyncPrompt = "执行 Trinity 多机同步 agent 一轮（python dsh-ops/trinity-sync-agent.py --one --config ~/.trinity/sync-agent.yaml）。若配置文件不存在或目标为本机环回则 SKIP；否则把本地引擎库 active 记忆增量推送到远端服务器聚合池，汇报推送条数与状态。"
 
 # SQLite 大库 → PG 幂等镜像（2026-08-15 接入：保证 decay/tiers 扫描覆盖运行时全量 active）
+# 2026-08-21 外部依赖容错：PG :5430（docker trinity-db）不可达时 SKIP 而非 FAILED——
+# 镜像缺席不误报每日链，docker 恢复后幂等补数（已验证 added/skipped/errors 语义）。
 $mirrorCmd = @"
-import sys
+import sys, socket
+try:
+    s = socket.create_connection(("127.0.0.1", int($PgPort)), timeout=3)
+    s.close()
+except Exception as e:
+    print("MIRROR SKIP: PG 127.0.0.1:$PgPort 不可达（%s）——维护镜像降级，docker 恢复后自动补数（幂等）" % e)
+    sys.exit(0)
 sys.path.insert(0, r"$TrinityRoot")
 import runpy
 sys.argv = ["sqlite_pg_mirror", "--pg-port", "$PgPort", "--pg-user", "$PgUser", "--pg-password", "$PgPass"]
@@ -404,17 +458,19 @@ foreach ($t in $Tasks) {
             try { Invoke-RestMethod -Uri "http://127.0.0.1:8001/evolution/cycle/run" -Method Post -TimeoutSec 120 | Out-Null } catch { Write-Log "API evolution cycle failed: $_" "WARN" }
             Invoke-Task -Name "evolution" -DirectCommand $evoCmd -DshPrompt $evoPrompt
         }
-        "decay"     { Invoke-Task -Name "decay"     -DirectCommand $decayCmd  -DshPrompt $decayPrompt }
-        "tiers"     { Invoke-Task -Name "tiers"     -DirectCommand $tiersCmd  -DshPrompt $tiersPrompt }
-        "mirror"    { Invoke-Task -Name "mirror"    -DirectCommand $mirrorCmd -DshPrompt $mirrorPrompt }
-        "consolidate" { Invoke-Task -Name "consolidate" -DirectCommand $consolidateCmd -DshPrompt $consolidatePrompt }
-        "dedup"      { Invoke-Task -Name "dedup"      -DirectCommand $dedupCmd      -DshPrompt $dedupPrompt }
-        "sync"      { Invoke-Task -Name "sync"      -DirectCommand $syncCmd   -DshPrompt $syncPrompt }
-        "agent-sync" { Invoke-Task -Name "agent-sync" -DirectCommand $agentSyncCmd -DshPrompt $agentSyncPrompt }  # 2026-08-21 多机同步
-        "compact"   { Invoke-Task -Name "compact"   -DirectCommand $compactCmd  -DshPrompt $compactPrompt }
+        "decay"     { Invoke-Task -Name "decay"     -LeaseJob "decay"     -DirectCommand $decayCmd  -DshPrompt $decayPrompt }
+        "tiers"     { Invoke-Task -Name "tiers"     -LeaseJob "tiers"     -DirectCommand $tiersCmd  -DshPrompt $tiersPrompt }
+        "mirror"    { Invoke-Task -Name "mirror"    -LeaseJob "mirror"    -DirectCommand $mirrorCmd -DshPrompt $mirrorPrompt }
+        "consolidate" { Invoke-Task -Name "consolidate" -LeaseJob "consolidate" -DirectCommand $consolidateCmd -DshPrompt $consolidatePrompt }
+        "dedup"      { Invoke-Task -Name "dedup"      -LeaseJob "dedup"      -DirectCommand $dedupCmd      -DshPrompt $dedupPrompt }
+        "sync"      { Invoke-Task -Name "sync"      -LeaseJob "sync"      -DirectCommand $syncCmd   -DshPrompt $syncPrompt }
+        "agent-sync" { Invoke-Task -Name "agent-sync" -LeaseJob "agent-sync" -DirectCommand $agentSyncCmd -DshPrompt $agentSyncPrompt }  # 2026-08-21 多机同步
+        "pool-sync" { Invoke-Task -Name "pool-sync" -LeaseJob "pool-sync" -DirectCommand $poolSyncCmd -DshPrompt $poolSyncPrompt }  # 2026-08-21 P0-2 聚合池水位同步（维护窗口任务）
+        "consistency" { Invoke-Task -Name "consistency" -DirectCommand $consistencyCmd -DshPrompt $consistencyPrompt }  # 2026-08-21 治理层只读一致性校验（显式调用，不进 all 链）
+        "compact"   { Invoke-Task -Name "compact"   -LeaseJob "compact"   -DirectCommand $compactCmd  -DshPrompt $compactPrompt }
         "selftest"  { Invoke-Task -Name "selftest"  -DirectCommand $selftestCmd -DshPrompt $selftestPrompt }
-        "session-summarize" { Invoke-Task -Name "session-summarize" -DirectCommand $sessionSummaryCmd -DshPrompt $sessionSummaryPrompt }
-        "session-auto" { Invoke-Task -Name "session-auto" -DirectCommand $sessionAutoCmd -DshPrompt $sessionAutoPrompt }
+        "session-summarize" { Invoke-Task -Name "session-summarize" -LeaseJob "session-summarize" -DirectCommand $sessionSummaryCmd -DshPrompt $sessionSummaryPrompt }
+        "session-auto" { Invoke-Task -Name "session-auto" -LeaseJob "session-auto" -DirectCommand $sessionAutoCmd -DshPrompt $sessionAutoPrompt }
         "agent-ttl" { Invoke-Task -Name "agent-ttl" -DirectCommand $agentTtlCmd -DshPrompt $agentTtlPrompt }
         "slo"      { Invoke-Task -Name "slo"      -DirectCommand $sloCmd      -DshPrompt $sloPrompt }  # 2026-08-18 SRE
         "db-health" { Invoke-Task -Name "db-health" -DirectCommand $dbHealthCmd -DshPrompt $dbHealthPrompt }

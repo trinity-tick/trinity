@@ -3383,3 +3383,372 @@ consolidate→dedup→sync→compact 全 OK) / backup(89.4MB,14天) / collector�
 
 #### 回滚
 还原 `_search.py` 的 touch 参数分支 与 `_crud.py` 的 `touch=False` 即可回到"自碰"旧行为。
+### 追加：P0 三项落地（Codex 开源架构借鉴，2026-08-21 第 10 轮）
+
+背景：借鉴 openai/codex（codex-rs）状态工程——rollout 事实源 + state_db 索引、
+watermark 陈旧检测、job claim 租约、压缩保留预算（RETAINED_MESSAGE_TOKEN_BUDGET）。
+只抄工程机制，记忆算法层不动（Trinity 47 通道检索/CRDT/衰减已全面领先 codex 的
+memory_summary.md 扁平摘要路线）。分析全文已存 Trinity（memory_id 4a759de4d949b76575737182）。
+
+#### 改动
+
+1. **P0-1 任务租约 + 认领状态机（新增）**
+   - `trinity/governance/job_lease.py`：`governance_jobs(job_kind, job_key, owner,
+     lease_expires_at, status, started_at, finished_at, detail)` 表（建在运行时权威库
+     `~/.trinity/store/trinity_store.db`）；`acquire/release/list_jobs`；
+     语义：无行→认领；租约有效→SKIP（绝不排队）；租约过期→steal 接管；
+     短事务（BEGIN IMMEDIATE），busy_timeout 取 `TRINITY_SQLITE_BUSY_TIMEOUT_MS`
+     （默认 15000，与 adapters/sqlite 一致）；拿不到锁返回 locked 未认领不阻塞。
+   - `scripts/with_lease.py`：CLI 封装 `--job <kind> [--key] [--lease] [--list] -- <cmd>`；
+     认领后子进程执行，按退出码 release（completed/failed）；SKIP 时 exit 0；
+     `TRINITY_MEMORY_ENABLED=0` 抑制 import 期聚合器自举（与 engine_worker 一致）。
+
+2. **P0-1 接入维护链（改）**：`dsh-ops/trinity-dsh-maintenance.ps1`
+   - `Invoke-Task` 新增 `-LeaseJob` 参数：任务经 with_lease 执行，SKIP 记日志
+     （`SKIP (lease held by another maintenance run)`）不算 FAILED。
+   - 写重型任务全部挂租约：decay/tiers/consolidate/mirror/compact/dedup/sync/
+     agent-sync/session-summarize/session-auto。
+   - 新增 `pool-sync` 任务（`benchmark/sync_pool_from_db_v2.py` 维护窗口版）：
+     **API(:8001) 在线时 SKIP 守卫**（聚合池由 API 进程持有，直接写盘会被内存池
+     覆盖）；不进 `all` 链。
+
+3. **P0-3 压缩保留预算（改）**：`scripts/compact_structure.py`
+   - 新增 `--budget-tokens N` 预算模式：处理全部非 active 非 compacted 会话，
+     **每会话保留最近 N token 明细原文**（切点按 turn 边界对齐，整 turn 保留）；
+     更早明细按 turn 聚合为 compacted_turn 摘要并删除；尾部仍超预算时按优先级
+     裁剪 **tool/result → tool/call → 其他，user/assistant 消息永不裁**；
+     预算内会话不动（不标记）。
+   - 维护链 compact 任务由 `--min-days 1` 改为 `--budget-tokens 32768`。
+
+4. **P0-2 watermark 增量（改）**：`benchmark/sync_pool_from_db_v2.py`
+   - 源库建 `sync_watermarks(source, watermark, updated_at)`；水位 = 上次处理到的
+     **最大 rowid**（SQLite 隐式自增列，插入序单调；实测 memory_id 前缀/长度混杂
+     mem_*/sync_*、updated_at 格式混用，均不可作水位）；每 500 条与结束时推进；
+     崩溃后从上次水位续跑；`--no-watermark` 回退全量、`--reset-watermark` 清水位。
+
+#### 验证
+
+- 新增单测 17 个全 PASS：`tests/unit/test_job_lease.py`（认领/释放/重认领、
+  有效租约 SKIP、过期 steal、key 隔离、释放记 status、锁竞争降级）、
+  `test_compact_structure_budget.py`（预算内不动、超预算聚合+尾部保留、
+  裁剪优先级、budget 忽略 min-days、main 落库标记 compacted）、
+  `test_sync_watermark.py`（建表/水位读写/rowid 单调/增量查询语义）。
+- 全量回归：**868 passed / 55 skipped / 1 failed**（唯一失败
+  `test_rl_feedback_loop.py::test_mcp_memory_feedback_tool` 单独重跑 PASS，
+  并发跑全量时 MCP 偶发，与本轮改动无关；基线 852p/55s/0f + 本轮 17 新测试）。
+- with_lease 实测：并发第二次调用 → `SKIP (reason=skipped, held_by=...)` exit 0；
+  释放后再调用正常执行；启动耗时 ~1.3s。
+- 真实库预算 compaction：9 会话 compacted、82 条 compacted_turn、删 7,306 条明细、
+  尾部保留 1,067 条（每会话 ~32.5k token）、按优先级裁 tool/result 593 +
+  tool/call 121、**消息 0 丢失**；二次运行幂等（0 条）；抽查 payload 含
+  budget 元数据（mode/budget_tokens/kept_tokens/dropped/cut_turn）。
+- maintenance 实测：`-Tasks compact` → with_lease claimed→compact OK→released；
+  `-Tasks pool-sync` → API 在线 `POOL-SYNC SKIP` 守卫生效，任务 OK。
+- API 服务不受影响（/memory/search/hybrid 正常）。
+
+#### 使用/回滚
+
+- 使用：每日链无需改动（compact 自动走预算模式）；pool-sync 需维护窗口
+  （先停 supervisor/api/collector）手动 `-Tasks pool-sync`。
+- 回滚：
+  - ps1：移除各任务的 `-LeaseJob` 与 pool-sync 分支；compact 任务改回
+    `--min-days 1`（git 还原该文件）。
+  - compact_structure.py：git 还原（预算分支整体在 `--budget-tokens` 开关后，
+    默认 0 = 旧时效模式，行为不变）。
+  - sync v2：`--no-watermark` 即回旧全量行为；或 git 还原。
+  - 租约：删除 `trinity/governance/job_lease.py` + `scripts/with_lease.py` 即无
+    租约；`governance_jobs` 表可留（仅诊断记录）可删（DROP TABLE）。
+
+### 追加：外部依赖容错 + 时间戳契约（2026-08-21 第 10 轮 P1-1/P1-2/P2-1）
+
+背景：闭环验证时发现每日链对 docker 栈单点依赖——docker 停机时 mirror 直接
+FAILED、sync 因 MARVIS push 失败整体 FAILED（2026-08-21 03:03 实测踩坑）。
+
+#### 改动
+
+1. **P1-1 mirror 守卫（改 `dsh-ops/trinity-dsh-maintenance.ps1`）**：
+   `$mirrorCmd` 开头加 PG :5430（$PgPort）socket 可达性检查（timeout 3s），
+   不可达 → 打印 `MIRROR SKIP: ...` 并 exit 0（不 FAILED）。docker 恢复后
+   幂等补数（sqlite_pg_mirror 的 added/skipped/errors 语义已验证）。
+   与 pool-sync 的 API 在线守卫同一模式。
+
+2. **P1-2 sync 部分失败降级（改 `dsh-ops/trinity-dsh-maintenance.ps1`）**：
+   `$syncCmd` 判定改为——HERMES（本地）失败 → 任务 FAILED；MARVIS（推
+   docker :8005）失败 → 打印 `MARVIS SYNC DEGRADED: exit N (docker 栈
+   :8005 不可达时属预期，hermes 双向同步已完成)`，**不加入 codes，任务仍
+   OK**。避免 docker 停机时误报整个 sync 失败。
+
+3. **P2-1 时间戳单位契约（改 `trinity/structure_store.py` + `scripts/compact_structure.py`）**：
+   明确——`dsh_events.time` / `dsh_todos.time` / `dsh_headers.time` = 事件源
+   直传 epoch **毫秒**（DSH 插件 JS Date.now() 语义，无值回退 time.time() 秒）；
+   `dsh_sessions.created_at/updated_at`、`dsh_goals.*`、`dsh_schedules.*` =
+   epoch **秒**。消费方（compact_structure 等）时效判断一律用秒列、事件 time
+   只透传不换算。仅注释，不动逻辑。
+
+4. **顺手清理**：删除 Hermes 残留锁文件
+   `~AppData/Local/hermes/memories/MEMORY.md.lock`（2026-07-21 的 0 字节残留，
+   一个月前遗留，sync 每次 WARN 的来源）。
+
+#### 验证
+
+- 单元验证 5 分支全 PASS（临时脚本）：
+  - 不可达端口 → SKIP 分支触发；PG :5430 可达 → 正常执行分支
+  - HERMES=0 + MARVIS=1 → exit 0 + DEGRADED WARN（降级生效）
+  - HERMES=1 + MARVIS=0 → exit 1 FAILED（本地失败仍报红）
+  - 双成功 → exit 0
+- 真实运行 `maintenance -Tasks mirror,sync`：mirror : OK（守卫放行）、
+  HERMES exit 0（1 new）、MARVIS exit 0（docker 已恢复）、sync : OK、
+  maintenance finished OK；两任务租约正常。
+- ps1 保持 UTF-8 BOM + CRLF、ParseErrors=0。
+
+#### 回滚
+
+- mirror 守卫：删除 `$mirrorCmd` 开头的 socket 检查块（git 还原该文件）。
+- sync 降级：`$syncCmd` 恢复 `codes.append(r2.returncode)` 与原文 exit 判定。
+- 注释：git 还原 structure_store.py / compact_structure.py（纯注释，无行为影响）。
+
+### 追加：ingest 写路径性能修复（2026-08-21，PlugMem A/B 前置发现的生产问题）
+
+背景：跑 LongMemEval 50 题 A/B（lme_route3.py）时 ingest 卡死（单进程 2 题
+10 分钟+，CPU 满负荷）。py-spy 栈定位为写路径冲突检测三处热点，均为
+`ingest → store_memory → _assign_conflicts` 内的大文本全量处理。
+
+#### 根因与修复（3 处）
+
+1. **`_crud.py _assign_conflicts` 召回查询截断**：原用完整 content 做 FTS 召回，
+   `_search_fts` 把 query 逐词拼成 `"词"* OR MATCH`，数万字中文 → 数千词条
+   OR 查询，单次可达分钟级。修复：召回 query 截断到
+   `TRINITY_CONFLICT_QUERY_MAX`（默认 300 字符；0 = 关闭召回查询）；
+   token 重叠判断仍在 Python 侧用完整内容计算，语义不变。
+2. **`_search.py _search_fts` OR 词条上限**：防御性截断到前 64 词——任何
+   超长查询（含用户全文搜索）不再爆炸。实测 2000 字符查询 3.0s → 0.063s。
+3. **`_crud.py _token_set` 分词截断**：冲突检测每次 ingest 需对 1 条新内容
+   + top_k=10 条候选做 jieba 全量分词，大文本每条数秒 → 每次 ingest 数十秒。
+   修复：只对前 `TRINITY_CONFLICT_TOKEN_MAX`（默认 2000）字符分词
+   （冲突检测是主题级高重叠语义，前 2000 字符代表主题；短文本行为不变）。
+
+#### 验证
+
+- 最重 multi 题（46 sessions / 51.7 万字符）全量 ingest：卡死 → **5.5s**
+- 2 万字中文 ingest：0.12s；2000 字符 FTS 查询：0.063s
+- 回归：test_conflict_query_trim（新增 4 用例）+ test_consolidation +
+  test_audit = 65 passed；长文本冲突组分配行为保持（conf_ 组仍生成）
+- 开关：TRINITY_CONFLICT_QUERY_MAX / TRINITY_CONFLICT_TOKEN_MAX 可调
+
+#### 回滚
+
+- git 还原 `_crud.py`（178-190 行召回截断 + _token_set）与 `_search.py`
+  （terms[:64]）即可；删除 tests/unit/test_conflict_query_trim.py。
+
+### 追加：PlugMem 路线 A/B 验证（2026-08-21，同批 50 题 seed42 + judge3）
+
+前置：发现并修复 ingest 写路径性能问题（见"ingest 写路径性能修复"节）——
+冲突检测 FTS 召回/分词全量处理大文本导致 ingest 分钟级，修复后最重 multi 题
+（51.7 万字符）5.5s 完成。
+
+#### 同批 A/B（lme_route3.py，同 50 题 seed42）
+
+| 题型 | baseline（route2 风格） | route3 组合路由 | delta |
+|---|---|---|---|
+| knowledge-update | 7/7 = 100% | 6/7 = 86% | -14pp（7 题样本波动） |
+| multi-session | 5/17 = 29% | 10/17 = 59% | **+30pp** |
+| single-session-assistant | 3/3 = 100% | 3/3 = 100% | 0 |
+| single-session-preference | 0/2 = 0% | 1/2 = 50% | +50pp（2 题样本） |
+| single-session-user | 10/10 = 100% | 10/10 = 100% | 0 |
+| temporal-reasoning | 6/11 = 55% | 7/11 = 64% | +9pp |
+| **总计** | **31/50 = 62%** | **37/50 = 74%** | **+12pp** |
+
+- 组合路由：multi=turn 粒度（top_k=12，16 turns 上下文）、temporal=REL+
+  inner2 过滤+时间线排序、pref=pref3 两段式、KU=dated plain。
+- judge3 三票稳定（route 0.98 / baseline 1.0）。
+- 对照历史：route2 全量 500 = 60.4%，与同批 baseline 62% 一致；计划文档中
+  "route2 72%" 与实测不符（口径差异，以同批 A/B 为准）。
+- 结论：**组合路由（按题型分流）是正确的提升方向，+12pp 干净可复现**；
+  multi 的 turn 粒度是核心贡献（29%→59%）；SS-U/SS-A 已满分无提升空间。
+- 命题化（并存式）维持第 48 轮证伪结论（multi 0.75% 灾难）；preference 题型
+  样本仅 2 题，命题路由无法可靠评估——**命题检索路由不作为下一步**。
+
+#### 下一步（待用户决策）
+
+- multi 59% 是最大缺口（17 题对 7 题）：turn 上下文 16→24 / top_k 12→16
+  低成本变体 A/B（约 80 分钟/轮）。
+- 或接受 74% 为当前最优，收束本轮。
+
+#### 回滚
+
+- 引擎修复回滚见"ingest 写路径性能修复"节；A/B 产物（route3b/route3r +
+  judge3_ab50.json）保留为原始证据，无代码回滚。
+
+### 追加：multi-session 生成层 A/B —— 3 变体证伪（2026-08-21）
+
+背景：对照网络最优方案优化 multi（当前 59% 是最大缺口）。
+
+#### 网络最优盘点（检索/QA 两层口径）
+
+- **检索召回层（R@5）**：MemPalace raw verbatim 96.6%、agentmemory BM25+向量
+  95.2%（multi 97.7%）——召回已近天花板，不是 multi 瓶颈。
+- **QA 端到端层（judge 口径）**：LongMemEval Oracle（喂金标会话）~82.4%、
+  PlugMem(ICML 2026) M-S **64.7%**、LiCoMemory 63.0%、Zep 57.9%。
+- **PlugMem multi 机制**：episodic standardization（turn 级标注）→ 原子命题+
+  概念标签+语义图+可溯源 → retrieve_and_reason；论文点名 multi 难点为
+  "retrieve multiple gold memories and distinguish them to maintain an accurate count"。
+
+#### Trinity 实测诊断
+
+- **检索召回**（recall_diag_multi.py，5 题抽样）：turn 粒度 top_k=12
+  gold 会话命中 **5/5 = 100%**（覆盖 4-9 个会话）→ 召回不是瓶颈。
+- **生成层 A/B**（17 题同批 seed42 + judge3）：
+
+| 变体 | majority |
+|---|---|
+| 基线（GEN_SYS_PLAIN + 搜索序，route3 原样） | **58.8%** |
+| 变体1：复杂聚合提示（Step1/2/3 逐会话列出+合并区分+计数）+ 日期排序 | 35.3% |
+| 变体2：轻量提示（distinct 计数约束）+ 日期排序 | 35.3% |
+| 变体3：轻量提示、无排序（分离变量） | 29.4% |
+
+- 失败根因（样本核对）：聚合提示诱导模型输出"步骤/格式化列表"，350 token
+  截断丢最终答案（基线直接给精确数字）；排序/提示均有害，且排序先于截断
+  （ctx[:16]）后做，打散相关 turn 的相关性顺序。
+- 结论：**multi 提示工程方向 3 变体全证伪**，58.8% 是当前配置局部最优；
+  与 PlugMem 64.7% 的差距需要架构级改动（命题+图+检索路由），第 48 轮已
+  评估为高成本低收益，本轮维持不投入。
+
+#### 产物
+
+- benchmark/lme_route3.py：--multi-prompt / --multi-sort 独立开关（默认关，
+  默认行为不变）；GEN_SYS_MULTI 两版提示保留供参考。
+- benchmark/recall_diag_multi.py：multi 检索召回诊断脚本（可复用）。
+- .trinity/bench-official/route3m{,_2,_3}_multi17.json + judge 结果：原始证据。
+
+### 追加：生成侧优化 A/B —— 组合变体证伪，74% 为模型口径天花板（2026-08-21）
+
+背景：按网络证据（DEV 实测：LongMemEval oracle 62%→82.8% 不动检索器，
+session 压缩 +8~10pp / 模型升级 +4.2pp / 分类提示 pref +20pp）优化生成侧。
+用户指示：**不做模型升级**。
+
+#### 实验（50 题同批 seed42 + judge3，--route 基础上叠加）
+
+| 变体 | majority | vs 基线 74% |
+|---|---|---|
+| route3 组合路由（基线，当前最优） | **74%** | — |
+| --gen-compress --gen-classify（LLM 按日期分组压缩 recap + 分类提示） | **48%** | **-26pp** |
+
+- 根因（样本核对）：deepseek-chat 压缩 recap **丢失精确事实**（KU 题
+  "4→5 engineers" 变 UNKNOWN；multi 计数 "10 times" 变 UNKNOWN）且**引入
+  幻觉细节**（temporal 题 "June 3rd" 变 "June 3rd, 2023"）；judge3 对精确
+  答案敏感 → 全面崩盘。
+- 网络文章用 GPT-4o/Sonnet-4 承担压缩-重建两跳（模型保真度高），
+  deepseek-chat 保真度不足——**生成侧技巧强烈依赖模型能力**。
+
+#### 汇总：不换模型约束下的生成侧全证伪（4 个实验）
+
+1. multi 专用聚合提示（3 变体）：35.3 / 35.3 / 29.4 vs 基线 58.8
+2. 会话压缩 + 分类提示（组合）：48 vs 基线 74
+
+**结论：74%（组合路由 + GEN_SYS_PLAIN 极简指令）是 deepseek-chat + judge3
+口径下的实际天花板**；网络方案的生成侧增量全部依赖更强模型。检索召回已
+100%（multi）/R@5 0.992（500q），检索侧无剩余空间。能力分提升只剩
+模型升级一条路（用户已排除）。
+
+#### 产物
+
+- lme_route3.py：--gen-compress / --gen-classify 开关保留（默认关）。
+- .trinity/bench-official/route3g_comb50.json：原始证据。
+
+### 追加：74% 复现验证 + 组合路由产品化验收（2026-08-21）
+
+背景：用户质疑"现在的情况真的能达到 74% 吗"。做两层验证。
+
+#### ① benchmark 口径复现（稳定性）
+
+- 第二轮独立运行 route3 --route 50 题 seed42（route3r_repro50.json，4814s）：
+  judge3 = **74%**（votes 0.74/0.74/0.74，stable 1.0）——与首轮 74% 完全一致。
+- **结论：74% 在评测口径下高度可复现**（两轮同分），非运气。
+
+#### ② 产品化验收（生产模块 RouteReasoner）
+
+- 历史发现：RouteReasoner（trinity/qa/route_reasoner.py，08-17 产品化，
+  /reason 端点）首轮全量验证仅 60.4%——**产品化版本从未达到 74%**，
+  根因是 temporal 摄入无 [DATE:] 时间戳（temporal 39.1% 回退）。
+- 本次验收：benchmark/rr_ab50.py（RouteReasoner.answer + 带 [DATE:] 摄入，
+  50 题 seed42）→ judge3 = **78%**（39/50，stable 1.0），**超过 benchmark 74%**：
+  - multi 11/17（benchmark 10/17，+1）、temporal 8/11（+1）、KU 6/7、
+    SS-U 10/10、SS-A 3/3、pref 1/2。
+  - 提升来源：RouteReasoner turn 策略 top_k=16（benchmark 12）+ pref 两段式细节。
+- **结论：产品化版本不仅能达到 74%，实测 78%**；前提是摄入保留时间戳。
+
+#### ③ 时间戳自动补齐（生产链路防护）
+
+- 改 trinity/qa/route_reasoner.py：`_ensure_date_prefix`——检索证据内容无
+  [DATE:] 时用记忆 created_at（兼容 "YYYY-MM-DD" 与 "YYYY/MM/DD"）自动补
+  日期前缀，保证 temporal 的 REL/时间线排序在无时间戳摄入下仍可用
+  （08-17 60.4% 惨案的根因防护）。
+- 验证：test_route_reasoner.py 12 passed；_ensure_date_prefix 4 断言 PASS。
+
+#### 使用
+
+- 生产调用：REST POST /reason（route=True 或 TRINITY_ROUTE_REASONER=on）或
+  Trinity.reason(qtype=...)，即走验证过的组合路由（78% 口径）。
+- 回滚：还原 route_reasoner.py 的 _retrieve/_ensure_date_prefix（git）；
+  删 benchmark/rr_ab50.py。
+
+#### 最终定位（回答"真的能达到 74% 吗"）
+
+- 评测口径：74% 复现稳定（两轮同分）。
+- 产品口径：RouteReasoner + 时间戳 = **78%**（比 benchmark 更高）。
+- 前提：时间戳摄入（已自动补齐防护）；不换模型下此为该口径天花板。
+
+### 追加：实时监测工具（2026-08-21/22）
+- 已有 `dsh-ops/trinity-live.ps1`（实时数据流看板：dsh_events/memories/versions/audit 增量 + 新事件/新记忆 + collector 心跳，-Interval 默认 10s，Ctrl+C 退出）。
+- 新增 `dsh-ops/trinity-monitor.ps1`（系统一体化仪表盘，-Interval 默认 5s / -Rounds 限次 / -Simple 无颜色）：API 健康与降级 tier、6 个服务端口、5 类关键进程存活、库规模增量（memories/dsh_events/pool）、运行中租约、维护日志 FAILED/WARN 扫描、CPU/内存、库文件大小。实测：4 进程识别、全端口 UP。
+- 回滚：删 trinity-monitor.ps1 即可（独立文件，无依赖）。
+### 追加：弹窗排查与 Marvis 自启禁用（2026-08-22）
+- 现象：电脑每 4-5 分钟闪一次控制台窗口。
+- 排查结论：①WMSWatchdog 计划任务（每 5 分钟，无 -WindowStyle Hidden）——已由管理员修复为 Hidden；②MarvisAgent.exe 周期性（4-5 分钟）启动带 conhost 的 powershell 子进程（监控实锤 17:06:43）——腾讯 Marvis agent 内部行为，无法配置隐藏。
+- 处置：用户决定关闭 Marvis 开机自启——启动文件夹 Marvis.lnk → Marvis.lnk.disabled（改名可一键恢复）。
+- 影响：下次开机 Marvis 不再自启；Trinity collector 的 Marvis 会话采集将无新数据（Hermes/DSH 数据源不受影响）；collector 不会报错（跳过）。
+- 恢复：改回 Marvis.lnk 即恢复自启。
+
+---
+
+## 第 51 轮：批量优化落地（2026-08-22，用户批准"按建议全部执行"）
+
+### 背景与校准
+- 用户要求按对比结论（Trinity vs TencentDB Agent Memory）全部执行优化。
+- 校准剔除已完成/被证伪项：①命题化 M3 第 48 轮已证伪、由 PlugMem 组合路由替代（benchmark 74% 复现稳定 / 产品口径 RouteReasoner 78%）——不再跑；⑩联邦 sync-agent 08-21 已落地——不再做；⑬ store 92 个遗留文件已在 `_legacy_20260818` 隔离——仅收尾。
+- 本轮 11 个实现包全部经 pytest/定向验证；API 中央挂载 4 个新 router；无运行时大库写入、无在途数据破坏。
+
+### 交付清单（每包：文件 / 验证）
+
+| 包 | 交付 | 验证 |
+|---|---|---|
+| ② Persona 层 | `trinity/memory/persona.py`（PersonaEngine：proposition 聚合→白盒 persona.md 落盘 `~/.trinity/personas/`，含来源 memory_id；`TRINITY_PERSONA` 默认 off 不改变基线）+ `_routers_persona.py`（GET /persona/{id}、POST /persona/{id}/rebuild、GET /personas）+ 12 单测 | 12 passed |
+| ③ Mermaid 卸载 | `trinity/memory/offload.py`（原文落盘 refs/{task}/{node_id}.md、Mermaid 画布 + index.json、drill_down/search；`TRINITY_OFFLOAD_DIR` 可覆盖；LLM 摘要开关默认 off 规则模式）+ `_routers_offload.py`（POST /offload/task、GET /offload/canvas|node|search）+ 12 单测 | 12 passed（TestClient 4 端点 200） |
+| ④ decay LLM | `scripts/run_decay_compress.py` 新增 `--llm {auto,mock,real}`（默认 auto：有 `TRINITY_DECAY_API_KEY`/`TRINITY_API_KEY` → real，否则 mock 与现状一致；real 用 OpenAI 兼容接口生成 5-10 行结构化摘要，解析容错、单条失败降级 mock；摘要函数可注入）+ 18 单测 | 18 passed；--help 正常 |
+| ⑤ ANN 预热 | `trinity/retrieval/ann_index.py`：`is_warm/prewarming/warm()`、`startup_prewarm()`（有盘 load 即 warm；无盘后台构建；损坏降级回退 build）、`TRINITY_ANN_PREWARM` 默认 on、`statistics()` 增 warm 字段 + test_ann_prewarm.py 追加 7 用例 | 10 passed（3 既有+7 新增）；hybrid/graph 检索回归 14 passed |
+| ⑥ TLS/审计/加密 | `__init__.py` 纯函数 `_tls_uvicorn_kwargs()`（`TRINITY_TLS_CERT`+`TRINITY_TLS_KEY` 同设 → https，缺一行为不变）+ `_routers_audit_purge.py`（DELETE /audit/events/{id}：物理删除 + action='PURGE' 留痕，操作者取 X-Agent-ID）+ `scripts/gen-self-signed-cert.ps1`（openssl 自签）+ 9 单测；**存储加密实测验证**：临时库加密写→读往返 ✅（enc:v1: 密文）、错密钥 InvalidTag ✅（`trinity/security/crypto.py` 无缺口） | 9 passed |
+| ⑦ 一致性校验 | `scripts/consistency_check.py`（只读 ro 连接：total_active/pool_entries/missing/extra/hash 抽查/source 分布；--fail-threshold 默认 1）+ maintenance.ps1 新增 `consistency` 任务（不进 all 链）+ 10 单测 | 10 passed；**真实库：active 1905 / pool 11411 / missing 679 / extra 218 / hash_mismatch 0 / drift 897 → exit 1（治理告警预期）** |
+| ⑧ worker 预热 | `trinity/engine_worker.py`：`should_prewarm(env)` 三态纯函数 + `_engine_lock` 防双初始化 + `_start_prewarm()`（main 启动后台 daemon 预热：预初始化引擎 + 一次 `mode="keyword"` 只读 FTS 探针；`TRINITY_WORKER_PREWARM` 默认 on；`TRINITY_MEMORY_ENABLED=0` 跳过保持现状）+ 8 单测 | 8 passed |
+| ⑨ 市场模拟 | `scripts/market_sim.py`（临时实例 5 卖家 3 买家多轮撮合：定价随供需方向 ✅、声誉收敛 ✅、最优价优先 ✅；`--rounds/--seed`；隔离 `TRINITY_TESTING=1`）+ 13 单测 | 13 passed，模拟 PASS |
+| ⑪ Skill 锻造 | `trinity/memory/skill_forge.py`（轨迹解析字段容错→LLM 归纳/规则降级→YAML front-matter Skill md 落 data/skills/auto/；`--store` 惰性）+ `scripts/skill_forge_cli.py`（默认 dry-run）+ 20 单测；真实 sidecar dry-run：825 条→auto-file_organizer.md | 20 passed |
+| ⑫ 召回可解释 | `_routers_explain.py`：GET /memory/search/explain?q=&top_k=（分数分解 keyword/vector/rerank/final + channels_hit + merged 标注；top_k 钳 1..20）+ 12 单测 | 12 passed |
+| ⑭ env doctor | `scripts/env_doctor.py`（8 项只读检查：Python/faiss/端口/进程/库/凭证键名（不读值）/日志关键行/磁盘；退出码 0/1/2；--quiet） | 实测 exit 1（collector/engine_worker 进程扫描假阴性 + 日志 WARN，无错误） |
+
+### 中央挂载（api/server/__init__.py）
+- 新增 4 个 router：`offload_router / explain_router / persona_router / audit_purge_router`（`_register_router_routes` 展平）；与 E 包 TLS 改动（`_tls_uvicorn_kwargs` + main 区域）互不重叠。
+- API import 冒烟：8 个新端点模式全部注册，total routes 160。
+
+### 运维观察与收尾
+- store 隔离：超 14 天保留期旧备份 `backups_20260724`（0.2MB）/`backups_20260805`（81.4MB）归拢进 `_legacy_20260822`（只移动不删除）。
+- env doctor [4] 进程扫描为启发式（按命令行含 trinity 匹配），对守护进程形态的 collector/engine_worker 存在假阴性——权威判据是端口监听 + collector 心跳（08-22 实测 collector running 2948 轮扫描）。
+- worker 预热生效性说明：当前 DSH 插件 spawn 强制注入 `TRINITY_MEMORY_ENABLED=0`（JS 侧，本轮未改）→ `should_prewarm` 在现网 worker 返回 False，机制就位、默认跳过；需要时改插件 spawn env 或显式 `TRINITY_WORKER_PREWARM=on`+`TRINITY_MEMORY_ENABLED=1`。
+- 市场冷启动 5 条建议（写入 market_sim.py 报告）：①冷启动期估值偏低宜用默认分段价兜底；②声誉公式对零背书卖家给 0 分，建议最小信任种子；③`buy_asset` 无价格队列，落地需抽离撮合器；④TRINITY_HOME 临时路径 + TRINITY_TESTING 作为 CI 固定入口；⑤差评 `report_agent` 双因子惩罚，退货建议单独建模 `record_trade_fail`。
+- 一致性 drift=897 为治理告警（两套长期分叉），接计划任务前建议调高 `--fail-threshold`。
+
+### 回归与回滚
+- 全量 pytest 回归（`pytest tests -m "not slow and not integration and not e2e"`，TRINITY_TESTING=1）：**993 passed / 54 skipped / 2 failed**（388s；基线 868p/55s，本轮 +125 测试）。两个失败均甄别为非本轮引入：
+  1. `test_pg_llm_extract.py::test_read_write_rollback_roundtrip`：**环境问题**——docker trinity-db(:5430) 容器陈旧态导致 psycopg2 连接即被关闭（容器日志多次非正常关停/WAL invalid record）。处置：`docker restart trinity-db` → 连接恢复（memories=9034），重跑 **5 passed**。
+  2. `test_rl_feedback_loop.py::test_mcp_memory_feedback_tool`：已知 MCP 偶发（第 50 轮同样记录），单独重跑 **passed**。
+- 实际基线：**995 passed / 54 skipped / 0 failed**（PG 修复后），零回归。
+- API 重启验证（新 router 生效）：kill :8001 旧进程 → supervisor 110s 内拉起；`/memory/search/explain` 200（分数分解）、`/personas` 200、`/offload/canvas/nonexistent` 404、`DELETE /audit/events/nonexistent` 404、`POST /offload/task` 200（画布+ref 落盘）。冒烟产物已清理。
+- 回滚：各包文件按上表删除/还原即可（全部为新增文件或单文件小改：ann_index.py、run_decay_compress.py、engine_worker.py、maintenance.ps1、api/server/__init__.py 的 TLS+挂载两处）；`__init__.py` 还原删 4 行 import + 4 行 `_register_router_routes` + `_tls_uvicorn_kwargs` 块。

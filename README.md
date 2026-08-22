@@ -78,8 +78,13 @@ python -m pytest tests/ -q
 | **跨模态** | ✅ | 图搜文/文搜图闭环 |
 | **DSH 结构融合** | ✅ | 6 表自动同步（会话/事件/goal/todo/header/schedule），goal objective 100% |
 | **记忆可迁移** | ✅ | memory_portability.py：标准 JSON/NDJSON + Mem0/Zep 导入 |
-| **记忆市场** | ✅ | TrustExchange：挂单/订单簿/定价/声誉（11 端点） |
-| **联邦** | ✅ | 多实例 export/import/diff 同步 |
+| **记忆市场** | ✅ | TrustExchange：挂单/订单簿/定价/声誉（11 端点）+ 冷启动模拟（scripts/market_sim.py） |
+| **联邦** | ✅ | 多实例 export/import/diff 同步 + sync-agent（单向增量+轮询） |
+| **短期记忆符号卸载** | ✅ | Mermaid 画布 + node_id 溯源（/offload/*，原文落盘 refs） |
+| **Persona 白盒画像** | ✅ | 命题聚合 → persona.md（/persona/*，TRINITY_PERSONA 默认 off） |
+| **召回可解释** | ✅ | /memory/search/explain 分数分解（keyword/vector/rerank/final） |
+| **一致性校验** | ✅ | scripts/consistency_check.py + maintenance `consistency` 任务（只读） |
+| **环境体检** | ✅ | scripts/env_doctor.py（8 项只读检查，退出码 0/1/2） |
 
 ---
 

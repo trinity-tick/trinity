@@ -18,11 +18,15 @@ Usage:
 from __future__ import annotations
 
 import json
+import logging
 import os
+import threading
 import warnings
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 # ── Backend detection ──────────────────────────────────────────────────
 
@@ -44,6 +48,16 @@ if not _HNSWLIB_AVAILABLE:
         _BACKEND_NAME = "faiss"
     except ImportError:
         pass
+
+
+def _prewarm_enabled() -> bool:
+    """Return True when ANN startup prewarm is enabled.
+
+    Gated by ``TRINITY_ANN_PREWARM`` (default ``on``). When set to a value
+    other than ``on`` (e.g. ``off``), ``startup_prewarm()`` becomes a no-op
+    and the index behaves exactly as if no prewarm feature existed.
+    """
+    return os.environ.get("TRINITY_ANN_PREWARM", "on").strip().lower() != "off"
 
 
 # ── ANNIndex ────────────────────────────────────────────────────────────
@@ -88,6 +102,10 @@ class ANNIndex:
         self._next_id = 0
         self._vectors: Dict[str, np.ndarray] = {}  # for numpy fallback
         self._built = False
+        # 2026-08-21: ANN 预热就绪态（undefined 未 warm → 调用方走降级通道）。
+        self._warm = False
+        self._prewarming = False
+        self._prewarm_lock = threading.Lock()
 
         # Backend label (set once, used by __repr__ / statistics)
         self._backend = "numpy"  # may be upgraded on first add
@@ -149,6 +167,25 @@ class ANNIndex:
     def size(self) -> int:
         return len(self._vectors)
 
+    @property
+    def is_warm(self) -> bool:
+        """True when the index is ready for ANN queries.
+
+        Meaning: vectors are loaded AND the underlying index has been built.
+        A freshly constructed (or still-prewarming) index is not warm, so
+        callers can route around it to the downgraded BM25/FTS channel.
+        """
+        return bool(self._warm and self._built and self._vectors)
+
+    @property
+    def prewarming(self) -> bool:
+        """True while a ``startup_prewarm()`` background thread is running."""
+        return self._prewarming
+
+    def warm(self) -> None:
+        """Explicitly mark the index as ready (called after build/load)."""
+        self._warm = self._built and bool(self._vectors)
+
     # ── Public API ─────────────────────────────────────────────────────
 
     def add_vector(self, memory_id: str, vector: np.ndarray) -> None:
@@ -197,6 +234,8 @@ class ANNIndex:
         # Rebuild index
         self._built = False
         self._rebuild()
+        # 2026-08-21: 向量已装载并构建 → 索引就绪（is_warm 可判定）
+        self._warm = self._built and bool(self._vectors)
 
     def remove_vector(self, memory_id: str) -> bool:
         """Remove a vector from the index.
@@ -363,6 +402,66 @@ class ANNIndex:
         self._built = native_loaded
         if not native_loaded:
             self._rebuild()
+        # 2026-08-21: load 成功后索引即 warm（供 is_warm / startup_prewarm 判定）
+        self._warm = self._built and bool(self._vectors)
+
+    def startup_prewarm(
+        self,
+        path: str,
+        build_func: Optional[Callable[[], Tuple[List[str], List[np.ndarray]]]] = None,
+    ) -> None:
+        """Background thread prewarm (2026-08-21) — non-blocking.
+
+        Gates on ``TRINITY_ANN_PREWARM`` (default ``on``); when ``off`` this
+        is a no-op and behavior is identical to having no prewarm feature.
+
+        - On-disk index present → ``load(path)`` (millisecond-level) → warm.
+        - No disk → runs ``build_func()`` on the background thread → warm.
+        - Corrupt/missing file → silent degrade (logs a warning, never raises);
+          falls back to ``build_func()`` when supplied.
+
+        Never blocks the caller: a daemon thread does the work; until it
+        finishes or is gated off, ``is_warm`` stays ``False`` so the caller
+        can keep using the existing BM25/FTS downgrade channel.
+        """
+        if not _prewarm_enabled():
+            return
+        with self._prewarm_lock:
+            if self._prewarming or self.is_warm:
+                return
+            self._prewarming = True
+        threading.Thread(
+            target=self._prewarm_worker,
+            args=(path, build_func),
+            daemon=True,
+            name="ann-startup-prewarm",
+        ).start()
+
+    def _prewarm_worker(
+        self,
+        path: str,
+        build_func: Optional[Callable[[], Tuple[List[str], List[np.ndarray]]]],
+    ) -> None:
+        """Prewarm worker body (runs on a daemon thread)."""
+        try:
+            # 有盘 → 毫秒级 load 即 warm
+            if path and os.path.exists(path + ".meta.json"):
+                try:
+                    self.load(path)
+                    if self.is_warm:
+                        return
+                except Exception as exc:  # noqa: BLE001 损坏文件静默降级
+                    logger.warning("ANN prewarm load failed (%s), will rebuild", exc)
+                    self._warm = False
+            # 无盘 / 损坏 → 后台构建
+            if build_func is not None:
+                ids, vectors = build_func()
+                if ids and vectors:
+                    self.add_vectors(ids, vectors)
+        except Exception as exc:  # noqa: BLE001 任何异常静默降级不崩
+            logger.warning("ANN prewarm failed: %s", exc)
+        finally:
+            self._prewarming = False
 
     def statistics(self) -> Dict[str, Any]:
         """Return index statistics."""
@@ -374,6 +473,8 @@ class ANNIndex:
             "M": self._M,
             "ef_construction": self._ef_construction,
             "built": self._built,
+            "warm": self.is_warm,
+            "prewarming": self._prewarming,
         }
 
     def __repr__(self) -> str:

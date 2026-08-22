@@ -78,10 +78,58 @@ from trinity.structure_store import (  # noqa: E402
 
 
 def _get_engine() -> Trinity:
-    global _engine
+    global _engine, _prewarm_done
     if _engine is None:
-        _engine = Trinity()
+        with _engine_lock:
+            if _engine is None:
+                _engine = Trinity()
+                _prewarm_done = True  # 任一路径完成初始化即视为预热完成
     return _engine
+
+
+# ── 首请求预热（2026-08-22 优化）──────────────────────────────────
+# worker 首请求懒初始化引擎：Trinity() 连接大库 + 建表 + FTS/jieba 预热，
+# 实测 5-30s。启动后用一个 daemon 后台线程预先完成初始化 + 一次轻量
+# 只读 FTS 查询，使后续首请求不再承担这段初始化。
+# 开关：TRINITY_WORKER_PREWARM（默认 on）；TRINITY_MEMORY_ENABLED=0
+# （worker 默认形态：仅引擎、聚合器懒创建）时跳过，保持现状。
+_PREWARM_QUERY = "prewarm"  # 极短只读探针，仅触发 FTS 快通道，不写库
+_engine_lock = threading.Lock()
+_prewarm_done = False
+
+
+def should_prewarm(env) -> bool:
+    """判定是否应启用首请求预热（纯函数，便于单测）。
+
+    三态：
+      - TRINITY_MEMORY_ENABLED=0 → False（保持现状：聚合器懒创建形态不预热）
+      - TRINITY_WORKER_PREWARM ∈ {off,0,false,no} → False（显式关闭）
+      - 其余（默认）→ True
+    """
+    if str(env.get("TRINITY_MEMORY_ENABLED", "")).strip().lower() == "0":
+        return False
+    prewarm = str(env.get("TRINITY_WORKER_PREWARM", "on")).strip().lower()
+    return prewarm not in ("off", "0", "false", "no")
+
+
+def _run_prewarm() -> None:
+    """后台预热：预初始化引擎 + 一次轻量只读 FTS 查询。异常静默降级。"""
+    try:
+        engine = _get_engine()
+        engine.search(query=_PREWARM_QUERY, top_k=1, mode="keyword")
+        print("[worker] prewarm done (engine initialized)", file=sys.stderr, flush=True)
+    except Exception as exc:  # noqa: BLE001 — 预热失败不致命，首请求仍走懒初始化
+        print(f"[worker] prewarm degraded: {exc}", file=sys.stderr, flush=True)
+    finally:
+        global _prewarm_done
+        _prewarm_done = True
+
+
+def _start_prewarm() -> None:
+    """按开关启动预热线程；不满足条件则跳过（保持现状）。"""
+    if not should_prewarm(os.environ):
+        return
+    threading.Thread(target=_run_prewarm, daemon=True, name="worker-prewarm").start()
 
 
 def _get_recorder() -> Any:
@@ -561,6 +609,7 @@ def _emit(obj: dict) -> None:
 def main() -> int:
     global _request_in_flight, _request_start
     _start_watchdog()
+    _start_prewarm()
     for line in sys.stdin:
         line = line.strip()
         if not line:

@@ -168,6 +168,215 @@ def fetch_active_memories(adapter: Any, limit: int = 500) -> List[Dict[str, Any]
             return results
 
 
+# ── Real-LLM Summary Generation（2026-08-18，decay 压缩接真实 LLM）──────
+# 默认仍走 mock（不设任何 decay 专用 key 时与现状完全一致）；设置
+# TRINITY_DECAY_API_KEY（或 TRINITY_API_KEY）后 auto → real，对"待压缩记忆组"
+# 生成 5-10 行结构化中文摘要。摘要生成抽成可注入函数 _llm_summarize，
+# 单测可 monkey-patch / 注入假实现，绝不真调外部 API。
+
+# 中文结构化摘要 system prompt：要求 5-10 行、保留事实/时间/数值、不编造。
+_DECAY_SUMMARY_SYSTEM_PROMPT = """你是一个记忆压缩引擎。请把下面的多条待压缩记忆合并为一篇简洁、
+结构化的中文摘要。
+
+要求：
+1. 摘要输出 5 到 10 行，每行一句，条理清晰。
+2. 必须保留：事实、时间/日期、数值/金额/度量、实体名、关键决策与结论。
+3. 不得编造原文没有的信息；不确定的信息不要补全。
+4. 删除冗余表述与重复内容。
+5. 只输出摘要正文本身；若确实需要，可输出一个 JSON 对象
+   {"summary": "<摘要正文>"}，但不要输出任何其他解释文字或 markdown 标题。"""
+
+
+def _build_summary_user_prompt(
+    texts: List[str],
+    memory_type: str = "general",
+) -> str:
+    """构建中文结构化摘要的用户 prompt（把待压缩记忆内容逐条列出）。"""
+    lines = []
+    for i, t in enumerate(texts, 1):
+        lines.append(f"[{i}] {str(t)[:600]}")
+    return (
+        f"待压缩记忆类型：{memory_type}\n"
+        f"共 {len(texts)} 条记忆：\n"
+        + "\n".join(lines)
+        + "\n\n请输出结构化中文摘要（保留事实/时间/数值，不要编造）："
+    )
+
+
+def _mock_batch_summary(texts: List[str], memory_type: str = "general") -> str:
+    """mock 降级摘要：抽取式拼接，输出格式与 trinity.daemon.memory_compressor.
+    mock_llm_compress 完全一致（保证默认行为不变）。"""
+    if not texts:
+        return "Compressed summary not available (no entries)."
+    snippets = [str(t)[:120] for t in texts]
+    combined = " | ".join(snippets[:5])
+    return f"[AUTO-COMPRESSED] {len(texts)} memories merged: {combined[:1500]}"
+
+
+def _parse_summary_response(raw: str) -> str:
+    """解析 LLM 摘要响应：先试 JSON {summary: ...}，失败用整段文本。"""
+    if not raw or not raw.strip():
+        return ""
+    t = raw.strip()
+    if t.startswith("```"):
+        t = t.strip("`")
+        if t.startswith("json"):
+            t = t[4:].strip()
+    try:
+        data = json.loads(t)
+        if isinstance(data, dict):
+            s = data.get("summary")
+            if s and str(s).strip():
+                return str(s).strip()
+    except (ValueError, TypeError):
+        pass
+    try:
+        # 容错：可能是截断的 JSON，先尝试补全右花括号再解析
+        data = json.loads(t + "}" * (t.count("{") - t.count("}")))
+        if isinstance(data, dict):
+            s = data.get("summary")
+            if s and str(s).strip():
+                return str(s).strip()
+    except (ValueError, TypeError):
+        logger.warning("decay LLM summary JSON parse failed, fallback to raw text: %s", raw[:120])
+    return t
+
+
+def _llm_chat(system: str, user: str, cfg: Dict[str, Any], timeout: float = 60.0) -> str:
+    """调用 OpenAI 兼容 /chat/completions（stdlib urllib）。
+
+    风格复用 trinity.memory.proposition_extractor（无 key 抛异常由调用方降级）。
+    Returns:
+        LLM 返回的 content 文本。
+    """
+    import urllib.request
+
+    api_key = cfg.get("api_key")
+    if not api_key:
+        raise RuntimeError("no decay LLM key configured")
+    payload = {
+        "model": cfg.get("model") or "deepseek-chat",
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        "temperature": 0.2,
+        "max_tokens": int(os.environ.get("TRINITY_DECAY_MAX_TOKENS", "1500")),
+    }
+    req = urllib.request.Request(
+        (cfg.get("base_url") or "https://api.deepseek.com/v1").rstrip("/")
+        + "/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json", "Authorization": "Bearer " + api_key},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        body = json.loads(resp.read().decode("utf-8"))
+    try:
+        return body["choices"][0]["message"]["content"].strip()
+    except (KeyError, IndexError, AttributeError) as e:
+        raise RuntimeError(f"decay LLM 响应格式异常: {body}") from e
+
+
+def _llm_summarize(
+    texts: List[str],
+    cfg: Dict[str, Any],
+    memory_type: str = "general",
+) -> str:
+    """对待压缩记忆组生成摘要（可注入 / 可替换的核心函数）。
+
+    Args:
+        texts: 待压缩记忆的内容列表。
+        cfg: LLM 配置 dict，含 mode/api_key/base_url/model。
+        memory_type: 记忆类型（仅用于 prompt 提示）。
+
+    Returns:
+        摘要文本。real 模式缺 key、调用失败或返回空 → 逐条降级 mock（不抛异常，
+        不中断任务）；mock 模式与现状完全一致。
+    """
+    mode = cfg.get("mode", "mock")
+    if mode == "real" and cfg.get("api_key"):
+        try:
+            raw = _llm_chat(
+                _DECAY_SUMMARY_SYSTEM_PROMPT,
+                _build_summary_user_prompt(texts, memory_type),
+                cfg,
+            )
+            if raw and raw.strip():
+                summary = _parse_summary_response(raw)
+                if summary and summary.strip():
+                    return summary
+            logger.warning("decay real LLM returned empty summary, fallback mock")
+        except Exception as e:  # noqa: BLE001
+            logger.warning("decay real LLM summary failed: %s, fallback mock", e)
+    return _mock_batch_summary(texts, memory_type)
+
+
+def _resolve_llm_mode(requested: str) -> str:
+    """解析 --llm 模式：auto 根据 decay 专用 key 是否存在决定 real/mock。
+
+    Env: TRINITY_DECAY_API_KEY 或 TRINITY_API_KEY 存在 → real；否则 mock。
+    显式 --llm mock/real 强制。
+    """
+    if requested in ("mock", "real"):
+        return requested
+    has_key = bool(
+        os.environ.get("TRINITY_DECAY_API_KEY") or os.environ.get("TRINITY_API_KEY")
+    )
+    return "real" if has_key else "mock"
+
+
+def _build_llm_cfg(mode: str, model_override: str = "") -> Dict[str, Any]:
+    """构造 LLM 配置 dict。
+
+    base_url 默认 https://api.deepseek.com/v1；model 默认 deepseek-chat。
+    """
+    return {
+        "mode": mode,
+        "api_key": os.environ.get("TRINITY_DECAY_API_KEY")
+        or os.environ.get("TRINITY_API_KEY"),
+        "base_url": (
+            os.environ.get("TRINITY_DECAY_BASE_URL") or "https://api.deepseek.com/v1"
+        ).rstrip("/"),
+        "model": model_override or os.environ.get("TRINITY_DECAY_MODEL") or "deepseek-chat",
+    }
+
+
+def _resolve_llm_config(requested: str, model_override: str = "") -> tuple:
+    """返回 (mode, cfg) —— auto 解析后的最终模式与 LLM 配置。"""
+    mode = _resolve_llm_mode(requested)
+    return mode, _build_llm_cfg(mode, model_override)
+
+
+def _prompt_entries_to_texts(user_prompt: str) -> List[str]:
+    """从 compressor 的 user_prompt 中抽取记忆内容字符串列表。
+
+    复用 mock_llm_compress 的解析规则（匹配 '[n] ' / '] ' 行）。
+    """
+    texts: List[str] = []
+    for line in user_prompt.split("\n"):
+        line = line.strip()
+        if line.startswith("[") and "] " in line:
+            texts.append(line.split("] ", 1)[1])
+    return texts
+
+
+def _make_llm_callable(_llm_summarize: Any, cfg: Dict[str, Any], mock_ctor: Any) -> Any:
+    """构造注入 MemoryCompressor 的 llm_callable。
+
+    实模式：忽略 compressor 内置英文 prompt，改走 _llm_summarize（中文结构化摘要，
+    单条失败自动降级 mock，不中断任务）。mock 模式：直接用 mock_ctor（现状不变）。
+    Returns:
+        (system_prompt, user_prompt) -> str
+    """
+    if cfg.get("mode") == "real":
+        def _real_call(system_prompt: str, user_prompt: str) -> str:  # noqa: ARG001
+            texts = _prompt_entries_to_texts(user_prompt)
+            return _llm_summarize(texts, cfg)
+        return _real_call
+    return mock_ctor
+
+
 # ── Main Pipeline ─────────────────────────────────────────────────────
 
 def run_decay_compress(
@@ -333,11 +542,11 @@ def main():
     parser.add_argument("--sqlite-path", default=os.path.expanduser("~/.trinity/store/trinity_store.db"),
                         help="SQLite 大库路径（--store sqlite 时使用）")
     parser.add_argument("--llm", choices=["mock", "real", "auto"], default="auto",
-                        help="压缩器 LLM：auto（默认，有 TRINITY_LLM_API_KEY/DEEPSEEK_API_KEY 则 real，"
+                        help="压缩器 LLM：auto（默认，有 TRINITY_DECAY_API_KEY/TRINITY_API_KEY 则 real，"
                              "否则回退 mock）、mock（离线抽取式摘要）或 real（OpenAI 兼容 API，"
-                             "需 TRINITY_LLM_API_KEY 环境变量）")
+                             "需 TRINITY_DECAY_API_KEY/TRINITY_API_KEY 环境变量）")
     parser.add_argument("--llm-model", default="",
-                        help="真实 LLM 模型名（缺省读 TRINITY_LLM_MODEL，再缺省 gpt-4o-mini）")
+                        help="真实 LLM 模型名（缺省读 TRINITY_DECAY_MODEL，再缺省 deepseek-chat）")
     args = parser.parse_args()
 
     # ── Build compressor ─────────────────────────────────────
@@ -370,17 +579,14 @@ def main():
         )
 
     # ── Build compressor ─────────────────────────────────────
-    # auto（生产默认）：TRINITY_LLM_API_KEY 或 DEEPSEEK_API_KEY 存在 → real，
-    # 否则回退 mock（离线抽取式摘要），保证无人值守维护链永不因缺 key 崩溃。
-    _llm_mode = args.llm
-    if _llm_mode == "auto":
-        _has_key = bool(os.environ.get("TRINITY_LLM_API_KEY")
-                        or os.environ.get("DEEPSEEK_API_KEY"))
-        _llm_mode = "real" if _has_key else "mock"
-        logger.info("LLM auto mode: resolved to %s", _llm_mode)
+    # auto（生产默认）：decay 专用 key（TRINITY_DECAY_API_KEY 或 TRINITY_API_KEY）
+    # 存在 → real（生成中文结构化摘要，单条失败自动降级 mock）；否则 mock，
+    # 与现状完全一致，无人值守维护链永不因缺 key 崩溃。
+    # base_url 默认 https://api.deepseek.com/v1，model 默认 deepseek-chat。
+    _llm_mode, _llm_cfg = _resolve_llm_config(args.llm, model_override=args.llm_model)
     if _llm_mode == "real":
-        llm_callable = create_llm_compress_callable(model=args.llm_model or None)
-        logger.info("Compressor initialized (REAL LLM mode)")
+        llm_callable = _make_llm_callable(_llm_summarize, _llm_cfg, mock_llm_compress)
+        logger.info("Compressor initialized (REAL LLM mode, model=%s)", _llm_cfg.get("model"))
     else:
         llm_callable = mock_llm_compress
         logger.info("Compressor initialized (mock LLM mode)")
