@@ -182,3 +182,21 @@ class OrderBook:
     def is_listed(self, asset_id: str) -> bool:
         entry = self._orders.get(asset_id)
         return entry is not None and entry.is_active
+
+    def best_ask(self) -> Optional[Dict[str, Any]]:
+        """最低价活跃挂单（最优卖价）；无活跃挂单返回 None。
+
+        2026-08-22 收尾（market_sim 冷启动建议③的落地基石）：正式撮合器
+        抽离前，先提供最优价原语，买方可按最优卖价出价。
+        """
+        active = [e for e in self._orders.values() if e.is_active]
+        if not active:
+            return None
+        best = min(active, key=lambda e: e.price)
+        return {
+            "asset_id": best.asset_id,
+            "price": best.price,
+            "currency": best.currency,
+            "owner_agent": best.asset.owner_agent,
+            "listed_at": best.listed_at,
+        }

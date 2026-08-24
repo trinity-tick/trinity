@@ -91,8 +91,10 @@ def _get_engine() -> Trinity:
 # worker 首请求懒初始化引擎：Trinity() 连接大库 + 建表 + FTS/jieba 预热，
 # 实测 5-30s。启动后用一个 daemon 后台线程预先完成初始化 + 一次轻量
 # 只读 FTS 查询，使后续首请求不再承担这段初始化。
-# 开关：TRINITY_WORKER_PREWARM（默认 on）；TRINITY_MEMORY_ENABLED=0
-# （worker 默认形态：仅引擎、聚合器懒创建）时跳过，保持现状。
+# 开关：TRINITY_WORKER_PREWARM（默认 on）显式 off/0/false/no 时关闭。
+# 2026-08-22 收尾：引擎预热与聚合器自举解耦——TRINITY_MEMORY_ENABLED=0
+# （worker 默认形态）只抑制 import 期聚合器自举，不阻止引擎预热；
+# 预热不影响"聚合器按需懒创建"的既有约定。
 _PREWARM_QUERY = "prewarm"  # 极短只读探针，仅触发 FTS 快通道，不写库
 _engine_lock = threading.Lock()
 _prewarm_done = False
@@ -101,13 +103,9 @@ _prewarm_done = False
 def should_prewarm(env) -> bool:
     """判定是否应启用首请求预热（纯函数，便于单测）。
 
-    三态：
-      - TRINITY_MEMORY_ENABLED=0 → False（保持现状：聚合器懒创建形态不预热）
-      - TRINITY_WORKER_PREWARM ∈ {off,0,false,no} → False（显式关闭）
-      - 其余（默认）→ True
+    默认 on；仅 TRINITY_WORKER_PREWARM ∈ {off,0,false,no} 时关闭。
+    TRINITY_MEMORY_ENABLED 不影响本判定（见上方收尾说明）。
     """
-    if str(env.get("TRINITY_MEMORY_ENABLED", "")).strip().lower() == "0":
-        return False
     prewarm = str(env.get("TRINITY_WORKER_PREWARM", "on")).strip().lower()
     return prewarm not in ("off", "0", "false", "no")
 

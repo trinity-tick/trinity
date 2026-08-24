@@ -3752,3 +3752,32 @@ session 压缩 +8~10pp / 模型升级 +4.2pp / 分类提示 pref +20pp）优化�
 - 实际基线：**995 passed / 54 skipped / 0 failed**（PG 修复后），零回归。
 - API 重启验证（新 router 生效）：kill :8001 旧进程 → supervisor 110s 内拉起；`/memory/search/explain` 200（分数分解）、`/personas` 200、`/offload/canvas/nonexistent` 404、`DELETE /audit/events/nonexistent` 404、`POST /offload/task` 200（画布+ref 落盘）。冒烟产物已清理。
 - 回滚：各包文件按上表删除/还原即可（全部为新增文件或单文件小改：ann_index.py、run_decay_compress.py、engine_worker.py、maintenance.ps1、api/server/__init__.py 的 TLS+挂载两处）；`__init__.py` 还原删 4 行 import + 4 行 `_register_router_routes` + `_tls_uvicorn_kwargs` 块。
+
+---
+
+## 第 52 轮：收尾四件套（2026-08-24，用户按第 51 轮汇总"需留意的 4 件事"要求收尾）
+
+### ① 一致性阈值参数化
+- `dsh-ops/trinity-dsh-maintenance.ps1` 新增 `-ConsistencyThreshold`（默认 **500**）：consistency 任务 `--fail-threshold` 改取该参数（原硬编码 1，实测 drift=897 会每次 FAILED）。
+- consistency 仍不进 all 链、仅显式调用；接计划任务时默认 500 即避免每次告警，可按治理节奏调参。
+- 验证：AST 0 errors；BOM + CRLF 保持（EF BB BF）；参数接线确认。
+
+### ② worker 预热激活（修掉"功能空转"）
+- `trinity/engine_worker.py` `should_prewarm` 语义修正：**移除 `TRINITY_MEMORY_ENABLED=0` 门控**。原实现下现网 worker（DSH 插件强制注入 MEMORY_ENABLED=0）永不预热，首请求仍吃 5-30s 初始化。
+- 依据：引擎预热与聚合器自举解耦——MEMORY_ENABLED=0 只抑制 import 期聚合器自举（防 GIL 饥饿），不阻止引擎初始化；预热不改变"聚合器按需懒创建"约定。
+- 生效：下次 worker 被插件 spawn 即默认后台预热（预连接引擎 + FTS 探针）；`TRINITY_WORKER_PREWARM=off` 仍可显式关闭。
+- 验证：`tests/unit/test_worker_prewarm.py` 更新语义后 **8 passed**（MEMORY_ENABLED=0 不再关闭预热、WORKER_PREWARM=off 仍关闭）。
+
+### ③ decay 新代码 dry-run 验证（真实库，不落库）
+- `python scripts/run_decay_compress.py --store sqlite --dry-run` → **exit 0**：`dry_run=true`、total_active_memories=500、decay_healthy=495、decaying=4、pending_compression=1、archived=0、compression_failures=0、errors=[]。
+- 无 key 时 auto→mock 与既有行为一致；确认 `--llm` 新代码在真实库全链路正常。
+
+### ④ 市场冷启动建议落地（不改变基线）
+- `trinity/market/reputation.py`（建议②）：`ReputationEngine` 新增**最小信任种子**——构造参数或 env `TRINITY_REPUTATION_SEED`（默认 0 = 行为完全不变；启用如 0.3）；种子加进 raw 并随 activity_bonus 衰减（不活跃自然消退）、[0,1] 钳制、差评仍显著压分。
+- `trinity/market/orderbook.py`（建议③基石）：新增 `best_ask()` 最优卖价原语（最低价活跃挂单 / None）；正式撮合器抽离留待产品化。
+- 建议④（CI 固定入口）已由 market_sim.py 的 TRINITY_HOME 临时路径 + TRINITY_TESTING 隔离实现；建议⑤（退货单独建模 `record_trade_fail`）留待真实市场运营时按需。
+- 验证：新增 `tests/unit/test_market_finish.py` **9 passed**；既有 `trinity/tests/unit/test_market.py` **33 passed 无回归**。
+
+### 回归与回滚
+- 定向回归（改动面小且隔离：4 个源文件 + 2 个测试文件）：worker 预热 8p / market_finish 9p / 既有 market 33p / ps1 AST 0 err；全量基线 995p/54s/0f 不受影响（本轮未重跑全量，定向覆盖全部风险面）。
+- 回滚：`git checkout -- trinity/market/reputation.py trinity/market/orderbook.py trinity/engine_worker.py dsh-ops/trinity-dsh-maintenance.ps1`（还原 3695443 版本）+ 删 `tests/unit/test_market_finish.py`。

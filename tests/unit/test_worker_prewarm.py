@@ -31,18 +31,20 @@ def worker():
     return _worker
 
 
-# ── should_prewarm 三态 ────────────────────────────────────────────
+# ── should_prewarm 判定 ────────────────────────────────────────────
 
 def test_should_prewarm_default_on(worker):
     assert worker.should_prewarm({}) is True
     assert worker.should_prewarm({"TRINITY_MEMORY_ENABLED": "1"}) is True
 
 
-def test_should_prewarm_memory_disabled_off(worker):
-    assert worker.should_prewarm({"TRINITY_MEMORY_ENABLED": "0"}) is False
+def test_should_prewarm_memory_disabled_still_on(worker):
+    # 2026-08-22 收尾：引擎预热与聚合器自举解耦——MEMORY_ENABLED=0（worker
+    # 默认形态，抑制 import 期聚合器自举）不再门控引擎预热。
+    assert worker.should_prewarm({"TRINITY_MEMORY_ENABLED": "0"}) is True
     assert worker.should_prewarm(
         {"TRINITY_MEMORY_ENABLED": "0", "TRINITY_WORKER_PREWARM": "on"}
-    ) is False
+    ) is True
 
 
 def test_should_prewarm_explicit_off(worker):
@@ -90,8 +92,8 @@ def test_run_prewarm_failure_degrades(worker, monkeypatch):
 # ── _start_prewarm 门控 ────────────────────────────────────────────
 
 def test_start_prewarm_skips_when_disabled(worker, monkeypatch):
-    monkeypatch.setenv("TRINITY_MEMORY_ENABLED", "0")
-    monkeypatch.delenv("TRINITY_WORKER_PREWARM", raising=False)
+    monkeypatch.setenv("TRINITY_WORKER_PREWARM", "off")
+    monkeypatch.delenv("TRINITY_MEMORY_ENABLED", raising=False)
 
     def _no_thread(*a, **k):
         raise AssertionError("prewarm thread must not start when disabled")

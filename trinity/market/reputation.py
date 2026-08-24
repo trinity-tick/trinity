@@ -85,8 +85,18 @@ class ReputationEngine:
         Inactive agents lose reputation with this half-life (default 30 days).
     """
 
-    def __init__(self, decay_half_life_days: float = 30.0):
+    def __init__(self, decay_half_life_days: float = 30.0, seed: Optional[float] = None):
         self.decay_half_life_days = decay_half_life_days
+        # 2026-08-22 收尾（market_sim 冷启动建议②）：最小信任种子。
+        # 零背书/零交易卖家原始分趋 0，冷启动会误伤新卖家；seed>0 时作为
+        # 原始分加成（受 activity_bonus 衰减），默认 0 完全保持既有行为；
+        # 可用环境变量 TRINITY_REPUTATION_SEED（如 0.3）或构造参数启用。
+        if seed is None:
+            try:
+                seed = float(os.environ.get("TRINITY_REPUTATION_SEED", "0") or 0)
+            except (TypeError, ValueError):
+                seed = 0.0
+        self.seed = max(0.0, min(float(seed), 1.0))
         self._ledger: Dict[str, List[ReputationEntry]] = {}
         self._trade_stats: Dict[str, Dict[str, int]] = {}  # agent -> {success, fail}
         self._lock = threading.Lock()
@@ -163,7 +173,8 @@ class ReputationEngine:
                 pass
 
         raw = (
-            trade_rate * 0.30
+            self.seed
+            + trade_rate * 0.30
             + quality * 0.25
             + community * 0.25
             - audit_penalty

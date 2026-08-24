@@ -23,6 +23,7 @@ param(
     [switch]$DryRun,
     [int]$DecayLimit = 2000,  # 2026-08-18 闭环优化：全量覆盖 active 1,422
     [string]$DecayLLM = "auto",
+    [int]$ConsistencyThreshold = 500,  # 2026-08-22 收尾：consistency 任务 drift 阈值（实测基线 drift=897，500 以下只告警不 FAILED）
     [string]$LogDir = "C:\Users\Administrator\.trinity\logs"
 )
 
@@ -277,12 +278,13 @@ runpy.run_path(r"$TrinityRoot\benchmark\sync_pool_from_db_v2.py", run_name="__ma
 $poolSyncPrompt = "运行 benchmark/sync_pool_from_db_v2.py（大库→聚合池 watermark 增量同步，rowid 水位；API 在线时 SKIP 守卫），汇报水位/跳过/新增统计。"
 
 # 聚合池 vs 引擎库一致性校验（2026-08-21 治理层，只读）：不改任何库/池文件。
-# drift = missing_in_pool + extra_in_pool + hash_mismatch；--fail-threshold 默认 1
-# （drift>1 → exit 1；0=从不失败）。只读任务，不加入 all 链，均由用户显式调用。
+# drift = missing_in_pool + extra_in_pool + hash_mismatch；--fail-threshold 取 $ConsistencyThreshold
+# （默认 500；2026-08-22 收尾：实测基线 drift=897 为两套长期分叉的治理告警，接入计划任务前用
+# 默认阈值避免每次 FAILED，0=从不失败）。只读任务，不加入 all 链，均由用户显式调用。
 $consistencyCmd = @"
 import sys, subprocess
 r = subprocess.run([sys.executable, r"$TrinityRoot\scripts\consistency_check.py", "--json",
-                    "--fail-threshold", "1"], cwd=r"$TrinityRoot", capture_output=True, text=True)
+                    "--fail-threshold", "$ConsistencyThreshold"], cwd=r"$TrinityRoot", capture_output=True, text=True)
 print((r.stdout or "").strip()[:4000])
 if r.stderr:
     print("STDERR:", r.stderr.strip()[-1000:])
