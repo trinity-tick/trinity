@@ -105,9 +105,9 @@ def _merge_group(conn, group: List[Dict[str, Any]], merged: List[Dict[str, Any]]
     group.sort(key=lambda e: -e["freq"])
     keep = group[0]
     for dup in group[1:]:
-        # 迁移关系引用
-        conn.execute("UPDATE relations SET subject_id=? WHERE subject_id=?", (keep["id"], dup["id"]))
-        conn.execute("UPDATE relations SET object_id=? WHERE object_id=?", (keep["id"], dup["id"]))
+        # 迁移关系引用（edge bi-temporal：同三元组边合并时间线——
+        # 取最早 valid_from、最晚 valid_to，保留完整生效区间）
+        _merge_relation_timelines(conn, keep["id"], dup["id"])
         alias = dup["name"]
         if keep["summary"]:
             conn.execute("UPDATE entities SET summary=summary || '; alias:' || ? WHERE entity_id=?", (alias, keep["id"]))
@@ -118,6 +118,44 @@ def _merge_group(conn, group: List[Dict[str, Any]], merged: List[Dict[str, Any]]
             "keep": keep["id"], "keep_name": keep["name"], "merged": dup["id"],
             "merged_name": dup["name"], "reason": "norm" if not merge_embed else "embed",
         })
+
+
+def _merge_relation_timelines(conn, keep_id: str, drop_id: str) -> None:
+    """合并两实体的关系引用 + 时间线。
+
+    2026-08-24（P1-6，COMPARISON_VS_2026_SOTA_R7）：edge bi-temporal 补全——
+    实体去重时，若 keep 与 drop 各自持有同三元组边（同 subject/predicate/object），
+    合并 valid 区间（最早 valid_from、最晚 valid_to），避免时间线断裂；
+    其余边整体迁移 subject/object 引用。
+    """
+    # 先迁移所有引用（把 drop 的边改指 keep）
+    conn.execute("UPDATE relations SET subject_id=? WHERE subject_id=?", (keep_id, drop_id))
+    conn.execute("UPDATE relations SET object_id=? WHERE object_id=?", (keep_id, drop_id))
+    # 同三元组重复边（INSERT OR IGNORE 的 rel_id 由三元组哈希生成，合并后
+    # keep 与 drop 的同三元组边共享 rel_id）：对每个 rel_id 合并 valid 区间，
+    # 并删除多余行（只保留合并后的一行）。
+    rows = conn.execute(
+        "SELECT id, MIN(valid_from) AS vf, MAX(valid_to) AS vt, "
+        "COUNT(*) AS n FROM relations WHERE subject_id=? GROUP BY id HAVING n > 1",
+        (keep_id,),
+    ).fetchall()
+    for r in rows:
+        # 任一行 valid_to 为 NULL（仍有效）→ 合并结果保持 NULL（永不过期）
+        has_open = conn.execute(
+            "SELECT 1 FROM relations WHERE id=? AND valid_to IS NULL LIMIT 1",
+            (r["id"],),
+        ).fetchone()
+        new_vt = None if has_open else r["vt"]
+        conn.execute(
+            "UPDATE relations SET valid_from=?, valid_to=? WHERE id=?",
+            (r["vf"], new_vt, r["id"]),
+        )
+        # 保留最小 rowid 一行，删除其余重复行
+        conn.execute(
+            """DELETE FROM relations WHERE id=? AND rowid NOT IN (
+                   SELECT MIN(rowid) FROM relations WHERE id=?)""",
+            (r["id"], r["id"]),
+        )
 
 
 def main() -> int:

@@ -224,6 +224,28 @@ def _search(query: str, top_k: int = MEMORY_K, strategy: str = "rrf") -> List[Di
     return _pool_search(query, top_k=top_k)
 
 
+def _mem0_compat(results: List[Dict]) -> List[Dict]:
+    """2026-08-24（R7 P0）：Mem0 兼容字段映射——Mem0 SDK 消费
+    ``results[].memory``（文本）与 ``results[].id``（标识），Trinity 返回
+    ``memory_id`` + ``content``。补别名让 Mem0Memory 类适配器（LlamaIndex/
+    OpenAI SDK）可直接消费，无需重写。
+
+    转换规则：每条结果增加 ``id``（=memory_id）与 ``memory``（=content）；
+    原字段保留（向后兼容）。
+    """
+    out = []
+    for r in results or []:
+        rec = dict(r)
+        mid = rec.get("memory_id") or rec.get("id") or ""
+        text = rec.get("content") or rec.get("content_preview") or ""
+        if mid and "id" not in rec:
+            rec["id"] = mid
+        if text and "memory" not in rec:
+            rec["memory"] = text
+        out.append(rec)
+    return out
+
+
 # ── 健康检查 ────────────────────────────────────────────────────────────
 
 
@@ -253,13 +275,13 @@ def list_memories(
     agent_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     if query:
-        return {"results": _search(query, top_k=top_k)}
+        return {"results": _mem0_compat(_search(query, top_k=top_k))}
     params = {"query": "", "top_k": top_k}
     if category:
         params["category"] = category
     if agent_id:
         params["agent_id"] = agent_id
-    return {"results": _t("memories", method="GET", params=params)}
+    return {"results": _mem0_compat(_t("memories", method="GET", params=params))}
 
 
 @app.get("/v1/memories/{memory_id}")
@@ -274,7 +296,7 @@ def delete_memory(memory_id: str) -> Dict[str, Any]:
 
 @app.post("/v1/memory/search")
 def search_memory(body: SearchIn) -> Dict[str, Any]:
-    return {"results": _search(body.query, top_k=body.top_k, strategy=body.strategy)}
+    return {"results": _mem0_compat(_search(body.query, top_k=body.top_k, strategy=body.strategy))}
 
 
 # ── 聊天代理（记忆自动注入）──────────────────────────────────────────

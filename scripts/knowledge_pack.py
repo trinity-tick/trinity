@@ -56,7 +56,14 @@ def pack_memories(db_path: str, out: str, category: Optional[str] = None,
                   tags: Optional[List[str]] = None, title: str = "",
                   description: str = "", price_hint: float = 0.0,
                   limit: int = 200, redact: bool = True) -> Dict[str, Any]:
-    """按 category/tags 筛选记忆打包为知识包。"""
+    """按 category/tags 筛选记忆打包为知识包。
+
+    2026-08-24（R8 P1-5 配套）：存储加密默认开启后 content 列可能为密文
+    （enc:v1: 前缀）——知识包导出必须先解密再脱敏，否则 PII 脱敏与内容
+    可读性均失效。解密失败/无密钥时原样保留。
+    """
+    from trinity.security.crypto import get_storage_cipher
+    cipher = get_storage_cipher()  # 默认 on；显式 off 时 None
     conn = sqlite3.connect(db_path, timeout=30)
     conn.row_factory = sqlite3.Row
     where = ["status = 'active'"]
@@ -79,6 +86,12 @@ def pack_memories(db_path: str, out: str, category: Optional[str] = None,
     items = []
     for r in rows:
         content = r["content"]
+        # 密文 → 明文（存储加密兼容，脱敏前必须解密）
+        if cipher is not None and isinstance(content, str) and content.startswith("enc:v1:"):
+            try:
+                content = cipher.decrypt(content)
+            except Exception:
+                pass
         if redact:
             content = _redact(content)
         t = r["tags"]

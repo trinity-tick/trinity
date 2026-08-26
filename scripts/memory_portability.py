@@ -65,8 +65,15 @@ def export_memories(db_path: str, persona_id: Optional[str] = None,
                     agent_id: Optional[str] = None,
                     active_only: bool = True,
                     include_all_fields: bool = False) -> List[Dict[str, Any]]:
-    """从 Trinity 导出记忆为标准格式。"""
+    """从 Trinity 导出记忆为标准格式。
+
+    2026-08-24（R8 P1-5 配套）：存储加密默认开启后，content 列可能为
+    密文（enc:v1: 前缀）——导出（GDPR 数据可携权）必须输出明文，
+    此处用存储密钥解密；解密失败/无密钥时原样保留（不阻断导出）。
+    """
     import sqlite3
+    from trinity.security.crypto import get_storage_cipher
+    cipher = get_storage_cipher()  # 默认 on；显式 off 时 None
     conn = sqlite3.connect(db_path, timeout=30)
     conn.row_factory = sqlite3.Row
     where = ["status = 'active'"] if active_only else []
@@ -84,6 +91,13 @@ def export_memories(db_path: str, persona_id: Optional[str] = None,
     items = []
     for r in rows:
         rec = {f: r[f] for f in CORE_FIELDS if f in r.keys()}
+        # 密文 → 明文（存储加密兼容）
+        content = rec.get("content", "")
+        if cipher is not None and isinstance(content, str) and content.startswith("enc:v1:"):
+            try:
+                rec["content"] = cipher.decrypt(content)
+            except Exception:
+                pass  # 解密失败原样保留（密钥不匹配等）
         # tags 是 JSON 字符串 → 列表
         if isinstance(rec.get("tags"), str):
             try:

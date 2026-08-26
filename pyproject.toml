@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "trinity-memory"
-version = "8.2.0"
+version = "8.2.1"
 description = "Trinity v8.2.0: Memory Operating System — Multi-Agent Shared Memory, 50-Layer Guardian Chain, 129-Paper Brain-Inspired Alignment, GraphQL API, Raft Cluster, BM25+Jieba Chinese Retrieval"
 readme = "README.md"
 license = {text = "MIT"}
@@ -56,6 +56,7 @@ Issues = "https://github.com/trinity-tick/trinity/issues"
 [project.scripts]
 trinity = "trinity.cli:main"
 trinity-mcp = "trinity.mcp.server:main"
+trinity-memory = "trinity.mcp.server:main"
 trinity-api = "trinity.api.server:main"
 
 [tool.setuptools.packages.find]
