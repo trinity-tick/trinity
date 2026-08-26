@@ -59,10 +59,22 @@ def test_retraction_delete_not_recalled(adapter):
 
 
 def test_collision_unique_constraint(adapter):
-    """相同内容（同 persona/agent）重复写入被唯一约束阻止。"""
-    _store(adapter, "重复内容 DEF", tags=["collision"])
-    with pytest.raises(Exception):
-        _store(adapter, "重复内容 DEF", tags=["collision"])
+    """相同内容（同 persona/agent）重复写入幂等去重（2026-08-25 起不再抛异常）。
+
+    旧语义：UNIQUE(content_hash) 直接抛 IntegrityError；
+    新语义（_crud.py 8-25 修复）：content_hash+persona+agent 幂等——
+    返回已有记忆 memory_id，不新增重复行。本测试对齐新语义。
+    """
+    r1 = _store(adapter, "重复内容 DEF", tags=["collision"])
+    r2 = _store(adapter, "重复内容 DEF", tags=["collision"])
+    assert r2.get("memory_id") == r1.get("memory_id"), "重复写入应返回同一 memory_id"
+    assert r2.get("dedup") is True, "应标记 dedup=true"
+    # content 列可能为密文（存储加密）→ 按主键计数，不依赖明文
+    rows = adapter._conn.execute(
+        "SELECT count(*) FROM memories WHERE memory_id = ?",
+        (r1.get("memory_id"),),
+    ).fetchone()
+    assert rows and rows[0] == 1, "库中应只有一条（幂等去重）"
 
 
 def test_recall_relevant_memories(adapter):

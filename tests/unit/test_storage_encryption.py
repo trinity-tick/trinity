@@ -58,8 +58,11 @@ def test_cipher_bad_key_len() -> None:
 
 
 def test_env_switch(monkeypatch: pytest.MonkeyPatch) -> None:
+    """2026-08-24（R8 P1-5）：默认 on（安全默认），off 显式关闭。"""
     monkeypatch.delenv("TRINITY_STORAGE_ENCRYPTION", raising=False)
     monkeypatch.delenv("TRINITY_STORAGE_KEY", raising=False)
+    assert is_enabled() is True   # 默认开启
+    monkeypatch.setenv("TRINITY_STORAGE_ENCRYPTION", "off")
     assert is_enabled() is False
     monkeypatch.setenv("TRINITY_STORAGE_ENCRYPTION", "on")
     assert is_enabled() is True
@@ -84,7 +87,8 @@ def _make_adapter(tmp_path: Path, encrypted: bool,
         monkeypatch.setenv("TRINITY_STORAGE_ENCRYPTION", "on")
         monkeypatch.setenv("TRINITY_STORAGE_KEY", _SECRET)
     else:
-        monkeypatch.delenv("TRINITY_STORAGE_ENCRYPTION", raising=False)
+        # 2026-08-24（R8 P1-5）：默认 on，明文对照组须显式 off
+        monkeypatch.setenv("TRINITY_STORAGE_ENCRYPTION", "off")
         monkeypatch.delenv("TRINITY_STORAGE_KEY", raising=False)
     db = str(tmp_path / "test.db")
     a = SQLiteAdapter(db)

@@ -242,8 +242,12 @@ def test_cache_off_passthrough(monkeypatch):
     assert _get_configured_cache() is None
 
 
-def test_cache_default_off(monkeypatch):
-    """With the env var unset, caching is off (default) and no cache exists."""
+def test_cache_default_memory(monkeypatch):
+    """With the env var unset, caching defaults to the memory backend
+    (2026-08-24, COMPARISON_VS_2026_SOTA_R7 P0-2: semantic cache is
+    industry-standard latency reduction; memory backend is dependency-free)."""
     monkeypatch.delenv("TRINITY_CACHE_BACKEND", raising=False)
     monkeypatch.delenv("TRINITY_CACHE_TTL", raising=False)
-    assert _get_configured_cache() is None
+    cache = _get_configured_cache()
+    assert cache is not None
+    assert cache.statistics()["backend"] == "memory"

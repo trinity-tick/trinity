@@ -13,6 +13,20 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from trinity.core.client import Trinity
 
+import pytest
+
+@pytest.fixture(autouse=True)
+def _iso_env_guard():
+    """2026-08-26（下一步建议）：防御其他测试残留的 ISOLATE=off 污染。"""
+    saved = os.environ.get("TRINITY_ISOLATE_TEST_WRITES")
+    os.environ["TRINITY_ISOLATE_TEST_WRITES"] = "on"
+    yield
+    if saved is None:
+        os.environ.pop("TRINITY_ISOLATE_TEST_WRITES", None)
+    else:
+        os.environ["TRINITY_ISOLATE_TEST_WRITES"] = saved
+
+
 
 def _fresh_store():
     d = tempfile.mkdtemp(prefix="iso_")
