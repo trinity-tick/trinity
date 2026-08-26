@@ -46,6 +46,33 @@ PROPOSITION_SYSTEM_PROMPT = """你是一个记忆命题提取器。把用户/助
 示例输出：[{"type":"user_fact","proposition":"用户是供应链项目经理","ts":"2026-08-18","expires":null},{"type":"user_preference","proposition":"用户喜欢深色模式","ts":"2026-08-18","expires":null},{"type":"user_done","proposition":"用户昨天完成了 WMS 对标","ts":"2026-08-18","expires":null}]"""
 
 
+# ── 命题提取 JSON Schema（2026-08-24, R9 后续 P0：Structured Outputs 契约）──
+# 2026 共识：记忆提取绑定强 JSON Schema（schema 校验 + 语义校验双层），
+# 显著降低解析失败与幻觉字段。schema 同时服务 response_format 约束与
+# 响应端 parse_structured_response 校验。
+PROPOSITION_SCHEMA: Dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "propositions": {
+            "type": "array",
+            "items": {
+                "type": ["object", "string"],  # 实测 DeepSeek 可简化为字符串数组
+                "properties": {
+                    "type": {"type": "string",
+                             "enum": ["user_preference", "user_fact",
+                                      "user_done", "agent_done"]},
+                    "proposition": {"type": "string"},
+                    "ts": {"type": ["string", "null"]},
+                    "expires": {"type": ["string", "null"]},
+                },
+                "required": ["type", "proposition"],
+            },
+        }
+    },
+    "required": ["propositions"],
+}
+
+
 def _get_llm_config() -> Optional[Dict[str, str]]:
     api_key = os.environ.get("TRINITY_LLM_API_KEY") or os.environ.get("DEEPSEEK_API_KEY")
     if not api_key:
@@ -56,6 +83,13 @@ def _get_llm_config() -> Optional[Dict[str, str]]:
 
 
 def _llm_json_call(system: str, user: str, timeout: float = 60.0) -> str:
+    """调用 LLM 提取命题（Structured Outputs 强约束）。
+
+    2026-08-24（R9 后续 P0）：response_format=json_schema 约束输出为
+    {"propositions": [...]}，parse_structured_response 语义校验；
+    失败/不支持时回退文本解析（_parse_propositions 兼容旧格式数组）。
+    返回 content 原文（调用方继续走 _parse_propositions 统一解析）。
+    """
     import urllib.request
     cfg = _get_llm_config()
     if not cfg:
@@ -69,15 +103,43 @@ def _llm_json_call(system: str, user: str, timeout: float = 60.0) -> str:
         "temperature": 0.1,
         "max_tokens": int(os.environ.get("TRINITY_PROPOSITION_MAX_TOKENS", "4000")),
     }
-    req = urllib.request.Request(
-        cfg["base_url"] + "/chat/completions",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json", "Authorization": "Bearer " + cfg["api_key"]},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        body = json.loads(resp.read().decode("utf-8"))
-    return body["choices"][0]["message"]["content"]
+    # Structured Outputs：schema 约束 + reasoning_effort=low（写路径 fast thinking）
+    try:
+        from trinity.llm.client import chat_completion
+        resp = chat_completion(
+            payload,
+            api_key=cfg["api_key"],
+            base_url=cfg["base_url"],
+            timeout=timeout,
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "propositions",
+                    "strict": True,
+                    "schema": PROPOSITION_SCHEMA,
+                },
+            },
+            reasoning_effort="low",  # 写入/提取用 fast thinking（2026 成本分层）
+        )
+        content = resp.get("content") or ""
+        if content:
+            # schema 语义校验：命中则直接返回（保证结构完整）
+            from trinity.llm.client import parse_structured_response
+            obj = parse_structured_response(resp, schema=PROPOSITION_SCHEMA)
+            if obj and isinstance(obj.get("propositions"), list):
+                return json.dumps(obj["propositions"], ensure_ascii=False)
+        return content
+    except Exception:
+        # 回退：原 urllib 直接调用（兼容不支持 response_format 的端点）
+        req = urllib.request.Request(
+            cfg["base_url"] + "/chat/completions",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json", "Authorization": "Bearer " + cfg["api_key"]},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+        return body["choices"][0]["message"]["content"]
 
 
 def _parse_propositions(text: str) -> List[Dict[str, Any]]:
@@ -100,6 +162,20 @@ def _parse_propositions(text: str) -> List[Dict[str, Any]]:
         except (ValueError, TypeError):
             logger.warning("proposition parse failed: %s", text[:120])
             return []
+    # 兼容 {"propositions": [...]} 包装（Structured Outputs schema 形态）
+    if isinstance(data, dict) and isinstance(data.get("propositions"), list):
+        data = data["propositions"]
+    # 兼容字符串数组形态（实测 DeepSeek json_schema 会把 items 对象
+    # 简化为字符串数组：[{"propositions": ["命题1", "命题2"]}]——2026-08-24
+    # 真实调用实测；每条字符串默认 user_fact 类型）。
+    if data and all(isinstance(x, str) for x in data):
+        out = []
+        for prop in data:
+            prop = prop.strip()
+            if prop and len(prop) <= 300:
+                out.append({"type": "user_fact", "proposition": prop,
+                            "ts": None, "expires": None})
+        return out
     out = []
     for item in data if isinstance(data, list) else []:
         if not isinstance(item, dict):

@@ -245,6 +245,7 @@ from ._routers_offload import router as offload_router  # noqa: E402
 from ._routers_explain import router as explain_router  # noqa: E402
 from ._routers_persona import router as persona_router  # noqa: E402
 from ._routers_audit_purge import router as audit_purge_router  # noqa: E402
+from ._routers_receipt import router as receipt_router  # noqa: E402  # 2026-08-24 P1-④ 可证明记忆回执
 
 def _register_router_routes(router) -> None:
     """Register an APIRouter's routes directly on the app router (flattened).
@@ -295,6 +296,167 @@ _register_router_routes(offload_router)
 _register_router_routes(explain_router)
 _register_router_routes(persona_router)
 _register_router_routes(audit_purge_router)
+_register_router_routes(receipt_router)  # 2026-08-24 P1-④
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# OpenAPI 规范 + 自动化统计（Budibase 借鉴 Phase 3，2026-08-26）
+# ═══════════════════════════════════════════════════════════════════════════
+# 注：/openapi.json 由 FastAPI 内置自动生成（147 paths 全量）；本端点提供
+# 增强版 OpenAPI 文档（中文描述 + view/visibility/automation 参数说明）。
+@app.get("/api/openapi.json", include_in_schema=False)
+async def api_openapi_json(request: Request):
+    from trinity.api.openapi_spec import build_spec
+    try:
+        base = str(request.base_url).rstrip("/")
+    except Exception:
+        base = "http://127.0.0.1:8001"
+    return JSONResponse(build_spec(server_url=base))
+
+
+@app.get("/automation/stats", include_in_schema=False)
+async def automation_stats():
+    """自动化引擎统计（TRINITY_AUTOMATION=on 时生效；默认关闭返回空统计）。"""
+    try:
+        from trinity.automation import get_engine
+        stats = get_engine().stats()
+        stats["enabled"] = get_engine().enabled()
+        return stats
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+# 知识层（Context7 借鉴 Phase 1-2，2026-08-26）：源注册表 + 独立知识检索
+@app.get("/knowledge/sources", include_in_schema=False)
+async def knowledge_sources():
+    """知识源注册表（freshness/coverage/usage/health）。"""
+    try:
+        from trinity.knowledge import sources
+        return sources()
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+@app.get("/knowledge/search", include_in_schema=False)
+async def knowledge_search(q: str = "", source: str = "", top_k: int = 10):
+    """独立知识检索（doc 层；源过滤 + 健康度元数据）。"""
+    try:
+        from trinity.knowledge import knowledge_search as _ks
+        return _ks(query=q, source=source or None, top_k=top_k)
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+# 技能运行时（DSH 借鉴 Phase 3，2026-08-26）：data/skills 注册表
+@app.get("/skills", include_in_schema=False)
+async def skills_list():
+    try:
+        from trinity.skills import list_skills
+        return {"skills": list_skills()}
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+@app.get("/skills/{name}", include_in_schema=False)
+async def skills_get(name: str):
+    try:
+        from trinity.skills import load_skill
+        skill = load_skill(name)
+        if skill is None:
+            return JSONResponse({"error": "skill not found"}, status_code=404)
+        return skill
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+# 目标引擎（DSH 借鉴 Phase 1，2026-08-26）：目标驱动自进化
+@app.get("/goals", include_in_schema=False)
+async def goals_list(phase: str = ""):
+    """目标列表（phase 过滤：active/paused/blocked/complete）。"""
+    try:
+        from trinity.evolution.goals import goal_list
+        return {"goals": goal_list(phase or None)}
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+@app.post("/goals", include_in_schema=False)
+async def goals_create(request: Request):
+    """创建目标：{objective, acceptance?: {metric,op,value}, max_rounds?: int}。"""
+    try:
+        from trinity.evolution.goals import goal_create
+        body = await request.json()
+        objective = body.get("objective") or ""
+        if not objective:
+            return JSONResponse({"error": "objective required"}, status_code=400)
+        goal = goal_create(objective,
+                           acceptance=body.get("acceptance"),
+                           max_rounds=body.get("max_rounds") or 10)
+        return goal
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+@app.get("/goals/{goal_id}", include_in_schema=False)
+async def goals_get(goal_id: str):
+    try:
+        from trinity.evolution.goals import goal_get
+        goal = goal_get(goal_id)
+        if goal is None:
+            return JSONResponse({"error": "goal not found"}, status_code=404)
+        return goal
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+@app.post("/goals/{goal_id}/update", include_in_schema=False)
+async def goals_update(goal_id: str, request: Request):
+    """更新目标：{action: edit|pause|resume|complete|blocked, ...}。"""
+    try:
+        from trinity.evolution.goals import goal_update
+        body = await request.json()
+        goal = goal_update(goal_id,
+                           action=body.get("action", "edit"),
+                           objective=body.get("objective"),
+                           acceptance=body.get("acceptance"),
+                           max_rounds=body.get("max_rounds"),
+                           blocked_reason=body.get("blocked_reason", ""))
+        if goal is None:
+            return JSONResponse({"error": "goal not found"}, status_code=404)
+        return goal
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+# 自动化审批（Codex 借鉴 Phase 1，2026-08-26）：动作执行策略层
+@app.get("/automation/pending", include_in_schema=False)
+async def automation_pending():
+    """待审批动作队列（approval always/on-failure 产生）。"""
+    try:
+        from trinity.automation import get_engine
+        return {"enabled": get_engine().enabled(),
+                "items": get_engine().pending_items()}
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+@app.post("/automation/approve", include_in_schema=False)
+async def automation_approve(request: Request):
+    """审批动作：{pending_id, approve: bool}；approve=True 后台执行。"""
+    try:
+        from trinity.automation import get_engine
+        body = await request.json()
+        pid = body.get("pending_id") or ""
+        approve = bool(body.get("approve", True))
+        if not pid:
+            return JSONResponse({"error": "pending_id required"}, status_code=400)
+        ok = get_engine().approve(pid, approve=approve)
+        if not ok:
+            return JSONResponse({"error": "pending item not found"}, status_code=404)
+        return {"pending_id": pid, "approve": approve,
+                "status": "approved" if approve else "rejected"}
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

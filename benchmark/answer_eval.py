@@ -177,6 +177,16 @@ def main() -> int:
     parser.add_argument("--min-overlap", type=int, default=0,
                         help="only evaluate questions whose topic words overlap >=N facts "
                              "(filters malformed/mismatched questions; EVAL-1 clean subset)")
+    # ── 2026-08-26（PageIndex 借鉴 Phase 1）：页树模式 A/B ──
+    parser.add_argument("--pagetree", action="store_true",
+                        help="页树模式：ingest 后 build_pagetree，检索走 page_tree（先定位页再读页内）")
+    parser.add_argument("--page-k", type=int, default=2, help="页树选页数（默认 2）")
+    parser.add_argument("--reason-deep", action="store_true",
+                        help="reason 深度模式（deep=True）：候选池 50/hybrid 20，难查询召回更强")
+    parser.add_argument("--reason", action="store_true",
+                        help="reason 模式（Phase 3）：LLM 相关重判（候选=关键词+页树，带活跃 goal 上下文）")
+    parser.add_argument("--out", default=os.path.join(ROOT, "output", "answer_eval_results.json"),
+                        help="结果 JSON 输出路径")
     args = parser.parse_args()
 
     from trinity import Trinity
@@ -187,6 +197,9 @@ def main() -> int:
     if not api_key:
         print("ERROR: no DEEPSEEK_API_KEY in credentials / TRINITY_LLM_API_KEY env")
         return 1
+    if args.reason:
+        # reason 模式内部走 trinity.llm.client.resolve_api_key（只读环境变量）
+        os.environ.setdefault("TRINITY_LLM_API_KEY", api_key)
 
     cat_filter = {c.strip() for c in args.categories.split(",") if c.strip()}
 
@@ -238,6 +251,16 @@ def main() -> int:
                 pass
     print(f"ingested in {time.time()-t0:.1f}s")
 
+    if args.pagetree or args.reason:
+        pt0 = time.time()
+        build_stats = mem.build_pagetree(
+            exclude_categories=set(),
+            exclude_tags={"lme"},
+        )
+        print(f"pagetree built in {time.time()-pt0:.1f}s: "
+              f"{build_stats.get('records')} records -> "
+              f"{build_stats.get('categories')} categories / {build_stats.get('clusters')} clusters")
+
     stats = {}
     n = 0
     r5_total = 0
@@ -259,8 +282,11 @@ def main() -> int:
         st = stats.setdefault(cat, {"total": 0, "r5": 0, "acc": 0, "gen_gap": 0, "retr_gap": 0})
         st["total"] += 1
 
-        results = mem.search(query=question, mode="keyword", top_k=args.top_k,
-                             persona_id=q.get("persona_name") or None).get("results", [])
+        results = mem.search(query=question, mode="reason" if args.reason else "keyword",
+                             top_k=args.top_k,
+                             persona_id=q.get("persona_name") or None,
+                             page_tree=args.pagetree, page_k=args.page_k,
+                             reason_deep=args.reason_deep).get("results", [])
         contexts = [r.get("content", "") for r in results]
         if args.ctx_n and args.ctx_n < len(contexts):
             contexts = contexts[: args.ctx_n]
@@ -344,11 +370,22 @@ def main() -> int:
         print(f"  {c:6s} n={s['total']:3d} R@5={s['R@5']:.3f} Acc={s['AnswerAcc']:.3f}")
     print(f"{'='*66}")
 
-    os.makedirs(os.path.join(ROOT, "output"), exist_ok=True)
-    path = os.path.join(ROOT, "output", "answer_eval_results.json")
+    os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
+    path = args.out
     with open(path, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
     print(f"saved -> {path}")
+    # 2026-08-26（Claude Science 借鉴 Phase 1）：实验工件 manifest（代码/环境/数据集/参数）
+    try:
+        from trinity.benchmark.manifest import build_manifest
+        build_manifest(path, params={
+            "top_k": args.top_k, "model": args.model,
+            "mode": "reason" if args.reason else "keyword",
+            "pagetree": args.pagetree, "reason_deep": args.reason_deep,
+            "ctx_n": args.ctx_n, "limit": args.limit,
+        }, dataset_paths=[DSET])
+    except Exception as _m_exc:
+        print(f"WARN manifest: {_m_exc}")
     return 0
 
 

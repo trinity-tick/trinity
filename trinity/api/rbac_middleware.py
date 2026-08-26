@@ -44,6 +44,25 @@ from trinity.audit.rbac import (
 
 logger = logging.getLogger(__name__)
 
+# ── 角色可见性规则（2026-08-26 Budibase 借鉴 Phase 3b）──────────────
+# env: TRINITY_VISIBILITY_<ROLE>（如 TRINITY_VISIBILITY_VIEWER="importance >= 0.3 AND category != 'lme'"），
+# 多角色取并集表达式（AND 拼接）；行级规则在 search 路由未显式指定时自动应用。
+import os as _os  # noqa: E402
+
+
+def visibility_rule_for_roles(roles: Optional[Set[str]]) -> Optional[str]:
+    """按角色集合解析可见性规则（env 白名单；无配置返回 None）。"""
+    if not roles:
+        return None
+    parts = []
+    for r in sorted(roles):
+        key = f"TRINITY_VISIBILITY_{r.upper().replace('-', '_')}"
+        v = _os.environ.get(key, "").strip()
+        if v:
+            parts.append(v)
+    return " AND ".join(parts) if parts else None
+
+
 # ── Module-level engine singleton ────────────────────────────────────
 _rbac_engine: Optional[RBACEngine] = None
 
@@ -313,6 +332,19 @@ class RBACMiddleware(BaseHTTPMiddleware):
         # Skip exempt paths
         if request.url.path in self._exempt:
             return await call_next(request)
+
+        # 角色可见性规则注入（2026-08-26 Budibase 借鉴 Phase 3b）：在 ACL map
+        # 检查之前注入 request.state.rbac_visibility——search 路由未显式传
+        # visibility_rule 时自动应用角色级行级规则。
+        try:
+            _role_header = (request.headers.get("X-Agent-Role") or
+                            request.headers.get("x-agent-role"))
+            _roles = {_role_header} if _role_header else self._default_roles
+            _vrule = visibility_rule_for_roles(_roles)
+            if _vrule:
+                request.state.rbac_visibility = _vrule
+        except Exception:
+            pass
 
         # Skip if route map is disabled (using per-endpoint dependencies instead)
         if not self._enable_route_map:

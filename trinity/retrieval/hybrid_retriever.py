@@ -21,14 +21,17 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 # ═══════════════════════════════════════════════════════════════════════
-#  Semantic result cache (env-gated, off by default)
+#  Semantic result cache (env-gated, default: memory backend)
 #
-#  TRINITY_CACHE_BACKEND  memory | redis | off   (default: off)
+#  TRINITY_CACHE_BACKEND  memory | redis | off   (default: memory, since
+#                          2026-08-24 COMPARISON_VS_2026_SOTA_R7 P0-2 —
+#                          semantic cache is industry-standard latency/cost
+#                          reduction; memory backend is dependency-free)
 #  TRINITY_REDIS_URL      redis://host:port/db   (default: redis://127.0.0.1:6379/0)
 #  TRINITY_CACHE_TTL      seconds                (default: 300)
 #
-#  The wrapper is deliberately additive: with the default ``off`` the
-#  retrieval pipeline behaves exactly as before.
+#  The wrapper is deliberately additive: setting TRINITY_CACHE_BACKEND=off
+#  restores the pre-cache retrieval pipeline behaviour exactly.
 # ═══════════════════════════════════════════════════════════════════════
 
 _cache_instance: Optional[Any] = None
@@ -46,7 +49,7 @@ def _get_configured_cache() -> Optional[Any]:
     """
     global _cache_instance, _cache_instance_config
 
-    backend = os.environ.get("TRINITY_CACHE_BACKEND", "off").strip().lower()
+    backend = os.environ.get("TRINITY_CACHE_BACKEND", "memory").strip().lower()
     if backend not in ("memory", "redis"):
         return None
 
@@ -136,12 +139,23 @@ class HybridRetriever:
         procedural_weight: float = 0.10,
         rrf_k: int = 60,
         cascade_top_n: int = 50,
+        ppr_fn: Optional[Callable] = None,
+        pagetree_fn: Optional[Callable] = None,
+        pagetree_weight: float = 0.15,
     ):
         self._bm25 = bm25_index
         self._graph = graph_retriever
         self._search_fn = search_fn
         self._procedural_store = procedural_store
         self._aggregator_fn = aggregator_fn
+        # 2026-08-24（R8 P1-4）：PPR 图谱通道（对齐 HippoRAG/Graphiti 共识）——
+        # 传入后，图谱通道先用实体种子做 PPR 多跳扩散，再与 1-hop 扩展融合；
+        # env TRINITY_GRAPH_PPR=off 可关闭（默认 on，失败静默降级 1-hop）。
+        self._ppr_fn = ppr_fn
+        # 2026-08-26（PageIndex 借鉴 Phase 1）：页树通道（可选）——
+        # 传入 pagetree_fn 后参与融合（fusion/rrf/cascade）；未传入=通道关闭。
+        self._pagetree_fn = pagetree_fn
+        self.pagetree_weight = pagetree_weight
 
         self.vector_weight = vector_weight
         self.bm25_weight = bm25_weight
@@ -188,7 +202,7 @@ class HybridRetriever:
         if strategy not in ("fusion", "rrf", "cascade"):
             strategy = "rrf"  # 2026-08-17 标定: rrf 远优于 fusion
 
-        # ── semantic result cache (env-gated, off by default) ───────
+        # ── semantic result cache (default: memory backend, TTL 300s) ──
         cache = _get_configured_cache()
         cache_key = None
         if cache is not None:
@@ -202,14 +216,23 @@ class HybridRetriever:
             if cached is not None:
                 return cached
 
+        # ── 2026-08-25（结构进化：查询扩展 v2）────────────────────
+        # TRINITY_QUERY_EXPANSION=on → 短查询 PRF 扩展（仅 BM25 通道用扩展查询，
+        # vector/graph 保持原 query 精确匹配——v1 教训：扩展污染所有通道降质）。
+        _bm25_query = query
+        if os.environ.get("TRINITY_QUERY_EXPANSION", "off").strip().lower() in ("1", "on", "true", "yes"):
+            _eq = self._expand_query(query, top_k=3)
+            if _eq != query:
+                _bm25_query = _eq
         # ── collect raw results from each source ───────────────────
         vector_results = self._get_vector_results(query, top_k)
-        bm25_results = self._get_bm25_results(query, top_k)
+        bm25_results = self._get_bm25_results(_bm25_query, top_k)
         graph_results = self._get_graph_results(query, top_k)
         # 1-hop neighbour expansion on graph results
         graph_results = self._expand_graph_neighbors(graph_results, top_k)
         proc_results = self._search_procedural(query, top_k)
         aggr_results = self._get_aggregator_results(query, top_k)
+        pt_results = self._get_pagetree_results(query, top_k)
 
         # ── normalise scores ───────────────────────────────────────
         vector_norm = _minmax_normalise(vector_results, "score")
@@ -217,14 +240,15 @@ class HybridRetriever:
         graph_norm = _minmax_normalise(graph_results, "graph_score", raw_key="graph_score")
         proc_norm = _minmax_normalise(proc_results, "procedural_score", raw_key="procedural_score")
         aggr_norm = _minmax_normalise(aggr_results, "score", raw_key="aggregator_score")
+        pt_norm = _minmax_normalise(pt_results, "score", raw_key="pagetree_score")
 
         # ── fuse ────────────────────────────────────────────────────
         if strategy == "fusion":
-            fused = self._fusion_fuse(vector_norm, bm25_norm, graph_norm, aggr_norm, proc_norm, top_k)
+            fused = self._fusion_fuse(vector_norm, bm25_norm, graph_norm, aggr_norm, proc_norm, top_k, pt_norm)
         elif strategy == "rrf":
-            fused = self._rrf_fuse(vector_norm, bm25_norm, graph_norm, aggr_norm, proc_norm, top_k)
+            fused = self._rrf_fuse(vector_norm, bm25_norm, graph_norm, aggr_norm, proc_norm, top_k, pt_norm)
         else:  # cascade
-            fused = self._cascade_fuse(vector_norm, bm25_norm, graph_norm, aggr_norm, proc_norm, top_k)
+            fused = self._cascade_fuse(vector_norm, bm25_norm, graph_norm, aggr_norm, proc_norm, top_k, pt_norm)
 
         # ── 2026-08-17 评分校准层（引擎路径, 对标 MEMTIER/AgentPrizm）──
         # env 门控（默认 off，不改既有 96.8% R@5 基线）:
@@ -242,6 +266,7 @@ class HybridRetriever:
                 "graph": len(graph_results),
                 "aggregator": len(aggr_results),
                 "procedural": len(proc_results),
+                "pagetree": len(pt_results),
                 "unique_fused": len(fused),
             },
         }
@@ -302,6 +327,49 @@ class HybridRetriever:
         except Exception:
             return []
 
+    # ── 2026-08-25（结构进化：查询扩展通道）──────────────────────────
+    # PRF 式查询扩展：首轮 BM25 检索 top-k → 从结果记忆提取高频词项
+    # （排除停用词/query 原词）→ 与 query 合并成扩展查询 → 后续所有
+    # 通道用扩展查询检索。扩大召回覆盖面（模糊/短查询尤其有效）。
+    # env TRINITY_QUERY_EXPANSION=on 启用（默认 off，向后兼容）。
+    _STOPWORDS = frozenset({
+        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+        "i", "me", "my", "you", "your", "he", "she", "it", "we", "they",
+        "and", "or", "but", "if", "then", "else", "when", "where", "what",
+        "how", "do", "does", "did", "to", "of", "in", "on", "at", "for",
+        "with", "about", "from", "by", "as", "that", "this", "these", "those",
+        "have", "has", "had", "not", "no", "yes", "there", "here", "so",
+    })
+
+    def _expand_query(self, query: str, top_k: int = 3, max_terms: int = 2) -> str:
+        """PRF 查询扩展 v2（2026-08-25）：仅短查询（≤3 词）启用。
+
+        返回扩展查询（原 query + 1-2 个高频共现词）；长查询/失败原样返回。
+        v1 教训：对所有查询扩展 4 词污染精确匹配（n=20 降质 -0.051）。
+        v2 改进：①仅短查询（缺上下文最需扩展）；②最多 2 个词（少即是多）；
+        ③扩展词只用于 BM25 召回通道（vector/graph 保持原 query）。
+        """
+        try:
+            import re as _re
+            _nq = len(_re.findall(r"[a-z0-9]+", query.lower()))
+            if _nq > 3:
+                return query  # 长查询已有区分度，不扩展
+            q_terms = set(_re.findall(r"[a-z0-9]+", query.lower()))
+            term_counts: dict = {}
+            for h in self._search_fn(query, top_k)[:top_k]:
+                content = (h.get("content") or "")[:2000]
+                for t in _re.findall(r"[a-z0-9]+", content.lower()):
+                    if t in self._STOPWORDS or t in q_terms or len(t) < 3:
+                        continue
+                    term_counts[t] = term_counts.get(t, 0) + 1
+            if not term_counts:
+                return query
+            top_terms = [t for t, _ in sorted(term_counts.items(), key=lambda x: -x[1])
+                         [:max_terms]]
+            return query + " " + " ".join(top_terms)
+        except Exception:
+            return query
+
     def _get_bm25_results(
         self, query: str, top_k: int,
     ) -> List[Dict[str, Any]]:
@@ -314,10 +382,31 @@ class HybridRetriever:
     def _get_graph_results(
         self, query: str, top_k: int,
     ) -> List[Dict[str, Any]]:
+        base: List[Dict[str, Any]] = []
         try:
-            return self._graph.search_by_entity(query, top_k=top_k)
+            base = self._graph.search_by_entity(query, top_k=top_k)
         except Exception:
-            return []
+            base = []
+        # 2026-08-24（R8 P1-4）：PPR 图谱增强——实体种子 PPR 多跳扩散后
+        # 补进图谱结果（对齐 HippoRAG/Graphiti；失败静默降级为纯 1-hop）。
+        if self._ppr_fn is not None and os.environ.get("TRINITY_GRAPH_PPR", "on").lower() not in ("off", "0", "false"):
+            try:
+                ppr_hits = self._ppr_fn(query, top_k=top_k * 2)
+                if ppr_hits:
+                    seen = {r.get("memory_id") or r.get("id") for r in base}
+                    for h in ppr_hits:
+                        mid = h.get("memory_id") or h.get("id")
+                        if mid and mid not in seen:
+                            seen.add(mid)
+                            base.append({
+                                "memory_id": mid,
+                                "content": h.get("content", ""),
+                                "graph_score": float(h.get("score", 0.0)),
+                                "source": "graph_ppr",
+                            })
+            except Exception as exc:
+                logger.debug("Graph PPR channel skipped: %s", exc)
+        return base
 
     def _get_aggregator_results(
         self, query: str, top_k: int,
@@ -343,6 +432,34 @@ class HybridRetriever:
                 })
             return result
         except Exception:
+            return []
+
+    def _get_pagetree_results(
+        self, query: str, top_k: int,
+    ) -> List[Dict[str, Any]]:
+        """页树通道（2026-08-26 Phase 1）：PageIndex 式先定位页再读页内。
+
+        pagetree_fn 签名: (query, top_k) -> [ {memory_id, score, ...} ]。
+        未配置/失败 → 空列表（通道优雅降级）。
+        """
+        if self._pagetree_fn is None:
+            return []
+        try:
+            raw = self._pagetree_fn(query, top_k)
+            result = []
+            for item in raw or []:
+                mid = item.get("memory_id") or item.get("id")
+                if not mid:
+                    continue
+                result.append({
+                    "memory_id": mid,
+                    "content": item.get("content", ""),
+                    "pagetree_score": float(item.get("score") or 0.0),
+                    "source": "pagetree",
+                })
+            return result
+        except Exception as exc:
+            logger.debug("Pagetree channel skipped: %s", exc)
             return []
 
     def _expand_graph_neighbors(
@@ -562,6 +679,7 @@ class HybridRetriever:
         aggregator: List[Dict],
         procedural: List[Dict],
         top_k: int,
+        pagetree: Optional[List[Dict]] = None,
     ) -> List[Dict]:
         wv, wb, wg, wa, wp = (
             self.vector_weight,
@@ -570,6 +688,7 @@ class HybridRetriever:
             self.aggregator_weight if self._aggregator_fn is not None else 0.0,
             self.procedural_weight if self._procedural_store is not None else 0.0,
         )
+        wpt = self.pagetree_weight if self._pagetree_fn is not None else 0.0
         merged: Dict[str, Dict] = {}
 
         for item in vector:
@@ -616,6 +735,17 @@ class HybridRetriever:
                 entry["procedural_score"] = ps
                 merged[mid] = entry
 
+        for item in pagetree or []:
+            mid = item["memory_id"]
+            pts = item.get("pagetree_score", 0)
+            if mid in merged:
+                merged[mid]["pagetree_score"] = pts
+                merged[mid]["hybrid_score"] += pts * wpt
+            else:
+                entry = _init_entry(item, "pagetree", pts * wpt)
+                entry["pagetree_score"] = pts
+                merged[mid] = entry
+
         return _sort_and_trim(merged, top_k)
 
     def _rrf_fuse(
@@ -626,6 +756,7 @@ class HybridRetriever:
         aggregator: List[Dict],
         procedural: List[Dict],
         top_k: int,
+        pagetree: Optional[List[Dict]] = None,
     ) -> List[Dict]:
         def _rank(source_list, score_key):
             ranked = sorted(source_list, key=lambda x: x.get(score_key, 0), reverse=True)
@@ -636,12 +767,14 @@ class HybridRetriever:
         g_rank = _rank(graph, "graph_score")
         a_rank = _rank(aggregator, "aggregator_score")
         p_rank = _rank(procedural, "procedural_score")
+        pt_rank = _rank(pagetree or [], "pagetree_score")
 
-        all_ids = set(v_rank) | set(b_rank) | set(g_rank) | set(a_rank) | set(p_rank)
+        all_ids = set(v_rank) | set(b_rank) | set(g_rank) | set(a_rank) | set(p_rank) | set(pt_rank)
         merged: Dict[str, Dict] = {}
 
         wa = 1.0 if self._aggregator_fn is not None else 0.0
         wp = 1.0 if self._procedural_store is not None else 0.0
+        wpt = 1.0 if self._pagetree_fn is not None else 0.0
 
         for mid in all_ids:
             rrf = (
@@ -650,6 +783,7 @@ class HybridRetriever:
                 + 1.0 / (self.rrf_k + g_rank.get(mid, len(g_rank)))
                 + wa * 1.0 / (self.rrf_k + a_rank.get(mid, len(a_rank)))
                 + wp * 1.0 / (self.rrf_k + p_rank.get(mid, len(p_rank)))
+                + wpt * 1.0 / (self.rrf_k + pt_rank.get(mid, len(pt_rank)))
             )
             entry: Dict[str, Any] = {"memory_id": mid, "hybrid_score": round(rrf, 6)}
             if mid in v_rank:
@@ -667,6 +801,9 @@ class HybridRetriever:
             if mid in p_rank:
                 entry["procedural_score"] = next(
                     (it.get("procedural_score", 0) for it in procedural if it["memory_id"] == mid), 0)
+            if mid in pt_rank:
+                entry["pagetree_score"] = next(
+                    (it.get("pagetree_score", 0) for it in (pagetree or []) if it["memory_id"] == mid), 0)
             merged[mid] = entry
 
         return _sort_and_trim(merged, top_k)
@@ -679,6 +816,7 @@ class HybridRetriever:
         aggregator: List[Dict],
         procedural: List[Dict],
         top_k: int,
+        pagetree: Optional[List[Dict]] = None,
     ) -> List[Dict]:
         # Stage 1: vector coarse rank
         stage1 = sorted(vector, key=lambda x: x.get("score", 0), reverse=True)[:self.cascade_top_n]
@@ -736,6 +874,18 @@ class HybridRetriever:
                     "procedural_score": ps,
                     "hybrid_score": ps * 0.10,
                 }
+        for item in pagetree or []:
+            mid = item["memory_id"]
+            pts = item.get("pagetree_score", 0)
+            if mid in merged:
+                merged[mid]["pagetree_score"] = pts
+                merged[mid]["hybrid_score"] += pts * 0.15
+            elif mid in stage1_ids:
+                merged[mid] = {
+                    "memory_id": mid,
+                    "pagetree_score": pts,
+                    "hybrid_score": pts * 0.15,
+                }
 
         return _sort_and_trim(merged, top_k)
 
@@ -789,6 +939,11 @@ def _init_entry(item: Dict, source: str, init_score: float) -> Dict:
                 entry[key] = item[key]
     elif source == "procedural":
         entry["procedural_score"] = item.get("procedural_score", 0)
+    elif source == "pagetree":
+        entry["pagetree_score"] = item.get("pagetree_score", 0)
+        for key in item:
+            if key not in entry:
+                entry[key] = item[key]
     return entry
 
 

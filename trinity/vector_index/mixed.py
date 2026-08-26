@@ -16,6 +16,7 @@ multi-stage hybrid search, aligning with industry best practices
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -58,7 +59,7 @@ class HybridIndex(VectorIndex):
         approx_top_k: int = 100,
         final_top_k: int = 10,
         enable_sparse: bool = True,
-        enable_reranker: bool = False,
+        enable_reranker: Optional[bool] = None,
         fusion_alpha: float = 0.3,
         **approx_kwargs,
     ):
@@ -72,6 +73,9 @@ class HybridIndex(VectorIndex):
             final_top_k: Final results after reranking.
             enable_sparse: Enable BM25 sparse retrieval.
             enable_reranker: Enable Cross-Encoder reranking (slower).
+                None → env-gated default ON (TRINITY_RERANKER, default "on");
+                explicit True/False always wins. Reranker falls back to
+                identity (no-op) when the model cannot be loaded.
             fusion_alpha: Weight for sparse scores in RRF fusion (0-1).
         """
         super().__init__(dim, metric)
@@ -81,6 +85,10 @@ class HybridIndex(VectorIndex):
         self._final_top_k = final_top_k
         self._fusion_alpha = fusion_alpha
         self._enable_sparse = enable_sparse
+        if enable_reranker is None:
+            enable_reranker = os.environ.get(
+                "TRINITY_RERANKER", "on"
+            ).strip().lower() in ("1", "on", "true", "yes")
         self._enable_reranker = enable_reranker
 
         # BM25 sparse retriever
@@ -295,7 +303,7 @@ def create_hybrid_index(
     approx_top_k: int = 100,
     final_top_k: int = 10,
     enable_sparse: bool = True,
-    enable_reranker: bool = False,
+    enable_reranker: Optional[bool] = None,
 ) -> HybridIndex:
     """Create a hybrid multi-stage vector index with sensible defaults.
 

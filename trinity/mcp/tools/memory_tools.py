@@ -119,7 +119,9 @@ def register_memory_tools(mcp: FastMCP) -> None:
     _register_memory_chronicle(mcp)
     _register_memory_tag_search(mcp)
     _register_memory_feedback(mcp)
-    logger.info("Registered 9 memory tools (backed by real engine).")
+    _register_skill_tools(mcp)
+    _register_knowledge_search(mcp)
+    logger.info("Registered 12 memory tools (backed by real engine).")
 
 
 # ---------------------------------------------------------------------------
@@ -158,6 +160,9 @@ def _register_memory_search(mcp: FastMCP) -> None:
         query: str,
         top_k: int = 5,
         mode: str = "hybrid",
+        view: str = "",
+        visibility_rule: str = "",
+        deep: bool = False,
     ) -> list[dict[str, Any]]:
         """Tri-signal semantic memory search.
 
@@ -167,19 +172,35 @@ def _register_memory_search(mcp: FastMCP) -> None:
         - exact:    KV exact match
         - hybrid:   multi-channel RRF fusion (default)
 
+        view（2026-08-26 Budibase 借鉴）: 命名记忆视图名（~/.trinity/views.yaml），
+            如 "wms-decision"——按视图过滤/排序；空 = 不用视图。
+        visibility_rule: 行级可见性规则表达式，如 "importance >= 0.6 AND category != 'lme'"；
+            空 = 不过滤。非法规则自动忽略。
+        deep: reason 深度模式（mode="reason" 时生效，2026-08-26）：候选池 50/hybrid 20/
+            page_k 3 + 事件规则——难查询（近义改写/多事实）召回更强，500q 全量
+            AnswerAcc 0.752 → 0.712、holdout R@10 0.547 → 0.663。
+
         如果语义搜索结果为空，自动回退到 ChatSessionRecorder.fulltext 搜索。
 
         Args:
             query:  Search query string.
             top_k:  Number of results (default: 5).
             mode:   Retrieval mode (semantic/graph/exact/hybrid).
+            view:   Named memory view (optional).
+            visibility_rule: Row-level visibility rule (optional).
+            deep:   Reason deep mode (optional, mode="reason" only).
 
         Returns:
             List of matching memory entries with scores.
         """
         async with _trace_span("mcp.memory_search", tool="memory_search", query_len=len(query)):
             engine = _get_engine()
-            result = engine.search(query=query, top_k=top_k)
+            result = engine.search(
+                query=query, top_k=top_k,
+                view=(view or None),
+                visibility_rule=(visibility_rule or None),
+                reason_deep=deep,
+            )
             results = result.get("results", result if isinstance(result, list) else [])
 
             # 如果结果为空，回退到会话全文搜索
@@ -453,6 +474,63 @@ def _register_memory_chronicle(mcp: FastMCP) -> None:
 # ---------------------------------------------------------------------------
 # Tool: memory_tag_search
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Tool: skill_list / skill_load（DSH 借鉴 Phase 3，2026-08-26）
+# ---------------------------------------------------------------------------
+def _register_skill_tools(mcp: FastMCP) -> None:
+
+    @mcp.tool()
+    async def skill_list() -> list[dict[str, Any]]:
+        """List Trinity self-improvement skills (data/skills registry).
+
+        返回技能注册表：name/description/when_to_use——供 agent 决定加载哪个技能。
+        """
+        from trinity.skills import list_skills
+        return list_skills()
+
+    @mcp.tool()
+    async def skill_load(name: str) -> dict[str, Any]:
+        """Load a Trinity skill by name (content + metadata).
+
+        Args:
+            name: 技能名（见 skill_list）。
+        """
+        from trinity.skills import load_skill
+        skill = load_skill(name)
+        if skill is None:
+            return {"error": f"skill not found: {name}", "name": name}
+        return skill
+
+
+# ---------------------------------------------------------------------------
+# Tool: knowledge_search（Context7 借鉴 Phase 2，2026-08-26）
+# ---------------------------------------------------------------------------
+def _register_knowledge_search(mcp: FastMCP) -> None:
+
+    @mcp.tool()
+    async def knowledge_search(
+        query: str,
+        source: str = "",
+        top_k: int = 10,
+    ) -> dict[str, Any]:
+        """Search the DOCUMENT/knowledge layer only (doc:*, kb_harvested, etc.).
+
+        Context7 借鉴（2026-08-26）：独立知识检索——区别于 memory_search（交互记忆），
+        本工具只检索知识面（include_docs），支持源过滤，结果带源健康度元数据
+        （freshness_days/health/stale）。查询别名自动展开（aliases.yaml）。
+
+        Args:
+            query:  Knowledge query string.
+            source:  Source filter (source_id substring, e.g. file name or category).
+            top_k:   Number of results (default: 10).
+
+        Returns:
+            Dict with results (doc-layer memories + source_health) and query info.
+        """
+        from trinity.knowledge import knowledge_search as _ks
+        return _ks(query=query, source=(source or None), top_k=top_k)
+
+
 def _register_memory_tag_search(mcp: FastMCP) -> None:
 
     @mcp.tool()

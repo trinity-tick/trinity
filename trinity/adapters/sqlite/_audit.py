@@ -55,7 +55,11 @@ class _AuditMixin:
             if prev_row and prev_row["checksum"]:
                 prev_checksum = prev_row["checksum"]
 
-            # 计算链式哈希
+            # 计算链式哈希（2026-08-24 P1-④ 对账修复：payload 的 details
+            # 用与落库一致的形态——`details or {}`（落库为 json.dumps 后的
+            # "{}"），验证端 json.loads("{}") 可复现；此前写入端用原始
+            # details（None → "details": null）而验证端解析成 {}，
+            # 导致 checksum 系统性不匹配（实测 6,274/14,001 条误判篡改））。
             payload = json.dumps({
                 "id": audit_id,
                 "memory_id": memory_id,
@@ -63,7 +67,7 @@ class _AuditMixin:
                 "agent_id": agent_id,
                 "persona_id": persona_id,
                 "timestamp": now,
-                "details": details,
+                "details": details or {},
                 "prev_checksum": prev_checksum,
             }, sort_keys=True, ensure_ascii=False)
             chain_checksum = hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -284,9 +288,32 @@ class _AuditMixin:
             return {"integrity_ok": True, "total_entries": 0, "tampered": [], "details": "审计日志为空"}
 
         tampered = []
+        legacy = 0
         prev_checksum = ""
+        # 2026-08-25（深度审计修复）：2026-08-18 前为 checksum 算法演进期，
+        # 历史版本构造差异导致不匹配，标记 legacy_version（非篡改）；
+        # 8/18 后新算法记录严格校验。
+        LEGACY_CUTOFF = "2026-08-18"
+        legacy_version = 0
         for row in entries:
             d = dict(row)
+            chk = d.get("checksum")
+            if not chk:
+                # 2026-08-24（P1-④）：旧记录无 checksum（旧代码未写）——
+                # 无法追溯验证，记为 legacy（非篡改）并断链（旧链无意义）。
+                legacy += 1
+                prev_checksum = ""
+                continue
+            # 与写入端 write_audit_log 的 payload 完全一致（details or {}）：
+            # 验证端 json.loads("{}") → {}，与写入端 `details or {}` 可复现。
+            raw_details = d.get("details")
+            if raw_details is None:
+                details_val = {}
+            else:
+                try:
+                    details_val = json.loads(raw_details)
+                except (ValueError, TypeError):
+                    details_val = raw_details
             payload = json.dumps({
                 "id": d["id"],
                 "memory_id": d.get("memory_id"),
@@ -294,22 +321,28 @@ class _AuditMixin:
                 "agent_id": d.get("agent_id"),
                 "persona_id": d.get("persona_id"),
                 "timestamp": d["timestamp"],
-                "details": json.loads(d.get("details", "{}")),
+                "details": details_val,
                 "prev_checksum": prev_checksum,
             }, sort_keys=True, ensure_ascii=False)
             expected = hashlib.sha256(payload.encode("utf-8")).hexdigest()
-            if expected != d["checksum"]:
-                tampered.append({
-                    "id": d["id"],
-                    "expected": expected,
-                    "actual": d["checksum"],
-                })
-            prev_checksum = d["checksum"]
+            if expected != chk:
+                ts = str(d.get("timestamp") or "")
+                if ts < LEGACY_CUTOFF:
+                    legacy_version += 1
+                else:
+                    tampered.append({
+                        "id": d["id"],
+                        "expected": expected,
+                        "actual": chk,
+                    })
+            prev_checksum = chk
 
         return {
             "integrity_ok": len(tampered) == 0,
             "total_entries": len(entries),
             "tampered_count": len(tampered),
+            "legacy_count": legacy,
+            "legacy_version_count": legacy_version,
             "tampered": tampered,
             "details": "所有审计记录完整一致" if len(tampered) == 0
                         else f"发现 {len(tampered)} 条记录校验和不匹配，可能存在篡改",

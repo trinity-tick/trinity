@@ -49,6 +49,7 @@ class _SearchMixin:
         mode: str = "keyword",
         query_text: str = "",
         source: str = "",
+        include_archived: bool = False,
     ) -> List[DimensionVector]:
         """Multi-dimension combined retrieval with optional semantic search.
 
@@ -59,10 +60,22 @@ class _SearchMixin:
             query_text: natural-language query for vector/hybrid modes
             source: 调用来源标识（2026-08-17 P1-2：聚合池利用率归因，
                     记录到 stats.queries_by_source 与 last_query_at）
+            include_archived: 是否包含源库已归档（source_status=archived）的记忆。
+                默认 False——2026-08-24（R8 P0-1）聚合池检索面与引擎库 active
+                口径统一（引擎库只检索 active），修复"归档记忆仍可被 API/MCP
+                侧命中"的口径分裂。
 
         Returns:
             List of matching DimensionVectors
         """
+        def _active_only(dvs: List[DimensionVector]) -> List[DimensionVector]:
+            if include_archived:
+                return dvs
+            return [
+                dv for dv in dvs
+                if dv.source_status not in ("archived", "deleted")
+            ]
+
         with self._lock:
             # ── v7.1.0: Tracing ──
             if self._tracer:
@@ -76,7 +89,7 @@ class _SearchMixin:
             self._stats["last_query_at"] = time.time()
 
             # ── Keyword results (always computed for hybrid) ──
-            kw_results = self._engine.query(filters)
+            kw_results = _active_only(self._engine.query(filters))
 
             # ── Auto-touch all keyword results (P0-2) ──
             for dv in kw_results:
@@ -101,6 +114,7 @@ class _SearchMixin:
                 vec_scores = {}
 
             vec_dvs = [self._pool[mid] for mid in vec_ids if mid in self._pool]
+            vec_dvs = _active_only(vec_dvs)
 
             # ── Auto-touch vector results (P0-2) ──
             for dv in vec_dvs:
@@ -144,7 +158,7 @@ class _SearchMixin:
                         if dv_id and dv_id in self._pool:
                             v47_dvs.append(self._pool[dv_id])
                     if v47_dvs:
-                        ranked_lists.append(v47_dvs)
+                        ranked_lists.append(_active_only(v47_dvs))
                 except Exception as exc:
                     self._degradation.mark_failure("retrieval_v47", str(exc)[:100])
 
@@ -159,7 +173,7 @@ class _SearchMixin:
                         if dv_id and dv_id in self._pool:
                             exa_dvs.append(self._pool[dv_id])
                     if exa_dvs:
-                        ranked_lists.append(exa_dvs)
+                        ranked_lists.append(_active_only(exa_dvs))
                 except Exception as exc:
                     self._degradation.mark_failure("exabase", str(exc)[:100])
 
@@ -176,7 +190,7 @@ class _SearchMixin:
                         if mid and mid in self._pool and mid not in [d.memory_id for d in graph_dvs]:
                             graph_dvs.append(self._pool[mid])
                     if graph_dvs:
-                        ranked_lists.append(graph_dvs)
+                        ranked_lists.append(_active_only(graph_dvs))
                 except Exception as exc:
                     logger.debug("Graph+PPR channel skipped: %s", exc)
 
@@ -191,6 +205,7 @@ class _SearchMixin:
                     explore_pool = [
                         dv for dv in self._pool.values()
                         if dv.memory_id not in hit_ids
+                        and dv.source_status not in ("archived", "deleted")
                     ][:50]
                     if explore_pool:
                         # 用 WanderRetriever 温度采样（relevance 取 importance 近似）

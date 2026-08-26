@@ -22,6 +22,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -70,6 +71,8 @@ class CompressionBatchResult:
     failed_ids: List[str] = field(default_factory=list)
     error_message: str = ""
     elapsed_seconds: float = 0.0
+    # 2026-08-24（R5 P0-②）：压缩前注入守卫命中（投毒内容进压缩的风险标记）
+    guard_hits: List[Dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -221,6 +224,30 @@ class MemoryCompressor:
             return result
 
         try:
+            # ── 2026-08-24（R5 P0-②）：压缩前注入守卫——压缩会跨多条记忆
+            # 聚合摘要，投毒内容可能被"洗白"进压缩结果；压缩前对每条原始
+            # 记忆做注入扫描（复用 trinity.security.injection，与写路径
+            # 同语义），命中高危标记并在结果中报告（不阻断压缩——治理
+            # 决策由上层按 risk 处理；TRINITY_COMPRESS_GUARD=off 关闭）。
+            guard_on = os.environ.get("TRINITY_COMPRESS_GUARD", "on").lower() not in ("off", "0", "false")
+            guard_hits = []
+            if guard_on:
+                try:
+                    from trinity.security.injection import scan_injection
+                    for m in memories:
+                        content = str(m.get("content") or "")
+                        if not content.strip():
+                            continue
+                        rep = scan_injection(content)
+                        if rep.get("flagged"):
+                            guard_hits.append({
+                                "memory_id": str(m.get("memory_id", "")),
+                                "severity": rep.get("severity"),
+                                "patterns": [h["pattern"] for h in rep.get("hits", [])],
+                            })
+                except Exception as exc:
+                    logger.warning("compression injection guard skipped: %s", exc)
+
             system_prompt, user_prompt = self.build_compression_prompt(
                 memories, memory_type,
             )
@@ -266,6 +293,14 @@ class MemoryCompressor:
             result.status = CompressionStatus.SUCCESS
             result.compressed = compressed
             result.archived_ids = parent_ids
+            result.guard_hits = guard_hits  # R5 P0-②：注入守卫命中回填
+            if guard_hits:
+                logger.warning(
+                    "Compression batch %s: %d injection guard hits (high=%d) — "
+                    "compressed summary may contain poisoned content",
+                    batch_id, len(guard_hits),
+                    sum(1 for h in guard_hits if h.get("severity") == "high"),
+                )
 
         except Exception as e:
             logger.error("Compression batch %s failed: %s", batch_id, e)

@@ -53,6 +53,10 @@ class _CrudMixin:
         metadata: Optional[Dict[str, Any]] = None,
         source_uri: Optional[str] = None,
     ) -> Dict[str, Any]:
+        # 2026-08-24（R9 P0-1）：只读模式（建表/迁移写锁失败降级）——
+        # 写操作明确报错，而不是静默失败或抛 database is locked 裸异常。
+        if getattr(self, "_readonly_mode", False):
+            return {"memory_id": "", "error": "readonly mode (schema init failed due to write lock)"}
         with self._write_lock:
 
             conn = self._conn
@@ -77,8 +81,23 @@ class _CrudMixin:
                     pii_info = pii_found
 
             sha256_hash = self._compute_sha256(stored_content)
+            # 2026-08-25（核心测试发现修复）：content_hash+persona+agent 幂等去重——
+            # 同内容重复 ingest 返回现有 memory_id（CRDT 幂等语义），
+            # 此前 UNIQUE 约束直接抛 IntegrityError。
+            try:
+                _dup = self._conn.execute(
+                    "SELECT memory_id FROM memories WHERE content_hash=? "
+                    "AND persona_id=? AND agent_id=? AND status='active' LIMIT 1",
+                    (sha256_hash, persona_id, agent_id),
+                ).fetchone()
+                if _dup:
+                    return {"memory_id": _dup["memory_id"], "version_id": None,
+                            "sha256_hash": sha256_hash, "dedup": True,
+                            "timestamp": now, "pushed_memories": []}
+            except Exception:
+                pass
             tokenized = self._tokenize_content_for_fts(stored_content)
-            plain_content = stored_content
+            plain_content = stored_content  # 明文副本（加密前的原始文本）
             # B5 存储加密：content 列写密文；tokenized 明文；hash 基于明文
             stored_content = self._encrypt_content(stored_content)
             tokenized = self._tokenized_for_storage(plain_content, tokenized)
@@ -146,9 +165,12 @@ class _CrudMixin:
 
             # 2026-08-18（conflict 检测改进）：写入后相似性冲突检测——
             # 高相似但内容不同的旧记忆自动分配 conflict_group_id（候选冲突组）。
+            # 2026-08-24（R8 P1-5 修复）：传 plain_content（明文）而非
+            # 加密后的 stored_content——密文 base64 分词与明文候选零重叠，
+            # 加密默认开启后冲突检测曾整体失效。
             if os.environ.get("TRINITY_CONFLICT_DETECT", "on") != "off":
                 try:
-                    self._assign_conflicts(memory_id, stored_content)
+                    self._assign_conflicts(memory_id, plain_content)
                 except Exception:
                     pass
 
@@ -470,10 +492,12 @@ class _CrudMixin:
             if r.get("content"):
                 r["content"] = self._decrypt_content(r["content"])
         return rows
-    def get_all_memories(self, agent_id: Optional[str] = None, limit: int = 200) -> List[Dict[str, Any]]:
+    def get_all_memories(self, agent_id: Optional[str] = None, limit: int = 200,
+                          offset: int = 0) -> List[Dict[str, Any]]:
         """Get all active memories across all personas/tenants, optionally filtered by agent_id.
 
         2026-08-15（压测修复 v2）：线程本地只读连接（纯读，无锁）。
+        2026-08-26（PageTree）：新增 offset 分页（页树全量建树用）。
         """
         conn = self._get_read_conn()
         if not conn:
@@ -484,15 +508,15 @@ class _CrudMixin:
                 SELECT * FROM memories
                 WHERE status = 'active' AND agent_id = ?
                 ORDER BY created_at DESC
-                LIMIT ?
-            """, (agent_id, limit))
+                LIMIT ? OFFSET ?
+            """, (agent_id, limit, offset))
         else:
             cursor = conn.execute("""
                 SELECT * FROM memories
                 WHERE status = 'active'
                 ORDER BY created_at DESC
-                LIMIT ?
-            """, (limit,))
+                LIMIT ? OFFSET ?
+            """, (limit, offset))
         rows = [dict(row) for row in cursor.fetchall()]
         for r in rows:
             if r.get("content"):

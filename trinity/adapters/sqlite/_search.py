@@ -40,11 +40,21 @@ class _SearchMixin:
         category: Optional[str] = None,
         top_k: int = 10,
         touch: bool = True,
+        include_docs: bool = False,
+        visibility_rule: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """搜索记忆。
 
         优先使用 FTS5 全文搜索，如果不可用则回退到 LIKE 模糊搜索。
         支持 agent_id / persona_id / session_id / app_id / category 的任意 AND 组合。
+
+        visibility_rule（2026-08-26 Budibase 借鉴 Phase 3）：行级可见性规则
+        表达式（白名单字段+参数化，防注入），解析失败时忽略该规则（不阻断检索）。
+
+        include_docs（默认 False，2026-08-24 R6 P0-①）：doc:* 类（文档 dump/
+        知识库内容）默认排除在交互记忆检索面之外——对齐 2026"记忆与知识
+        分层而非混同"共识（本地实测 doc 类占 active 24%，Raft 查询 top-10
+        中 70% 被文档污染）。include_docs=True 时包含（知识检索面）。
 
         touch（默认 True）：命中记忆异步入队 touch（access_count+1）。
         内部维护操作（如写路径的冲突检测检索）应传 touch=False，避免把
@@ -79,6 +89,20 @@ class _SearchMixin:
         if category:
             conditions.append("category = ?")
             params.append(category)
+        # 2026-08-24（R6 P0-①）：doc 类分层隔离——默认排除知识库内容
+        if not include_docs:
+            conditions.append("(category NOT LIKE 'doc:%' AND category NOT LIKE 'doc_%')")
+
+        # 2026-08-26（Budibase 借鉴 Phase 3）：行级可见性规则（白名单+参数化）
+        if visibility_rule:
+            try:
+                from trinity.security.visibility import to_sql as _vis_to_sql
+                _vis_where, _vis_params = _vis_to_sql(visibility_rule)
+                if _vis_where:
+                    conditions.append("(" + _vis_where + ")")
+                    params.extend(_vis_params)
+            except Exception as _vis_exc:
+                logger.debug("visibility rule ignored: %s", _vis_exc)
 
         where = " AND ".join(conditions)
 
@@ -175,6 +199,7 @@ class _SearchMixin:
         sql = f"""
             SELECT m.memory_id, m.content, m.persona_id, m.session_id, m.role,
                    m.importance, m.tags, m.category, m.modality, m.created_at,
+                   m.source_uri,
                    fts.rank as score
             FROM memories m
             INNER JOIN (
@@ -224,6 +249,7 @@ class _SearchMixin:
                 "category": row["category"],
                 "modality": row["modality"],
                 "created_at": row["created_at"],
+                "source_uri": row["source_uri"] if "source_uri" in row.keys() else None,
                 "score": round(norm_score, 4),
             })
 
@@ -244,6 +270,7 @@ class _SearchMixin:
         cursor = conn.execute(f"""
             SELECT memory_id, content, persona_id, session_id, role,
                    importance, tags, category, modality, created_at,
+                   source_uri,
                    0.8 as score
             FROM memories
             WHERE {where}

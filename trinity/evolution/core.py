@@ -297,6 +297,17 @@ class MetaEvolution:
         else:
             # Cycle complete
             self.current_cycle.completed_at = time.time()
+            # 2026-08-26（DSH 借鉴 Phase 1）：目标驱动自进化——周期完成后
+            # 用最近基准指标评估 active goals（达标 complete / 无进展 blocked）
+            try:
+                from trinity.evolution.goals import evaluate_goals, default_metrics
+                _changed = evaluate_goals(default_metrics())
+                if _changed:
+                    import logging as _logging
+                    _logging.getLogger("trinity.evolution").info(
+                        "[evolution] goal evaluation: %d updated", len(_changed))
+            except Exception:
+                pass
             self.current_cycle.certificates = result.get("certificates", {})
             self.state.total_cycles += 1
             self.state.last_cycle_id = self.current_cycle.cycle_id
@@ -480,6 +491,22 @@ class MetaEvolution:
             "passed": success_rate >= 0.5,
         }
 
+        # 2026-08-26（DSH 借鉴 Phase 2）：断言式评测回归——进化轮必须过
+        # 功能断言（pagetree/search/reason/automation/views/visibility/goals）；
+        # 失败不阻断进化，但记录到证书供观察。
+        try:
+            from trinity.eval.runner import run_all
+            _ev = run_all()
+            certs["eval_assertions"] = {
+                "passed": _ev.get("passed", 0),
+                "total": _ev.get("total", 0),
+                "failed": _ev.get("failed", 0),
+                "ok": _ev.get("failed", 1) == 0,
+            }
+        except Exception:
+            certs["eval_assertions"] = {"passed": 0, "total": 0,
+                                        "failed": 1, "ok": False}
+
         # Integrate with M112 if available
         try:
             from trinity.modules.second_brain.engine import SecondBrainV636
@@ -493,6 +520,22 @@ class MetaEvolution:
         return certs
 
     # ── File Management Methods ─────────────────────────────────────
+
+    @staticmethod
+    def _preserve_frontmatter(path: str, body: str) -> str:
+        """2026-08-26（DSH 借鉴 Phase 3 修复）：写入时保留文件已有 YAML
+        frontmatter（trinity/skills 运行时依赖 name/description/when_to_use），
+        否则整体重写会把 frontmatter 冲掉。"""
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                text = f.read()
+            if text.lstrip().startswith("---"):
+                idx = text.find("\n---", 3)
+                if idx != -1:
+                    return text[: idx + 4] + "\n\n" + body
+        except Exception:
+            pass
+        return body
 
     def _update_memory_file(self, action: Dict) -> Dict:
         """Update memory.md with new patterns/preferences."""
@@ -512,7 +555,8 @@ class MetaEvolution:
 
         recent = "\n## Recent\n- Updated: " + datetime.now().isoformat()
 
-        content = header + confirmed + patterns + recent + "\n"
+        content = self._preserve_frontmatter(
+            path, header + confirmed + patterns + recent + "\n")
         with open(path, "w", encoding="utf-8") as f:
             f.write(content)
 
@@ -534,17 +578,17 @@ class MetaEvolution:
         path = action.get("target", os.path.join(self.skill_dir, "heartbeat-state.md"))
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
-        content = f"""# Self-Improving Heartbeat State
-
-last_heartbeat: {datetime.now().isoformat()}
-total_cycles: {self.state.total_cycles}
-active_preferences: {len(self.state.active_preferences)}
-active_patterns: {len(self.state.active_patterns)}
-corrections_log: {len(self.state.corrections_log)}
-skill_scores: {len(self.state.skill_scores)}
-"""
+        body = (
+            "# Self-Improving Heartbeat State\n\n"
+            f"last_heartbeat: {datetime.now().isoformat()}\n"
+            f"total_cycles: {self.state.total_cycles}\n"
+            f"active_preferences: {len(self.state.active_preferences)}\n"
+            f"active_patterns: {len(self.state.active_patterns)}\n"
+            f"corrections_log: {len(self.state.corrections_log)}\n"
+            f"skill_scores: {len(self.state.skill_scores)}\n"
+        )
         with open(path, "w", encoding="utf-8") as f:
-            f.write(content)
+            f.write(self._preserve_frontmatter(path, body))
 
         return {"action": "heartbeat", "status": "done", "file": path}
 

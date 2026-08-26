@@ -228,6 +228,95 @@ class OllamaEmbeddingEngine(EmbeddingEngine):
 
 # ── Scikit-learn TF-IDF Embedding Engine (lightweight fallback) ───────
 
+class OnnxEmbeddingEngine(EmbeddingEngine):
+    """bge-m3 内镶引擎（2026-08-25）：onnxruntime 进程内推理，不依赖外部 Ollama。
+
+    - 模型：hooman650/bge-m3-onnx-o4（量化版 ~1.08GB，1024d）
+    - 目录：~/.trinity/models/bge-m3-onnx/（scripts/pull_bge_m3_onnx.py 下载）
+    - 推理：onnxruntime CPU（Int8 量化，快于 Ollama API 往返）
+    - 输入：transformers tokenizer（sentencepiece，max 8192）
+    - 输出：L2 归一化 float32 1024d（与 Ollama bge-m3 一致）
+    """
+
+    DEFAULT_DIR = os.path.expanduser("~/.trinity/models/bge-m3-onnx")
+
+    def __init__(self, model_dir: Optional[str] = None,
+                 max_length: int = 8192, providers: Optional[list] = None):
+        self._model_dir = model_dir or self.DEFAULT_DIR
+        self._max_length = max_length
+        self._providers = providers or ["CPUExecutionProvider"]
+        self._session = None
+        self._tokenizer = None
+        self._input_names = None
+        self._total = 0
+
+    def _lazy_init(self):
+        if self._session is not None:
+            return
+        import onnxruntime as ort
+        from transformers import AutoTokenizer
+        model_path = os.path.join(self._model_dir, "model_optimized.onnx")
+        if not os.path.exists(model_path):
+            raise RuntimeError(
+                f"bge-m3 ONNX 模型缺失: {self._model_dir} —— "
+                f"运行 python scripts/pull_bge_m3_onnx.py 下载")
+        self._session = ort.InferenceSession(model_path, providers=self._providers)
+        self._tokenizer = AutoTokenizer.from_pretrained(self._model_dir)
+        self._input_names = [i.name for i in self._session.get_inputs()]
+
+    def _tokenize(self, text: str) -> dict:
+        enc = self._tokenizer(
+            text, max_length=self._max_length, truncation=True,
+            padding=True, return_tensors="np")
+        feeds = {}
+        for name in self._input_names:
+            lname = name.lower()
+            if "input_ids" in lname:
+                feeds[name] = enc["input_ids"]
+            elif "attention" in lname or "mask" in lname:
+                feeds[name] = enc["attention_mask"]
+            elif "token_type" in lname:
+                feeds[name] = enc.get("token_type_ids", enc["input_ids"] * 0)
+        return feeds
+
+    def embed(self, text: str) -> np.ndarray:
+        self._lazy_init()
+        feeds = self._tokenize(text)
+        hidden = self._session.run(None, feeds)[0]  # (batch, seq, 1024)
+        # 2026-08-25：bge-m3 ONNX 输出 last_hidden_state（每 token 向量）——
+        # 用 CLS token（首个 token）池化 + L2 归一化（bge 系列惯例）
+        vec = np.asarray(hidden[0, 0], dtype=np.float32)  # CLS pooling
+        norm = np.linalg.norm(vec)
+        self._total += 1
+        return vec / norm if norm > 1e-8 else vec
+
+    def embed_batch(self, texts: List[str]) -> List[np.ndarray]:
+        self._lazy_init()
+        out = []
+        for t in texts:
+            try:
+                out.append(self.embed(t))
+            except Exception:
+                out.append(np.zeros(1024, dtype=np.float32))
+        return out
+
+    def embedding_dim(self) -> int:
+        return 1024
+
+    def model_name(self) -> str:
+        return "bge-m3-onnx"
+
+    def diagnostics(self) -> Dict[str, Any]:
+        return {
+            "engine": self.__class__.__name__,
+            "model": self.model_name(),
+            "dim": self.embedding_dim(),
+            "model_dir": self._model_dir,
+            "total_embeddings": self._total,
+            "providers": self._providers,
+        }
+
+
 class SklearnEmbeddingEngine(EmbeddingEngine):
     """Lightweight embedding using scikit-learn TfidfVectorizer.
 
@@ -549,6 +638,9 @@ def create_engine(
             def model_name(self): return "sha256_hash"
         engine = HashEngine()
 
+    elif backend == "onnx":
+        engine = OnnxEmbeddingEngine(**kwargs)
+
     elif backend == "sklearn":
         engine = SklearnEmbeddingEngine(**kwargs)
 
@@ -584,7 +676,13 @@ def create_engine(
             else:
                 raise RuntimeError("Ollama not responding")
         except Exception:
-            engine = SklearnEmbeddingEngine(**kwargs)
+            # 2026-08-25（内镶）：Ollama 不可用时优先 bge-m3 ONNX
+            # （进程内推理）；模型缺失才回退 sklearn（128d 降级）。
+            if os.path.exists(os.path.join(OnnxEmbeddingEngine.DEFAULT_DIR,
+                                           "model_optimized.onnx")):
+                engine = OnnxEmbeddingEngine(**kwargs)
+            else:
+                engine = SklearnEmbeddingEngine(**kwargs)
 
     else:
         raise ValueError(f"Unknown backend: {backend}. Choose from: auto, ollama, sklearn, hash")

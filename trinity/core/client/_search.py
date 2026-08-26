@@ -34,6 +34,12 @@ class _SearchMixin:
         ranked: bool = False,
         modality: Optional[str] = None,
         dedup_by_session: bool = False,
+        include_docs: bool = False,
+        page_tree: bool = False,
+        page_k: int = 3,
+        view: Optional[str] = None,
+        visibility_rule: Optional[str] = None,
+        reason_deep: bool = False,
     ) -> Dict[str, Any]:
         """语义记忆搜索。
 
@@ -51,13 +57,57 @@ class _SearchMixin:
             use_vector: 是否启用向量语义搜索（默认 False，向后兼容）。
             agent_weight: 调用方指定的 Agent 权重值，覆盖存储层配置。
             ranked: 是否启用三层分层排序（语义 / 时间衰减 / Agent 权重）。
+            include_docs: 是否包含 doc:* 知识库内容（默认 False——
+                2026-08-24 R6 P0-① 记忆/知识分层；True = 知识检索面）。
+            page_tree: 是否走页优先检索（PageIndex 式主题页树，2026-08-26
+                Phase 1；默认 False 保持既有行为；需先 build_pagetree()）。
+            page_k: 页树模式选页数（默认 3）。
+            view: 命名记忆视图（Budibase 借鉴 Phase 2，~/.trinity/views.yaml）。
+                展开为过滤/排序/截断；显式参数优先于视图缺省；视图不存在忽略。
+                仅作用于基础检索路径（keyword/hybrid/graph/semantic）。
+            visibility_rule: 行级可见性规则（Budibase 借鉴 Phase 3，白名单字段+
+                参数化防注入），如 "importance >= 0.6 AND category != 'lme'"。
+                解析失败时忽略；仅作用于基础检索路径。
 
         Returns:
             Dict with 'results' (匹配条目列表) and 'pushed_memories' (主动推送列表)。
         """
         raw_results: List[Dict[str, Any]] = []
+        _view_spec: Optional[Dict[str, Any]] = None
 
         if self._adapter:
+            # ── 记忆视图（Budibase 借鉴 Phase 2）：显式参数优先，视图补缺省 ──
+            if view:
+                try:
+                    from trinity.views import resolve as _resolve_view, apply_view as _apply_view
+                    _view_spec = _resolve_view(view)
+                    if _view_spec:
+                        if not category and _view_spec.get("categories"):
+                            category = _view_spec["categories"][0] if len(_view_spec["categories"]) == 1 else None
+                        if not persona_id and _view_spec.get("personas"):
+                            persona_id = _view_spec["personas"][0] if len(_view_spec["personas"]) == 1 else None
+                except Exception:
+                    _view_spec = None
+            # ── 页树模式（PageIndex 式，2026-08-26 Phase 1）──────────
+            #   显式启用（默认关闭）；先定位页再读页内，基础召回兜底。
+            if page_tree:
+                return self.pagetree_search(
+                    query=query, top_k=top_k, page_k=page_k,
+                    persona_id=persona_id, tenant_id=tenant_id,
+                    agent_id=agent_id, app_id=app_id, session_id=session_id,
+                    category=category, include_docs=include_docs,
+                )
+            # ── reason 模式（Phase 3，2026-08-26）：LLM 相关重判 ──
+            #   候选（关键词+页树）→ LLM 带活跃 goal 上下文判定相关 →
+            #   重排输出；无 LLM key / 失败时静默回退候选原序。
+            if (mode or "").lower() == "reason":
+                return self._search_reason(
+                    query=query, top_k=top_k,
+                    persona_id=persona_id, tenant_id=tenant_id,
+                    agent_id=agent_id, app_id=app_id, session_id=session_id,
+                    category=category, include_docs=include_docs,
+                    deep=reason_deep,
+                )
             _mode = (mode or "hybrid").lower()
             # ── 真实 mode 路由（GEN-2，修复"mode 参数装饰性"）──────────
             #   keyword/exact → FTS5 关键词（保持默认行为）
@@ -99,6 +149,7 @@ class _SearchMixin:
                         session_id=session_id,
                         category=category,
                         top_k=top_k,
+                        include_docs=include_docs,
                     )
             elif _use_hybrid:
                 try:
@@ -124,6 +175,7 @@ class _SearchMixin:
                             session_id=session_id,
                             category=category,
                             top_k=top_k,
+                            include_docs=include_docs,
                         )
                     except Exception:
                         raw_results = []
@@ -166,7 +218,10 @@ class _SearchMixin:
                     session_id=session_id,
                     category=category,
                     top_k=top_k,
+                    include_docs=include_docs,
+                    visibility_rule=visibility_rule,
                 )
+
 
         # modality 过滤
         if modality and raw_results:
@@ -195,6 +250,12 @@ class _SearchMixin:
                 agent_weight=agent_weight,
             )
 
+        # 2026-08-24（R6 P1-③）：证据/置信度标注（区分"检索到"与"确定对"）
+        try:
+            raw_results = self._enrich_evidence(raw_results)
+        except Exception:
+            pass  # 标注失败不影响检索
+
         # 收集本次搜索结果中的记忆 ID，进行主动推送
         memory_ids = [m.get("memory_id", "") for m in raw_results if m.get("memory_id")]
         pushed = self.proactive_push(memory_ids)
@@ -211,10 +272,75 @@ class _SearchMixin:
             except Exception:
                 pass
 
+        # 2026-08-26（Budibase 借鉴 Phase 1）：事件驱动自动化——memory.search
+        # 事件（默认关闭；emit 在规则未启用时零开销）。
+        if _view_spec and raw_results:
+            try:
+                from trinity.views import apply_view as _apply_view
+                raw_results = _apply_view(raw_results, _view_spec)
+            except Exception:
+                pass
+        try:
+            from trinity.automation import emit as _automation_emit
+            _automation_emit(
+                "memory.search",
+                {
+                    "query": query,
+                    "top_k": top_k,
+                    "mode": (mode or "hybrid") + ((":" + view) if view else ""),
+                    "hit_count": len(raw_results),
+                    "top_score": float(raw_results[0].get("score") or 0.0) if raw_results else 0.0,
+                },
+                audit_fn=lambda rule, ok, detail: self._adapter.write_audit_log(
+                    memory_id=None, action="automation",
+                    agent_id=agent_id, persona_id=persona_id,
+                    details={"rule": rule, "ok": ok, **detail},
+                ) if self._adapter else None,
+            )
+        except Exception:
+            pass
+
         return {
             "results": raw_results,
             "pushed_memories": pushed,
         }
+    def _enrich_evidence(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """2026-08-24（R6 P1-③）：检索结果附证据/置信度标注。
+
+        对齐 2026 可信记忆方向（ERA: Evidence-based Reliability Alignment、
+        mnemos 证据背书）：区分"检索到了"与"确定是对的"——
+          - evidence: 来源（category/source_uri）、版本数（多版本=多次确认）、
+            审计可查（audit_available）；
+          - confidence: importance 加权 + 版本数修正，弱证据（无版本/低
+            importance）标注 "verify"（需复核）。
+        只读补充（从 adapter 查版本数，失败降级），不改变排序。
+        """
+        enriched = []
+        for r in results or []:
+            rec = dict(r)
+            mid = rec.get("memory_id") or rec.get("id")
+            category = rec.get("category") or ""
+            importance = float(rec.get("importance") or 0.5)
+            version_count = 0
+            if mid and self._adapter is not None:
+                try:
+                    chain = self._adapter.get_version_chain(mid) or []
+                    version_count = len(chain)
+                except Exception:
+                    version_count = 0
+            # confidence：importance 0-1 与版本修正（≥2 版本 +0.1，0 版本 -0.15）
+            confidence = min(1.0, max(0.0, importance + (0.1 if version_count >= 2 else -0.15)))
+            rec["evidence"] = {
+                "category": category,
+                "source_uri": rec.get("source_uri") or "",
+                "version_count": version_count,
+                "audit_available": bool(mid and self._adapter is not None),
+            }
+            rec["confidence"] = round(confidence, 3)
+            if confidence < 0.4:
+                rec["verify_hint"] = "需复核（弱证据：低 importance 或无版本链）"
+            enriched.append(rec)
+        return enriched
     def _apply_layered_ranking(
         self,
         raw_results: List[Dict[str, Any]],
@@ -532,12 +658,34 @@ class _SearchMixin:
         组合向量/FTS + BM25 关键词 + 图谱检索，支持 fusion/rrf/cascade。
         use_ann=True 时向量源使用 ANNIndex（FAISS HNSW），否则为 SQLite FTS。
         """
+        # 2026-08-25（可测域扩展）：tuning env 变化时重建实例——A/B 的
+        # base/exp 同进程运行，共享实例会让 exp 的权重 env 不生效。
+        _tune_env = ("TRINITY_VECTOR_WEIGHT", "TRINITY_BM25_WEIGHT",
+                     "TRINITY_GRAPH_WEIGHT", "TRINITY_AGGREGATOR_WEIGHT",
+                     "TRINITY_PROCEDURAL_WEIGHT", "TRINITY_RRF_K",
+                     "TRINITY_BM25_K1", "TRINITY_BM25_B",
+                     "TRINITY_PAGETREE_HYBRID")
+        _sig = tuple(os.environ.get(k, "") for k in _tune_env)
+        if self._hybrid_retriever is not None and getattr(
+                self, "_hybrid_sig", None) != _sig:
+            self._hybrid_retriever = None  # env 变化 → 重建
+            # 2026-08-25（BM25 k1/b 维度）：k1/b 变化时 BM25 索引也需重建
+            # （索引用 k1/b 计算分数，旧索引分数无效）。
+            if os.environ.get("TRINITY_BM25_K1") or os.environ.get("TRINITY_BM25_B"):
+                self._bm25_index = None
+                self._bm25_ready = False
         if self._hybrid_retriever is None:
+            self._hybrid_sig = _sig
             from trinity.retrieval import HybridRetriever, BM25Index, GraphRetriever
 
             if self._bm25_index is None:
                 self._ensure_bm25_index()
-            bm25 = self._bm25_index or BM25Index()
+            # 2026-08-25（新维度）：BM25 k1/b 支持 env 覆盖——经典 BM25 参数，
+            # 直接影响关键词检索排序（默认 k1=1.5/b=0.75）。
+            bm25 = self._bm25_index or BM25Index(
+                k1=float(os.environ.get("TRINITY_BM25_K1", "1.5")),
+                b=float(os.environ.get("TRINITY_BM25_B", "0.75")),
+            )
             graph = GraphRetriever(self._adapter) if self._adapter else None
 
             # search_fn: 闭包封装向量/FTS 逻辑
@@ -550,10 +698,122 @@ class _SearchMixin:
                         query=q, top_k=top_k,
                     ) if self._adapter else []
 
+            # 2026-08-24（R8 P1-4）：PPR 图谱通道——实体种子 + 记忆关联图
+            # PPR 扩散（HippoRAG 式），供 HybridRetriever 图谱通道增强。
+            def _ppr_fn(q: str, top_k: int):
+                if self._adapter is None:
+                    return []
+                # 实体种子：实体名模糊匹配 → 关联记忆
+                seed_mids = set()
+                try:
+                    entities = self._adapter.search_entities(name=q, etype=None, limit=8)
+                    for e in entities:
+                        eid = e.get("entity_id") or e.get("id")
+                        if not eid:
+                            continue
+                        links = self._adapter.get_all_links(eid)
+                        for link in links:
+                            mid = link.get("source_id") or link.get("target_id") or link.get("memory_id")
+                            if mid and mid != eid:
+                                seed_mids.add(mid)
+                except Exception:
+                    pass
+                # 直接查询记忆作为种子兜底
+                if not seed_mids:
+                    try:
+                        hits = self._adapter.search_memories(query=q, top_k=8)
+                        for h in hits:
+                            mid = h.get("memory_id") or h.get("id")
+                            if mid:
+                                seed_mids.add(mid)
+                    except Exception:
+                        return []
+                if not seed_mids:
+                    return []
+                # 邻接表：从种子出发逐层 BFS 收集 2 跳 memory_links（不预载全图）
+                graph: Dict[str, Dict[str, Any]] = {}
+                frontier = list(seed_mids)
+                seen_nodes = set(seed_mids)
+                for _ in range(2):
+                    nxt = []
+                    for mid in frontier:
+                        try:
+                            links = self._adapter.get_all_links(mid)
+                        except Exception:
+                            links = {"outgoing": [], "incoming": []}
+                        for link in links.get("outgoing", []):
+                            tgt = link.get("target_id")
+                            if tgt:
+                                graph.setdefault(mid, {})[tgt] = link.get("link_type", "semantic")
+                                graph.setdefault(tgt, {})[mid] = link.get("link_type", "semantic")
+                                if tgt not in seen_nodes:
+                                    seen_nodes.add(tgt)
+                                    nxt.append(tgt)
+                        for link in links.get("incoming", []):
+                            src = link.get("source_id")
+                            if src:
+                                graph.setdefault(src, {})[mid] = link.get("link_type", "semantic")
+                                graph.setdefault(mid, {})[src] = link.get("link_type", "semantic")
+                                if src not in seen_nodes:
+                                    seen_nodes.add(src)
+                                    nxt.append(src)
+                    frontier = nxt
+                    if not frontier:
+                        break
+                if not graph:
+                    return []
+                try:
+                    from trinity.kgraph.ppr_core import ppr_from_graph
+                    hits = ppr_from_graph(graph, list(seed_mids), top_k=top_k * 2)
+                    out = []
+                    for h in hits:
+                        mid = h.get("id")
+                        if not mid:
+                            continue
+                        out.append({
+                            "id": mid,
+                            "memory_id": mid,
+                            "score": float(h.get("score", 0.0)),
+                            "content": "",
+                        })
+                    return out
+                except Exception as exc:
+                    logger.debug("PPR search failed, fallback: %s", exc)
+                    return []
+
+            # 2026-08-26（PageIndex 借鉴 Phase 1）：页树通道 fn——
+            # TRINITY_PAGETREE_HYBRID=on 且页树已构建时接入 hybrid 融合。
+            _pt_fn = None
+            if os.environ.get("TRINITY_PAGETREE_HYBRID", "off").strip().lower() in ("1", "on", "true", "yes"):
+                try:
+                    if self.load_pagetree() is not None:
+                        # novel_only：页树通道只贡献基础召回未命中的记忆（只增不减）
+                        _pt_fn = lambda q, k: self.pagetree_search(
+                            query=q, top_k=k, novel_only=True,
+                        ).get("results", [])
+                except Exception:
+                    _pt_fn = None
+            # 2026-08-25（可测域扩展）：通道权重 + rrf_k 支持 env 覆盖——
+            # 此前硬编码默认（vector 0.35/bm25 0.25/graph 0.25/agg 0.15/proc 0.10,
+            # rrf_k 60），自进化 A/B 无法测。env 未设时行为不变（向后兼容）。
+            _w = lambda k, d: float(os.environ.get(k, str(d)))
             self._hybrid_retriever = HybridRetriever(
                 bm25_index=bm25,
                 graph_retriever=graph,
                 search_fn=_vector_search_fn,
+                ppr_fn=_ppr_fn,
+                vector_weight=_w("TRINITY_VECTOR_WEIGHT", 0.35),
+                bm25_weight=_w("TRINITY_BM25_WEIGHT", 0.25),
+                # 2026-08-25（P4 排序优先简化）：默认 0.25→0.1——SmartSearch 验证：
+            # n=20 nDCG 下 GW 0.1/0 均 delta=0（图谱通道在当前评测配置无贡献），
+            # 降权 60% 无损并降低图谱检索开销；可用 TRINITY_GRAPH_WEIGHT 覆盖。
+            graph_weight=_w("TRINITY_GRAPH_WEIGHT", 0.1),
+                aggregator_weight=_w("TRINITY_AGGREGATOR_WEIGHT", 0.15),
+                procedural_weight=_w("TRINITY_PROCEDURAL_WEIGHT", 0.10),
+                rrf_k=int(os.environ.get("TRINITY_RRF_K", "60")),
+                # 2026-08-26（PageIndex 借鉴 Phase 1）：页树通道——
+                # env TRINITY_PAGETREE_HYBRID=on 且页树存在时接入融合。
+                pagetree_fn=_pt_fn,
             )
         return self._hybrid_retriever
     def _ensure_bm25_index(self) -> None:
@@ -576,7 +836,11 @@ class _SearchMixin:
         with self._bm25_lock:
             if self._bm25_index is not None:
                 return  # 已在构建（另一线程启动），等待 ready 即可
-            self._bm25_index = BM25Index()  # 空索引立即可用（优雅降级）
+            # 2026-08-25（新维度）：BM25 k1/b env 覆盖（默认 1.5/0.75）
+            self._bm25_index = BM25Index(
+                k1=float(os.environ.get("TRINITY_BM25_K1", "1.5")),
+                b=float(os.environ.get("TRINITY_BM25_B", "0.75")),
+            )  # 空索引立即可用（优雅降级）
             if self._adapter is None:
                 return
 
@@ -610,10 +874,11 @@ class _SearchMixin:
           routing="auto"：按 query 特征分层——短查询走 light（FTS 快路径），
             长/复杂查询走 full（5 通道融合）。
           routing="light"/"full"：强制指定。
-          环境变量 TRINITY_ADAPTIVE_ROUTING=on 时 auto 生效；off 默认全走 full
-          （行为兼容，A/B 可测）。
+          环境变量 TRINITY_ADAPTIVE_ROUTING=off 可关闭；默认 on——
+          2026-08-24（R8 P0-3）：短查询走 FTS 轻通道是引擎已验证的最优路径
+          （FTS R@5=0.975 > hybrid-rrf 0.942），此前默认 off 使该性能特性空转。
         """
-        env = os.environ.get("TRINITY_ADAPTIVE_ROUTING", "off").strip().lower()
+        env = os.environ.get("TRINITY_ADAPTIVE_ROUTING", "on").strip().lower()
         if routing == "auto":
             if env != "on":
                 routing = "full"

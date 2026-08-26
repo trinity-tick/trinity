@@ -171,6 +171,7 @@ async def agent_memory_search(
     scope: Optional[str] = Query(None, description="Filter by scope"),
     mode: str = Query("hybrid", description="Search mode: keyword / vector / hybrid"),
     use_embeddings: bool = Query(True, description="Use semantic embedding search (deprecated, use mode)"),
+    include_archived: bool = Query(False, description="Include source-archived memories (default False — 检索面与引擎库 active 口径统一, 2026-08-24 R8 P0-1)"),
 ):
     """Search the shared Aggregator memory pool.
 
@@ -199,6 +200,7 @@ async def agent_memory_search(
                 filters, limit=top_k,
                 mode=mode, query_text=q,
                 source="api:/agents/memory/search",
+                include_archived=include_archived,
             )
             return {
                 "query": q, "total": len(results),
@@ -217,6 +219,11 @@ async def agent_memory_search(
             qv = eng.embed(q)
 
             all_dvs = list(agg._pool.values())
+            if not include_archived:
+                all_dvs = [
+                    dv for dv in all_dvs
+                    if dv.source_status not in ("archived", "deleted")
+                ]
             if not all_dvs:
                 return {"query": q, "total": 0, "results": [], "method": "semantic_empty"}
 

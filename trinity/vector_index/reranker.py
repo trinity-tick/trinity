@@ -59,12 +59,19 @@ class CrossEncoderReranker:
         self._use_fp16 = use_fp16
         self._model = None
         self._model_loaded = False
+        self._model_failed = False
         self._total_reranks = 0
         self._total_rerank_time = 0.0
 
     def _load_model(self):
-        """Lazy-load the Cross-Encoder model."""
-        if self._model_loaded:
+        """Lazy-load the Cross-Encoder model.
+
+        Failures are sticky: after a failed load attempt the reranker
+        permanently degrades to identity (no-op) instead of retrying the
+        import on every search (avoids repeated import failures + log spam
+        when sentence-transformers is not installed).
+        """
+        if self._model_loaded or self._model_failed:
             return
         try:
             from sentence_transformers import CrossEncoder
@@ -79,6 +86,7 @@ class CrossEncoderReranker:
                 self._model_name, self._device or "auto"
             )
         except Exception as e:
+            self._model_failed = True
             logger.warning(
                 "Failed to load Cross-Encoder '%s': %s. "
                 "Falling back to identity reranking (no-op).",

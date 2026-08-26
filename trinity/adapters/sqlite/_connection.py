@@ -39,6 +39,9 @@ class _ConnectionMixin:
         self._cipher: Optional[StorageCipher] = get_storage_cipher()
         if self._cipher:
             logger.info("storage encryption ON (AES-256-GCM) for %s", db_path)
+        # 2026-08-24（R9 P0-1）：建表/迁移写锁失败时进入只读模式
+        # （检索可用、写操作报错），见 connect()。
+        self._readonly_mode: bool = False
 
         # ── 批量写入缓冲区 ──────────────────────────────────────────
         self._batch_buffer: List[Dict[str, Any]] = []
@@ -71,7 +74,14 @@ class _ConnectionMixin:
         self._touch_pending = threading.Event()
         self._touch_stop = threading.Event()
     def connect(self) -> None:
-        """Connect to SQLite database and create tables if needed."""
+        """Connect to SQLite database and create tables if needed.
+
+        2026-08-24（R9 P0-1）：建表/迁移写操作**容错降级**——此前建表
+        写锁失败（database is locked）会整体抛异常 → Trinity 上层静默
+        adapter=None → 引擎检索全 0（健康假象）。现在：只读连接先建立，
+        建表/迁移失败时进入只读模式（_readonly_mode=True，检索/读取正常，
+        写操作报错），不再让初始化写操作阻断只读检索。
+        """
         os.makedirs(os.path.dirname(self.db_path) or ".", exist_ok=True)
         # check_same_thread=False：允许 FastAPI/HTTP 线程池等跨线程复用同一连接
         # （SQLite 连接默认线程绑定，多线程服务调用 search/store 会抛
@@ -79,7 +89,18 @@ class _ConnectionMixin:
         self._conn = sqlite3.connect(self.db_path, timeout=10.0, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._apply_pragmas()
-        self._create_tables()
+        try:
+            self._create_tables()
+            self._readonly_mode = False
+        except Exception as exc:
+            # 建表写锁失败（其他进程持写锁）→ 只读模式：检索仍可用，
+            # 写操作走 _write_guard 报错；不再向上抛（R9 P0-1 解耦）。
+            logger.warning(
+                "SQLite schema init failed (%s) — entering READONLY mode for %s; "
+                "retrieval remains available, writes will fail",
+                exc, self.db_path,
+            )
+            self._readonly_mode = True
         # 性能（2026-08-15）：jieba 词典冷启动约 1.4s（首查被拖慢）——
         # 后台线程预热，把开销移到进程启动而非首次搜索。
         threading.Thread(target=self._prewarm_tokenizer, daemon=True).start()

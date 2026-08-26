@@ -9,6 +9,7 @@ _ensure_vms also reads _TRINITY_STORE, so vms/_ensure_vms live here.
 
 import hashlib
 import json
+import logging
 import os
 import sys
 import threading
@@ -17,6 +18,8 @@ from typing import Any, Dict, List, Optional, Union
 
 from trinity.telemetry import traced
 from ._helpers import _find_trinity_store
+
+logger = logging.getLogger("trinity.core.client")
 
 # Preserve the old single-file __file__ semantics: the original module lived at
 # trinity/core/client.py, so dirname(dirname(__file__)) resolved to <repo>/trinity.
@@ -30,10 +33,19 @@ _TRINITY_STORE = _find_trinity_store()
 
 # ---- Dynamically import the trinity_call bridge module ----
 def _import_trinity_bridge():
-    """Dynamically import the trinity_call bridge module."""
-    sys.path.insert(0, _TRINITY_STORE)
-    from trinity_call import trinity as _trinity
-    return _trinity
+    """Dynamically import the trinity_call bridge module.
+
+    2026-08-25（闭环自检修复）：trinity_call 是运行时部署的桥模块，
+    环境缺失时导入抛 ModuleNotFoundError——bridge 是可选增强，不应
+    阻断核心功能（reason/search 等）。缺失时返回 None（容错降级）。
+    """
+    try:
+        sys.path.insert(0, _TRINITY_STORE)
+        from trinity_call import trinity as _trinity
+        return _trinity
+    except Exception:
+        # 桥模块缺失/损坏 → 降级（bridge 属性返回 None，调用方容错）
+        return None
 
 # ---- Cached bridge import ----
 _BRIDGE_CACHE: Optional[Any] = None
@@ -60,6 +72,9 @@ class _ConstructionMixin:
         self._bridge = None
         self._adapter = None
         self._engine = None
+        # 2026-08-24（R9 P0-1）：引擎初始化错误（connect 失败等）——
+        # 非 None 时表示引擎不可用，诊断/健康检查应报 degraded 而非 healthy。
+        self._engine_error: Optional[str] = None
 
         # ── 自进化记忆系统 ──────────────────────────────────────────
         self.evolution_enabled = evolution_enabled
@@ -141,8 +156,16 @@ class _ConstructionMixin:
             try:
                 self._adapter = SQLiteAdapter(db_path=_db_path)
                 self._adapter.connect()
-            except Exception:
+            except Exception as exc:
+                # 2026-08-24（R9 P0-1）：不再静默降级——记录详细错误与
+                # 库路径（此前 except: pass 吞异常导致 API 在引擎全挂时
+                # 自报 healthy、检索静默 0 hits 的"健康假象"）。
+                logger.error(
+                    "Trinity SQLite adapter connect FAILED for %s: %s: %s",
+                    _db_path, type(exc).__name__, exc,
+                )
                 self._adapter = None
+                self._engine_error = f"{type(exc).__name__}: {exc}"
         else:
             raise ValueError(f"Unknown adapter: {adapter}")
     def _init_sqlite_adapter(self):
@@ -155,8 +178,17 @@ class _ConstructionMixin:
         )
         os.makedirs(_store_dir, exist_ok=True)
         db_path = os.path.join(_store_dir, "trinity_store.db")
-        self._adapter = SQLiteAdapter(db_path=db_path)
-        self._adapter.connect()
+        try:
+            self._adapter = SQLiteAdapter(db_path=db_path)
+            self._adapter.connect()
+        except Exception as exc:
+            # 2026-08-24（R9 P0-1）：同默认路径，不静默降级
+            logger.error(
+                "Trinity SQLite adapter connect FAILED for %s: %s: %s",
+                db_path, type(exc).__name__, exc,
+            )
+            self._adapter = None
+            self._engine_error = f"{type(exc).__name__}: {exc}"
     def _init_postgres_adapter(self):
         from trinity.adapters.postgresql import PostgreSQLAdapter
         self._adapter = PostgreSQLAdapter(

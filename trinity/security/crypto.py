@@ -1,11 +1,12 @@
 """
-Trinity — 存储加密（B5, 2026-08-15）
-=====================================
+Trinity — 存储加密（B5, 2026-08-15；R8 P1-5 默认开启, 2026-08-24）
+=========================================================================
 AES-256-GCM 可选加密：保护 SQLite 落盘的敏感正文（memories.content /
 memory_versions.content），密钥由环境变量或密钥文件提供。
 
 开关：
-    TRINITY_STORAGE_ENCRYPTION=on    # 启用存储加密
+    TRINITY_STORAGE_ENCRYPTION=on    # 启用存储加密（默认 on，2026-08-24）
+    TRINITY_STORAGE_ENCRYPTION=off   # 显式关闭（旧行为）
     TRINITY_STORAGE_KEY=<hex 64>     # 32 字节密钥（hex）；缺省时自动生成并
                                      # 持久化到 ~/.trinity/secrets/storage.key
 
@@ -14,10 +15,12 @@ memory_versions.content），密钥由环境变量或密钥文件提供。
     - tokenized_content 保持明文 → FTS5 全文检索不受影响
     - sha256_hash/content_hash 基于明文计算 → 去重/一致性链/身份保留不变
     - 高敏部署可关闭 FTS 或仅索引非敏感字段（见 docs/COMPLIANCE_GDPR_20260815.md）
+    - 历史明文数据兼容：decrypt 对非 enc:v1: 前缀原样返回（增量加密，
+      新写入加密、旧数据可读）；企业合规需全量加密时用迁移脚本重写 content
 
 用法：
     from trinity.security.crypto import get_storage_cipher
-    cipher = get_storage_cipher()          # None 表示未启用
+    cipher = get_storage_cipher()          # None 表示未启用（显式 off 或降级）
     enc = cipher.encrypt("秘密内容")
     assert cipher.decrypt(enc) == "秘密内容"
 """
@@ -97,7 +100,12 @@ def _load_or_create_key() -> Optional[bytes]:
 
 
 def is_enabled() -> bool:
-    return os.environ.get(ENV_SWITCH, "").strip().lower() in ("1", "on", "true", "yes")
+    """存储加密是否启用。
+
+    2026-08-24（R8 P1-5）：默认 **on**（安全默认）——企业合规标配的静态
+    加密从"可选项"变"出厂默认"；`TRINITY_STORAGE_ENCRYPTION=off` 显式关闭。
+    """
+    return os.environ.get(ENV_SWITCH, "on").strip().lower() in ("1", "on", "true", "yes")
 
 
 def get_storage_cipher() -> Optional[StorageCipher]:

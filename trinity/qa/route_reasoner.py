@@ -237,21 +237,83 @@ class RouteReasoner:
             out.append(h)
         return out
 
+    # ── 2026-08-25（ENGRAM 式证据组织）─────────────────────────────
+    # 按记忆类型（episodic/semantic/procedural）组织证据 + 预算门控：
+    # - 类型映射：category → 类型（episodic: session/episodic/lme；
+    #   semantic: decision/knowledge/general/consolidation；procedural: skill/procedure）
+    # - 查询路由：qtype → 类型优先级（pref/knowledge → semantic 优先；
+    #   multi/temporal → episodic 优先）
+    # - 预算：按类型配额截断 + 去重 + [TYPE] 前缀序列化（LLM 更易区分证据来源）
+    # env TRINITY_EVIDENCE_TYPED=on 启用（默认 off，向后兼容）
+    _TYPE_OF_CATEGORY = {
+        "session": "episodic", "episodic": "episodic", "lme": "episodic",
+        "decision": "semantic", "knowledge": "semantic", "general": "semantic",
+        "consolidation": "semantic", "kb_harvested": "semantic",
+        "skill": "procedural", "procedure": "procedural",
+    }
+    _QTYPE_TYPE_PRIORITY = {
+        "pref": ["semantic", "episodic", "procedural"],
+        "knowledge-update": ["semantic", "episodic", "procedural"],
+        "multi-session": ["episodic", "semantic", "procedural"],
+        "temporal": ["episodic", "semantic", "procedural"],
+    }
+
+    def _organize_evidence(self, evidence: list, qtype: Optional[str],
+                           budget: int = 12) -> list:
+        """ENGRAM 式：类型分组 → 路由优先级配额 → 去重 → [TYPE] 前缀。"""
+        try:
+            typed: dict = {"episodic": [], "semantic": [], "procedural": []}
+            for e in evidence:
+                cat = str(e.get("category") or "").strip().lower()
+                t = self._TYPE_OF_CATEGORY.get(cat, "semantic")
+                typed[t].append(e)
+            priority = self._QTYPE_TYPE_PRIORITY.get(str(qtype or "").lower(),
+                                                     ["semantic", "episodic", "procedural"])
+            out: list = []
+            seen: set = set()
+            # 按优先级分配预算（首个类型 50%，其余均分）
+            n = len(priority)
+            for i, t in enumerate(priority):
+                pool = typed.get(t, [])
+                if not pool:
+                    continue
+                quota = int(budget * (0.5 if i == 0 else 0.5 / max(n - 1, 1)))
+                for e in pool[:max(quota, 1)]:
+                    c = (e.get("content") or "").strip()
+                    if not c or c in seen:
+                        continue
+                    seen.add(c)
+                    e = dict(e)
+                    e["content"] = f"[{t.upper()}] " + c
+                    out.append(e)
+            return out[:budget]
+        except Exception:
+            return evidence
+
     def _chat(self, system: str, user: str, max_tokens: int = 350, timeout: int = 120) -> str:
+        # 2026-08-24（P1-7）：走统一 LLM 适配层——兼容推理模型
+        # （reasoning_content 输出 / finish_reason=length）与 chat 模型；
+        # 模型可用 TRINITY_LLM_MODEL 覆盖（默认 deepseek-chat）。
+        # P1-7：stable_prefix_messages 把系统提示固定为缓存前缀（tag 版本化），
+        # 变体（问题/证据）全放 user 尾部——最大化 DeepSeek 前缀缓存命中。
+        from trinity.llm.client import (
+            chat_completion,
+            resolve_default_model,
+            stable_prefix_messages,
+        )
+        messages = stable_prefix_messages(system, user, tag="trinity-qa-v1")
         payload = {
-            "model": self.model,
-            "messages": [{"role": "system", "content": system},
-                         {"role": "user", "content": user}],
+            "model": self.model or resolve_default_model(),
+            "messages": messages,
             "temperature": 0.0, "max_tokens": max_tokens,
         }
-        req = urllib.request.Request(
-            self.api_base,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json",
-                     "Authorization": "Bearer " + self._api_key},
+        resp = chat_completion(
+            payload,
+            api_key=self._api_key,
+            base_url=self.api_base.rsplit("/chat/completions", 1)[0],
+            timeout=timeout,
         )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return json.loads(resp.read().decode("utf-8"))["choices"][0]["message"]["content"].strip()
+        return resp["content"]
 
     def answer(
         self,
@@ -267,6 +329,28 @@ class RouteReasoner:
         strategy = route_for(qtype)
         top_k = self.turn_top_k if strategy == "turn" else self.top_k
         evidence = self._retrieve(question, agent_id, persona_id, top_k=top_k)
+        # 2026-08-25（闭环修复：时间巩固消费）：semantic 优先类型
+        # （pref/knowledge-update）额外检索 consolidation 摘要（agent=consolidation
+        # 命名空间），作为高价值证据前置——TiMem 语义：偏好/知识题先用巩固摘要。
+        _qtype_l = str(qtype or "").lower()
+        if _qtype_l in ("pref", "single-session-preference", "knowledge-update"):
+            try:
+                _cons = self._search_fn(question, top_k=2, agent_id="consolidation")
+                _cl = _cons.get("results", []) if isinstance(_cons, dict) else (_cons or [])
+                _seen2 = {e.get("content", "") for e in evidence}
+                for h in _cl:
+                    c = (h.get("content") or "").strip()
+                    if c and c not in _seen2:
+                        _seen2.add(c)
+                        h2 = dict(h)
+                        h2["content"] = _ensure_date_prefix(c, h2.get("created_at"))
+                        h2["_consolidated"] = True
+                        evidence.insert(0, h2)  # 前置高价值摘要
+            except Exception:
+                pass
+        # 2026-08-25（ENGRAM 式）：类型组织 + 证据预算（env 开关）
+        if os.environ.get("TRINITY_EVIDENCE_TYPED", "off").strip().lower() in ("1", "on", "true", "yes"):
+            evidence = self._organize_evidence(evidence, qtype, budget=top_k)
         if not evidence:
             return {"answer": "UNKNOWN", "strategy": strategy, "evidence": [], "error": None}
 

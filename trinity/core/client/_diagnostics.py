@@ -66,11 +66,26 @@ class _DiagnosticsMixin:
         pref→两段式 / 其他→dated plain，见 trinity/qa/route_reasoner.py）；
         无凭证/失败回退 OpenDomainReasoner。默认 off（行为兼容）。
         """
+        # 2026-08-25（评测/生产对齐修复）：生产推理检索改用 hybrid 5 通道——
+        # 此前 search_fn=self.search（默认 FTS5），而自进化评测优化的是
+        # search_hybrid（5 通道 RRF）——评测结论在生产从未生效（核心失真）。
+        # self.search(mode="hybrid") 走 5 通道 RRF 并自动补全 content。
+        def _hybrid_search(query, top_k=8, agent_id=None, persona_id=None):
+            try:
+                # 确保 hybrid_retriever 已初始化（property 懒构建 5 通道；
+                # 不触发则 _use_hybrid=False 回退 FTS——评测/生产失真根因）
+                if getattr(self, "_hybrid_retriever", None) is None:
+                    _ = self.hybrid_retriever
+                return self.search(query, top_k=top_k, mode="hybrid",
+                                   agent_id=agent_id, persona_id=persona_id)
+            except Exception:
+                return self.search(query, top_k=top_k, agent_id=agent_id,
+                                   persona_id=persona_id)
         if os.environ.get("TRINITY_ROUTE_REASONER", "off").strip().lower() == "on":
             try:
                 from trinity.qa.route_reasoner import RouteReasoner
 
-                rr = RouteReasoner(search_fn=self.search)
+                rr = RouteReasoner(search_fn=_hybrid_search)
                 if rr.available:
                     return rr.answer(
                         query, qtype=qtype, question_date=question_date,
@@ -82,6 +97,10 @@ class _DiagnosticsMixin:
             from trinity.modules.open_domain.reasoner import OpenDomainReasoner
             reasoner = OpenDomainReasoner()
             if multi_hop:
-                return reasoner.answer_multi_hop(query, retriever=self.search, top_k=top_k)
-            return reasoner.answer(query, retriever=self.search, top_k=top_k)
-        return self.bridge("reason", query=query, multi_hop=multi_hop, top_k=top_k)
+                return reasoner.answer_multi_hop(query, retriever=_hybrid_search, top_k=top_k)
+            return reasoner.answer(query, retriever=_hybrid_search, top_k=top_k)
+        if self.bridge is not None:
+            return self.bridge("reason", query=query, multi_hop=multi_hop, top_k=top_k)
+        # 2026-08-25（闭环自检修复）：bridge 缺失时返回可读错误而非崩溃
+        return {"answer": None, "error": "reason unavailable: bridge module missing "
+                "(trinity_call not deployed)", "strategy": None, "evidence": []}

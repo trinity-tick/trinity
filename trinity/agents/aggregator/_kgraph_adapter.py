@@ -76,9 +76,9 @@ class _AggregatorKGraphAdapter:
         对齐 HippoRAG 2 增强 PPR：种子实体注入个性化重启分布 p，
         v_{t+1} = alpha·Mᵀv_t + (1-alpha)·p，图扩散评分优于固定跳数加权。
         BFS 先收集 3 跳内子图限定规模（11k 节点图上幂迭代可控）。
+        2026-08-24（R8 P1-4）：算法提取至 trinity/kgraph/ppr_core.py 共享。
         """
-        from collections import Counter
-        graph = self._agg._relations_graph
+        from trinity.kgraph.ppr_core import ppr_from_graph
 
         # 1) 种子解析
         seeds = set()
@@ -89,65 +89,12 @@ class _AggregatorKGraphAdapter:
         if not seeds:
             return []
 
-        # 2) BFS 收集 3 跳内可达子图（限定幂迭代规模）
-        nodes = set(seeds)
-        frontier = set(seeds)
-        for _ in range(3):
-            nxt = set()
-            for n in frontier:
-                for nb in graph.get(n, {}):
-                    if nb not in nodes:
-                        nodes.add(nb)
-                        nxt.add(nb)
-            frontier = nxt
-            if not frontier:
-                break
-        if not nodes:
-            return []
-        nodes = list(nodes)
-        idx = {n: i for i, n in enumerate(nodes)}
-        n = len(nodes)
-
-        # 3) 个性化重启分布 + 初始向量（种子均分）
-        p = [0.0] * n
-        for s in seeds:
-            p[idx[s]] = 1.0 / len(seeds)
-        v = list(p)
-
-        # 4) 行归一化转移矩阵（出度均匀分布）
-        # 悬空节点（无出边）跳转到个性化分布 p，保证质量守恒（sum→1）。
-        M = [[0.0] * n for _ in range(n)]
-        for src in nodes:
-            outs = graph.get(src, {})
-            total = len(outs)
-            if total == 0:
-                for j in range(n):
-                    M[idx[src]][j] = p[j]
-                continue
-            for nb in outs:
-                j = idx.get(nb)
-                if j is not None:
-                    M[idx[src]][j] = 1.0 / total
-
-        # 5) 幂迭代: v = alpha·Mᵀv + (1-alpha)·p
-        for _ in range(max_iter):
-            nv = [0.0] * n
-            for i in range(n):
-                vi = v[i]
-                if vi <= 0.0:
-                    continue
-                row = M[i]
-                for j in range(n):
-                    mij = row[j]
-                    if mij > 0.0:
-                        nv[j] += alpha * vi * mij
-            for j in range(n):
-                nv[j] += (1.0 - alpha) * p[j]
-            diff = sum(abs(nv[i] - v[i]) for i in range(n))
-            v = nv
-            if diff < tol:
-                break
-
-        # 6) 排序返回
-        ranked = sorted(range(n), key=lambda i: v[i], reverse=True)
-        return [{"id": nodes[i], "score": round(float(v[i]), 6)} for i in ranked[:top_k]]
+        # 2) 幂迭代 PPR（共享实现：BFS 3 跳子图 + 个性化重启）
+        return ppr_from_graph(
+            self._agg._relations_graph,
+            list(seeds),
+            top_k=top_k,
+            alpha=alpha,
+            max_iter=max_iter,
+            tol=tol,
+        )

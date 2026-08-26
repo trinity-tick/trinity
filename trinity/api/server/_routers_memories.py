@@ -6,7 +6,7 @@ Trinity REST API Server — memory engine routes (/memories*, /personas/*, /grap
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, HTTPException, Query, Request
 
 from ._deps import (
     _live_aggregator as get_aggregator,
@@ -103,6 +103,7 @@ async def store_session_memory(
 
 @router.get("/memories")
 async def search_memories(
+    request: Request,
     query: str = Query(..., description="Search query"),
     top_k: int = Query(10),
     persona_id: Optional[str] = Query(None),
@@ -112,13 +113,28 @@ async def search_memories(
     session_id: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
     modality: Optional[str] = Query(None, description="Filter by modality"),
+    include_docs: bool = Query(False, description="Include doc:* knowledge content (default False — 记忆/知识分层, 2026-08-24 R6 P0-①)"),
+    view: Optional[str] = Query(None, description="命名记忆视图（views.yaml，Budibase 借鉴 2026-08-26）"),
+    visibility_rule: Optional[str] = Query(None, description="行级可见性规则，如 category!='lme' AND importance>=0.5"),
+    reason_deep: bool = Query(False, description="reason 深度模式（mode=reason 时生效）：难查询召回更强，holdout R@10 0.547→0.663"),
 ):
-    """Search memories with composite scope filtering (agent_id / app_id / session_id / category AND)."""
+    """Search memories with composite scope filtering (agent_id / app_id / session_id / category AND).
+
+    2026-08-24（R6 P0-①）：默认排除 doc:* 知识库内容（交互记忆检索面）；
+    include_docs=true 时包含（知识检索面）。
+    2026-08-26（Budibase 借鉴）：view（命名视图）与 visibility_rule（行级可见性）；
+    未显式传 visibility_rule 时自动应用 RBAC 角色规则（TRINITY_VISIBILITY_<ROLE> env）。
+    """
     mem = get_memory()
+    if not visibility_rule:
+        visibility_rule = getattr(request.state, "rbac_visibility", None)
     result = mem.search(query=query, top_k=top_k, persona_id=persona_id,
                         tenant_id=tenant_id, agent_id=agent_id,
                         app_id=app_id, session_id=session_id,
-                        category=category, modality=modality)
+                        category=category, modality=modality,
+                        include_docs=include_docs,
+                        view=view, visibility_rule=visibility_rule,
+                        reason_deep=reason_deep)
     results = result.get("results", [])
     return {
         "query": query,
@@ -308,7 +324,10 @@ async def get_entity(entity_id: str):
 async def create_relation(request: dict):
     """创建关系。
     Body:
-        subject_id: 主体实体 ID（必填）。        predicate: 谓词（必填）。        object_id: 客体实体 ID（必填）。        properties: 附加属性JSON。    """
+        subject_id: 主体实体 ID（必填）。        predicate: 谓词（必填）。        object_id: 客体实体 ID（必填）。        properties: 附加属性JSON。
+        valid_from: 边生效时间（ISO8601，缺省=now；edge bi-temporal）。
+        valid_to: 边失效时间（ISO8601，缺省 None=仍有效）。
+    """
     mem = get_memory()
     sid = request.get("subject_id", "")
     pred = request.get("predicate", "")
@@ -316,8 +335,13 @@ async def create_relation(request: dict):
     if not sid or not pred or not oid:
         raise HTTPException(status_code=400, detail="subject_id, predicate, object_id are required")
     props = request.get("properties", {})
+    valid_from = request.get("valid_from")
+    valid_to = request.get("valid_to")
     if hasattr(mem, "_adapter") and mem._adapter and hasattr(mem._adapter, "create_relation"):
-        return mem._adapter.create_relation(sid, pred, oid, props)
+        return mem._adapter.create_relation(
+            sid, pred, oid, props,
+            valid_from=valid_from, valid_to=valid_to,
+        )
     raise HTTPException(status_code=501, detail="Not available without adapter")
 
 
@@ -332,6 +356,29 @@ async def query_relations(
     mem = get_memory()
     if hasattr(mem, "_adapter") and mem._adapter and hasattr(mem._adapter, "query_relations"):
         return mem._adapter.query_relations(
+            subject_id=subject_id, predicate=predicate,
+            object_id=object_id, limit=limit,
+        )
+    raise HTTPException(status_code=501, detail="Not available without adapter")
+
+
+@router.get("/graph/relations/at")
+async def query_relations_at(
+    at_time: str = Query(..., description="ISO8601 时间点：返回该时点有效的边（edge bi-temporal）"),
+    subject_id: Optional[str] = Query(None),
+    predicate: Optional[str] = Query(None),
+    object_id: Optional[str] = Query(None),
+    limit: int = Query(50),
+):
+    """时点查询：返回指定时间点有效的边（valid_from <= at_time < valid_to）。
+
+    2026-08-24（P1-6，COMPARISON_VS_2026_SOTA_R7）：API 层补全 edge 级
+    bi-temporal 时点查询，对齐 Zep/Graphiti 时序知识图谱能力。
+    """
+    mem = get_memory()
+    if hasattr(mem, "_adapter") and mem._adapter and hasattr(mem._adapter, "query_relations_at"):
+        return mem._adapter.query_relations_at(
+            at_time=at_time,
             subject_id=subject_id, predicate=predicate,
             object_id=object_id, limit=limit,
         )

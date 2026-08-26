@@ -110,6 +110,13 @@ class DimensionVector:
     access_count: int = 0
     last_accessed: float = 0.0
 
+    # ── Source status (P0-1, 2026-08-24 R8) ──
+    # 源库（SQLite 引擎库）的记忆状态快照：active / archived / deleted。
+    # 聚合池与引擎库检索口径统一的基石——引擎库只检索 active（1,882 条），
+    # 聚合池此前无 status 概念（11,412 条含已归档），导致归档记忆仍可被
+    # API/MCP 侧检索命中。None = 未知（旧数据，视为 active 兼容）。
+    source_status: Optional[str] = None
+
     # ── Derived properties ──
 
     @property
@@ -157,6 +164,7 @@ class DimensionVector:
             "expire_at": self.expire_at,
             "access_count": self.access_count,
             "last_accessed": self.last_accessed,
+            "source_status": self.source_status,
         }
         if not full:
             d["time_bucket"] = self.time_bucket
@@ -181,6 +189,7 @@ class DimensionVector:
             expire_at=d.get("expire_at", None),
             access_count=d.get("access_count", 0),
             last_accessed=d.get("last_accessed", 0.0),
+            source_status=d.get("source_status", None),
         )
 
 

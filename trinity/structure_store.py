@@ -367,6 +367,17 @@ def goal_upsert(params: dict) -> dict:
                  now, now),
             )
             conn.commit()
+            # 2026-08-26（Budibase 借鉴 Phase 1）：goal.updated 事件（默认关闭）
+            try:
+                from trinity.automation import emit as _automation_emit
+                _automation_emit("goal.updated", {
+                    "goal_id": gid,
+                    "status": params.get("status", "active"),
+                    "phase": params.get("phase") or "",
+                    "objective": (params.get("objective") or "")[:200],
+                })
+            except Exception:
+                pass
             return {"goal_id": gid, "status": params.get("status", "active")}
         except Exception as exc:
             conn.rollback()

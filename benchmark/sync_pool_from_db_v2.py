@@ -132,14 +132,14 @@ def main():
     use_watermark = not args.no_watermark
     if use_watermark:
         rows = conn.execute(
-            "SELECT rowid, memory_id, content, category, created_at FROM memories "
+            "SELECT rowid, memory_id, content, category, created_at, status FROM memories "
             "WHERE status != 'deleted' AND rowid > ? ORDER BY rowid",
             (watermark,),
         ).fetchall()
         print(f"[sync] watermark 增量: 上次水位 rowid={watermark}, 待处理 {len(rows)} 条")
     else:
         rows = conn.execute(
-            "SELECT rowid, memory_id, content, category, created_at FROM memories "
+            "SELECT rowid, memory_id, content, category, created_at, status FROM memories "
             "WHERE status != 'deleted'"
         ).fetchall()
         print(f"[sync] 全量扫描: {len(rows)} 条 (watermark 关闭)")
@@ -162,7 +162,7 @@ def main():
     skipped = 0
     added = 0
     last_rowid = watermark if use_watermark else "0"
-    for i, (rowid, mid, content, category, created_at) in enumerate(rows):
+    for i, (rowid, mid, content, category, created_at, status) in enumerate(rows):
         last_rowid = str(rowid)
         text = str(content).strip() if content else ""
         if not text:
@@ -171,7 +171,11 @@ def main():
             skipped += 1
             continue
         md = {"category": category} if category else {}
-        agg.ingest(text, source_agent="db-sync", metadata=md)
+        dv = agg.ingest(text, source_agent="db-sync", metadata=md)
+        # 2026-08-24（R8 P0-1）：同步源库 status——聚合池检索面与引擎库
+        # active 口径统一；None 保留（旧条目兼容），archived 条目由检索层过滤。
+        if status:
+            dv.source_status = str(status)
         added += 1
         if use_watermark and (i + 1) % WATERMARK_BATCH == 0:
             _advance_watermark(last_rowid)

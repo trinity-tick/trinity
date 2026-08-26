@@ -50,7 +50,12 @@ async def health_self_test():
 
 @router.get("/health", tags=["Health"], summary="健康检查")
 async def health():
-    """Health check with component status."""
+    """Health check with component status.
+
+    2026-08-24（R9 P0-1）：引擎（engine/adapter）状态纳入健康判定——
+    此前仅看聚合池，API 在引擎 connect 失败（如 SQLite 写锁）时仍自报
+    "ok"（健康假象）。现在 engine 不可用时 status=degraded 且报错误。
+    """
     agg_ok = False
     sb_ok = False
     try:
@@ -60,15 +65,29 @@ async def health():
     except Exception:
         pass
 
+    # ── engine 状态（R9 P0-1）：adapter 缺失或初始化失败 → degraded ──
+    engine_ok = False
+    engine_error: str = ""
+    try:
+        mem = get_memory()
+        engine_ok = mem is not None and getattr(mem, "_adapter", None) is not None
+        if not engine_ok:
+            engine_error = str(getattr(mem, "_engine_error", "") or "no adapter")
+    except Exception as exc:
+        engine_error = f"{type(exc).__name__}: {exc}"
+
+    healthy = agg_ok and engine_ok
     return {
-        "status": "ok" if agg_ok else "degraded",
+        "status": "ok" if healthy else "degraded",
         "version": app.version,
         "uptime_seconds": round(time.time() - _app_start_time, 1),
         "components": {
             "aggregator": "healthy" if agg_ok else "unavailable",
             "api": "healthy",
             "second_brain": "available" if sb_ok else "unavailable",
+            "engine": "healthy" if engine_ok else "degraded",
         },
+        "engine_error": engine_error or None,
         "degradation": agg._degradation.statistics() if hasattr(agg, '_degradation') else {},
     }
 
@@ -120,6 +139,51 @@ async def metrics():
         "# TYPE trinity_queries_total counter",
         f"trinity_queries_total {int(stats.get('total_queries', 0) or 0)}",
     ]
+
+    # ── 2026-08-24（R9 后续 P1-③）：记忆可观测指标（对齐 2026 共识——
+    # R@k 已失效，需命中率/写放大/成本运行指标）──────────────────
+    try:
+        # statistics() 已合并 _stats（queries_by_source/total_queries/last_query_at）
+        qbs = stats.get("queries_by_source") or {}
+        for src, cnt in sorted(qbs.items()):
+            src_sanitized = src.replace(":", "_").replace("/", "_").replace("-", "_")
+            lines.append(
+                f'# HELP trinity_queries_by_source_total Queries per source: {src}'
+            )
+            lines.append("# TYPE trinity_queries_by_source_total counter")
+            lines.append(f'trinity_queries_by_source_total{{source="{src_sanitized}"}} {int(cnt)}')
+
+        # 写放大系数 = ingested / max(merged,1)（越高说明合并越少、写入越原始）
+        ingested = int(stats.get("total_ingested", 0) or 0)
+        merged = int(stats.get("total_merged", 0) or 0)
+        write_amp = round(ingested / max(merged, 1), 3) if merged > 0 else 0.0
+        lines.append("# HELP trinity_write_amplification Ingested-to-merged ratio (higher = less consolidation)")
+        lines.append("# TYPE trinity_write_amplification gauge")
+        lines.append(f"trinity_write_amplification {write_amp}")
+
+        # 上次查询时间（0 = 从未查询——利用率监控）
+        last_q = float(stats.get("last_query_at") or 0)
+        lines.append("# HELP trinity_last_query_ts Unix ts of last pool query (0 = never)")
+        lines.append("# TYPE trinity_last_query_ts gauge")
+        lines.append(f"trinity_last_query_ts {int(last_q)}")
+
+        # 语义缓存命中率（hybrid retriever 层，若可用）
+        try:
+            from trinity.retrieval.hybrid_retriever import _get_configured_cache
+            cache = _get_configured_cache()
+            if cache is not None:
+                cs = cache.statistics()
+                lines.append("# HELP trinity_semantic_cache_hit_rate_pct Semantic cache hit rate")
+                lines.append("# TYPE trinity_semantic_cache_hit_rate_pct gauge")
+                lines.append(f"trinity_semantic_cache_hit_rate_pct {cs.get('hit_rate_pct', 0)}")
+                lines.append("# HELP trinity_semantic_cache_entries Semantic cache entries")
+                lines.append("# TYPE trinity_semantic_cache_entries gauge")
+                lines.append(f"trinity_semantic_cache_entries {int(cs.get('memory_entries', 0) or 0)}")
+        except Exception:
+            pass
+    except Exception:
+        pass  # 指标扩展失败不影响主指标
+
     rendered = get_metrics().render().rstrip("\n")
     if rendered:
         lines.append(rendered)

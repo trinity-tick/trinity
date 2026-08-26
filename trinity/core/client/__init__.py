@@ -54,10 +54,11 @@ from ._multimodal import _MultimodalMixin
 from ._a2a import _A2AMixin
 from ._audit_identity import _AuditIdentityMixin
 from ._advanced import _AdvancedMixin
+from ._pagetree import _PagetreeMixin
 
 __all__ = ["Trinity", "TrinityClient"]
 
-class Trinity(_ConstructionMixin, _SearchMixin, _VectorMixin, _IngestionMixin, _GraphMixin, _CrudMixin, _StatsMixin, _DiagnosticsMixin, _MultimodalMixin, _A2AMixin, _AuditIdentityMixin, _AdvancedMixin):
+class Trinity(_ConstructionMixin, _SearchMixin, _VectorMixin, _IngestionMixin, _GraphMixin, _CrudMixin, _StatsMixin, _DiagnosticsMixin, _MultimodalMixin, _A2AMixin, _AuditIdentityMixin, _AdvancedMixin, _PagetreeMixin):
     """Unified Trinity memory system client.
 
     Supports multi-tenant, multi-persona, multi-session operations.

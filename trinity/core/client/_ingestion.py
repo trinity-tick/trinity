@@ -158,6 +158,26 @@ class _IngestionMixin:
         isolated_test_write = self._is_isolated_test_write(
             agent_id=agent_id, category=category, tags=tags, content=content)
 
+        # 2026-08-24（R8 P1-6）：记忆投毒写入扫描（OWASP AG 类）——
+        # 命中高危注入模式（指令覆盖/角色仿冒/数据外泄/恶意指令）的写入
+        # 强制归档（仍落库、不进 active 检索面），与压测隔离同一机制；
+        # 中危仅打 metadata 标记。TRINITY_INJECTION_SCAN=off 关闭。
+        injection_report: Optional[Dict[str, Any]] = None
+        try:
+            from trinity.security.injection import injection_scan_enabled, scan_injection
+            if injection_scan_enabled():
+                injection_report = scan_injection(content or "")
+                if injection_report.get("flagged"):
+                    metadata = dict(metadata or {})
+                    metadata["injection_scan"] = {
+                        "severity": injection_report.get("severity"),
+                        "patterns": [h["pattern"] for h in injection_report.get("hits", [])],
+                    }
+                    if injection_report.get("severity") == "high":
+                        isolated_test_write = True  # 复用隔离归档机制
+        except Exception:
+            injection_report = None  # 扫描失败不阻断写入
+
         result: Dict[str, Any] = {}
         if self._adapter:
             result = self._adapter.store_memory(
@@ -192,11 +212,20 @@ class _IngestionMixin:
         if isolated_test_write and memory_id and self._adapter:
             try:
                 self._adapter.archive_memories([memory_id])
+                action = "ISOLATED_TEST_WRITE"
+                details: Dict[str, Any] = {"category": category, "tags": tags}
+                if injection_report is not None and injection_report.get("flagged"):
+                    # 2026-08-24（R8 P1-6）：投毒注入隔离单独记审计
+                    action = "INJECTION_ISOLATED"
+                    details = {
+                        "severity": injection_report.get("severity"),
+                        "patterns": [h["pattern"] for h in injection_report.get("hits", [])],
+                    }
                 if hasattr(self._adapter, "write_audit_log"):
                     self._adapter.write_audit_log(
-                        memory_id=memory_id, action="ISOLATED_TEST_WRITE",
+                        memory_id=memory_id, action=action,
                         agent_id=agent_id, persona_id=persona_id,
-                        details={"category": category, "tags": tags},
+                        details=details,
                     )
             except Exception:
                 pass
@@ -209,6 +238,35 @@ class _IngestionMixin:
                     persona_id=persona_id,
                     details={"importance": importance, "tags": tags,
                              "category": category, "modality": modality},
+                )
+            except Exception:
+                pass
+
+        # 2026-08-26（Budibase 借鉴 Phase 1）：事件驱动自动化——memory.write
+        # 事件（默认关闭 TRINITY_AUTOMATION=off，emit 零开销）。动作经 audit_fn
+        # 留痕（action=automation），失败不影响写入主流程。
+        # 2026-08-26（二轮）：TRINITY_AUTOMATION_ACTION=1 防循环——自动化动作
+        # 子进程内（exec.command 注入）的写入不再触发自动化事件。
+        if memory_id and self._adapter and os.environ.get("TRINITY_AUTOMATION_ACTION") != "1":
+            try:
+                from trinity.automation import emit as _automation_emit
+                _automation_emit(
+                    "memory.write",
+                    {
+                        "memory_id": memory_id,
+                        "importance": importance,
+                        "category": category,
+                        "tags": tags,
+                        "persona_id": persona_id,
+                        "agent_id": agent_id,
+                        "modality": modality,
+                        "content_preview": (content or "")[:100],
+                    },
+                    audit_fn=lambda rule, ok, detail: self._adapter.write_audit_log(
+                        memory_id=memory_id, action="automation",
+                        agent_id=agent_id, persona_id=persona_id,
+                        details={"rule": rule, "ok": ok, **detail},
+                    ),
                 )
             except Exception:
                 pass
@@ -300,6 +358,32 @@ class _IngestionMixin:
             if self._adapter and hasattr(self._adapter, "create_memory_link"):
                 linked_ids = self._auto_link_semantic(memory_id, content)
             entity_ids = self._auto_extract_entities(memory_id, content)
+            # 2026-08-24（R5 P1-③）：画像增量钩子接线——PersonaEngine
+            # 此前完整实现（12 测试 + 4 端点）但写路径未调用，启用后不生效。
+            # 保持 TRINITY_PERSONA/TRINITY_PROPOSITION_EXTRACT 双开关默认
+            # off（成本/隐私取舍，网络 2026 画像记忆标配但需 LLM 提取素材），
+            # 显式启用后此钩子才触发；失败静默不阻塞写路径。
+            try:
+                from trinity.memory.persona import persona_enabled, maybe_persona_after_store
+                if persona_enabled() and self._adapter is not None:
+                    _meta = {}
+                    try:
+                        _full = self._adapter.get_memory(memory_id) or {}
+                        _meta = _full.get("metadata") or {}
+                        if isinstance(_meta, str):
+                            import json as _json
+                            _meta = _json.loads(_meta)
+                    except Exception:
+                        _meta = {}
+                    maybe_persona_after_store(
+                        self._adapter,
+                        {"content": content, "memory_id": memory_id,
+                         "persona_id": _meta.get("persona_id") or "default",
+                         "metadata": _meta},
+                        {"memory_id": memory_id},
+                    )
+            except Exception:
+                pass
             # ANN 增量维护（①落盘持久化，2026-08-15）：后台线程同步新记忆进索引
             if memory_id and self.use_ann:
                 import threading as _th
