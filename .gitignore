@@ -146,3 +146,5 @@ __pycache__/
 docs/TRINITY_COMMERCIAL_PLAN_*
 docs/FUTURE_PLAN_*
 scripts/_read_j3.py
+# Large private eval sets
+benchmark/private_holdout*.json
