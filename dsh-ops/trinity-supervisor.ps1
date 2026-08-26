@@ -72,6 +72,13 @@ if (-not [Environment]::GetEnvironmentVariable("TRINITY_STORE", "Process")) {
     Write-Output "TRINITY_STORE -> $TrinityStore"
 }
 
+# ── 自进化采纳 env 应用（2026-08-25 缺口A 补全）：读取 evolve_env.json
+#    白名单校验后注入当前进程环境（Start-Process 子进程继承）。
+#    服务已运行时不重启（避免打断连接）；下一轮拉起时新实例自动带最新 env。
+if (Test-Path (Join-Path $env:USERPROFILE ".trinity\evolve\evolve_env.json")) {
+    & (Join-Path $PSScriptRoot "apply_evolve_env.ps1") 2>&1 | ForEach-Object { Write-Log $_ }
+}
+
 if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
 
 function Write-Log {
@@ -211,6 +218,22 @@ if (-not (Test-McpAlive)) {
     }
 } else {
     Write-Log "mcp OK (port 8000 open, trinity process)"
+}
+
+# ── 2.5. MCP streamable-http (:8003, 2026-08-24 P0-3 默认常驻) ─────────────
+# MCP v2 streamable-http 传输（OAuth 2.1 Bearer 鉴权，默认 TRINITY_MCP_HTTP_AUTH=on；
+# 无 TRINITY_MCP_API_KEY/TRINITY_API_KEY 时 server 自动降级无鉴权并告警）。
+# 网络 2025 生产组合 = Streamable HTTP + OAuth；与 :8000 SSE 并存过渡。
+if (-not (Test-Tcp -Port 8003)) {
+    if (Should-Restart "mcp-http") {
+        Write-Log "mcp-http DOWN (:8003 closed) — restarting (streamable-http)" "WARN"
+        Start-WithLogs -Name "mcp-http" -Exe $McpPy -ArgList @("-m", "trinity.mcp.server", "--mode", "streamable-http", "--port", "8003", "--host", "127.0.0.1")
+        $state.restartedAt.'mcp-http' = $now.ToString("o")
+    } else {
+        Write-Log "mcp-http DOWN (:8003 closed) but within restart interval — skipped" "WARN"
+    }
+} else {
+    Write-Log "mcp-http OK (port 8003 open, streamable-http)"
 }
 
 # ── 3. Collector ──────────────────────────────────────────────────────────

@@ -29,7 +29,7 @@ param(
 
 # 兼容 powershell -File 传参：命令行里的 "a,b,c" 会以单个字符串到达，
 # 这里统一按逗号拆分 + 校验。
-$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "all")  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
+$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "all")  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
 $normalized = @()
 foreach ($t in $Tasks) { $normalized += $t.Split(',') }
 $normalized = $normalized | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
@@ -261,6 +261,39 @@ runpy.run_path(r"$TrinityRoot\scripts\compact_structure.py", run_name="__main__"
 "@
 $compactPrompt = "在 C:\Users\Administrator\trinity 运行 python scripts/compact_structure.py --budget-tokens 32768（结构层 compaction token 预算模式：非 active 会话保留最近 32768 token 明细 + 更早部分聚合为 compacted_turn，控制表增长），汇报压缩会话数与移除明细数。"
 
+# 记忆页树（2026-08-26，PageIndex 借鉴）：纯元数据建树 + LLM 节点摘要（增量）
+$pagetreeCmd = @"
+import sys
+sys.path.insert(0, r"$TrinityRoot")
+import runpy
+sys.argv = ["build_memory_pagetree"]
+runpy.run_path(r"$TrinityRoot\scriptsuild_memory_pagetree.py", run_name="__main__")
+sys.argv = ["run_pagetree_summaries", "--limit", "20"]
+runpy.run_path(r"$TrinityRoot\scriptsun_pagetree_summaries.py", run_name="__main__")
+"@
+$pagetreePrompt = "运行 scripts/build_memory_pagetree.py 与 scripts/run_pagetree_summaries.py（页树重建+增量摘要），汇报统计。"
+
+# 断言式评测回归（2026-08-26 DSH 借鉴）：功能正确性断言
+$evalCmd = @"
+import sys
+sys.path.insert(0, r"$TrinityRoot")
+import runpy
+sys.argv = ["run_evals", "--all"]
+runpy.run_path(r"$TrinityRoot\scriptsun_evals.py", run_name="__main__")
+"@
+$evalPrompt = "运行 scripts/run_evals.py --all（断言评测回归），汇报通过/失败断言数。"
+
+# 评测审阅（2026-08-26 Claude Science 借鉴）：自动对比最近两次 500q reason 结果
+$reviewCmd = @"
+import sys
+sys.path.insert(0, r"$TrinityRoot")
+import runpy
+sys.argv = ["experiment_review", "--latest"]
+runpy.run_path(r"$TrinityRoot\scripts\experiment_review.py", run_name="__main__")
+"@
+$reviewPrompt = "运行 scripts/experiment_review.py --latest（对比最近两次 ae_500_reason 结果），汇报异常类目与代码一致性。"
+
+
 # 大库 → 聚合池 watermark 增量同步（2026-08-21 P0-2；维护窗口任务，不进 all 链）
 $poolSyncCmd = @"
 import sys, urllib.request
@@ -445,7 +478,7 @@ sys.exit(main())
 $activeHealthPrompt = "运行 scripts/active_set_health.py(active 集健康: total/active/archived 占比, 归档高价值记忆告警, 有告警提示 restore_high_value_memories.py),汇报指标。"
 
 # ── 选择任务 ──────────────────────────────────────────────────────────────
-if ($Tasks -contains "all") { $Tasks = @("health", "evolution", "mirror", "decay", "tiers", "consolidate", "dedup", "sync", "compact", "backup", "selftest") }
+if ($Tasks -contains "all") { $Tasks = @("health", "evolution", "mirror", "decay", "tiers", "consolidate", "dedup", "sync", "compact", "pagetree", "backup", "selftest") }
 if ($Tasks -contains "compress") { $Tasks = @($Tasks | Where-Object { $_ -ne "compress" }) + "decay" }
 
 if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
@@ -470,6 +503,8 @@ foreach ($t in $Tasks) {
         "pool-sync" { Invoke-Task -Name "pool-sync" -LeaseJob "pool-sync" -DirectCommand $poolSyncCmd -DshPrompt $poolSyncPrompt }  # 2026-08-21 P0-2 聚合池水位同步（维护窗口任务）
         "consistency" { Invoke-Task -Name "consistency" -DirectCommand $consistencyCmd -DshPrompt $consistencyPrompt }  # 2026-08-21 治理层只读一致性校验（显式调用，不进 all 链）
         "compact"   { Invoke-Task -Name "compact"   -LeaseJob "compact"   -DirectCommand $compactCmd  -DshPrompt $compactPrompt }
+        "pagetree"  { Invoke-Task -Name "pagetree"  -LeaseJob "pagetree"  -DirectCommand $pagetreeCmd -DshPrompt $pagetreePrompt }  # 2026-08-26 PageIndex 借鉴
+        "eval"      { Invoke-Task -Name "eval"      -DirectCommand $evalCmd      -DshPrompt $evalPrompt }  # 2026-08-26 DSH 借鉴
         "selftest"  { Invoke-Task -Name "selftest"  -DirectCommand $selftestCmd -DshPrompt $selftestPrompt }
         "session-summarize" { Invoke-Task -Name "session-summarize" -LeaseJob "session-summarize" -DirectCommand $sessionSummaryCmd -DshPrompt $sessionSummaryPrompt }
         "session-auto" { Invoke-Task -Name "session-auto" -LeaseJob "session-auto" -DirectCommand $sessionAutoCmd -DshPrompt $sessionAutoPrompt }
@@ -478,6 +513,9 @@ foreach ($t in $Tasks) {
         "db-health" { Invoke-Task -Name "db-health" -DirectCommand $dbHealthCmd -DshPrompt $dbHealthPrompt }
         "active-health" { Invoke-Task -Name "active-health" -DirectCommand $activeHealthCmd -DshPrompt $activeHealthPrompt }
         "backup"    { Write-Log "backup: WAL 安全备份到 ~/.trinity/backups (保留 14 天)"; & "$PSScriptRoot\trinity-backup.ps1" 2>&1 | ForEach-Object { Write-Log $_ } }
+        "evolve-env" { Write-Log "evolve-env: 应用自进化采纳 env（evolve_env.json → 进程环境，白名单校验）"; & "$PSScriptRootpply_evolve_env.ps1" -Show 2>&1 | ForEach-Object { Write-Log $_ } }  # 2026-08-25 缺口A
+        "consolidate-temporal" { $consArgs = @("--days", "1"); if ((Get-Date).DayOfWeek -eq "Sunday") { $consArgs = @("--days", "7", "--weekly") }; Write-Log "consolidate-temporal: 时间层级巩固（TiMem 式；daily 每日，Sunday 加 weekly）"; & "$Py" "$TrinityRoot\scripts\consolidate_temporal.py" @consArgs 2>&1 | ForEach-Object { Write-Log $_ } }  # 2026-08-25 TiMem 式
+        "memory-ops" { Write-Log "memory-ops: Mem0 式记忆操作（LLM 决策 ADD/UPDATE/NOOP，控制写放大）"; $env:TRINITY_MEM_OPS = "on"; if ($DryRun) { & "$Py" "$TrinityRoot\scripts\memory_ops.py" --hours 24 --limit 20 --dry-run 2>&1 | ForEach-Object { Write-Log $_ } } else { & "$Py" "$TrinityRoot\scripts\memory_ops.py" --hours 24 --limit 20 2>&1 | ForEach-Object { Write-Log $_ } } }  # 2026-08-25 Mem0 式
     }
 }
 

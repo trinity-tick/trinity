@@ -1,6 +1,8 @@
 # Trinity — Open Memory Layer with Governance
 
-> **v8.2.0** — 治理优先的记忆操作系统：模型会换、框架会换，但记忆不换。
+<!-- mcp-name: io.github.trinity-tick/trinity-memory -->
+
+> **v8.2.1** — 治理优先的记忆操作系统：模型会换、框架会换，但记忆不换。
 > Trinity 是让记忆**可迁移、可治理、可交易**的基础设施。
 
 Trinity is not a "memory library." It is a **Memory Operating System** — an
@@ -44,7 +46,7 @@ cd trinity
 pip install -e .
 
 # 验证
-python -c "import trinity; print(trinity.__version__)"   # → 8.2.0
+python -c "import trinity; print(trinity.__version__)"   # → 8.2.1
 
 # 全量测试（815 passed / 50 skipped / 0 failed，系统 Python 3.14）
 python -m pytest tests/ -q

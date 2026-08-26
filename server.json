@@ -1,0 +1,31 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.trinity-tick/trinity-memory",
+  "title": "Trinity Memory OS",
+  "description": "Cross-session long-term memory for AI agents: hybrid retrieval, CRDT+audit, knowledge graph.",
+  "websiteUrl": "https://trinity-tick.github.io/trinity/",
+  "repository": {
+    "url": "https://github.com/trinity-tick/trinity",
+    "source": "github",
+    "id": "1302776755"
+  },
+  "version": "8.2.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "trinity-memory",
+      "version": "8.2.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "named",
+          "name": "--mode",
+          "value": "stdio"
+        }
+      ]
+    }
+  ]
+}
