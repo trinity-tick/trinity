@@ -5163,3 +5163,46 @@ git -C C:UsersAdministrator	rinity checkout -- trinity/retrieval/pagetree.py tri
 - 回滚：`git checkout -- trinity/api/server/__init__.py trinity/mcp/tools/memory_tools.py README.md`；
   文档恢复：git checkout -- docs/（archive 移回）
 
+---
+
+## 35. 官方 LongMemEval-S 基准轮（2026-08-26，网络最优评价方案兑现）
+
+> 执行"跑官方 LongMemEval-S"（网络评价 5.9/10 的唯一硬缺口）。数据集 277MB 官方
+> ICLR 2025 LongMemEval-S（500 问，6 类目）。
+
+### 35.1 runner 修复（QA 从 0.0 到 0.50）
+
+- 定位三个 QA 归零根因并修复（`benchmark/longmemeval_official_runner.py`）：
+  1. 上下文截断 600→5000 字符/条（深层答案被切）；
+  2. 上下文取 top-10→top-5×5000（预算 25k 字符）；
+  3. **prompt 保守度**：移除过严的 "answer UNKNOWN if not present" 指令
+     （deepseek-chat 过度保守——连明确含答案的短上下文都答 UNKNOWN；A/B 证实）；
+  4. judge 升级：strict match → **LLM 语义 judge**（LongMemEval 官方主流）；
+- 冒烟 20 问：QA 0.0 → 0.15 → 0.35 → **0.50**；Recall 保持 1.0/0.95。
+
+### 35.2 官方成绩（分块 5×100 问，后台续跑中）
+
+**块 1 完成（100 问，seed 101）**：
+- **Session Recall@10 = 0.96** / **Turn Recall@10 = 0.93** / mean_hit_position = 1.52
+- **QA accuracy = 0.41**（deepseek-chat 生成 + LLM judge；口径偏严：截断上下文）
+- 类目：SS-A/SS-U 1.0、multi-session 0.97、temporal 0.96、KU 1.0(sess)/0.85(turn)、
+  **SS-P 0.667**（与 mock 500q 的 SS-P 短板一致——偏好类检索是共性问题）
+- 结果：`~/.trinity/bench-official/lme_s_block1_20260826.json`（带 manifest）
+
+### 35.3 对比（2026 网络报告）
+
+| 指标 | Trinity | 头部参考 |
+|---|---|---|
+| Session Recall@10 | **0.96** | TiMem/Mem0 0.9+（对齐） |
+| Turn Recall@10 | **0.93** | 对齐 |
+| QA accuracy | 0.41 | TiMem 78.96（LongMemEval-S 综合；口径差异：完整上下文+更强模型） |
+
+- 检索对齐头部；QA 差距主要来自**生成/上下文口径**（5×5000 截断 + deepseek-chat），
+  非检索缺陷（hit_position 1.52 说明答案会话排位极靠前）。
+
+### 35.4 验证与回滚
+
+- 块 2-5 后台续跑（每块 100 问 seed 102-105，~75min/块），完成后汇总更新
+- 回滚：runner 改动 `git checkout -- benchmark/longmemeval_official_runner.py`（已提交）；
+  数据集删除 `~/.trinity/bench-official/longmemeval_s_cleaned.json`（Temp 有原副本）
+
