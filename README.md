@@ -5,6 +5,10 @@
 > **v8.2.1** — 治理优先的记忆操作系统：模型会换、框架会换，但记忆不换。
 > Trinity 是让记忆**可迁移、可治理、可交易**的基础设施。
 
+> 🚀 **开源就绪（2026-08-26）**：MIT 许可证 · 数据全本地（无遥测）· 存储加密 + 审计可证明 ·
+> 全部基准带可复现 manifest。详见 [docs/BENCHMARK_GUIDE.md](docs/BENCHMARK_GUIDE.md)（复现指南）、
+> [docs/PRIVACY.md](docs/PRIVACY.md)（隐私说明）、[docs/INDEX.md](docs/INDEX.md)（文档索引）。
+
 Trinity is not a "memory library." It is a **Memory Operating System** — an
 infrastructure layer that any memory store (vector DB, graph DB, SQLite) can
 plug into, with retrieval, governance, identity, evolution, and economic

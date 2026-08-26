@@ -121,7 +121,8 @@ def register_memory_tools(mcp: FastMCP) -> None:
     _register_memory_feedback(mcp)
     _register_skill_tools(mcp)
     _register_knowledge_search(mcp)
-    logger.info("Registered 12 memory tools (backed by real engine).")
+    _register_evolution_status(mcp)
+    logger.info("Registered 13 memory tools (backed by real engine).")
 
 
 # ---------------------------------------------------------------------------
@@ -500,6 +501,50 @@ def _register_skill_tools(mcp: FastMCP) -> None:
         if skill is None:
             return {"error": f"skill not found: {name}", "name": name}
         return skill
+
+
+# ---------------------------------------------------------------------------
+# Tool: evolution_status（价值兑现路径 1，2026-08-26）
+# ---------------------------------------------------------------------------
+def _register_evolution_status(mcp: FastMCP) -> None:
+
+    @mcp.tool()
+    async def evolution_status() -> dict[str, Any]:
+        """Get Trinity's self-evolution status overview.
+
+        价值兑现（2026-08-26）：让 agent 感知记忆系统自身的进化状态——
+        目标引擎（complete/active/blocked + 验收指标）、eval 断言任务清单、
+        技能库、进化周期累计、当前基准指标（AnswerAcc/R@5/holdout）。
+
+        Returns:
+            Dict with goals/eval/skills/evolution/metrics sections.
+        """
+        from trinity.evolution.goals import goal_list, default_metrics
+        from trinity.eval.runner import DEFAULT_TASKS
+        from trinity.skills import list_skills
+        from trinity.evolution import MetaEvolution
+        goals = goal_list()
+        metrics = default_metrics()
+        evo = MetaEvolution()
+        diag = {}
+        try:
+            diag = evo.diagnostics()
+        except Exception:
+            pass
+        return {
+            "goals": {
+                "total": len(goals),
+                "complete": sum(1 for g in goals if g.get("phase") == "complete"),
+                "active": sum(1 for g in goals if g.get("phase") == "active"),
+                "items": [{"id": g["goal_id"][:16], "phase": g.get("phase"),
+                           "last_metric": g.get("last_metric")} for g in goals],
+            },
+            "eval": {"total_tasks": len(DEFAULT_TASKS),
+                     "tasks": [t["name"] for t in DEFAULT_TASKS]},
+            "skills": [s["name"] for s in list_skills()],
+            "evolution": {"total_cycles": diag.get("total_cycles", 0)},
+            "metrics": metrics,
+        }
 
 
 # ---------------------------------------------------------------------------

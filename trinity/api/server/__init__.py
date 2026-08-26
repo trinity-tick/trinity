@@ -326,6 +326,49 @@ async def automation_stats():
         return JSONResponse({"error": str(exc)}, status_code=500)
 
 
+# 进化治理对外可见化（价值兑现路径 1，2026-08-26）：agent 可感知自身进化状态
+@app.get("/evolution/status", include_in_schema=False)
+async def evolution_status():
+    """进化治理全景（agent 可感知）：目标/eval 断言/技能/进化周期/基准指标。"""
+    try:
+        from trinity.evolution.goals import goal_list, default_metrics
+        from trinity.eval.runner import DEFAULT_TASKS
+        from trinity.skills import list_skills
+        from trinity.evolution import MetaEvolution
+        goals = goal_list()
+        metrics = default_metrics()
+        evo = MetaEvolution()
+        diag = {}
+        try:
+            diag = evo.diagnostics()
+        except Exception:
+            pass
+        return {
+            "goals": {
+                "total": len(goals),
+                "complete": sum(1 for g in goals if g.get("phase") == "complete"),
+                "active": sum(1 for g in goals if g.get("phase") == "active"),
+                "blocked": sum(1 for g in goals if g.get("phase") == "blocked"),
+                "items": [{"id": g["goal_id"][:16], "phase": g.get("phase"),
+                           "last_metric": g.get("last_metric"),
+                           "objective": g["objective"][:60]} for g in goals],
+            },
+            "eval": {
+                "total_tasks": len(DEFAULT_TASKS),
+                "tasks": [t["name"] for t in DEFAULT_TASKS],
+            },
+            "skills": [s["name"] for s in list_skills()],
+            "evolution": {
+                "total_cycles": diag.get("total_cycles", 0),
+                "state_file": getattr(evo, "state_path", ""),
+            },
+            "metrics": metrics,
+            "generated_at": __import__("time").strftime("%Y-%m-%dT%H:%M:%S"),
+        }
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
 # 知识层（Context7 借鉴 Phase 1-2，2026-08-26）：源注册表 + 独立知识检索
 @app.get("/knowledge/sources", include_in_schema=False)
 async def knowledge_sources():

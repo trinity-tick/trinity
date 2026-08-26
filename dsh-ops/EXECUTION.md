@@ -5121,3 +5121,45 @@ git -C C:UsersAdministrator	rinity checkout -- trinity/retrieval/pagetree.py tri
 - 代码：git 5 个提交可 revert/checkout；lme 归档恢复：`UPDATE memories SET status='active' WHERE category='lme'`；
 - 归档结果恢复：output/archive/ 移回。M+CRLF）
 
+---
+
+## 34. 价值兑现路径执行轮（2026-08-26，进化可见化 + 开源就绪 + modules 盘点 + 文档去重）
+
+> 执行 TRINITY_VALUE_REVIEW.md 的价值兑现路径四项。
+
+### 34.1 进化治理对外可见化（路径 1）
+
+- REST `GET /evolution/status`：目标引擎（total/complete/active/blocked + 各目标
+  last_metric）、eval 任务清单（12）、技能库（5）、进化周期累计（89）、当前基准指标
+  （0.752/0.6632…）——**agent 可感知记忆系统自身进化状态**（差异化叙事）；
+- MCP 工具 `evolution_status`（第 13 个 memory 工具）同构返回；
+- 实测：goals=3(2 complete/1 active) eval=12 skills=5 cycles=89 ✓。
+
+### 34.2 官方基准就绪包 + 开源准备（路径 2）
+
+- `docs/BENCHMARK_GUIDE.md`：评测集/复现命令/manifest 规范/历史基线表/评测纪律；
+- `docs/PRIVACY.md`：数据本地化/静态加密/可证明性/访问控制/隐私承诺；
+- README 增补"开源就绪"横幅（MIT 已有 LICENSE；pyproject license=MIT 确认）；
+- 官方 LongMemEval-S 集已备（data/ 277MB），跑官方集为后续工作。
+
+### 34.3 modules 层盘点（路径 3，只报告不删码）
+
+- import 静态分析：modules/ 60 文件 33,440 行；12 个被直接引用（含 second_brain/engine.py），
+  48 个无静态引用（含 __init__ 误报；真实孤立候选 ~42：second_brain CB 系列 34、
+  multimodal 4、open_domain 整包、memory_replay_trainer/streaming_ingest 等）；
+- `docs/MODULES_GUIDE.md`：索引 + 处置建议（推荐保守：文档化 + 季度重盘，不删码）。
+
+### 34.4 文档合并去重（路径 4）
+
+- 12 篇旧轮次对比/SOTA/优化分析移入 `docs/archive/`（历史存档，git 保留）；
+- 生成 `docs/INDEX.md`（93 篇分类索引 + archive 清单）；README 链接更新。
+
+### 34.5 验证与回滚
+
+- pytest 专项 85/85；API 重启后 /evolution/status 200；/health ok；
+- 改动：`trinity/api/server/__init__.py`、`trinity/mcp/tools/memory_tools.py`、
+  `docs/BENCHMARK_GUIDE.md`（新）、`docs/PRIVACY.md`（新）、`docs/MODULES_GUIDE.md`（新）、
+  `docs/INDEX.md`（新）、README.md、docs/archive/（12 篇移入）
+- 回滚：`git checkout -- trinity/api/server/__init__.py trinity/mcp/tools/memory_tools.py README.md`；
+  文档恢复：git checkout -- docs/（archive 移回）
+
