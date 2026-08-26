@@ -5074,5 +5074,50 @@ git -C C:UsersAdministrator	rinity checkout -- trinity/retrieval/pagetree.py tri
 - 改动文件：`trinity/evolution/goals.py`、`scripts/experiment_review.py`、
   `dsh-ops/trinity-dsh-maintenance.ps1`（恢复定义 + review 任务）、`trinity/eval/runner.py`
 - 回滚：`git checkout -- trinity/evolution/goals.py scripts/experiment_review.py trinity/eval/runner.py`；
-  ps1 恢复：git checkout -- dsh-ops/trinity-dsh-maintenance.ps1（注意重新应用 BOM+CRLF）
+  ps1 恢复：git checkout -- dsh-ops/trinity-dsh-maintenance.ps1（注意重新应用 BO
+
+---
+
+## 33. 整理与稳定性加固轮（2026-08-26，git 基线 + 清理 + lme 归档 + 稳定性验证）
+
+> 十三轮迭代后的系统整理与稳定性加固。全程 API 在线、全部操作可回滚。
+
+### 33.1 git 基线（最大稳定性保障）
+
+- 十三轮迭代成果此前**全部未提交**（149 个变更）——本次分 5 个逻辑提交建立基线：
+  ①301fe46 核心模块（页树/自动化/目标引擎/eval/skills/知识层/manifest）②4e7010f 测试
+  ③41c80fe 脚本/基准/gateway ④7a097ab 文档/运维 ⑤d406a16 gitignore/tools；
+- 工作区**干净（0 剩余）**；此后任何误操作可 `git checkout` 回滚；
+- 敏感排查：git 跟踪无凭证（trinity.yaml 已忽略；docker 配置为占位符）；
+  `benchmark/private_holdout*.json`（53MB 私有评测集）加入 .gitignore 不入库；
+  删除误创建文件 `=`（截断的 python -c 重定向产物）。
+
+### 33.2 清理
+
+- temp/：**216 个残留补丁/诊断脚本全部清除**（temp 已在 .gitignore，此后用完即删纪律）；
+- output/：14 个旧评测结果 + manifests 移入 output/archive/（保留最新代表：
+  ae_500_base/v3-v6、hard_holdout_eval.json/v7、ae_MS_reason_v4）。
+
+### 33.3 lme 基准语料归档（安全瘦身）
+
+- lme 类目 13,724 条（占 active 54%）**全部归档**（status=archived，可恢复，审计链保留）；
+- active 22,748 → **9,025（-60%）**；检索面更干净（归档前实证：lme 未进 top-10，归档后确认）；
+- 页树不受影响（lme 本就在 excluded_categories）。
+
+### 33.4 稳定性验证（归档后终验）
+
+- 检索正常（5 hits，kb/video/wms 类目）；知识源 197/0 stale；目标指标完整
+  （0.752/0.994/0.663/0.2375）；页树 270 簇+270 向量；
+- eval **12/12**；pytest 专项 **85/85**；API ok tier=full；
+- 备份新鲜（18:22，637MB，14 天保留）；storage.key 在位。
+
+### 33.5 运维纪律固化
+
+- ps1 维护链定义丢失历史教训 → 以后 ps1 变更走 git（diff/checkout），不再反复 python 补丁；
+- temp 用完即删；output 结果统一带 manifest（实验工件规范）。
+
+### 33.6 回滚
+
+- 代码：git 5 个提交可 revert/checkout；lme 归档恢复：`UPDATE memories SET status='active' WHERE category='lme'`；
+- 归档结果恢复：output/archive/ 移回。M+CRLF）
 
