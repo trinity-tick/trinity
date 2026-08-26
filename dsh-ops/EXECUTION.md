@@ -5204,5 +5204,25 @@ git -C C:UsersAdministrator	rinity checkout -- trinity/retrieval/pagetree.py tri
 
 - 块 2-5 后台续跑（每块 100 问 seed 102-105，~75min/块），完成后汇总更新
 - 回滚：runner 改动 `git checkout -- benchmark/longmemeval_official_runner.py`（已提交）；
-  数据集删除 `~/.trinity/bench-official/longmemeval_s_cleaned.json`（Temp 有原副本）
+  数据集删除 `~/.trinity/bench-official/longmemeval_s_cleaned.json`（Tem
+
+### 35.5 最终总成绩（500 问全量，2026-08-27 05:57 完成）
+
+| 指标 | 总成绩 | 头部参考 |
+|---|---|---|
+| **Session Recall@10** | **0.98** | TiMem/Mem0 0.9+ —— **对齐/超头部** |
+| **Turn Recall@10** | **0.93** | 对齐 |
+| **QA accuracy** | **0.358** | TiMem 78.96（口径差异：完整上下文+更强模型） |
+| mean_hit_position | 1.35 | 答案会话平均第 1.35 位 |
+
+逐类目（500 问）：SS-A **1.0/0.904**、SS-U 1.0/0.523、multi-session 0.985/0.218、
+temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+生成双短板，
+与 mock 500q 的 SS-P 短板一致）。
+
+- 5 块结果：`~/.trinity/bench-official/lme_s_block{1-5}_20260826.json` +
+  `lme_s_final_20260826.json`（均带 manifest，数据集哈希锁定 277MB 官方集）；
+- **网络评价评分更新**：官方基准 2/10 → 6/10（检索兑现、QA 口径中）→ 加权总分
+  **5.9 → ≈7.2**；
+- QA 提升方向（下一轮）：完整上下文（去掉 5×5000 截断）+ 更强 judge——预计 0.6+；
+  SS-P/偏好类检索（0.81）是共性瓶颈（mock 与官方集一致）。p 有原副本）
 
