@@ -133,18 +133,32 @@ for qi, q in enumerate(data):
     if args.qa:
         ctx = []
         for h in hit_list:
-            c = (h.get("content") or "")[:600]
+            c = (h.get("content") or "")[:5000]  # 2026-08-26: 答案会话通常在 top-5，5000 覆盖更深
             if c:
                 ctx.append(c)
-        ctx_text = "\n---\n".join(ctx[:5]) if ctx else "(no evidence retrieved)"
+        ctx_text = "\n---\n".join(ctx[:5]) if ctx else "(no evidence retrieved)"  # 2026-08-26: 5×5000（预算 25k）
         sys_p = ("You are answering a question based ONLY on the provided conversation "
-                 "excerpts. If the information is not present, answer 'UNKNOWN'. "
-                 "Answer concisely.")
+                 "excerpts. Answer concisely using the information in the excerpts; "
+                 "only if the excerpts truly do not contain the answer, reply UNKNOWN. "
+                 "2026-08-26: 移除过严的 UNKNOWN 指令（deepseek-chat 过度保守）")
         user_p = f"Conversation excerpts:\n{ctx_text}\n\nQuestion: {question}\nAnswer:"
         try:
             qa_raw = llm_chat(sys_p, user_p)
-            norm = lambda s: (s or "").strip().lower()
-            qa_correct = norm(qa_raw) == norm(expected) or (expected and norm(expected) in norm(qa_raw))
+            # 2026-08-26: LLM 语义 judge（LongMemEval 官方主流）——strict match 对
+            # 推理型答案（如 June 3rd 需从上下文推断）过严；UNKNOWN 判错
+            if (qa_raw or "").strip().upper() == "UNKNOWN":
+                qa_correct = False
+            else:
+                j_sys = ("You are a strict but fair judge. Decide if the ANSWER semantically "
+                         "matches the EXPECTED answer (same fact/value, paraphrasing ok). "
+                         "Reply ONLY with YES or NO.")
+                j_usr = "ANSWER: " + qa_raw + "\n" + "EXPECTED: " + expected
+                try:
+                    jv = llm_chat(j_sys, j_usr, max_tokens=8).strip().upper()
+                    qa_correct = jv.startswith("YES")
+                except Exception:
+                    norm = lambda s: (s or "").strip().lower()
+                    qa_correct = norm(qa_raw) == norm(expected) or (expected and norm(expected) in norm(qa_raw))
         except Exception as exc:
             qa_raw = f"ERR:{type(exc).__name__}"
 
