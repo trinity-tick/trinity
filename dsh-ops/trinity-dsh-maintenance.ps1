@@ -29,7 +29,7 @@ param(
 
 # 兼容 powershell -File 传参：命令行里的 "a,b,c" 会以单个字符串到达，
 # 这里统一按逗号拆分 + 校验。
-$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "all")  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
+$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "usage", "all")  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
 $normalized = @()
 foreach ($t in $Tasks) { $normalized += $t.Split(',') }
 $normalized = $normalized | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
@@ -269,7 +269,8 @@ import runpy
 sys.argv = ["build_memory_pagetree"]
 runpy.run_path(r"$TrinityRoot\scriptsuild_memory_pagetree.py", run_name="__main__")
 sys.argv = ["run_pagetree_summaries", "--limit", "20"]
-runpy.run_path(r"$TrinityRoot\scriptsun_pagetree_summaries.py", run_name="__main__")
+runpy.run_path(r"$TrinityRoot\scripts
+un_pagetree_summaries.py", run_name="__main__")
 "@
 $pagetreePrompt = "运行 scripts/build_memory_pagetree.py 与 scripts/run_pagetree_summaries.py（页树重建+增量摘要），汇报统计。"
 
@@ -279,7 +280,8 @@ import sys
 sys.path.insert(0, r"$TrinityRoot")
 import runpy
 sys.argv = ["run_evals", "--all"]
-runpy.run_path(r"$TrinityRoot\scriptsun_evals.py", run_name="__main__")
+runpy.run_path(r"$TrinityRoot\scripts
+un_evals.py", run_name="__main__")
 "@
 $evalPrompt = "运行 scripts/run_evals.py --all（断言评测回归），汇报通过/失败断言数。"
 
@@ -505,6 +507,8 @@ foreach ($t in $Tasks) {
         "compact"   { Invoke-Task -Name "compact"   -LeaseJob "compact"   -DirectCommand $compactCmd  -DshPrompt $compactPrompt }
         "pagetree"  { Invoke-Task -Name "pagetree"  -LeaseJob "pagetree"  -DirectCommand $pagetreeCmd -DshPrompt $pagetreePrompt }  # 2026-08-26 PageIndex 借鉴
         "eval"      { Invoke-Task -Name "eval"      -DirectCommand $evalCmd      -DshPrompt $evalPrompt }  # 2026-08-26 DSH 借鉴
+        "review"    { Invoke-Task -Name "review"    -DirectCommand $reviewCmd   -DshPrompt $reviewPrompt }  # 2026-08-26 Claude Science 借鉴
+        "usage"     { Invoke-Task -Name "usage"     -DirectCommand $usageCmd     -DshPrompt $usagePrompt }  # 2026-08-27 使用伙伴闭环
         "selftest"  { Invoke-Task -Name "selftest"  -DirectCommand $selftestCmd -DshPrompt $selftestPrompt }
         "session-summarize" { Invoke-Task -Name "session-summarize" -LeaseJob "session-summarize" -DirectCommand $sessionSummaryCmd -DshPrompt $sessionSummaryPrompt }
         "session-auto" { Invoke-Task -Name "session-auto" -LeaseJob "session-auto" -DirectCommand $sessionAutoCmd -DshPrompt $sessionAutoPrompt }

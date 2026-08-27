@@ -5364,5 +5364,39 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - pytest 85/85；cite 模式实测；结构化检索命中实测
 - 改动：`benchmark/answer_eval.py`（--cite）、`scripts/harvest_kb_structured.py`（新）
 - 回滚：git checkout 对应文件；结构化记忆删除：
-  `UPDATE memories SET status='archived' WHERE tags LIKE '%kb-section%' OR tags LIKE '%kb-table-row%'`（可恢复）
+  `UPDATE memories SET status='archived' WHERE tags LIKE '%kb-sect
+
+---
+
+## 40. 使用伙伴闭环轮（2026-08-27，使用统计反馈给进化引擎）
+
+> 执行"亲密伙伴"分析建议 A：让 Trinity 从"自转"走向"被需要"——使用数据成为进化输入。
+
+### 40.1 数据基础确认
+
+- `access_count` 由检索命中自动累加（异步入队 touch，_crud.py:527）——使用数据已在采集；
+- 审计表（59k+ 条）含 search/search_hybrid 动作（details 含 query/hits）——查询行为可聚合。
+
+### 40.2 scripts/usage_feedback.py（使用反馈闭环）
+
+- 聚合近 N 天：使用概况（search/write 次数）、**热门查询 TOP**（query+次数）、
+  **高频记忆 TOP**（access_count）、**闲置记忆**（0 访问超期）；
+- 生成报告并 ingest（category=analysis, tags=usage-feedback/evolution-input）——
+  **evolution ANALYZE 阶段可检索到（实证命中）**——使用数据进入进化闭环；
+- 首份报告实测：**search=3,278 次/7 天**（使用活跃）、热门查询 TOP（36 次最高）、
+  高频记忆（1849 次最高）、闲置 0；洞察自动判定"使用活跃，反馈闭环运转"；
+- 修复过程：审计列是 timestamp（非 created_at）、时间 ISO 比较、action 名适配。
+
+### 40.3 维护链接入
+
+- 新增 `-Tasks usage`（allowed + 定义 + dispatch）；**顺带修复 ps1 的 review dispatch
+  缺失**（与 pagetree/eval 同类丢失问题）；PARSE OK + DryRun review,usage 通过；
+- 使用反馈报告每日更新（供 evolution ANALYZE 读取）。
+
+### 40.4 验证与回滚
+
+- 报告可检索（evolution 输入）✓；重复报告已归档去重（保留最新）；
+- 改动：`scripts/usage_feedback.py`（新）、`dsh-ops/trinity-dsh-maintenance.ps1`
+- 回滚：git checkout 对应文件；报告记忆可归档（tags=usage-feedback）；
+  维护链回退：去掉 usage 任务行ion%' OR tags LIKE '%kb-table-row%'`（可恢复）
 
