@@ -5652,3 +5652,29 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
   `scripts/memory_stream_server.py`
 - 回滚：git checkout 对应文件（ps1 回退则 6 任务消失，巡检可再检测）
 
+---
+
+## 49. 建议执行轮（2026-08-27，audit-ps1 入链 + stale 观察工具）
+
+> 执行建议两项。
+
+### 49.1 ps1 巡检入维护链（Task 1）
+
+- 维护链新增 `-Tasks audit-ps1`（每日自检三件套；完整行锚点补丁，PARSE OK，
+  DryRun 通过）；
+- 修复巡检工具正则：变量名可含数字（auditPs1）——`[a-zA-Z]` → `[a-zA-Z0-9]`；
+- 最终巡检 **ALL OK（32 allowed / 31 dispatched / 31 defined）**。
+
+### 49.2 stale 观察工具（Task 2）
+
+- `scripts/stale_watch.py`：stale 数 / 最旧源 / **预计自然过期触发日期**；
+- 实测：198 源 0 stale；最旧 ai_knowledge 24.8d → **预计 2026-09-01 首次自然触发**
+  （自动化自动采集闭环的自然验证点）。
+
+### 49.3 验证与回滚
+
+- pytest（automation）15/15；API ok
+- 改动：`dsh-ops/trinity-dsh-maintenance.ps1`、`scripts/audit_maintenance_ps1.py`、
+  `scripts/stale_watch.py`（新）
+- 回滚：git checkout 对应文件
+

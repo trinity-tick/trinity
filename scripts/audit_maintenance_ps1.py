@@ -23,8 +23,8 @@ def main() -> int:
     allowed = [t.strip().strip('"') for t in m.group(1).split(",") if t.strip()] if m else []
     # dispatch 任务名
     dispatched = set(re.findall(r'Invoke-Task -Name "([a-z0-9-]+)"', raw))
-    # 定义（$xxxCmd = @"）
-    defined = set(re.findall(r'\$([a-zA-Z]+)Cmd = @"', raw))
+    # 定义（$xxxCmd = @"；变量名可含数字如 auditPs1）
+    defined = set(re.findall(r'\$([a-zA-Z0-9]+)Cmd = @"', raw))
 
     problems = []
     for t in allowed:
