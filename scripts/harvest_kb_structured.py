@@ -71,12 +71,22 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0, help="0=all files")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--stale-only", action="store_true",
+                    help="只重新摄入过时源（freshness>30 天，2026-08-27 knowledge.stale 闭环）")
     args = ap.parse_args()
 
     if not os.path.isdir(KB_DIR):
         print("kb_harvest dir missing:", KB_DIR)
         return 1
     files = sorted(f for f in os.listdir(KB_DIR) if f.endswith(".md"))
+    if args.stale_only:
+        # 知识源注册表：只保留 stale 源（fresh_days>30 且来源是 kb_harvest 文件）
+        sys.path.insert(0, _TRINITY_ROOT)
+        from trinity.knowledge import sources
+        reg = sources()
+        stale = {s["source_id"].replace("\\", "/") for s in reg.get("sources", []) if s.get("stale")}
+        files = [f for f in files if os.path.join(KB_DIR, f).replace("\\", "/") in stale]
+        print(f"stale-only: {len(files)} files")
     if args.limit:
         files = files[: args.limit]
 

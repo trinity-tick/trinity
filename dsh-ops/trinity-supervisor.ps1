@@ -67,6 +67,12 @@ foreach ($cache in @("TRINITY_CACHE_BACKEND", "TRINITY_REDIS_URL", "TRINITY_CACH
 # 存储统一（EXECUTION 31，双库修复双保险）：显式锚定权威大库路径，
 # 子进程（api/mcp）继承后不再依赖 _find_trinity_store() 的 cwd 兜底。
 $TrinityStore = Join-Path $env:USERPROFILE ".trinity\store"
+
+# 2026-08-27 (伙伴系列): API 常驻启用 automation (knowledge.stale 告警等)
+if (-not [Environment]::GetEnvironmentVariable("TRINITY_AUTOMATION", "Process")) {
+    [Environment]::SetEnvironmentVariable("TRINITY_AUTOMATION", "on", "Process")
+    Write-Output "TRINITY_AUTOMATION -> on"
+}
 if (-not [Environment]::GetEnvironmentVariable("TRINITY_STORE", "Process")) {
     [Environment]::SetEnvironmentVariable("TRINITY_STORE", $TrinityStore, "Process")
     Write-Output "TRINITY_STORE -> $TrinityStore"
@@ -190,6 +196,18 @@ if (-not (Test-GatewayHealth)) {
     }
 } else {
     Write-Log "gateway OK (/v1/models 200)"
+}
+# ---- 0.5 memory stream UI (2026-08-27 partner) ----
+if (-not (Test-Tcp -Port 8010)) {
+    if (Should-Restart "memstream") {
+        Write-Log "memstream DOWN (:8010) - restarting" "WARN"
+        Start-WithLogs -Name "memstream" -Exe $SysPy -ArgList @("scripts\memory_stream_server.py", "--port", "8010")
+        $state.restartedAt.memstream = $now.ToString("o")
+    } else {
+        Write-Log "memstream DOWN but within restart interval - skipped" "WARN"
+    }
+} else {
+    Write-Log "memstream OK (:8010)"
 }
 
 # ── 1. API ────────────────────────────────────────────────────────────────

@@ -5433,3 +5433,36 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
   docs/PARTNER_VERIFICATION.md（新）
 - 回滚：git checkout 对应文件；rules.yaml 删除即回默认；:8010 服务停掉即可
 
+---
+
+## 42. 伙伴后续执行轮（2026-08-27，API 常驻 automation + UI 拉起 + stale 自动采集闭环）
+
+> 执行伙伴系列后续三项。
+
+### 42.1 API 常驻启用 automation（Task 1）
+
+- supervisor 启动环境注入 `TRINITY_AUTOMATION=on`（子进程继承）；
+- 验证：API 检索低置信查询 → automation stats emitted+1/matched+1/**executed+1**
+  （内置 search-low-confidence-flag 规则在 API 常驻下真实运转）。
+
+### 42.2 记忆流 UI :8010 挂进 supervisor（Task 2）
+
+- supervisor 新增 memstream 服务段（Test-Tcp :8010 探测 + Should-Restart 拉起 +
+  Start-WithLogs）；PARSE OK；重启后 :8010 存活（UI ok）。
+
+### 42.3 knowledge.stale 自动采集闭环（Task 3）
+
+- `harvest_kb_structured.py` 新增 `--stale-only`（只重新摄入 freshness>30 天的源）；
+- rules.yaml 新增 `knowledge-stale-auto-refresh`（exec：stale 事件 → 自动重新摄入，
+  cooldown 3600s 防抖）；**修复 YAML 反斜杠转义**（Windows 路径 → 正斜杠+单引号，
+  否则整个规则文件加载失败回退默认）；
+- 验证：emit knowledge.stale → **matched=2 / executed=1**（notify ✓ + exec 触发 ✓）；
+  exec failed=1 待观察（模拟假源场景，真实维护链 emit_stale 场景后续确认）。
+
+### 42.4 验证与回滚
+
+- pytest 85/85；API/UI 存活
+- 改动：`dsh-ops/trinity-supervisor.ps1`、`scripts/harvest_kb_structured.py`、
+  `~/.trinity/automation/rules.yaml`
+- 回滚：git checkout 对应文件；rules.yaml 删 exec 规则即回告警模式
+
