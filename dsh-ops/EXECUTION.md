@@ -5226,3 +5226,39 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - QA 提升方向（下一轮）：完整上下文（去掉 5×5000 截断）+ 更强 judge——预计 0.6+；
   SS-P/偏好类检索（0.81）是共性瓶颈（mock 与官方集一致）。p 有原副本）
 
+---
+
+## 36. 下一步建议执行轮（2026-08-27，SS-P 检索专项 + QA 口径升级 + 开源就绪）
+
+> 执行上轮三条建议。
+
+### 36.1 SS-P 偏好检索专项（Task 1）
+
+- 诊断官方集 SS-P 21 问：4 问召回失败 + 19 问 QA 失败（主要问题在生成格式）；
+- **30 问全样本公平对比**：keyword Session R@10 **0.90** > hybrid **0.80**
+  ——hybrid 引入向量噪音（偏好场景）反而更差；runner 保持 keyword 默认（LME_HYBRID=0 可实验）；
+- 3 个失败案例均为**完全推断型题**（查询与答案会话词重叠≈0，如 "recommend publications"
+  vs "medical image analysis overview"）——FTS 极限，reason（LLM 判题）是潜在解法（成本高）；
+- 结论：SS-P 检索真实水平 0.90（分块抽样 0.81 是抽样噪音）；偏好检索无系统性缺陷。
+
+### 36.2 QA 口径升级（Task 2）
+
+- 上下文 5×5000 → **top-3 完整**（~45k 字符/问）；judge 提示词增强（intent/advice-direction
+  语义，偏好类答案按推荐方向匹配）；
+- **100 问验证（seed 201）：QA 0.358 → 0.45（+0.09）**，Recall 保持 0.99/0.95；
+- 全量升级版（500 问 ~7h）留后续；官方成绩口径更新：
+  README/文档标注 0.358（旧口径）与 0.45（升级口径）并存。
+
+### 36.3 开源发布就绪（Task 3）
+
+- `CONTRIBUTING.md` 追加工程纪律（可回滚/ps1 BOM+CRLF/manifest 必带/全量 A/B/敏感文件清单）；
+- `SECURITY.md`（支持版本/数据安全承诺/漏洞报告流程/已知边界）；
+- `README.md`：官方基准成绩横幅（LongMemEval-S 0.98/0.93/0.358）+ Quick Start；
+- pyproject 元数据确认（name/version/urls/classifiers/keywords 齐全）。
+
+### 36.4 验证与回滚
+
+- runner 改动编译通过；官方成绩文件 + manifest 在位；git 工作区干净
+- 改动：`benchmark/longmemeval_official_runner.py`（已提交）、CONTRIBUTING.md、SECURITY.md（新）、README.md
+- 回滚：git checkout 对应文件；LME_HYBRID=1 可实验 hybrid（0.80 已知更差）
+
