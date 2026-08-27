@@ -353,6 +353,19 @@ class AutomationEngine:
                         ok = self._exec_command_policy(action, payload, rule_name)
                     else:
                         ok = False
+                    # 2026-08-27（方向D 全链审计）：事件上下文摘要入 rollout（执行/入队后）
+                    try:
+                        _psum = {"memory_id": payload.get("memory_id"),
+                                 "query": str(payload.get("query"))[:80],
+                                 "goal_id": payload.get("goal_id"),
+                                 "status": payload.get("status"),
+                                 "importance": payload.get("importance")}
+                        _psum = {k: v for k, v in _psum.items() if v is not None}
+                        self._record_rollout({"ts": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime()),
+                                               "event": "context", "rule": rule_name,
+                                               "action_type": "payload", "payload_summary": _psum})
+                    except Exception:
+                        pass
                     if ok or attempt >= retries:
                         return ok
                     time.sleep(2 ** attempt)  # 指数退避

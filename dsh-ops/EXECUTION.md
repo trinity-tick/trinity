@@ -6064,3 +6064,34 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - 改动：`scripts/forgetting_score.py`、`trinity/core/client/_search.py`、
   `gateway/server.py`
 - 回滚：git checkout 对应文件；RAG 端点移除即回原状
+
+---
+
+## 62. 建议全执行轮（2026-08-27，RAG 文档 + 全链审计 + 方向汇总）
+
+> 执行建议三项。
+
+### 62.1 RAG 使用文档（Task 1）
+
+- docs/RAG_SERVICE_20260827.md：端点/参数/响应/一行接入（curl+Python+任意
+  LLM 应用 RAG 模式）——任何应用可自助接入记忆增强。
+
+### 62.2 方向D 继续：自动化动作全链审计（Task 2）
+
+- rollout 记录新增 **context 事件**（payload_summary：memory_id/query/goal_id/
+  status/importance）——全链回放：**事件上下文 → 规则 → 动作 → 结果**（context +
+  action + ok/exit_code/error_tail）；
+- 修复竞态：context 记录移到动作执行/入队**之后**（此前写文件拖慢线程导致
+  审批入队测试竞态失败）——test_automation 15/15 恢复。
+
+### 62.3 六方向收尾汇总（Task 3）
+
+- docs/EVOLUTION_DIRECTIONS_20260827.md：六方向状态（全部启动）+ 入口 +
+  下一步 + 性能路线 + 全景一句话（"自进化认知协作平台"）。
+
+### 62.4 验证与回滚
+
+- pytest 39/39；API/GATEWAY ok；巡检 ALL OK
+- 改动：`trinity/automation/engine.py`、docs/RAG_SERVICE_20260827.md（新）、
+  docs/EVOLUTION_DIRECTIONS_20260827.md（新）
+- 回滚：git checkout 对应文件
