@@ -5494,3 +5494,35 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - 改动：`trinity/automation/engine.py`（白名单）
 - 回滚：git checkout -- trinity/automation/engine.py
 
+---
+
+## 44. 建议继续执行轮（2026-08-27，goal 规则 + stale 端到端 + UI 增强）
+
+> 执行下一步建议三项。
+
+### 44.1 automation 规则扩展（Task 1）
+
+- rules.yaml 新增 `goal-complete-notify`（phase=complete → 通知）与 `goal-blocked-alert`
+  （phase=blocked → 告警）；
+- 验证：emit goal.updated（complete+blocked）→ **matched=2 / executed=2, failed=0**
+  ——目标生命周期事件接入自动化。
+
+### 44.2 真实 stale 周期端到端（Task 2）
+
+- 构造真实场景：按规范化 URI 回填源全部记忆 created_at（-40 天，含结构化记忆——
+  只改 1 条会被同源新记忆拉新 freshness）→ build_sources(emit_stale=True)；
+- **E2E 全链路验证通过**：stale 检测 1 个源 → knowledge.stale 事件 →
+  **matched=2 / executed=2, failed=0**（notify + auto-refresh 自动重新摄入真实执行）；
+- 测试后恢复（2 条记忆 created_at 还原）。
+
+### 44.3 记忆流 UI 增强（Task 3）
+
+- 页面新增**统计区块**（活跃记忆总数 + 类别 TOP5）与**热门查询展示**（近 7 天 TOP8）；
+- 验证：页面 200，HOT/STATS 区块 present；API/UI 存活。
+
+### 44.4 验证与回滚
+
+- pytest（automation+goals）22/22
+- 改动：`~/.trinity/automation/rules.yaml`、`scripts/memory_stream_server.py`
+- 回滚：git checkout scripts/memory_stream_server.py；rules.yaml 删 goal 规则行
+

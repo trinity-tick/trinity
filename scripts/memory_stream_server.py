@@ -29,6 +29,9 @@ h1{font-size:20px} .card{background:#fff;border:1px solid #e2e2e2;border-radius:
 input{width:70%;padding:8px} button{padding:8px 16px} .query{background:#f5f5f5;border-radius:6px;padding:6px 10px;margin:4px 0;font-size:13px}
 </style></head><body>
 <h1>🧠 Trinity 记忆流</h1>
+__STATS__
+<h2>热门查询（近 7 天）</h2>
+<div>__HOT__</div>
 <form method="get" action="/"><input name="q" placeholder="检索记忆…" value="__Q__"><button>检索</button></form>
 __SEARCH__
 <h2>最近记忆流</h2>
@@ -72,12 +75,31 @@ def main() -> int:
                 "WHERE status='active' AND content LIKE ? ORDER BY created_at DESC LIMIT 10",
                 ("%" + q + "%",)).fetchall()
             search_html = "<h2>检索结果</h2>" + "".join(_mem_card(r) for r in rows) if rows else "<h2>检索结果</h2><p>无命中</p>"
+        # 统计区块（2026-08-27 UI 增强）
+        total = conn.execute("SELECT count(*) FROM memories WHERE status='active'").fetchone()[0]
+        cats = conn.execute("SELECT category, count(*) FROM memories WHERE status='active' GROUP BY category ORDER BY 2 DESC LIMIT 5").fetchall()
+        stats_html = "<p>活跃记忆 <b>" + str(total) + "</b> 条 · 类别: " + " · ".join(f"{c}({n})" for c, n in cats) + "</p>"
+        # 热门查询
+        hot_rows = conn.execute(
+            "SELECT details FROM audit_log WHERE action IN ('search','search_hybrid') AND timestamp >= ? LIMIT 400",
+            ((datetime.utcnow() - __import__("datetime").timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%S"),)).fetchall()
+        qmap = {}
+        for (dd,) in hot_rows:
+            try:
+                ddd = json.loads(dd)
+                qq = str(ddd.get("query", ""))[:50]
+                if qq:
+                    qmap[qq] = qmap.get(qq, 0) + 1
+            except Exception:
+                pass
+        hot_html = "".join(f'<div class="query">{q} <b>x{n}</b></div>' for q, n in sorted(qmap.items(), key=lambda x: -x[1])[:8]) or "<p>无</p>"
         rows = conn.execute(
             "SELECT memory_id, category, tags, created_at, substr(content,1,240) FROM memories "
             "WHERE status='active' ORDER BY created_at DESC LIMIT 30").fetchall()
         stream = "".join(_mem_card(r) for r in rows)
         conn.close()
-        page = PAGE.replace("__SEARCH__", search_html).replace("__STREAM__", stream)
+        page = PAGE.replace("__STATS__", stats_html).replace("__HOT__", hot_html)
+        page = page.replace("__SEARCH__", search_html).replace("__STREAM__", stream)
         return HTMLResponse(page.replace("__Q__", q.replace('"', "&quot;")))
 
     @app.get("/api/stream")
