@@ -5556,3 +5556,34 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
   `scripts/memory_stream_server.py`（UI）、`~/.trinity/automation/rules.yaml`
 - 回滚：git checkout 对应文件；rules.yaml 删失败告警行l 规则行
 
+---
+
+## 46. 建议继续执行轮（2026-08-27，rollout 审计 + stale 观察确认 + UI 引擎化修复）
+
+> 执行下一步建议三项。
+
+### 46.1 rollout 异常检测（Task 1）
+
+- 新脚本 `scripts/rollout_audit.py`：扫描 automation rollouts JSONL（近 N 天），
+  统计失败模式（ok=false/exit_code!=0/解析错误），有异常时 emit automation.failed
+  （告警规则响应）；
+- 实测：1 文件 / 3 动作 / 0 失败（automation 启用后轨迹已在记录）。
+
+### 46.2 自然 stale 观察确认（Task 2）
+
+- `knowledge-fresh`（每日 eval，emit_stale=True）实测：PASS 2/2、198 源 0 stale——
+  观察机制在日常运行链路就绪（源自然过期时自动触发采集）。
+
+### 46.3 记忆流 UI：引擎化修复 + 增强（Task 3）
+
+- **发现并修复密文泄漏**：UI 直连 SQL 读 content 显示 enc:v1: 密文、检索 LIKE 对密文
+  无效——改用 **Trinity 引擎读取**（get_all_memories/search 解密 + 语义检索）；
+- 增强：类别下拉（?cat=）、时间线分组、检索高亮（片段命中时 <mark>）；
+- 实测：**DECRYPTED ok**（密文不再泄漏）、检索命中、下拉 present。
+
+### 46.4 验证与回滚
+
+- pytest（automation）15/15；API/UI 存活
+- 改动：`scripts/rollout_audit.py`（新）、`scripts/memory_stream_server.py`（引擎化）
+- 回滚：git checkout 对应文件
+
