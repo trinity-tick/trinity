@@ -6032,3 +6032,35 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - 改动：`trinity/agents/mesh.py`、`trinity/core/client/_search.py`、
   `scripts/memory_value.py`（新）
 - 回滚：git checkout 对应文件；降权可 forgetting_rerank=False 关闭
+
+---
+
+## 61. 建议全执行轮（2026-08-27，高价值豁免 + 检索审计 + RAG 服务化）
+
+> 执行建议三项。
+
+### 61.1 资产化应用：高价值豁免（Task 1）
+
+- forgetting --apply 增加**高价值豁免**：value>=0.7 的记忆永不归档（调用
+  memory_value.value_score）；
+- 实测：--apply --min-score 0.5 --max-importance 0.6 仍 0 归档（豁免+库健康）。
+
+### 61.2 方向D：检索决策审计（Task 2）
+
+- search 审计 details 增强：+elapsed_ms（耗时）+layer（层推断结果）——
+  与既有 query/mode/hits/memory_ids 组成**完整可回放决策轨迹**；
+- 实测：audit keys 全 7 项（elapsed_ms 1615.7ms / layer / hits / memory_ids ...）。
+
+### 61.3 方向E：RAG 服务化（Task 3）
+
+- gateway 新增 **POST /v1/retrieval**（标准 RAG 端点）：query → 解密 content +
+  score + memory_id + category + layer 的 JSON（mode/layer_hint 可调）；
+- 实测：object=retrieval count=3（WMS 上架规范命中）——**任何 LLM 应用一行接入
+  Trinity 记忆增强**。
+
+### 61.4 验证与回滚
+
+- pytest 39/39；巡检 ALL OK；API/GATEWAY ok
+- 改动：`scripts/forgetting_score.py`、`trinity/core/client/_search.py`、
+  `gateway/server.py`
+- 回滚：git checkout 对应文件；RAG 端点移除即回原状

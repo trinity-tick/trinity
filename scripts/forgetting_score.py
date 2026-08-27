@@ -61,8 +61,16 @@ def main() -> int:
     for s, r, info in top[: 10]:
         print(f"  {s:.2f} {info} {str(r.get('content') or '')[:40]}")
     if args.apply:
+        # 2026-08-27（资产化应用）：高价值记忆豁免——value>=0.7 永不归档
+        import importlib.util as _ilu
+        _spec = _ilu.spec_from_file_location("mval", os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "memory_value.py"))
+        _mval = _ilu.module_from_spec(_spec)
+        _spec.loader.exec_module(_mval)
         arch = [r for s, r, info in scored
-                if s > args.min_score and float(r.get("importance") or 0) < args.max_importance]
+                if s > args.min_score
+                and float(r.get("importance") or 0) < args.max_importance
+                and _mval.value_score(r, time.time())[0] < 0.7]
         if arch:
             mem._adapter.archive_memories([r.get("memory_id") for r in arch])
             print(f"archived {len(arch)} low-value memories")

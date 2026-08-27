@@ -299,6 +299,34 @@ def search_memory(body: SearchIn) -> Dict[str, Any]:
     return {"results": _mem0_compat(_search(body.query, top_k=body.top_k, strategy=body.strategy))}
 
 
+# ── RAG 检索服务（2026-08-27 方向E）：标准 /v1/retrieval ──────────────
+# 任何 LLM 应用一行接入 Trinity 记忆增强：query → 解密 content + score + 元数据。
+
+
+class RetrievalIn(BaseModel):
+    query: str
+    top_k: int = 5
+    mode: str = "hybrid"
+    layer_hint: Optional[str] = None
+
+
+@app.post("/v1/retrieval")
+def retrieval(body: RetrievalIn) -> Dict[str, Any]:
+    results = _search(body.query, top_k=body.top_k, strategy=body.mode)
+    items = []
+    for m in results:
+        items.append({
+            "content": m.get("content") or m.get("content_preview") or "",
+            "score": m.get("score", 0),
+            "memory_id": m.get("memory_id", ""),
+            "category": m.get("category"),
+            "created_at": m.get("created_at"),
+            "layer": m.get("memory_layer"),
+        })
+    return {"object": "retrieval", "query": body.query, "count": len(items),
+            "data": items}
+
+
 # ── 聊天代理（记忆自动注入）──────────────────────────────────────────
 
 

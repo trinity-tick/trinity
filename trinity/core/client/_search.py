@@ -96,6 +96,8 @@ class _SearchMixin:
         """
         raw_results: List[Dict[str, Any]] = []
         _view_spec: Optional[Dict[str, Any]] = None
+        import time as _t0mod
+        _t0 = _t0mod.time()
 
         # 2026-08-27（方向A 认知分层）：查询层感知——layer_hint=auto 按查询性质选层
         _layer_filter: Optional[str] = None
@@ -322,7 +324,9 @@ class _SearchMixin:
                     memory_id=None, action="search", agent_id=agent_id,
                     persona_id=persona_id,
                     details={"query": query, "top_k": top_k, "mode": mode,
-                             "hits": len(raw_results), "memory_ids": memory_ids[:10]},
+                             "hits": len(raw_results), "memory_ids": memory_ids[:10],
+                             "elapsed_ms": round((_t0mod.time() - _t0) * 1000, 1),
+                             "layer": _layer_filter},
                 )
             except Exception:
                 pass
