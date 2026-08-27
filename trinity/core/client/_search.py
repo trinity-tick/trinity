@@ -61,6 +61,7 @@ class _SearchMixin:
         visibility_rule: Optional[str] = None,
         reason_deep: bool = False,
         layer_hint: Optional[str] = None,
+        forgetting_rerank: bool = False,
     ) -> Dict[str, Any]:
         """语义记忆搜索。
 
@@ -256,6 +257,26 @@ class _SearchMixin:
             _kept = [r for r in raw_results if (r.get("memory_layer") or "ltm") == _layer_filter]
             if len(_kept) >= max(1, min(top_k, 3)):
                 raw_results = _kept
+
+        # 2026-08-27 (方向A 阶段3): 高遗忘分检索降权 - 后置不删除 (默认 off)
+        if forgetting_rerank and raw_results:
+            import time as _tm
+            _now = _tm.time()
+            def _fscore(x):
+                try:
+                    _la = str(x.get("last_accessed_at") or x.get("created_at") or "")
+                    if len(_la) >= 19:
+                        _ts = _tm.mktime(_tm.strptime(_la[:19], "%Y-%m-%dT%H:%M:%S"))
+                    else:
+                        _ts = _now
+                    _idle = min(1.0, max(0.0, (_now - _ts) / 86400.0) / 90.0)
+                except Exception:
+                    _idle = 0.0
+                _acc = min(1.0, max(0.0, 1.0 - float(x.get("access_count") or 0) / 20.0))
+                return 0.5 * _idle + 0.3 * _acc + 0.2 * max(0.0, 1.0 - float(x.get("importance") or 0.5) / 0.6)
+            raw_results = sorted(raw_results,
+                key=lambda x: (1.0 if _fscore(x) < 0.6 else 0.0, x.get("score", 0) or 0),
+                reverse=True)
 
         # modality 过滤
         if modality and raw_results:

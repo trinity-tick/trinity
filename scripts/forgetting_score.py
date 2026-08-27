@@ -41,7 +41,9 @@ def forgetting_score(rec, now):
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=20)
-    ap.add_argument("--apply", action="store_true", help="归档 score>0.9 且 importance<0.3")
+    ap.add_argument("--min-score", type=float, default=0.9, help="归档分数下限（阶段2 可下调）")
+    ap.add_argument("--max-importance", type=float, default=0.3, help="归档重要度上限")
+    ap.add_argument("--apply", action="store_true", help="归档 score>min-score 且 importance<max-importance")
     args = ap.parse_args()
     from trinity import Trinity
     mem = Trinity(adapter="sqlite")
@@ -60,7 +62,7 @@ def main() -> int:
         print(f"  {s:.2f} {info} {str(r.get('content') or '')[:40]}")
     if args.apply:
         arch = [r for s, r, info in scored
-                if s > 0.9 and float(r.get("importance") or 0) < 0.3]
+                if s > args.min_score and float(r.get("importance") or 0) < args.max_importance]
         if arch:
             mem._adapter.archive_memories([r.get("memory_id") for r in arch])
             print(f"archived {len(arch)} low-value memories")

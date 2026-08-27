@@ -5814,7 +5814,8 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 ### 54.1 页树增量入维护链（Task 1）
 
 - pagetree 任务改：**每日增量（1.2s）+ 周日全量重建+摘要**（weekday 判断）；
-- **修复历史损坏**：pagetreeCmd here-string 含退格/换行控制字符（//
+- **修复历史损坏**：pagetreeCmd here-string 含退格/换行控制字符（/
+/
  在
   历史写入时被解释——summaries 路径一直含非法字符）——整块行级替换为干净内容；
 - PARSE OK + DryRun（增量分支）通过。
@@ -5966,3 +5967,37 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
   `dsh-ops/trinity-dsh-maintenance.ps1`、docs/FORGETTING_BASELINE_20260827.md（新）
 - 回滚：git checkout 对应文件；layer_hint 不传即原行为
 
+---
+
+## 59. 建议全执行轮（2026-08-27，遗忘阶段2 + 检索降权 + AgentMesh）
+
+> 执行建议三项。
+
+### 59.1 遗忘分阶段 2（Task 1）
+
+- 分布扫描：3000 条全 <0.5（**库极健康**——下调阈值无对象）；
+- forgetting_score 阈值参数化（--min-score/--max-importance，默认 0.9/0.3）——
+  未来库积累后可下调，dry-run 验证安全。
+
+### 59.2 高遗忘分检索降权（Task 2，阶段3）
+
+- search 新增 forgetting_rerank（默认 off 向后兼容）：高遗忘分（>=0.6）
+  结果后置不删除；
+- adapter 检索结果补 access_count/last_accessed_at 字段（降权数据源）；
+- **修复排序方向 bug**（reverse 把降权组排前）——key 反转为低遗忘分组优先；
+- 实测：构造 stale 记忆 pos **0->9**（从第 1 位降到第 10 位）。
+
+### 59.3 方向B AgentMesh（Task 3）
+
+- trinity/agents/mesh.py（新）：delegation 记忆类型协作总线——
+  create（pending）/claim（原子：仅 pending 未过期）/complete（仅认领人）/inbox（状态过滤）；
+- 实测：claim(b)=True、claim(c)=False、complete(c)=False、complete(b)=True、inbox 过滤正确；
+- 修坑：search 结果不带 metadata（inbox 改 get_memory 读全量）、metadata JSON 解析、
+  update_memory 无 metadata 参数（SQL 直接更新）。
+
+### 59.4 验证与回滚
+
+- pytest 39/39；巡检 ALL OK；API ok
+- 改动：scripts/forgetting_score.py、trinity/core/client/_search.py、
+  trinity/adapters/sqlite/_search.py、trinity/agents/mesh.py（新）
+- 回滚：git checkout 对应文件；降权默认 off；mesh 不导入即无影响
