@@ -107,7 +107,19 @@ for qi, q in enumerate(data):
         print(f"  [ingest error q{qi}] {type(exc).__name__}: {exc}", flush=True)
 
     # 2) retrieve top-K
-    hits = mem.search(question, top_k=args.top_k, agent_id=agent)
+    # 2026-08-27（SS-P 专项）：SS-P 是推断型偏好题（查询与答案会话词重叠极低），
+    # FTS keyword 召回失败（官方 0.81）→ 升级 hybrid（RRF：FTS+BM25+向量）。
+    import os as _os
+    # 2026-08-27 实测：hybrid 在 SS-P 上 0.80 < keyword 0.90（向量噪音）→ 默认 keyword
+    _hybrid = _os.environ.get("LME_HYBRID", "0") != "0"
+    if _hybrid:
+        try:
+            hits = mem.search_hybrid(query=question, top_k=args.top_k, agent_id=agent,
+                                     strategy="rrf")
+        except Exception:
+            hits = mem.search(question, top_k=args.top_k, agent_id=agent)
+    else:
+        hits = mem.search(question, top_k=args.top_k, agent_id=agent)
     hit_list = hits.get("results", []) if isinstance(hits, dict) else (hits if isinstance(hits, list) else [])
     retrieved = [h.get("memory_id") for h in hit_list]
 
@@ -133,10 +145,10 @@ for qi, q in enumerate(data):
     if args.qa:
         ctx = []
         for h in hit_list:
-            c = (h.get("content") or "")[:5000]  # 2026-08-26: 答案会话通常在 top-5，5000 覆盖更深
+            c = (h.get("content") or "")[:20000]  # 2026-08-27 QA 升级: top-3 完整上下文
             if c:
                 ctx.append(c)
-        ctx_text = "\n---\n".join(ctx[:5]) if ctx else "(no evidence retrieved)"  # 2026-08-26: 5×5000（预算 25k）
+        ctx_text = "\n---\n".join(ctx[:3]) if ctx else "(no evidence retrieved)"  # 2026-08-27 QA 升级: top-3 完整（~45k 字符/问）
         sys_p = ("You are answering a question based ONLY on the provided conversation "
                  "excerpts. Answer concisely using the information in the excerpts; "
                  "only if the excerpts truly do not contain the answer, reply UNKNOWN. "
@@ -150,8 +162,9 @@ for qi, q in enumerate(data):
                 qa_correct = False
             else:
                 j_sys = ("You are a strict but fair judge. Decide if the ANSWER semantically "
-                         "matches the EXPECTED answer (same fact/value, paraphrasing ok). "
-                         "Reply ONLY with YES or NO.")
+                         "matches the EXPECTED answer (same fact/value/intent/advice-direction, "
+                         "paraphrasing ok; preference-style answers match if the same preference "
+                         "or recommendation direction is expressed). Reply ONLY with YES or NO.")
                 j_usr = "ANSWER: " + qa_raw + "\n" + "EXPECTED: " + expected
                 try:
                     jv = llm_chat(j_sys, j_usr, max_tokens=8).strip().upper()

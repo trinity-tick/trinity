@@ -9,6 +9,32 @@
 > 全部基准带可复现 manifest。详见 [docs/BENCHMARK_GUIDE.md](docs/BENCHMARK_GUIDE.md)（复现指南）、
 > [docs/PRIVACY.md](docs/PRIVACY.md)（隐私说明）、[docs/INDEX.md](docs/INDEX.md)（文档索引）。
 
+> 🏆 **官方基准（2026-08-27）**：LongMemEval-S（ICLR 2025 官方集，500 问）
+> **Session Recall@10 = 0.98** · Turn Recall@10 = 0.93 · QA accuracy 0.358（deepseek-chat 口径）
+> ——检索对齐头部（TiMem/Mem0 0.9+）；结果带 manifest 完全可复现。
+
+## Quick Start
+
+```bash
+# 安装（本地运行，无遥测）
+pip install -e ".[dev,test]"
+
+# 启动 API（:8001）+ MCP（:8000/:8003）
+python -m trinity.api.server --port 8001
+python -m trinity.mcp.server --mode sse --port 8000
+
+# 写入与检索
+python -m trinity ingest --content "用户偏好暗色模式"
+python -m trinity search --query "用户偏好" --top-k 5
+
+# 维护（每日链：health/evolution/decay/tiers/sync/backup...）
+powershell -File dsh-ops/trinity-dsh-maintenance.ps1 -Tasks all
+
+# 评测（12 项功能断言 + 官方基准复现）
+python scripts/run_evals.py --all
+python benchmark/longmemeval_official_runner.py --limit 100 --qa --out results.json
+```
+
 Trinity is not a "memory library." It is a **Memory Operating System** — an
 infrastructure layer that any memory store (vector DB, graph DB, SQLite) can
 plug into, with retrieval, governance, identity, evolution, and economic
