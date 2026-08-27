@@ -462,20 +462,47 @@ class AutomationEngine:
                     pid, rule_name, reason)
         return pid
 
+    # 2026-08-27（编排升级）：审批流状态机——pending 超时自动 expired
+    _PENDING_TTL_SECONDS = 86400.0  # 24h
+
+    def _expire_stale_pending(self) -> int:
+        """超时 pending -> expired（不可再批准）。返回过期数。"""
+        import datetime as _dt
+        n = 0
+        with self._lock:
+            now = _dt.datetime.now()
+            for p in self._pending:
+                if p.get("status") != "pending":
+                    continue
+                try:
+                    ts = _dt.datetime.strptime(p.get("ts", ""), "%Y-%m-%dT%H:%M:%S")
+                    if (now - ts).total_seconds() > self._PENDING_TTL_SECONDS:
+                        p["status"] = "expired"
+                        p["expired_at"] = now.strftime("%Y-%m-%dT%H:%M:%S")
+                        n += 1
+                except Exception:
+                    continue
+            if n:
+                self._persist_pending_locked()
+        if n:
+            logger.info("[automation] expired %d pending items", n)
+        return n
+
     def pending_items(self) -> List[Dict[str, Any]]:
         """只返回待审批项（approved/rejected 历史保留在 pending.json）。"""
         with self._lock:
             return [dict(p) for p in self._pending if p.get("status") == "pending"]
 
     def approve(self, pending_id: str, approve: bool = True) -> bool:
-        """审批：approve=True 后台执行动作；False 标记 rejected。"""
+        """审批（状态机 2026-08-27）：pending -> approved/rejected；expired 不可批准。"""
+        self._expire_stale_pending()
         item = None
         with self._lock:
             for p in self._pending:
                 if p.get("pending_id") == pending_id and p.get("status") == "pending":
                     item = p
                     break
-            if item is None:
+            if item is None or item.get("status") != "pending":
                 return False
             item["status"] = "approved" if approve else "rejected"
             self._persist_pending_locked()

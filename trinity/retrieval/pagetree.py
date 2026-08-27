@@ -267,6 +267,69 @@ class MemoryPageTree:
                     len(self._node_vectors))
         return self
 
+
+    def incremental_update(self, new_records: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """2026-08-27（性能）：增量构建——新增记忆归属现有簇（按 category +
+        代表词重叠），无匹配则新建簇；不重聚类（全量重聚由显式 build 触发）。"""
+        import math as _math
+        added = 0
+        new_clusters = 0
+        for rec in new_records or []:
+            mid = str(rec.get("memory_id") or rec.get("id") or "").strip()
+            if not mid or mid in self.memory_index:
+                continue
+            cat = rec.get("category") or "general"
+            _excl = set(self.stats.get("excluded_categories") or [])
+            if cat in _excl:
+                continue
+            text = str(rec.get("content") or "")
+            if len(text) < 20:
+                continue
+            terms = _tokenize(text)
+            # 找最佳归属簇：同 category + 词重叠最大
+            best = None
+            best_score = 0.0
+            for cid, node in self.clusters.items():
+                if node.get("category") != cat:
+                    continue
+                node_set = set(node.get("terms") or [])
+                if not node_set:
+                    continue
+                overlap = len(set(terms) & node_set) / _math.sqrt(len(set(terms)) * len(node_set) + 1e-6)
+                if overlap > best_score:
+                    best = node
+                    best_score = overlap
+            if best is not None and best_score >= 0.15:
+                # 追加到现有簇
+                best.setdefault("members", []).append(mid)
+                existing = set(best.get("terms") or [])
+                merged = list(existing | set(terms))[:40]
+                best["terms"] = merged
+                sample = best.get("sample") or []
+                if len(sample) < 3 and text[:200]:
+                    sample.append(text[:200])
+                    best["sample"] = sample
+                self.memory_index[mid] = best["node_id"]
+            else:
+                # 新建簇
+                cid = f"clu:{cat}/{self._cluster_id()}"
+                self.clusters[cid] = {
+                    "node_id": cid, "category": cat, "title": (text[:40] or mid),
+                    "terms": list(set(terms))[:40], "sample": [text[:200]],
+                    "members": [mid], "count": 1,
+                }
+                self.memory_index[mid] = cid
+                new_clusters += 1
+            added += 1
+        if added:
+            self.stats["records"] = len(self.memory_index)
+            self.stats["clusters"] = len(self.clusters)
+        return {"added": added, "new_clusters": new_clusters}
+
+    def _cluster_id(self) -> str:
+        import uuid
+        return uuid.uuid4().hex[:8]
+
     def restore_summaries(self, old_tree: Optional["MemoryPageTree"]) -> None:
         """从旧树恢复节点摘要（重建不丢 LLM 摘要，2026-08-26 遗留处理）。"""
         if old_tree is None:

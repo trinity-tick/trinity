@@ -5768,5 +5768,40 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - pytest 34/34；API ok
 - 改动：`trinity/evolution/goals.py`、`trinity/automation/engine.py`、
   `trinity/core/client/_pagetree.py`
-- 回滚：git checkout 对应文件；蒸馏可 `TRINITY_JUDGE_HEURISTIC=off` 关闭回记忆指标专用）
+- 回滚：git checkout 对应文件；蒸馏可 `TRINITY_JUDGE_HEURISTIC=off` 关闭回记忆指标专用
+
+---
+
+## 53. 建议继续执行轮（2026-08-27，蒸馏 A/B + 审批状态机 + 页树增量）
+
+> 执行建议三项。
+
+### 53.1 蒸馏后 holdout A/B（Task 1，验证通过）
+
+- reason 臂 95 问（默认池，蒸馏 on）：**R@10 = 0.547——与基线完全一致（不降指标）**；
+- 蒸馏收益：高词重叠查询跳过 LLM（缓存+启发式双保险）——LLM 调用显著减少；
+- 修复：_pagetree.py 缺 `time` 导入（启发式缓存写入首次触发 NameError）。
+
+### 53.2 automation 审批流状态机（Task 2）
+
+- pending 生命周期升级：**pending → approved / rejected / expired**（TTL 24h，
+  超时自动 expired，不可再批准）；
+- 实测：入队 → 模拟 2 天过期 → expired=1 → 批准拒绝 ✓；
+- 与既有 /automation/pending + /automation/approve 端点兼容。
+
+### 53.3 页树增量构建（Task 3，性能 100s→1.2s）
+
+- `MemoryPageTree.incremental_update()`：新增记忆按 category+词重叠归属现有簇
+  （无匹配新建簇），不重聚类；
+- `scripts/pagetree_incremental.py`：UTC 1h 窗口查新增（修复时区错位——
+  created_at 是 UTC、built_at 本地）→ 增量更新；
+- 实测：11 条新增 → **added=8、new_clusters=3、耗时 1.2s（全量 100s 的 1%）**；
+- 全量重聚仍由显式 build（每日维护链）兜底。
+
+### 53.4 验证与回滚
+
+- pytest 27/27；API ok；holdout 0.547 不降
+- 改动：`trinity/core/client/_pagetree.py`、`trinity/automation/engine.py`、
+  `trinity/retrieval/pagetree.py`、`scripts/pagetree_incremental.py`（新）
+- 回滚：git checkout 对应文件；增量脚本停用即回全量构建）
 
