@@ -32,7 +32,7 @@ input{width:70%;padding:8px} button{padding:8px 16px} .query{background:#f5f5f5;
 __STATS__
 <h2>热门查询（近 7 天）</h2>
 <div>__HOT__</div>
-<form method="get" action="/"><input name="q" placeholder="检索记忆…" value="__Q__"><input name="cat" placeholder="类别过滤(如 general)" value="__CAT__"><button>检索/过滤</button></form>
+<form method="get" action="/"><input name="q" placeholder="检索记忆…" value="__Q__"><select name="cat">__CATOPTIONS__</select><button>检索/过滤</button></form>
 __SEARCH__
 <h2>最近记忆流</h2>
 __STREAM__
@@ -45,9 +45,23 @@ def _conn():
     return c
 
 
-def _mem_card(row):
+def _safe(text, hl):
+    try:
+        if hl and hl in text:
+            text = text.replace(hl, "<mark>" + hl + "</mark>")
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    except Exception:
+        return str(text)[:220]
+
+
+def _mem_card(row, hl: str = ""):
     mid, cat, tags, created, content = row
     c = (content or "")[:220]
+    if hl:
+        try:
+            c = c.replace(hl, '<mark>' + hl + '</mark>')
+        except Exception:
+            pass
     tags_html = "".join(f'<span class="tag">{t}</span>' for t in (tags or [])[:4])
     created_s = (created or "")[:19].replace("T", " ")
     return (f'<div class="card"><div>{c}</div>'
@@ -60,6 +74,9 @@ def main() -> int:
     args = ap.parse_args()
 
     from fastapi import FastAPI, Request
+    sys.path.insert(0, _TRINITY_ROOT)
+    from trinity import Trinity
+    _mem = Trinity(adapter="sqlite")  # 2026-08-27: 引擎读取（解密 content，检索语义）
     from fastapi.responses import HTMLResponse
     import uvicorn
 
@@ -70,11 +87,18 @@ def main() -> int:
         conn = _conn()
         search_html = ""
         if q:
-            rows = conn.execute(
-                "SELECT memory_id, category, tags, created_at, substr(content,1,240) FROM memories "
-                "WHERE status='active' AND content LIKE ? ORDER BY created_at DESC LIMIT 10",
-                ("%" + q + "%",)).fetchall()
-            search_html = "<h2>检索结果</h2>" + "".join(_mem_card(r) for r in rows) if rows else "<h2>检索结果</h2><p>无命中</p>"
+            # 2026-08-27: 引擎检索（解密 + 语义）——SQL LIKE 对密文 content 无效
+            _sr = _mem.search(query=q, mode="keyword", top_k=10)
+            _srows = _sr.get("results", []) if isinstance(_sr, dict) else []
+            _scards = "".join(
+                f'<div class="card"><div>{_safe((r.get("content") or "")[:220], q)}</div>'
+                f'<div class="meta">{str(r.get("memory_id", ""))[:14]} · {r.get("category")} · {str(r.get("created_at", ""))[:19].replace("T", " ")}</div></div>'
+                for r in _srows)
+            search_html = "<h2>检索结果</h2>" + _scards if _srows else "<h2>检索结果</h2><p>无命中</p>"
+        # 类别下拉选项（2026-08-27 UI 增强）
+        _cats = conn.execute("SELECT DISTINCT category FROM memories WHERE status='active' ORDER BY category LIMIT 40").fetchall()
+        cat_opts = '<option value="">全部类别</option>' + "".join(
+            f'<option value="{c}"{" selected" if c == cat else ""}>{c}</option>' for (c,) in _cats)
         # 统计区块（2026-08-27 UI 增强）
         total = conn.execute("SELECT count(*) FROM memories WHERE status='active'").fetchone()[0]
         cats = conn.execute("SELECT category, count(*) FROM memories WHERE status='active' GROUP BY category ORDER BY 2 DESC LIMIT 5").fetchall()
@@ -96,20 +120,23 @@ def main() -> int:
         # 时间线分组（按天）+ 类别过滤（2026-08-27 UI 增强）
         _cat_where = "AND category = ?" if cat else ""
         _cat_params = (cat,) if cat else ()
-        rows = conn.execute(
-            "SELECT memory_id, category, tags, created_at, substr(content,1,240) FROM memories "
-            "WHERE status='active' " + _cat_where + " ORDER BY created_at DESC LIMIT 60",
-            _cat_params).fetchall()
+        # 2026-08-27: 引擎读取（get_all_memories 解密）
+        _all = _mem._adapter.get_all_memories(limit=200, offset=0)
+        if cat:
+            _all = [r for r in _all if r.get("category") == cat]
         groups = {}
-        for r in rows:
-            day = str(r[3] or "")[:10]
+        for r in _all:
+            day = str(r.get("created_at") or "")[:10]
             groups.setdefault(day, []).append(r)
         stream = ""
         for day in sorted(groups, reverse=True):
             stream += f'<h3>{day}</h3>'
-            stream += "".join(_mem_card(r) for r in groups[day])
+            stream += "".join(
+                f'<div class="card"><div>{_safe((r.get("content") or "")[:220], "")}</div>'
+                f'<div class="meta">{str(r.get("memory_id", ""))[:14]} · {r.get("category")} · {str(r.get("created_at", ""))[:19].replace("T", " ")} · {("".join(t + " " for t in (r.get("tags") or [])[:3]))}</div></div>'
+                for r in groups[day][:40])
         conn.close()
-        page = PAGE.replace("__STATS__", stats_html).replace("__HOT__", hot_html)
+        page = PAGE.replace("__STATS__", stats_html).replace("__HOT__", hot_html).replace("__CATOPTIONS__", cat_opts)
         page = page.replace("__SEARCH__", search_html).replace("__STREAM__", stream)
         return HTMLResponse(page.replace("__Q__", q.replace('"', "&quot;")).replace("__CAT__", cat.replace('"', "&quot;")))
 
