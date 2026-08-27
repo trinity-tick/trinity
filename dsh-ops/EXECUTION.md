@@ -5707,3 +5707,30 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - 改动：`benchmark/longmemeval_official_runner.py`、`trinity/modules/_research_archive/`（新）
 - 回滚：git checkout 对应文件；归档模块移回 `modules/` 根即可
 
+---
+
+## 51. 进化引擎通用化轮（2026-08-27，方向1 第一步：系统健康目标）
+
+> 跳出记忆系统：进化引擎首次跟踪**非记忆指标**——从"进化记忆"迈向"进化平台"。
+
+### 51.1 system_health 指标（default_metrics 扩展）
+
+- 四项综合（实时轻量计算）：ps1 三件套 ALL OK + WAL=0/integrity ok + 备份<24h +
+  API /health ok → 均值 0-1；
+- **实测 system_health = 1.0**（全绿：audit ALL OK / log=0 integrity=ok / 备份 17:04 /
+  API ok）；
+- 修复：goals.py 缺 sys 导入（sys.executable NameError——被 except 吞，加诊断定位）。
+
+### 51.2 系统健康目标（非记忆目标首次进入进化引擎）
+
+- 创建"系统健康全绿（system_health>=1.0）"→ evaluate → **complete（last=1.0）**；
+- 目标全景：**3 complete（0.752 / 0.6632 / 1.0）+ 1 blocked（MS 0.2375）**；
+- 意义：进化引擎从"记忆指标专用"升级为"任何可评测指标通用"——后续可接代码健康
+  （build/test 通过率）、服务延迟（P95）等目标。
+
+### 51.3 验证与回滚
+
+- pytest（goals）7/7；API ok
+- 改动：`trinity/evolution/goals.py`
+- 回滚：git checkout -- trinity/evolution/goals.py（system_health 块移除即回记忆指标专用）
+

@@ -343,4 +343,44 @@ def default_metrics() -> Dict[str, Any]:
                     break
         except Exception:
             continue
+    # 2026-08-27（方向1 通用化第一步）：系统健康综合指标——非记忆指标首次进入
+    # 进化引擎（ps1 三件套 + WAL/integrity + 备份新鲜 + API 健康，四项均值）。
+    try:
+        import subprocess as _sp
+        import glob as _gl
+        import urllib.request as _ur
+        import sys as _sys
+        _root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        _pts = []
+        # a) ps1 三件套
+        _ra = _sp.run([_sys.executable, "-X", "utf8",
+                       os.path.join(_root, "scripts", "audit_maintenance_ps1.py")],
+                      capture_output=True, text=True, timeout=30)
+        _pts.append(1.0 if "ALL OK" in _ra.stdout else 0.0)
+        # b) WAL / integrity
+        _rb = _sp.run([_sys.executable, "-X", "utf8",
+                       os.path.join(_root, "scripts", "db_health.py")],
+                      capture_output=True, text=True, timeout=60)
+        _pts.append(1.0 if ("log=0" in _rb.stdout and "integrity=ok" in _rb.stdout) else 0.0)
+        # c) 备份新鲜（<24h）
+        _bf = _gl.glob(os.path.join(os.path.expanduser("~/.trinity/backups"), "trinity_store_*.db"))
+        _fresh = 0.0
+        if _bf:
+            _latest = max(os.path.getmtime(p) for p in _bf)
+            _fresh = 1.0 if (time.time() - _latest) < 86400 else 0.0
+        _pts.append(_fresh)
+        # d) API 健康
+        try:
+            with _ur.urlopen("http://127.0.0.1:8001/health", timeout=5) as _resp:
+                _h = json.loads(_resp.read().decode("utf-8"))
+                _pts.append(1.0 if _h.get("status") == "ok" else 0.0)
+        except Exception:
+            _pts.append(0.0)
+        metrics["system_health"] = round(sum(_pts) / len(_pts), 3)
+        metrics["system_health_parts"] = {
+            "audit_ps1": _pts[0], "wal_integrity": _pts[1],
+            "backup_fresh": _pts[2], "api_ok": _pts[3],
+        }
+    except Exception:
+        pass
     return metrics
