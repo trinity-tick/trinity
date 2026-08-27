@@ -5466,3 +5466,31 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
   `~/.trinity/automation/rules.yaml`
 - 回滚：git checkout 对应文件；rules.yaml 删 exec 规则即回告警模式
 
+---
+
+## 43. 伙伴继续执行轮（2026-08-27，exec 白名单修复 + 低置信→页树刷新确认）
+
+> 执行下一步建议两项：真实 stale 场景 exec 确认 + automation 规则扩展。
+
+### 43.1 exec failed=1 根因修复（Task 1）
+
+- **根因**：`harvest_kb_structured.py` 不在 automation `KNOWN_SCRIPTS` 白名单 →
+  `_validate_command` 拒绝 → exec failed；
+- 修复：加入白名单（engine.py KNOWN_SCRIPTS）；
+- 重测（真实 kb 文件路径触发）：**emitted=1 → matched=2 → executed=2, failed=0**
+  ——knowledge.stale 的 notify + auto-refresh exec 全部成功执行。
+
+### 43.2 低置信 → 页树刷新（Task 2，内置规则确认）
+
+- 内置 `search-low-confidence-pagetree-refresh`（top_score<0.2 → exec 页树重建，
+  cooldown 3600s）在 API 常驻 automation 下确认运转：
+  **emitted=1 → matched=2 → executed=1, failed=0**；
+- 至此 automation 规则全景：knowledge.stale 告警 + 自动重新摄入、低置信标记 +
+  页树刷新、高重要写入通知——**事件驱动运维闭环全部真实运转**。
+
+### 43.3 验证与回滚
+
+- pytest（automation 专项）15/15
+- 改动：`trinity/automation/engine.py`（白名单）
+- 回滚：git checkout -- trinity/automation/engine.py
+
