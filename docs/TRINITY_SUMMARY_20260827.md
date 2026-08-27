@@ -104,3 +104,54 @@ POST http://127.0.0.1:8002/v1/retrieval {"query": "...", "top_k": 5}
 - audit-ps1 每日自检三件套完整性
 
 *生成 2026-08-27*
+
+﻿---
+
+## 六、闭环情况（最核心的运行特征）
+
+### 1. 自进化闭环（95 轮实证）
+目标(goal_create) → 评测(default_metrics: 记忆/系统/代码) → 达标/受阻自动判定
+→ 经验沉淀(decision 记忆) → 使用反馈(usage_feedback) → 下一轮目标
+当前：4 complete（0.752 / 0.6632 / 1.0 / 1.0）+ 1 blocked（MS 0.2375）
+
+### 2. 自动化事件闭环（实测运转）
+事件(emit) → 规则匹配(8 规则) → 动作(notify/exec) → rollout 审计(全链)
+→ 失败告警(automation.failed) → 修复
+实测：emitted 46 / matched 10 / executed 10 / failed 0
+
+### 3. 知识生命周期闭环（E2E 验证）
+知识源采集(kb_harvest) → 健康度监控(build_sources emit_stale)
+→ stale 检测(>30 天, 动态阈值) → 自动告警 + 自动重新摄入(--stale-only)
+→ 知识更新 → 检索使用
+
+### 4. 记忆生命周期闭环（认知治理）
+写入 → 使用(access_count) → 价值分(memory_value) → 遗忘决策(forgetting_score 每日)
+→ 高价值豁免(>=0.7 不归档) → 检索降权(stale 后置) → 归档/版本链
+
+### 5. 维护闭环（自检自愈）
+每日 36 任务 → audit-ps1 三件套巡检 → 发现问题(报告) → 修复 → 再巡检
+supervisor 5 分钟自愈(服务掉线自动拉起)
+
+### 6. 使用反馈闭环
+检索/写入使用 → usage_feedback(热门查询/高频记忆/闲置) → 进化输入
+→ 优化 → 使用变化 → 再反馈
+实测：3,300+ 次搜索/7 天，反馈闭环运转
+
+### 7. 多 agent 协作闭环（AgentMesh 实战验证）
+委托创建(decompose) → 订阅通知(delegation.notify) → 认领(claim 原子)
+→ 完成(complete 回写) → 结果验证(inbox) → 配额治理(agent_quota)
+
+### 8. 验证闭环（防自证）
+基准运行 → manifest 防口径漂移 → 独立 fresh 环境验证(seed 777)
+→ 可复现确认(sess_R 0.94-1.00 / QA 0.45-0.48) → 目标判定依据
+
+### 9. 认知闭环（层感知）
+查询 → _infer_layer(时间→episodic/知识→semantic) → 层过滤 → 结果
+→ 审计回放(query/hits/ms/layer) → 决策可证明
+
+### 10. 健康闭环
+system_health 指标(ps1 三件套/WAL/备份/API) → 目标跟踪(1.0 complete)
+→ 异常自动暴露 → 修复 → 指标回绿
+
+**总结**：Trinity 不是"记忆库"，而是一套**十环相扣的自运行系统**——数据从写入到使用到遗忘到证明，每个环节都有闭环监控与自动动作，且全部实测运转。
+
