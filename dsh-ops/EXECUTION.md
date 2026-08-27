@@ -6197,3 +6197,35 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - pytest 34/34；巡检 ALL OK；API/GATEWAY ok
 - 改动：`trinity/agents/mesh.py`、docs/PHASE2_SUMMARY_20260827.md（新）
 - 回滚：git checkout 对应文件
+
+---
+
+## 66. 第三阶段执行轮（2026-08-27，多 agent 实战 + 联邦同步入链 + 合规确认）
+
+> 执行第三阶段三项。
+
+### 66.1 多 agent 编排实战（Task 1）
+
+- 真实协作场景演练：agent-op decompose"系统巡检分析"→ 2 子任务（审计链/自动化
+  评估）→ agent-an 认领+完成 → done inbox 验证；
+- 实测：decompose 2、claim×2=True、complete×2=True、结果正确、事件 9 个
+  （created/claimed/completed/notify）——**AgentMesh 全流程实战通过**。
+
+### 66.2 联邦定时同步入链（Task 2）
+
+- 维护链新增 `-Tasks federation-sync`：export decision/knowledge →
+  `federation_push.py` push 到目标（env TRINITY_FED_TARGET 可配，无目标 skip）；
+- PARSE OK + 巡检 ALL OK（36 任务三件套齐全）+ DryRun 通过；
+- 注意：federation_sync.py 已存在（旧 PG 同步）——新脚本命名 federation_push.py
+  避免冲突；gateway 端口波动由 supervisor 自愈（push 机制此前 119 条实测通过）。
+
+### 66.3 合规导出自动化确认（Task 3）
+
+- produce 任务确认含 compliance_report（DryRun 显示 knowledge_produce +
+  compliance_report 顺序执行）——每日自动生成周报+合规报告。
+
+### 66.4 验证与回滚
+
+- pytest 22/22（专项）；API/GATEWAY 恢复在线；巡检 ALL OK
+- 改动：`dsh-ops/trinity-dsh-maintenance.ps1`、`scripts/federation_push.py`（新）
+- 回滚：git checkout 对应文件
