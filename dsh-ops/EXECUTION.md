@@ -5584,6 +5584,37 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 ### 46.4 验证与回滚
 
 - pytest（automation）15/15；API/UI 存活
-- 改动：`scripts/rollout_audit.py`（新）、`scripts/memory_stream_server.py`（引擎化）
+- 改动：`scripts/rollout_audit.py`（新）、`scripts/memory_stream_server.p
+
+---
+
+## 47. 建议继续执行轮（2026-08-27，rollout 审计入链 + stale 实况快照 + UI 片段高亮）
+
+> 执行下一步建议三项。
+
+### 47.1 rollout 审计入维护链（Task 1）
+
+- 维护链新增 `-Tasks rollout-audit`（allowed + 定义 + dispatch）；
+- **顺带修复**：40 轮添加的 usage 定义再次丢失（ps1 定义区被补丁破坏——reviewPrompt
+  行被截断 + rolloutAuditPrompt 拼接残留），已按完整行锚点修复；**PARSE OK +
+  DryRun usage,rollout-audit 通过**；
+- 教训固化：ps1 定义区补丁必须用**完整行锚点**（行首片段会截断行）。
+
+### 47.2 自然 stale 实况快照（Task 2）
+
+- 快照：stale 0/198、automation stats（1/1/1/0）、rollout 1 文件 0 失败——
+  观察点已记录；机制待自然触发（>30 天源出现时自动采集）。
+
+### 47.3 UI 中文高亮片段化（Task 3）
+
+- 检索结果改为**命中词周围 ±80 字符片段**展示（…前缀/后缀）；
+- 修复 **转义顺序 bug**（先转义再高亮，否则 <mark> 被 &lt; 吃掉）；
+- 实测：HIGHLIGHT present、SNIPPET ellipsis、ENC clean、页面 200。
+
+### 47.4 验证与回滚
+
+- pytest（automation）15/15；API/UI 存活
+- 改动：`dsh-ops/trinity-dsh-maintenance.ps1`、`scripts/memory_stream_server.py`
+- 回滚：git checkout 对应文件y`（引擎化）
 - 回滚：git checkout 对应文件
 

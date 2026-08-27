@@ -29,7 +29,7 @@ param(
 
 # 兼容 powershell -File 传参：命令行里的 "a,b,c" 会以单个字符串到达，
 # 这里统一按逗号拆分 + 校验。
-$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "usage", "all")  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
+$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "usage", "rollout-audit", "all")  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
 $normalized = @()
 foreach ($t in $Tasks) { $normalized += $t.Split(',') }
 $normalized = $normalized | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
@@ -294,6 +294,25 @@ sys.argv = ["experiment_review", "--latest"]
 runpy.run_path(r"$TrinityRoot\scripts\experiment_review.py", run_name="__main__")
 "@
 $reviewPrompt = "运行 scripts/experiment_review.py --latest（对比最近两次 ae_500_reason 结果），汇报异常类目与代码一致性。"
+# rollout 异常审计（2026-08-27）：扫描 automation 轨迹失败模式，异常 emit 告警
+$rolloutAuditCmd = @"
+import sys
+sys.path.insert(0, r"$TrinityRoot")
+import runpy
+sys.argv = ["rollout_audit", "--days", "7"]
+runpy.run_path(r"$TrinityRoot\scripts\rollout_audit.py", run_name="__main__")
+"@
+$rolloutAuditPrompt = "运行 scripts/rollout_audit.py（扫描近 7 天 automation 轨迹失败模式，异常 emit 告警），汇报统计。"
+
+# 使用反馈（2026-08-27 使用伙伴闭环）：聚合审计生成使用报告（供 evolution ANALYZE）
+$usageCmd = @"
+import sys
+sys.path.insert(0, r"$TrinityRoot")
+import runpy
+sys.argv = ["usage_feedback", "--days", "7"]
+runpy.run_path(r"$TrinityRoot\scripts\usage_feedback.py", run_name="__main__")
+"@
+$usagePrompt = "运行 scripts/usage_feedback.py（聚合近 7 天使用：热门查询/高频记忆/闲置记忆，报告入 evolution 输入），汇报使用概况。"
 
 
 # 大库 → 聚合池 watermark 增量同步（2026-08-21 P0-2；维护窗口任务，不进 all 链）
@@ -509,6 +528,7 @@ foreach ($t in $Tasks) {
         "eval"      { Invoke-Task -Name "eval"      -DirectCommand $evalCmd      -DshPrompt $evalPrompt }  # 2026-08-26 DSH 借鉴
         "review"    { Invoke-Task -Name "review"    -DirectCommand $reviewCmd   -DshPrompt $reviewPrompt }  # 2026-08-26 Claude Science 借鉴
         "usage"     { Invoke-Task -Name "usage"     -DirectCommand $usageCmd     -DshPrompt $usagePrompt }  # 2026-08-27 使用伙伴闭环
+        "rollout-audit" { Invoke-Task -Name "rollout-audit" -DirectCommand $rolloutAuditCmd -DshPrompt $rolloutAuditPrompt }  # 2026-08-27 rollout 审计
         "selftest"  { Invoke-Task -Name "selftest"  -DirectCommand $selftestCmd -DshPrompt $selftestPrompt }
         "session-summarize" { Invoke-Task -Name "session-summarize" -LeaseJob "session-summarize" -DirectCommand $sessionSummaryCmd -DshPrompt $sessionSummaryPrompt }
         "session-auto" { Invoke-Task -Name "session-auto" -LeaseJob "session-auto" -DirectCommand $sessionAutoCmd -DshPrompt $sessionAutoPrompt }

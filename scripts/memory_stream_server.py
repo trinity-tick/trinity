@@ -45,11 +45,28 @@ def _conn():
     return c
 
 
+def _snippet(text, hl, radius=80):
+    """2026-08-27 UI 增强：命中词周围片段化 + 高亮（命中在深处时可见）。"""
+    try:
+        idx = text.find(hl)
+        if idx < 0:
+            return _safe(text[:220], "")
+        start = max(0, idx - radius)
+        end = min(len(text), idx + len(hl) + radius)
+        prefix = "…" if start > 0 else ""
+        suffix = "…" if end < len(text) else ""
+        return prefix + _safe(text[start:end], hl) + suffix
+    except Exception:
+        return _safe(text[:220], "")
+
+
 def _safe(text, hl):
     try:
+        # 2026-08-27: 先转义再高亮（否则 <mark> 被 &lt; 吃掉）
+        text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         if hl and hl in text:
             text = text.replace(hl, "<mark>" + hl + "</mark>")
-        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        return text
     except Exception:
         return str(text)[:220]
 
@@ -91,7 +108,7 @@ def main() -> int:
             _sr = _mem.search(query=q, mode="keyword", top_k=10)
             _srows = _sr.get("results", []) if isinstance(_sr, dict) else []
             _scards = "".join(
-                f'<div class="card"><div>{_safe((r.get("content") or "")[:220], q)}</div>'
+                f'<div class="card"><div>{_snippet(r.get("content") or "", q)}</div>'
                 f'<div class="meta">{str(r.get("memory_id", ""))[:14]} · {r.get("category")} · {str(r.get("created_at", ""))[:19].replace("T", " ")}</div></div>'
                 for r in _srows)
             search_html = "<h2>检索结果</h2>" + _scards if _srows else "<h2>检索结果</h2><p>无命中</p>"
