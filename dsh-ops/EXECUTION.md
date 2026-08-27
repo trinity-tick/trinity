@@ -6324,3 +6324,36 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - 改动：`trinity/core/client/_pagetree.py`（阈值链）、
   `dsh-ops/trinity-dsh-maintenance.ps1`（tune 任务）、docs/RAG_SERVICE（鉴权步骤）
 - 回滚：git checkout 对应文件；tuned_config 删除即回默认
+
+---
+
+## 70. 建议全执行轮（2026-08-27，多参数调优 + 效果评估 + 优化总报告）
+
+> 执行建议三项。
+
+### 70.1 多参数自动调优（Task 1）
+
+- tune_judge 扩展 `--param threshold|top_k`：top_k 3/5/10 A/B（命中率+LLM 成本）；
+- 实测：3 档全 6/6 命中 → 推荐 top_k=3；推荐持久化 tuned_config
+  （threshold 0.5 + top_k 3 双参数）；
+- 已知瑕疵：合并旧推荐逻辑的 out 定义顺序 bug（合并被 except 吞）——
+  手动双推荐已正确，低优先级待修。
+
+### 70.2 参数应用效果评估（Task 2）
+
+- `scripts/tune_report.py`：tuned 配置 vs 默认 10 问对比（命中率+LLM 调用）；
+- 实测：两者均 10/10 命中 + 0 LLM（启发式覆盖）——机制可用；
+- 评估结论：当前批次查询 tuned/默认无差异（都最优）——真实差异场景由每日
+  tune 持续观察。
+
+### 70.3 优化效果总报告（Task 3）
+
+- docs/OPTIMIZATION_REPORT_20260827.md：检索/成本/质量/运维/能力五维前后对比
+  + 结论（**所有优化先 A/B 后落地**）。
+
+### 70.4 验证与回滚
+
+- pytest 27/27；巡检 ALL OK；API ok
+- 改动：`scripts/tune_judge.py`、`scripts/tune_report.py`（新）、
+  docs/OPTIMIZATION_REPORT_20260827.md（新）
+- 回滚：git checkout 对应文件；tuned_config 删除即回默认

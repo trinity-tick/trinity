@@ -28,34 +28,53 @@ _QUERIES = [
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--queries", type=int, default=12)
+    ap.add_argument("--param", default="threshold", choices=["threshold", "top_k"])
     args = ap.parse_args()
     import trinity.core.client._pagetree as PT
     from trinity import Trinity
     mem = Trinity(adapter="sqlite")
     queries = _QUERIES[: args.queries]
     results = {}
-    for thr in ("0.5", "0.55", "0.6", "0.7"):
+    if args.param == "threshold":
+        cands_p = ("0.5", "0.55", "0.6", "0.7")
+    else:
+        cands_p = (3, 5, 10)
+    for cv in cands_p:
         PT._JUDGE_CACHE.clear()
         PT._JUDGE_CACHE_TS.clear()
         PT._JUDGE_LLM_CALLS = 0
-        os.environ["TRINITY_JUDGE_THRESHOLD"] = thr
+        if args.param == "threshold":
+            os.environ["TRINITY_JUDGE_THRESHOLD"] = str(cv)
+        else:
+            os.environ.pop("TRINITY_JUDGE_THRESHOLD", None)
         hits = 0
         for q in queries:
             try:
-                r = mem.search(query=q, mode="reason", top_k=3)
+                r = mem.search(query=q, mode="reason", top_k=int(cv))
                 if r.get("results"):
                     hits += 1
             except Exception:
                 pass
-        results[thr] = {"hits": hits, "llm_calls": PT._JUDGE_LLM_CALLS,
-                        "hit_rate": round(hits / max(1, len(queries)), 3)}
-        print(f"thr={thr} hits={hits}/{len(queries)} llm={PT._JUDGE_LLM_CALLS}")
+        results[str(cv)] = {"hits": hits, "llm_calls": PT._JUDGE_LLM_CALLS,
+                            "hit_rate": round(hits / max(1, len(queries)), 3)}
+        print(f"param={args.param} value={cv} hits={hits}/{len(queries)} llm={PT._JUDGE_LLM_CALLS}")
     # 选优：hit_rate 最高的组里 LLM 最少
     best_rate = max(v["hit_rate"] for v in results.values())
     cands = {k: v for k, v in results.items() if v["hit_rate"] >= best_rate - 0.05}
     best = min(cands, key=lambda k: cands[k]["llm_calls"])
-    rec = {"recommended_threshold": best, "results": results,
+    rec = {"tuned_param": args.param, "recommended_" + args.param: best,
+           "results": results,
            "updated_at": __import__("time").strftime("%Y-%m-%dT%H:%M:%S")}
+    # 2026-08-27: merge old recommendations
+    try:
+        import json as _j
+        _old = _j.load(open(out, encoding="utf-8")) if os.path.exists(out) else {}
+        if isinstance(_old, dict):
+            for _k in ("recommended_threshold", "recommended_top_k"):
+                if _k not in rec and _k in _old:
+                    rec[_k] = _old[_k]
+    except Exception:
+        pass
     out = os.path.expanduser("~/.trinity/tuned_config.json")
     with open(out, "w", encoding="utf-8") as f:
         json.dump(rec, f, ensure_ascii=False, indent=1)
