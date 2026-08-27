@@ -10,7 +10,8 @@
 > [docs/PRIVACY.md](docs/PRIVACY.md)（隐私说明）、[docs/INDEX.md](docs/INDEX.md)（文档索引）。
 
 > 🏆 **官方基准（2026-08-27）**：LongMemEval-S（ICLR 2025 官方集，500 问）
-> **Session Recall@10 = 0.98** · Turn Recall@10 = 0.93 · QA accuracy 0.358（deepseek-chat 口径）
+> **Session Recall@10 = 0.98-0.99** · Turn Recall@10 = 0.93-0.94 · QA accuracy 0.358（旧口径）/
+> **0.467（升级口径：top-3 完整上下文 + 语义 judge，300 问）**
 > ——检索对齐头部（TiMem/Mem0 0.9+）；结果带 manifest 完全可复现。
 
 ## Quick Start
