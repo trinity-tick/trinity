@@ -27,9 +27,9 @@ def _infer_layer(query: str) -> Optional[str]:
     try:
         q = str(query or "")
         if any(w in q for w in _TIME_WORDS):
-            return "stm" if any(w in q for w in ("刚", "刚才", "刚刚")) else "im"
+            return "episodic"
         if any(w in q for w in _KNOWLEDGE_WORDS):
-            return "ltm"
+            return "semantic"
     except Exception:
         pass
     return None

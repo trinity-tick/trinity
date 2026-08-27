@@ -199,7 +199,7 @@ class _SearchMixin:
         sql = f"""
             SELECT m.memory_id, m.content, m.persona_id, m.session_id, m.role,
                    m.importance, m.tags, m.category, m.modality, m.created_at,
-                   m.source_uri,
+                   m.source_uri, m.memory_layer,
                    fts.rank as score
             FROM memories m
             INNER JOIN (
@@ -250,6 +250,7 @@ class _SearchMixin:
                 "modality": row["modality"],
                 "created_at": row["created_at"],
                 "source_uri": row["source_uri"] if "source_uri" in row.keys() else None,
+                "memory_layer": row["memory_layer"] if "memory_layer" in row.keys() else None,
                 "score": round(norm_score, 4),
             })
 
@@ -270,7 +271,7 @@ class _SearchMixin:
         cursor = conn.execute(f"""
             SELECT memory_id, content, persona_id, session_id, role,
                    importance, tags, category, modality, created_at,
-                   source_uri,
+                   source_uri, memory_layer,
                    0.8 as score
             FROM memories
             WHERE {where}
@@ -294,6 +295,7 @@ class _SearchMixin:
                 "category": row["category"],
                 "modality": row["modality"],
                 "created_at": row["created_at"],
+                "memory_layer": row["memory_layer"] if "memory_layer" in row.keys() else None,
                 "score": row["score"],
             })
 

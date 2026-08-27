@@ -5934,3 +5934,35 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - 改动：`trinity/core/client/_search.py`、`scripts/forgetting_score.py`（新）
 - 回滚：git checkout 对应文件；layer_hint 不传即原行为（默认 None 全层）
 
+---
+
+## 58. 方向A执行轮（2026-08-27，层过滤生效 + forgetting 入链 + 遗忘基线）
+
+> 认知分层自动化第二步。
+
+### 58.1 层感知过滤真正生效（Task 1）
+
+- sqlite adapter 检索 SELECT 增加 `memory_layer` 列 + 结果字段（FTS 与 LIKE 两路径）；
+- **_infer_layer 映射对齐库内值域**：时间词→episodic、知识词→semantic（库分布：
+  None 9910 / semantic 1085 / episodic 545 / consolidated 3）；
+- 实测：知识查询（规范与规则）→ 过滤后**结果全 semantic**（层过滤生效）；
+  时间查询 episodic 不足时安全降级全量。
+
+### 58.2 forgetting 入维护链（Task 2）
+
+- 新增 `-Tasks forgetting`（每日遗忘分 TOP10 + --apply 保守归档）；
+- PARSE OK + 巡检 ALL OK（33 任务三件套齐全）+ DryRun 通过。
+
+### 58.3 遗忘基线（Task 3）
+
+- docs/FORGETTING_BASELINE_20260827.md：公式/基线（TOP 0.34-0.35）/
+  三阶段阈值策略（报告→下调→检索降权）；
+- 维护链每日观察，库积累后自动归档低价值。
+
+### 58.4 验证与回滚
+
+- pytest 39/39；API ok；巡检 ALL OK
+- 改动：`trinity/adapters/sqlite/_search.py`、`trinity/core/client/_search.py`、
+  `dsh-ops/trinity-dsh-maintenance.ps1`、docs/FORGETTING_BASELINE_20260827.md（新）
+- 回滚：git checkout 对应文件；layer_hint 不传即原行为
+
