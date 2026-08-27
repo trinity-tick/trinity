@@ -281,6 +281,11 @@ class AutomationEngine:
                 daemon=True, name="automation-" + rule["name"],
             ).start()
             matched += 1
+        # 2026-08-27（调度）：事件处理顺带检查定时规则（every_seconds）
+        try:
+            self.run_due_scheduled()
+        except Exception:
+            pass
         return matched
 
     def _run_rule(self, rule: Dict[str, Any], payload: Dict[str, Any],
@@ -473,6 +478,33 @@ class AutomationEngine:
         logger.info("[automation] pending approval: %s (rule=%s reason=%s)",
                     pid, rule_name, reason)
         return pid
+
+    # 2026-08-27（编排升级）：定时调度——规则 every_seconds 周期执行（emit 顺带检查）
+    def run_due_scheduled(self) -> int:
+        """返回本次触发数。规则带 every_seconds 且距上次执行超时 → 触发（空 payload）。"""
+        n = 0
+        now = time.time()
+        for rule in list(self._rules or []):
+            if not rule.get("enabled", True):
+                continue
+            if rule.get("trigger") != "scheduled":
+                continue
+            try:
+                iv = float(rule.get("every_seconds") or 0)
+            except Exception:
+                continue
+            if iv <= 0:
+                continue
+            last = self._cooldown.get("sched:" + rule["name"], 0.0)
+            if now - last < iv:
+                continue
+            self._cooldown["sched:" + rule["name"]] = now
+            try:
+                self._run_rule(rule, {"_scheduled": True}, None)
+                n += 1
+            except Exception as exc:
+                logger.warning("[automation] scheduled rule %s failed: %s", rule["name"], exc)
+        return n
 
     # 2026-08-27（编排升级）：审批流状态机——pending 超时自动 expired
     _PENDING_TTL_SECONDS = 86400.0  # 24h

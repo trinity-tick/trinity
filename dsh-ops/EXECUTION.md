@@ -5867,3 +5867,34 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - 改动：`trinity/automation/engine.py`、`trinity/core/client/_pagetree.py`
 - 回滚：git checkout 对应文件；阈值可 `TRINITY_JUDGE_THRESHOLD=0.6` 回原值
 
+---
+
+## 56. 建议全执行轮（2026-08-27，蒸馏量化 + 编排调度 + 官方基准补齐启动）
+
+> 执行建议三项。
+
+### 56.1 蒸馏收益量化（Task 1）
+
+- 模块级计数器 `_JUDGE_LLM_CALLS`（chat_completion 包装计数，永久可观测）；
+- 实测（20 条近串查询）：threshold 0.55 → **0/20 LLM 调用**（全启发式）；
+  full 基线（0.99）→ 8/20；**LLM 调用减少 100%**（近串场景）；
+- 结合 holdout A/B（0.5474 不降）——蒸馏零损失高收益确认。
+
+### 56.2 编排调度（Task 2）
+
+- 规则支持 `trigger: scheduled` + `every_seconds` 定时执行（run_due_scheduled，
+  emit 顺带检查；间隔防抖复用 cooldown）；
+- 实测：立即到期触发 fired=1，间隔内重复 fired=0 ✓；
+- 至此编排能力：if 分支 / delay / continue_on_error / retries / 审批状态机 / **定时调度**。
+
+### 56.3 官方基准补齐（Task 3，进行中）
+
+- 200q（seed 303）后台运行中（预计 ~80min）；完成后聚合 300q+200q=**500q 报告**；
+- 结果将在补齐后补记。
+
+### 56.4 验证与回滚
+
+- pytest 27/27；巡检 ALL OK；API ok
+- 改动：`trinity/automation/engine.py`（调度）、`trinity/core/client/_pagetree.py`（计数器）
+- 回滚：git checkout 对应文件
+

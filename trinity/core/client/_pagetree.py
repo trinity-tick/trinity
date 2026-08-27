@@ -23,6 +23,8 @@ logger = logging.getLogger("trinity.core.client")
 
 # 2026-08-27 (P0 优化 3): reason 判题 LRU 缓存 (query+候选指纹 -> selected)
 _JUDGE_CACHE: dict = {}
+# 2026-08-27 (distill quant): LLM judge call counter
+_JUDGE_LLM_CALLS = 0
 _JUDGE_CACHE_TS: dict = {}
 _JUDGE_CACHE_TTL = 600.0  # 10 分钟
 
@@ -305,7 +307,11 @@ class _PagetreeMixin:
         llm_used = False
         selected_ids: List[str] = []
         try:
-            from trinity.llm.client import chat_completion, resolve_api_key
+            from trinity.llm.client import chat_completion as _cc_impl, resolve_api_key
+            def chat_completion(*_a, **_k):
+                global _JUDGE_LLM_CALLS
+                _JUDGE_LLM_CALLS += 1
+                return _cc_impl(*_a, **_k)
 
             key = resolve_api_key()
             if key:
@@ -389,6 +395,8 @@ class _PagetreeMixin:
                             _JUDGE_CACHE[_finger] = list(sel)
                             _JUDGE_CACHE_TS[_finger] = time.time()
                     else:
+                        global _JUDGE_LLM_CALLS
+                        _JUDGE_LLM_CALLS += 1
                         resp = chat_completion(
                             {"model": _model,
                              "messages": [{"role": "system", "content": sys_msg},
