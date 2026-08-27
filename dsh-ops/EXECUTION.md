@@ -5306,3 +5306,34 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
   `dist_check/`（打包产物）、EXECUTION.md
 - 回滚：git checkout 对应文件；PyPI 发布命令见 37.2（凭证就绪后执行）
 
+---
+
+## 38. Claude-Mem 对比 P1 执行轮（2026-08-27，decay 真实 LLM 摘要 + token 成本可见性）
+
+> 对比 Claude-Mem（thedotmack/claude-mem，46K stars：自动捕获→语义摘要→渐进式披露）
+> 后的 P1 两项落地。
+
+### 38.1 decay 接真实 LLM 摘要（Task 1）
+
+- 修复**键不匹配 bug**：维护链注入 `TRINITY_LLM_API_KEY`（凭证兜底），但 decay 的
+  `_resolve_llm_mode` 只认 `TRINITY_DECAY_API_KEY/TRINITY_API_KEY` → auto 永远解析 mock；
+  已把 `TRINITY_LLM_API_KEY` 纳入识别列表；
+- 验证：带 key 执行 `--llm auto` → **"Compressor initialized (REAL LLM mode, model=deepseek-chat)"**；
+- **REAL vs MOCK 摘要质量对比**：REAL 输出语义要点（保留 270/117/0.179→0.200 数字），
+  MOCK 是机械拼接（[AUTO-COMPRESSED] 原文回显）——真实摘要显著更优；
+- 维护链 decay 任务（-DecayLimit 100）现在自动走真实 LLM 摘要（成本 ~$0.05-0.1/次，可控）。
+
+### 38.2 检索 token 成本可见性（Task 2，渐进式披露）
+
+- `client.search()` 返回新增 `usage: {est_tokens, est_cost_usd}`；每条结果附
+  `est_tokens`（中文 ~2 字符/token 估算）；价格常量 `TRINITY_TOKEN_COST_PER_K`
+  （默认 0.00014 = deepseek-chat 输入价 $0.14/M）；
+- 验证：keyword 检索 usage {18,642 tokens, $0.00261}；hybrid {1,230 tokens, $0.00017}；
+- REST/MCP 自动携带（透传 search 返回）。
+
+### 38.3 验证与回滚
+
+- pytest 85/85；decay REAL 模式实测；usage 字段实测
+- 改动：`scripts/run_decay_compress.py`、`trinity/core/client/_search.py`
+- 回滚：git checkout 对应文件；decay 回 mock：`--llm mock` 或清 key
+

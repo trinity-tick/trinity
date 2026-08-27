@@ -320,8 +320,12 @@ def _resolve_llm_mode(requested: str) -> str:
     """
     if requested in ("mock", "real"):
         return requested
+    # 2026-08-27（Claude-Mem P1）：维护链注入的是 TRINITY_LLM_API_KEY（凭证兜底），
+    # 一并识别——否则 auto 永远解析为 mock（真实 LLM 摘要空转）。
     has_key = bool(
-        os.environ.get("TRINITY_DECAY_API_KEY") or os.environ.get("TRINITY_API_KEY")
+        os.environ.get("TRINITY_DECAY_API_KEY")
+        or os.environ.get("TRINITY_API_KEY")
+        or os.environ.get("TRINITY_LLM_API_KEY")
     )
     return "real" if has_key else "mock"
 

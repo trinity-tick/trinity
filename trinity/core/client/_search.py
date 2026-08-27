@@ -300,9 +300,25 @@ class _SearchMixin:
         except Exception:
             pass
 
+        # 2026-08-27（Claude-Mem 对比 P1-2）：渐进式披露——token 成本可见性。
+        # 每条结果附 est_tokens（中文 ~2 字符/token 估算），响应附 usage 汇总
+        # （deepseek-chat 输入价 $0.14/M tokens 估算；TRINITY_TOKEN_COST_PER_K 可覆盖）。
+        try:
+            _tok_total = 0
+            for _rr in raw_results:
+                _c = str(_rr.get("content") or _rr.get("content_preview") or "")
+                _t = max(1, len(_c) // 2)
+                _rr["est_tokens"] = _t
+                _tok_total += _t
+            _price_k = float(os.environ.get("TRINITY_TOKEN_COST_PER_K", "0.00014"))
+            _usage = {"est_tokens": _tok_total,
+                      "est_cost_usd": round(_tok_total / 1000.0 * _price_k, 6)}
+        except Exception:
+            _usage = {}
         return {
             "results": raw_results,
             "pushed_memories": pushed,
+            "usage": _usage,
         }
     def _enrich_evidence(self, results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """2026-08-24（R6 P1-③）：检索结果附证据/置信度标注。
