@@ -5895,6 +5895,14 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 ### 56.4 验证与回滚
 
 - pytest 27/27；巡检 ALL OK；API ok
-- 改动：`trinity/automation/engine.py`（调度）、`trinity/core/client/_pagetree.py`（计数器）
+- 改动：`trinity/automation/engine.py`（调度）、`trinity/core/client/_page
+
+### 56.3 补记（基准聚合结果）
+
+- 汇总报告：docs/BENCHMARK_OFFICIAL_20260827.md；
+- **500q 已存在**（旧口径 final：0.98/0.93/0.358）；
+- 升级口径最新：**300q = 0.99/0.9433/0.4667**；独立验证 50q：0.94/0.92/0.48（可复现）；
+- 200q 补齐（seed 303）：runner 网络挂起（CPU 停滞 4h+）已终止——**升级口径 500q
+  转长期项**（网络恢复后可续跑 --limit 200 --seed 303）。tree.py`（计数器）
 - 回滚：git checkout 对应文件
 
