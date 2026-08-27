@@ -5337,3 +5337,32 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - 改动：`scripts/run_decay_compress.py`、`trinity/core/client/_search.py`
 - 回滚：git checkout 对应文件；decay 回 mock：`--llm mock` 或清 key
 
+---
+
+## 39. RAGFlow 对比 P1 执行轮（2026-08-27，有引文生成 + 文档摄入结构化）
+
+> 对比 RAGFlow（DeepDoc 深度文档理解 + 有引文生成 Groundedness）后的 P1 两项落地。
+
+### 39.1 有引文生成（Task 1，--cite 模式）
+
+- `answer_eval.py` 新增 `--cite`：生成 prompt 追加"回答末尾附所用上下文编号 [n]"；
+- 验证（SS-A 20 问）：答案带引用（如 "fintech startup acquired in 2023 [1]"）、
+  Acc 0.80（小样本波动，溯源价值明确）；与 build_prompt 已有 [n] 编号天然配合；
+- 定位：防幻觉 + 可溯源 = RAGFlow Groundedness 对齐；检索侧证据标注（evidence/
+  confidence/source_uri）已有，生成侧引用补齐闭环。
+
+### 39.2 文档摄入结构化（Task 2，DeepDoc 轻量版）
+
+- 新脚本 `scripts/harvest_kb_structured.py`：kb_harvest/*.md 分节（## 标题）+ markdown
+  表格逐行提取（含表头上下文）→ 细粒度记忆（tags: kb-section/kb-table-row，source_uri 保留）；
+- **87 个文件含结构化内容**（旺店通跨境 API 规范 4863 表格行/压力测试 566/对标 V8 547）；
+- 实测摄入：kb_harvested 185 → **2,646 条**（208 分节 + 2,253 表格行）；
+- 检索验证："波次 拣货 压力测试 结果" 命中 kb-table-row ✓（细粒度表格内容可检索）。
+
+### 39.3 验证与回滚
+
+- pytest 85/85；cite 模式实测；结构化检索命中实测
+- 改动：`benchmark/answer_eval.py`（--cite）、`scripts/harvest_kb_structured.py`（新）
+- 回滚：git checkout 对应文件；结构化记忆删除：
+  `UPDATE memories SET status='archived' WHERE tags LIKE '%kb-section%' OR tags LIKE '%kb-table-row%'`（可恢复）
+

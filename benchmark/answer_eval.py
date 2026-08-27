@@ -202,6 +202,9 @@ def main() -> int:
     parser.add_argument("--min-overlap", type=int, default=0,
                         help="only evaluate questions whose topic words overlap >=N facts "
                              "(filters malformed/mismatched questions; EVAL-1 clean subset)")
+    # ── 2026-08-27（RAGFlow 对比 P1-1）：有引文生成 ──
+    parser.add_argument("--cite", action="store_true",
+                        help="生成答案末尾附上下文编号引用 [n]（可溯源/防幻觉）")
     # ── 2026-08-26（PageIndex 借鉴 Phase 1）：页树模式 A/B ──
     parser.add_argument("--pagetree", action="store_true",
                         help="页树模式：ingest 后 build_pagetree，检索走 page_tree（先定位页再读页内）")
@@ -324,6 +327,9 @@ def main() -> int:
             st["retr_gap"] += 1
 
         prompt = build_prompt_for_category(question, contexts, cat)
+        if args.cite:
+            # 2026-08-27（RAGFlow 对比 P1-1）：有引文生成——回答末尾附所用上下文编号
+            prompt += "\n\nCite the context numbers you used at the end of your answer, e.g. [1][3]."
         answer = ""
         try:
             t1 = time.time()
