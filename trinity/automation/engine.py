@@ -147,6 +147,7 @@ KNOWN_SCRIPTS = READONLY_SCRIPTS | {
     "cleanup_noise.py", "export_memories_markdown.py", "run_decay_compress.py",
     "harvest_kb_structured.py",  # 2026-08-27（stale 自动采集闭环）
     "rollout_audit.py",          # 2026-08-27（编排升级）
+    "mesh_delegate.py",         # 2026-08-27（多agent 产品化）
 }
 _PENDING_FILE = os.path.join(_HOME, "automation", "pending.json")
 _ROLLOUT_DIR = os.path.join(_HOME, "automation", "rollouts")
