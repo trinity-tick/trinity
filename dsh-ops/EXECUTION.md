@@ -5524,5 +5524,35 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 
 - pytest（automation+goals）22/22
 - 改动：`~/.trinity/automation/rules.yaml`、`scripts/memory_stream_server.py`
-- 回滚：git checkout scripts/memory_stream_server.py；rules.yaml 删 goal 规则行
+- 回滚：git checkout scripts/memory_stream_server.py；rules.yaml 删 goa
+
+---
+
+## 45. 建议继续执行轮（2026-08-27，失败告警 + stale 观察机制 + UI 时间线/过滤）
+
+> 执行下一步建议三项。
+
+### 45.1 rollout 异常规则（Task 1）
+
+- automation 引擎：动作失败 → **emit `automation.failed` 事件**（rule/trigger/error）；
+- rules.yaml 新增 `automation-failed-alert`（失败 → notify 告警）；
+- 验证：emit automation.failed → **matched=1 / executed=1**——失败不再静默。
+
+### 45.2 自然 stale 周期观察机制（Task 2）
+
+- eval `knowledge-fresh` 任务改 `build_sources(emit_stale=True)`——**每日维护链
+  eval 时自动触发 stale 事件**（如有 >30 天源 → automation 自动重新摄入）；
+- 观察机制就绪：日常运行中源自然过期时自动采集（无需人工干预）。
+
+### 45.3 记忆流 UI 增强（Task 3）
+
+- 页面新增**类别过滤**输入（?cat=wms_knowledge 等）与**时间线分组**（按天 <h3> 分组）；
+- 验证：类别页 200 + FILTER 字段 + TIMELINE（类别页与首页均 present）。
+
+### 45.4 验证与回滚
+
+- pytest（automation+eval）26/26；API/UI 存活
+- 改动：`trinity/automation/engine.py`（失败事件）、`trinity/eval/runner.py`（emit_stale）、
+  `scripts/memory_stream_server.py`（UI）、`~/.trinity/automation/rules.yaml`
+- 回滚：git checkout 对应文件；rules.yaml 删失败告警行l 规则行
 

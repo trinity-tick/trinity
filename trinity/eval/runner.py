@@ -212,7 +212,8 @@ def _t_knowledge_fresh() -> Any:
     """知识源健康度（Context7 借鉴 Phase 1）：源注册表可构建，过时源占比合理。"""
     try:
         from trinity.knowledge import build_sources, sources
-        reg = build_sources()
+        # 2026-08-27（stale 观察）：每日 eval 同时 emit stale 事件（automation 自动采集）
+        reg = build_sources(emit_stale=True)
         total = reg.get("total", 0)
         stale = reg.get("stale_count", 0)
         return {"total": total, "stale": stale,

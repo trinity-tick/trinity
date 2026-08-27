@@ -293,6 +293,17 @@ class AutomationEngine:
         except Exception as exc:
             ok = False
             logger.warning("[automation] rule %s failed: %s", rule["name"], exc)
+        if not ok:
+            # 2026-08-27（rollout 异常规则）：动作失败 → automation.failed 事件（可被告警规则响应）
+            try:
+                from trinity.automation import emit as _reemit
+                _reemit("automation.failed", {
+                    "rule": rule.get("name", "?"),
+                    "trigger": payload.get("_event", ""),
+                    "error": str(exc) if "exc" in dir() else "action returned False",
+                })
+            except Exception:
+                pass
         with self._lock:
             self._stats["executed" if ok else "failed"] += 1
             self._stats["failed"] = self._stats.get("failed", 0)  # keep key stable

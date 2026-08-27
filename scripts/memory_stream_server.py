@@ -32,7 +32,7 @@ input{width:70%;padding:8px} button{padding:8px 16px} .query{background:#f5f5f5;
 __STATS__
 <h2>热门查询（近 7 天）</h2>
 <div>__HOT__</div>
-<form method="get" action="/"><input name="q" placeholder="检索记忆…" value="__Q__"><button>检索</button></form>
+<form method="get" action="/"><input name="q" placeholder="检索记忆…" value="__Q__"><input name="cat" placeholder="类别过滤(如 general)" value="__CAT__"><button>检索/过滤</button></form>
 __SEARCH__
 <h2>最近记忆流</h2>
 __STREAM__
@@ -66,7 +66,7 @@ def main() -> int:
     app = FastAPI(title="Trinity Memory Stream")
 
     @app.get("/", response_class=HTMLResponse)
-    async def index(q: str = ""):
+    async def index(q: str = "", cat: str = ""):
         conn = _conn()
         search_html = ""
         if q:
@@ -93,14 +93,25 @@ def main() -> int:
             except Exception:
                 pass
         hot_html = "".join(f'<div class="query">{q} <b>x{n}</b></div>' for q, n in sorted(qmap.items(), key=lambda x: -x[1])[:8]) or "<p>无</p>"
+        # 时间线分组（按天）+ 类别过滤（2026-08-27 UI 增强）
+        _cat_where = "AND category = ?" if cat else ""
+        _cat_params = (cat,) if cat else ()
         rows = conn.execute(
             "SELECT memory_id, category, tags, created_at, substr(content,1,240) FROM memories "
-            "WHERE status='active' ORDER BY created_at DESC LIMIT 30").fetchall()
-        stream = "".join(_mem_card(r) for r in rows)
+            "WHERE status='active' " + _cat_where + " ORDER BY created_at DESC LIMIT 60",
+            _cat_params).fetchall()
+        groups = {}
+        for r in rows:
+            day = str(r[3] or "")[:10]
+            groups.setdefault(day, []).append(r)
+        stream = ""
+        for day in sorted(groups, reverse=True):
+            stream += f'<h3>{day}</h3>'
+            stream += "".join(_mem_card(r) for r in groups[day])
         conn.close()
         page = PAGE.replace("__STATS__", stats_html).replace("__HOT__", hot_html)
         page = page.replace("__SEARCH__", search_html).replace("__STREAM__", stream)
-        return HTMLResponse(page.replace("__Q__", q.replace('"', "&quot;")))
+        return HTMLResponse(page.replace("__Q__", q.replace('"', "&quot;")).replace("__CAT__", cat.replace('"', "&quot;")))
 
     @app.get("/api/stream")
     async def api_stream(limit: int = 20):
