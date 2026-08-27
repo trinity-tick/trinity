@@ -5906,3 +5906,31 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
   转长期项**（网络恢复后可续跑 --limit 200 --seed 303）。tree.py`（计数器）
 - 回滚：git checkout 对应文件
 
+---
+
+## 57. 方向A执行轮（2026-08-27，认知分层自动化第一步）
+
+> 跳出记忆系统：把"记忆"升级为"认知"——查询层感知 + 自动遗忘决策。
+
+### 57.1 查询层感知检索（Task 1）
+
+- search 新增 `layer_hint`（auto/stm/im/ltm）+ 模块级 `_infer_layer`：
+  时间词→STM/IM（刚/刚才→stm）、知识词（规则/规范/流程）→LTM、无信号→全层；
+- 单元验证：time-im ✓ time-stm ✓ know-ltm ✓ none ✓；
+- 层过滤钩子：结果带 memory_layer 时过滤生效；不带字段安全降级（保留全部）——
+  agents 层（memory_layers.py）接入为下一步。
+
+### 57.2 自动遗忘决策（Task 2）
+
+- `scripts/forgetting_score.py`：遗忘分 = 未访问时长0.4 + 访问频率0.3 +
+  importance0.2 + 冲突0.1（0-1）；
+- 实测：3000 条评分，TOP 候选 0.34-0.35（访问0+importance0.45 的旧会话记忆）；
+  **--apply 保守归档（score>0.9 & importance<0.3）命中 0 条——库健康**；
+- 决策逻辑就绪：维护链可接 --apply（当前无低价值记忆，归档为空操作安全）。
+
+### 57.3 验证与回滚
+
+- pytest 24/24；API ok
+- 改动：`trinity/core/client/_search.py`、`scripts/forgetting_score.py`（新）
+- 回滚：git checkout 对应文件；layer_hint 不传即原行为（默认 None 全层）
+

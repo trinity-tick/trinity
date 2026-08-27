@@ -15,6 +15,26 @@ from typing import Any, Dict, List, Optional, Union
 from trinity.telemetry import traced
 from ._helpers import _fuse_results, _get_embedding_engine, _get_vector_index
 
+_TIME_WORDS = ("最近", "刚才", "昨天", "今天", "上次", "之前", "刚", "刚刚", "前几天", "先前")
+_KNOWLEDGE_WORDS = ("规则", "规范", "标准", "流程", "步骤", "配置", "指南", "手册", "制度")
+
+
+def _infer_layer(query: str) -> Optional[str]:
+    """2026-08-27（方向A 认知分层）：查询性质 -> 记忆层。
+
+    时间词 → STM/IM（会话延续）；知识词 → LTM（事实/规范）；无信号 → None（全层）。
+    """
+    try:
+        q = str(query or "")
+        if any(w in q for w in _TIME_WORDS):
+            return "stm" if any(w in q for w in ("刚", "刚才", "刚刚")) else "im"
+        if any(w in q for w in _KNOWLEDGE_WORDS):
+            return "ltm"
+    except Exception:
+        pass
+    return None
+
+
 class _SearchMixin:
     @traced("memory.search")
     def search(
@@ -40,6 +60,7 @@ class _SearchMixin:
         view: Optional[str] = None,
         visibility_rule: Optional[str] = None,
         reason_deep: bool = False,
+        layer_hint: Optional[str] = None,
     ) -> Dict[str, Any]:
         """语义记忆搜索。
 
@@ -74,6 +95,13 @@ class _SearchMixin:
         """
         raw_results: List[Dict[str, Any]] = []
         _view_spec: Optional[Dict[str, Any]] = None
+
+        # 2026-08-27（方向A 认知分层）：查询层感知——layer_hint=auto 按查询性质选层
+        _layer_filter: Optional[str] = None
+        if layer_hint == "auto":
+            _layer_filter = _infer_layer(query)
+        elif layer_hint:
+            _layer_filter = layer_hint
 
         if self._adapter:
             # ── 记忆视图（Budibase 借鉴 Phase 2）：显式参数优先，视图补缺省 ──
@@ -222,6 +250,12 @@ class _SearchMixin:
                     visibility_rule=visibility_rule,
                 )
 
+
+        # 2026-08-27（方向A 认知分层）：层过滤（layer_hint）
+        if _layer_filter and raw_results:
+            _kept = [r for r in raw_results if (r.get("memory_layer") or "ltm") == _layer_filter]
+            if len(_kept) >= max(1, min(top_k, 3)):
+                raw_results = _kept
 
         # modality 过滤
         if modality and raw_results:
