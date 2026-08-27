@@ -5400,3 +5400,36 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - 回滚：git checkout 对应文件；报告记忆可归档（tags=usage-feedback）；
   维护链回退：去掉 usage 任务行ion%' OR tags LIKE '%kb-table-row%'`（可恢复）
 
+---
+
+## 41. 伙伴系列执行轮（2026-08-27，验证伙伴 + 表达伙伴 + automation 启用观察）
+
+> 执行"亲密伙伴"系列三项（验证/表达/守护增强）。
+
+### 41.1 验证伙伴（独立交叉验证，打破自证）
+
+- fresh 环境独立跑官方 50 问（seed 777）：**Session R@10 0.94 / Turn 0.92 / QA 0.48**；
+- **跨 9 次独立运行稳定性确认**（全部 fresh 注入，非主库检索）：Session R@10 0.94-1.00、
+  QA 升级口径 0.45-0.48——主实例成绩可由独立进程复现；
+- 报告：docs/PARTNER_VERIFICATION.md（9 次运行汇总表）。
+
+### 41.2 表达伙伴（记忆流 Web UI :8010）
+
+- `scripts/memory_stream_server.py`：/ 记忆流页面（最近 30 条+检索）、
+  /api/stream（记忆 JSON）、/api/hot-queries（热门查询）；
+- 实测：stream 3 条 / hot 10 条 / 检索页 200；记忆从后台数据变成可浏览入口。
+
+### 41.3 automation 启用观察（守护增强，事件引擎首次真实运转）
+
+- `~/.trinity/automation/rules.yaml`：knowledge.stale → notify（过时源自动告警）
+  + 低置信检索标记；
+- 实测：TRINITY_AUTOMATION=on 下 emitted=2 / matched=3 / **executed=2** / failed=0；
+- 意义：knowledge.stale 闭环就绪（过时知识源自动告警）。
+
+### 41.4 验证与回滚
+
+- pytest 85/85；独立验证/UI/automation 全实测
+- 改动：`scripts/memory_stream_server.py`（新）、`~/.trinity/automation/rules.yaml`（新）、
+  docs/PARTNER_VERIFICATION.md（新）
+- 回滚：git checkout 对应文件；rules.yaml 删除即回默认；:8010 服务停掉即可
+
