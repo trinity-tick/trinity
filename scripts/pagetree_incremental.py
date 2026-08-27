@@ -41,6 +41,23 @@ def main() -> int:
     new = [r for r in new if r.get("memory_id") not in (tree.memory_index or {})]
     res = tree.incremental_update(new)
     import datetime as _dt2
+    # 2026-08-27: 向量增量——只嵌入新增簇（秒级）
+    _new_ids = res.get("new_cluster_ids") or []
+    if _new_ids:
+        t1 = time.time()
+        try:
+            from trinity.embeddings.engine import create_engine as _ce
+            _eng = _ce(backend="auto", use_cache=True)
+            for _cid in _new_ids:
+                _node = tree.clusters.get(_cid)
+                if not _node:
+                    continue
+                _summ = (_node.get("summary") or "").strip() or " ".join(_node.get("sample", []))[:300]
+                _v = _eng.embed("[" + str(_node.get("category", "")) + "] " + _summ)
+                tree._node_vectors[_cid] = [float(x) for x in _v]
+            print("vectors for", len(_new_ids), "new clusters in", round(time.time()-t1, 1), "s")
+        except Exception as _ve:
+            print("vector embed skipped:", type(_ve).__name__, str(_ve)[:80])
     tree.built_at = _dt2.datetime.now(_dt2.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
     tree.save(tree_path)
     print(f"incremental: {res} in {time.time()-t0:.1f}s")

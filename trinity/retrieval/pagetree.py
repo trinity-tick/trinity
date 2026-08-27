@@ -274,6 +274,7 @@ class MemoryPageTree:
         import math as _math
         added = 0
         new_clusters = 0
+        new_cluster_ids: list = []
         for rec in new_records or []:
             mid = str(rec.get("memory_id") or rec.get("id") or "").strip()
             if not mid or mid in self.memory_index:
@@ -320,11 +321,12 @@ class MemoryPageTree:
                 }
                 self.memory_index[mid] = cid
                 new_clusters += 1
+                new_cluster_ids.append(cid)
             added += 1
         if added:
             self.stats["records"] = len(self.memory_index)
             self.stats["clusters"] = len(self.clusters)
-        return {"added": added, "new_clusters": new_clusters}
+        return {"added": added, "new_clusters": new_clusters, "new_cluster_ids": new_cluster_ids}
 
     def _cluster_id(self) -> str:
         import uuid

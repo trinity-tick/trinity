@@ -263,14 +263,18 @@ $compactPrompt = "在 C:\Users\Administrator\trinity 运行 python scripts/compa
 
 # 记忆页树（2026-08-26，PageIndex 借鉴）：纯元数据建树 + LLM 节点摘要（增量）
 $pagetreeCmd = @"
-import sys
+# 2026-08-27（增量入链）：每日增量（1.2s）+ 周日全量重建+摘要
+import sys, datetime
 sys.path.insert(0, r"$TrinityRoot")
 import runpy
-sys.argv = ["build_memory_pagetree"]
-runpy.run_path(r"$TrinityRoot\scriptsuild_memory_pagetree.py", run_name="__main__")
-sys.argv = ["run_pagetree_summaries", "--limit", "20"]
-runpy.run_path(r"$TrinityRoot\scripts
-un_pagetree_summaries.py", run_name="__main__")
+if datetime.datetime.now().weekday() == 6:
+    sys.argv = ["build_memory_pagetree"]
+    runpy.run_path(r"$TrinityRoot\scripts\build_memory_pagetree.py", run_name="__main__")
+    sys.argv = ["run_pagetree_summaries", "--limit", "20"]
+    runpy.run_path(r"$TrinityRoot\scripts\run_pagetree_summaries.py", run_name="__main__")
+else:
+    sys.argv = ["pagetree_incremental"]
+    runpy.run_path(r"$TrinityRoot\scripts\pagetree_incremental.py", run_name="__main__")
 "@
 $pagetreePrompt = "运行 scripts/build_memory_pagetree.py 与 scripts/run_pagetree_summaries.py（页树重建+增量摘要），汇报统计。"
 

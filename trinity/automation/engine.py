@@ -287,10 +287,18 @@ class AutomationEngine:
                   audit_fn: Optional[Callable]) -> None:
         ok = True
         try:
+            # 2026-08-27（编排升级）：多步动作链——动作支持 if 条件分支 + delay 间隔
             for action in rule.get("actions", []):
+                _cond = action.get("if")
+                if _cond and not _match_condition(_cond, payload):
+                    logger.info("[automation] action skipped (if): %s", rule.get("name", "?"))
+                    continue
                 if not self._run_action(action, payload, rule.get("name", "?")):
                     ok = False
                     break
+                _delay = action.get("delay")
+                if _delay:
+                    time.sleep(min(float(_delay), 60.0))
         except Exception as exc:
             ok = False
             logger.warning("[automation] rule %s failed: %s", rule["name"], exc)

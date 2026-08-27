@@ -5805,3 +5805,36 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
   `trinity/retrieval/pagetree.py`、`scripts/pagetree_incremental.py`（新）
 - 回滚：git checkout 对应文件；增量脚本停用即回全量构建）
 
+---
+
+## 54. 建议全执行轮（2026-08-27，增量入链 + 多步动作链 + 向量增量）
+
+> 执行建议三项。
+
+### 54.1 页树增量入维护链（Task 1）
+
+- pagetree 任务改：**每日增量（1.2s）+ 周日全量重建+摘要**（weekday 判断）；
+- **修复历史损坏**：pagetreeCmd here-string 含退格/换行控制字符（//
+ 在
+  历史写入时被解释——summaries 路径一直含非法字符）——整块行级替换为干净内容；
+- PARSE OK + DryRun（增量分支）通过。
+
+### 54.2 automation 多步动作链（Task 2）
+
+- 动作支持 **if 条件分支**（payload 字段判断，跳过不满足动作）与 **delay 间隔**
+  （动作间等待，上限 60s）；
+- 实测：if 命中+delay 1s=1.0s ✓；if 不满足跳过无延迟 ✓。
+
+### 54.3 页树向量增量维护（Task 3）
+
+- incremental_update 返回 `new_cluster_ids`；脚本对新簇**嵌入向量**（auto 后端）：
+  实测 **1 新簇 0.2s**（全量嵌入 100s+ 的零头）；
+- 增量全链：新增 → 归属/新建簇 → 新簇向量 → 保存（总 1.4s）。
+
+### 54.4 验证与回滚
+
+- pytest 27/27；巡检 ALL OK；API ok
+- 改动：`dsh-ops/trinity-dsh-maintenance.ps1`、`trinity/automation/engine.py`、
+  `trinity/retrieval/pagetree.py`、`scripts/pagetree_incremental.py`
+- 回滚：git checkout 对应文件；pagetree 任务可回全量（改回 build_memory_pagetree）
+
