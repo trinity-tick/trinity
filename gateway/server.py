@@ -82,8 +82,16 @@ app = FastAPI(
 )
 
 
+# 2026-08-27 (product): optional auth - set TRINITY_GATEWAY_TOKEN
+_GATEWAY_TOKEN = os.environ.get("TRINITY_GATEWAY_TOKEN", "").strip()
+
+
 @app.middleware("http")
 async def _gateway_middleware(request: Request, call_next):
+    if _GATEWAY_TOKEN:
+        auth = request.headers.get("authorization", "")
+        if auth != "Bearer " + _GATEWAY_TOKEN:
+            return JSONResponse(status_code=401, content={"detail": "invalid token"})
     """鉴权 + 限流 + 监控（生产化，2026-08-15）。"""
     client_ip = request.client.host if request.client else "unknown"
     # 鉴权
@@ -325,6 +333,23 @@ def retrieval(body: RetrievalIn) -> Dict[str, Any]:
         })
     return {"object": "retrieval", "query": body.query, "count": len(items),
             "data": items}
+
+
+
+
+# 2026-08-27 (product): compliance JSON endpoint
+@app.get("/v1/compliance")
+def compliance(days: int = 7) -> Dict[str, Any]:
+    import json as _json
+    import urllib.request as _ur
+    status = "unknown"
+    try:
+        with _ur.urlopen(TRINITY_API + "/health", timeout=5) as _r:
+            status = _json.loads(_r.read().decode("utf-8")).get("status", "unknown")
+    except Exception:
+        status = "unreachable"
+    return {"object": "compliance", "days": days, "api_status": status,
+            "note": "detailed report: docs/COMPLIANCE_REPORT_*.md (daily auto)"}
 
 
 # ── 聊天代理（记忆自动注入）──────────────────────────────────────────

@@ -30,6 +30,29 @@ def main() -> int:
     return 0
 
 
+def incremental_sync(target_base: str, categories=None, limit=10000) -> dict:
+    """2026-08-27（一致性）：增量同步——只推 created_at > 上次 sync 的记忆。"""
+    import json
+    from trinity.agents.federation import Federation
+    state_file = os.path.expanduser("~/.trinity/fed_sync_state.json")
+    last = ""
+    if os.path.exists(state_file):
+        try:
+            last = json.load(open(state_file, encoding="utf-8")).get("last_sync_ts", "")
+        except Exception:
+            last = ""
+    f = Federation("sqlite")
+    pack = f.export_pack(categories=categories or ["decision", "knowledge"], limit=limit)
+    if last:
+        pack["items"] = [it for it in pack["items"] if str(it.get("created_at") or "") > last]
+        print("incremental since", last, "->", len(pack["items"]), "items")
+    n = f.push_remote(target_base, pack, timeout=30)
+    with open(state_file, "w", encoding="utf-8") as fp:
+        json.dump({"last_sync_ts": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime()),
+                   "last_pushed": n}, fp)
+    return {"pushed": n, "total_exported": pack["count"]}
+
+
 if __name__ == "__main__":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     raise SystemExit(main())

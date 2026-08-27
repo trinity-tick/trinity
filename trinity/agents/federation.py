@@ -56,18 +56,27 @@ class Federation:
             "%Y-%m-%dT%H:%M:%S", time.localtime()), "count": len(items), "items": items}
 
     def import_pack(self, pack: Dict[str, Any], source: str = "federation") -> int:
-        """导入记忆包（幂等：content_hash 已存在则跳过）。返回新增数。"""
+        """导入记忆包（幂等：content_hash 已存在则跳过；同 hash 异内容→冲突标记）。
+        2026-08-27（一致性）：返回 {added, skipped, conflicts}。"""
         items = (pack or {}).get("items") or []
         added = 0
         skipped = 0
+        conflicts = 0
         conn = self._mem._adapter._conn
         for it in items:
             h = it.get("content_hash")
             if h:
                 dup = conn.execute(
-                    "SELECT 1 FROM memories WHERE content_hash=? AND status='active' LIMIT 1",
+                    "SELECT memory_id, content FROM memories WHERE content_hash=? AND status='active' LIMIT 1",
                     (h,)).fetchone()
                 if dup:
+                    # 2026-08-27: 同 hash 异内容 → 冲突标记（content_hash 相同但内容被改）
+                    if str(dup["content"] or "") != str(it.get("content") or ""):
+                        cg = "fed-conflict-" + str(h)[:12]
+                        conn.execute(
+                            "UPDATE memories SET conflict_group_id=? WHERE memory_id=?",
+                            (cg, dup["memory_id"]))
+                        conflicts += 1
                     skipped += 1
                     continue
             self._mem.ingest(
@@ -79,7 +88,8 @@ class Federation:
                 postprocess=False,
             )
             added += 1
-        return added
+        conn.commit()
+        return {"added": added, "skipped": skipped, "conflicts": conflicts}
 
     def push_remote(self, target_base: str, pack: Dict[str, Any],
                     timeout: float = 30.0, token: Optional[str] = None) -> int:

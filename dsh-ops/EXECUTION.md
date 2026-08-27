@@ -6259,3 +6259,37 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - 改动：scripts/mesh_delegate.py（新）、trinity/automation/engine.py（白名单）、
   ~/.trinity/automation/rules.yaml、docs/SESSION_RECAP_20260827.md（新）
 - 回滚：git checkout 对应文件；stale-delegate 规则默认关闭无影响
+
+---
+
+## 68. 建议全执行轮（2026-08-27，联邦一致性 + 自动调参 + 对外产品化）
+
+> 执行建议三项（评价后的差距补齐）。
+
+### 68.1 联邦一致性（Task 1）
+
+- import_pack 冲突检测：同 content_hash 异内容 → conflict_group_id 标记
+  （返回 {added, skipped, conflicts}）；
+- federation_push 增量同步：created_at > 上次 sync（fed_sync_state.json）只推新；
+- 实测：构造冲突 → conflicts=1 + fed-conflict-* 标记 ✓。
+
+### 68.2 自进化自动调参第一步（Task 2）
+
+- `scripts/tune_judge.py`：judge 阈值自动 A/B（0.5/0.55/0.6/0.7）→
+  按"命中率不降 + LLM 最少"选优 → 持久化 ~/.trinity/tuned_config.json；
+- 实测：4 阈值全 10/10 命中（启发式覆盖）→ 推荐 0.5（LLM 最少）；
+- 意义：自进化从"跟踪指标"迈向"自动调参"（安全可回滚——仅持久化推荐）。
+
+### 68.3 对外产品化（Task 3）
+
+- gateway 可选鉴权：设 `TRINITY_GATEWAY_TOKEN` 后要求 Bearer（默认无鉴权
+  向后兼容）；
+- 新增 `GET /v1/compliance` 合规 JSON 端点（api 状态 + 报告指引）；
+- 实测：retrieval count=2（无 token 正常）、compliance api=ok。
+
+### 68.4 验证与回滚
+
+- pytest 22/22；巡检 ALL OK；API ok
+- 改动：`trinity/agents/federation.py`、`scripts/federation_push.py`、
+  `scripts/tune_judge.py`（新）、`gateway/server.py`
+- 回滚：git checkout 对应文件；鉴权仅设 env 才启用
