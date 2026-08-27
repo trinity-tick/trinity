@@ -20,6 +20,11 @@ from trinity.telemetry import traced
 
 logger = logging.getLogger("trinity.core.client")
 
+# 2026-08-27 (P0 优化 3): reason 判题 LRU 缓存 (query+候选指纹 -> selected)
+_JUDGE_CACHE: dict = {}
+_JUDGE_CACHE_TS: dict = {}
+_JUDGE_CACHE_TTL = 600.0  # 10 分钟
+
 _PAGETREE_FILE = "pagetree.json"
 
 
@@ -299,7 +304,8 @@ class _PagetreeMixin:
         llm_used = False
         selected_ids: List[str] = []
         try:
-            from trinity.llm.client import chat_completion, resolve_api_key
+            from trinity.llm.client import chat_completion
+
             key = resolve_api_key()
             if key:
                 cand_text = "\n".join(
@@ -347,24 +353,46 @@ class _PagetreeMixin:
                 from trinity.llm.client import resolve_model_for as _resolve_model
                 _model = _resolve_model("retrieval_judge",
                                         llm_model or os.environ.get("TRINITY_LLM_MODEL", "deepseek-chat"))
-                resp = chat_completion(
-                    {"model": _model,
-                     "messages": [{"role": "system", "content": sys_msg},
-                                  {"role": "user", "content": user}],
-                     "temperature": 0.0, "max_tokens": 200},
-                    timeout=60,
-                )
-                content = resp.get("content", "")
+                # 2026-08-27 (P0 优化 3): 判题 LRU 缓存——相同 (query+候选指纹) 复用,
+                # 省 LLM 调用 (官方 500 问评测 7h 的主成本)。TRINITY_REASON_CACHE=off 关闭。
+                import hashlib as _hl
+                _cache_on = os.environ.get("TRINITY_REASON_CACHE", "on").strip().lower() not in ("off", "0", "false")
+                _finger = None
+                _cached_sel = None
+                if _cache_on:
+                    _finger = _hl.sha256((query + "||" + cand_text[:4000] + "||" + sys_msg).encode()).hexdigest()[:24]
+                    _cached_sel = _JUDGE_CACHE.get(_finger)
+                if _cached_sel is not None:
+                    content = ""
+                else:
+                    resp = chat_completion(
+                        {"model": _model,
+                         "messages": [{"role": "system", "content": sys_msg},
+                                      {"role": "user", "content": user}],
+                         "temperature": 0.0, "max_tokens": 200},
+                        timeout=60,
+                    )
+                    content = resp.get("content", "")
                 import re as _re
                 m = _re.search(r"\{[^{}]*\}", content)
-                if m:
+                if _cached_sel is not None:
+                    sel = _cached_sel
+                else:
                     import json as _json
-                    data = _json.loads(m.group(0))
+                    data = _json.loads(m.group(0)) if m else {}
                     sel = data.get("selected") or []
-                    for s in sel:
-                        idx = str(s).strip()
-                        if idx.isdigit() and 0 <= int(idx) < len(ordered):
-                            selected_ids.append(ordered[int(idx)]["memory_id"])
+                    if _cache_on and _finger is not None:
+                        _JUDGE_CACHE[_finger] = list(sel)
+                        _JUDGE_CACHE_TS[_finger] = time.time()
+                        if len(_JUDGE_CACHE) > 256:
+                            _now = time.time()
+                            for _k in [k for k, t in _JUDGE_CACHE_TS.items() if _now - t > _JUDGE_CACHE_TTL]:
+                                _JUDGE_CACHE.pop(_k, None)
+                                _JUDGE_CACHE_TS.pop(_k, None)
+                for s in sel:
+                    idx = str(s).strip()
+                    if idx.isdigit() and 0 <= int(idx) < len(ordered):
+                        selected_ids.append(ordered[int(idx)]["memory_id"])
                 llm_used = bool(selected_ids)
         except Exception as exc:
             logger.warning("reason LLM judge failed, fallback to candidates: %s", exc)

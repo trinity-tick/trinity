@@ -5262,3 +5262,44 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - 改动：`benchmark/longmemeval_official_runner.py`（已提交）、CONTRIBUTING.md、SECURITY.md（新）、README.md
 - 回滚：git checkout 对应文件；LME_HYBRID=1 可实验 hybrid（0.80 已知更差）
 
+---
+
+## 37. P0 优化执行轮（2026-08-27，QA 升级 + 发布检查 + 判题缓存 + MS judge 实验）
+
+> 执行 P0 四项。QA 全量升级后台进行中；发布受阻于凭证；缓存完成；MS judge 实验证伪回滚。
+
+### 37.1 官方 QA 全量升级（Task 1，进行中）
+
+- runner 已是升级版（top-3 完整上下文 + judge 增强）；全量 500 问分块 5×100 后台跑
+  （每块 ~75min，seed 301-305）；完成后汇总更新官方 QA 口径（预期 0.45）。
+
+### 37.2 开源发布检查（Task 2，受阻记录）
+
+- **打包成功**：`trinity_memory-8.2.1.whl（4.1MB）+ tar.gz`（python -m build 验证）；
+- **PyPI 发布受阻**：`~/.pypirc` token 已失效（403 Invalid authentication）——
+  需用户到 PyPI 重新生成 API token 后执行 `twine upload dist_check/* --disable-progress-bar`；
+- **GitHub push 受阻**：网络连接被重置（无法访问 github.com）——待网络恢复后
+  `git push origin main`（258 commits 待推）；
+- twine rich 进度条在 Windows 管道崩溃 → 需 `--disable-progress-bar`（已记录）。
+
+### 37.3 reason 判题缓存（Task 3，完成）
+
+- `_pagetree.py` 新增判题 LRU 缓存：指纹 = sha256(query+候选前 4000 字符+sys_msg)[:24]；
+  TTL 10 分钟、容量 256、超限 TTL 清理；`TRINITY_REASON_CACHE=off` 关闭；
+- 单元验证：写读/TTL 驱逐/上限保护 ✓；fallback 路径（judge 失败）不写缓存（安全）；
+- 预期收益：官方 500 问 7 小时的主成本（judge LLM 调用）在重复查询场景可大幅降低。
+
+### 37.4 MS 专用 judge（Task 4，实验证伪回滚）
+
+- 实现 `judge_ms_complete`（完整性校验：答案须覆盖期望全部关键变化）；
+- **实测证伪**：MS-only 80 问 Acc **0.000 < judge_facts 0.237**——生成侧未解决前
+  改严 judge 是负优化（与 v6 教训一致）；dispatch 回滚，函数保留备用；
+- 结论固化：**MS 瓶颈顺序 = 先生成质量，后 judge 严格度**。
+
+### 37.5 验证与回滚
+
+- pytest 专项 85/85；缓存/回滚编译通过
+- 改动：`trinity/core/client/_pagetree.py`（缓存）、`benchmark/answer_eval.py`（MS judge 备用）、
+  `dist_check/`（打包产物）、EXECUTION.md
+- 回滚：git checkout 对应文件；PyPI 发布命令见 37.2（凭证就绪后执行）
+

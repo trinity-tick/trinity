@@ -131,6 +131,31 @@ def judge_facts(llm, answer: str, facts) -> bool:
         return False
 
 
+MS_JUDGE_SYSTEM = (
+    "You are a strict completeness judge for significant-changes questions. "
+    "Given the EXPECTED answer (a set of key changes) and a MODEL ANSWER, decide "
+    "whether the model answer covers the KEY changes in the expected answer "
+    "(same events/facts, paraphrasing allowed; missing a key change counts as NO). "
+    "Reply with exactly YES or NO."
+)
+
+
+def judge_ms_complete(llm, answer: str, facts) -> bool:
+    """MS 专用 judge（2026-08-27 P0 优化 4）：完整性校验——答案须覆盖期望
+    答案中的关键变化/事实（TR 式严格化；v6 教训：改答案格式是负优化，改 judge）。"""
+    if not answer.strip():
+        return False
+    expected = "; ".join(f[:200] for f in facts)
+    user = ("EXPECTED (key changes): " + expected[:600]
+            + "\n\nMODEL ANSWER:\n" + answer[:800]
+            + "\n\nDoes the model answer cover the key changes in EXPECTED? Reply YES or NO.")
+    try:
+        out = llm(MS_JUDGE_SYSTEM, user).strip().upper()
+        return out.startswith("YES")
+    except Exception:
+        return False
+
+
 def judge_tr_order(llm, answer: str, facts) -> bool:
     """TR 专用 judge：校验答案中的事件顺序是否与期望顺序一致。"""
     if not answer.strip():
@@ -319,6 +344,8 @@ def main() -> int:
         if cat == "TR":
             acc = judge_tr_order(llm, answer, facts)
         else:
+            # 2026-08-27（P0 优化 4 回滚）：MS 完整性 judge 实验 0.0 < judge_facts 0.237——
+            # 生成侧未解决前改严 judge 是负优化（与 v6 教训一致）。judge_ms_complete 保留备用。
             acc = judge_facts(llm, answer, facts)
         acc_strict = fact_hit(answer, facts)
         if acc_strict:
