@@ -118,8 +118,15 @@ def main() -> int:
             f'<option value="{c}"{" selected" if c == cat else ""}>{c}</option>' for (c,) in _cats)
         # 统计区块（2026-08-27 UI 增强）
         total = conn.execute("SELECT count(*) FROM memories WHERE status='active'").fetchone()[0]
-        cats = conn.execute("SELECT category, count(*) FROM memories WHERE status='active' GROUP BY category ORDER BY 2 DESC LIMIT 5").fetchall()
-        stats_html = "<p>活跃记忆 <b>" + str(total) + "</b> 条 · 类别: " + " · ".join(f"{c}({n})" for c, n in cats) + "</p>"
+        cats = conn.execute("SELECT category, count(*) FROM memories WHERE status='active' GROUP BY category ORDER BY 2 DESC LIMIT 8").fetchall()
+        # 类别 bar 图（2026-08-27 UI 增强）
+        _maxn = max((n for _, n in cats), default=1)
+        bars = "".join(
+            f'<div class="catbar"><span class="catname">{c}</span>'
+            f'<span class="catfill" style="display:inline-block;background:#4a7;height:12px;width:{max(2, int(n / _maxn * 120))}px"></span>'
+            f'<span class="catnum">{n}</span></div>'
+            for c, n in cats)
+        stats_html = "<p>活跃记忆 <b>" + str(total) + "</b> 条</p><div>" + bars + "</div>"
         # 热门查询
         hot_rows = conn.execute(
             "SELECT details FROM audit_log WHERE action IN ('search','search_hybrid') AND timestamp >= ? LIMIT 400",

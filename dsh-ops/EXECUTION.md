@@ -5618,3 +5618,37 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - 回滚：git checkout 对应文件y`（引擎化）
 - 回滚：git checkout 对应文件
 
+---
+
+## 48. 建议继续执行轮（2026-08-27，ps1 全任务巡检 + stale 快照 + UI 类别 bar）
+
+> 执行下一步建议三项。
+
+### 48.1 ps1 全任务巡检（Task 2，最重要）
+
+- 新工具 `scripts/audit_maintenance_ps1.py`：检查 allowed/定义/dispatch 三件套齐全性
+  （含特殊变量名别名 evolution→evo 等）；
+- **巡检发现 6 个历史缺失任务**（compress/backup/evolve-auto/evolve-env/
+  consolidate-temporal/memory-ops——allowed 有但实现丢失）→ 按完整行锚点补全
+  定义+dispatch；
+- **过程中 ps1 两次被行首片段锚点截断（reviewPrompt/activeHealthPrompt）→ 已 git
+  恢复 + 完整行锚点重打**；最终 **PARSE OK + 巡检 ALL OK（31/30/30）+ 6 任务 DryRun 通过**；
+- 教训固化：ps1 补丁纪律 = **完整行锚点 + PARSE + 巡检 + 全任务 DryRun**。
+
+### 48.2 自然 stale 实况快照（Task 1）
+
+- freshness 分布：0-7d 187 源 / 7-30d 11 源 / stale 0；最旧 ai_knowledge 24.8 天——
+  **约 5 天后首个源将自然过期 → 自动采集闭环首次自然触发**（观察点记录）。
+
+### 48.3 UI 类别 bar 图（Task 3）
+
+- 统计区块升级为**类别分布 bar 图**（CSS 宽度按占比）；
+- 实测：CATBAR present、页面 200。
+
+### 48.4 验证与回滚
+
+- pytest（automation）15/15；API/UI 存活
+- 改动：`scripts/audit_maintenance_ps1.py`（新）、`dsh-ops/trinity-dsh-maintenance.ps1`、
+  `scripts/memory_stream_server.py`
+- 回滚：git checkout 对应文件（ps1 回退则 6 任务消失，巡检可再检测）
+

@@ -498,6 +498,52 @@ sys.exit(main())
 "@
 $activeHealthPrompt = "运行 scripts/active_set_health.py(active 集健康: total/active/archived 占比, 归档高价值记忆告警, 有告警提示 restore_high_value_memories.py),汇报指标。"
 
+# 备份（2026-08-27 巡检补全）：WAL 安全备份（14 天保留）
+$backupCmd = @"
+powershell -NoProfile -ExecutionPolicy Bypass -File '\$PSScriptRoot\trinity-backup.ps1'
+"@
+$backupPrompt = "运行 trinity-backup.ps1（WAL 安全备份），汇报备份文件。"
+
+# 记忆操作（2026-08-27 巡检补全）
+$memoryOpsCmd = @"
+import sys
+sys.path.insert(0, r"$TrinityRoot")
+import runpy
+sys.argv = ["memory_ops"]
+runpy.run_path(r"$TrinityRoot\scripts\memory_ops.py", run_name="__main__")
+"@
+$memoryOpsPrompt = "运行 scripts/memory_ops.py（记忆操作），汇报结果。"
+
+# 时序巩固（2026-08-27 巡检补全）
+$consolidateTemporalCmd = @"
+import sys
+sys.path.insert(0, r"$TrinityRoot")
+import runpy
+sys.argv = ["consolidate_temporal"]
+runpy.run_path(r"$TrinityRoot\scripts\consolidate_temporal.py", run_name="__main__")
+"@
+$consolidateTemporalPrompt = "运行 scripts/consolidate_temporal.py（时序巩固），汇报结果。"
+
+# 压缩（2026-08-27 巡检补全；与 decay 同管线）
+$compressCmd = @"
+import sys
+sys.path.insert(0, r"$TrinityRoot")
+import runpy
+sys.argv = ["run_decay_compress", "--store", "sqlite", "--limit", "$DecayLimit", "--llm", "auto"]
+runpy.run_path(r"$TrinityRoot\scripts\run_decay_compress.py", run_name="__main__")
+"@
+$compressPrompt = "运行 run_decay_compress.py（记忆压缩），汇报统计。"
+
+# 进化 env 应用（2026-08-27 巡检补全）
+$evolveAutoCmd = @"
+powershell -NoProfile -ExecutionPolicy Bypass -File '\$PSScriptRoot\apply_evolve_env.ps1'
+"@
+$evolveAutoPrompt = "运行 apply_evolve_env.ps1（应用进化 env），汇报。"
+$evolveEnvCmd = @"
+powershell -NoProfile -ExecutionPolicy Bypass -File '\$PSScriptRoot\apply_evolve_env.ps1'
+"@
+$evolveEnvPrompt = "运行 apply_evolve_env.ps1（应用进化 env），汇报。"
+
 # ── 选择任务 ──────────────────────────────────────────────────────────────
 if ($Tasks -contains "all") { $Tasks = @("health", "evolution", "mirror", "decay", "tiers", "consolidate", "dedup", "sync", "compact", "pagetree", "backup", "selftest") }
 if ($Tasks -contains "compress") { $Tasks = @($Tasks | Where-Object { $_ -ne "compress" }) + "decay" }
@@ -536,6 +582,12 @@ foreach ($t in $Tasks) {
         "slo"      { Invoke-Task -Name "slo"      -DirectCommand $sloCmd      -DshPrompt $sloPrompt }  # 2026-08-18 SRE
         "db-health" { Invoke-Task -Name "db-health" -DirectCommand $dbHealthCmd -DshPrompt $dbHealthPrompt }
         "active-health" { Invoke-Task -Name "active-health" -DirectCommand $activeHealthCmd -DshPrompt $activeHealthPrompt }
+        "backup"    { Invoke-Task -Name "backup"    -LeaseJob "backup"    -DirectCommand $backupCmd    -DshPrompt $backupPrompt }  # 2026-08-27 巡检补全
+        "memory-ops" { Invoke-Task -Name "memory-ops" -LeaseJob "memory-ops" -DirectCommand $memoryOpsCmd -DshPrompt $memoryOpsPrompt }  # 2026-08-27 巡检补全
+        "consolidate-temporal" { Invoke-Task -Name "consolidate-temporal" -LeaseJob "consolidate-temporal" -DirectCommand $consolidateTemporalCmd -DshPrompt $consolidateTemporalPrompt }  # 2026-08-27 巡检补全
+        "compress"  { Invoke-Task -Name "compress"  -LeaseJob "compress"  -DirectCommand $compressCmd  -DshPrompt $compressPrompt }  # 2026-08-27 巡检补全
+        "evolve-auto" { Invoke-Task -Name "evolve-auto" -DirectCommand $evolveAutoCmd -DshPrompt $evolveAutoPrompt }  # 2026-08-27 巡检补全
+        "evolve-env" { Invoke-Task -Name "evolve-env" -DirectCommand $evolveEnvCmd -DshPrompt $evolveEnvPrompt }  # 2026-08-27 巡检补全
         "backup"    { Write-Log "backup: WAL 安全备份到 ~/.trinity/backups (保留 14 天)"; & "$PSScriptRoot\trinity-backup.ps1" 2>&1 | ForEach-Object { Write-Log $_ } }
         "evolve-env" { Write-Log "evolve-env: 应用自进化采纳 env（evolve_env.json → 进程环境，白名单校验）"; & "$PSScriptRootpply_evolve_env.ps1" -Show 2>&1 | ForEach-Object { Write-Log $_ } }  # 2026-08-25 缺口A
         "consolidate-temporal" { $consArgs = @("--days", "1"); if ((Get-Date).DayOfWeek -eq "Sunday") { $consArgs = @("--days", "7", "--weekly") }; Write-Log "consolidate-temporal: 时间层级巩固（TiMem 式；daily 每日，Sunday 加 weekly）"; & "$Py" "$TrinityRoot\scripts\consolidate_temporal.py" @consArgs 2>&1 | ForEach-Object { Write-Log $_ } }  # 2026-08-25 TiMem 式
