@@ -6133,3 +6133,38 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - 改动：knowledge_produce.py（新）/federation.py（新）/compliance_report.py（新）/
   knowledge/__init__.py/tests/test_knowledge.py
 - 回滚：git checkout 对应文件
+
+---
+
+## 64. 建议全执行轮（2026-08-27，produce 入链 + 联邦跨机 + Mesh 分解/配额）
+
+> 执行建议三项。
+
+### 64.1 produce 任务入维护链（Task 1）
+
+- 新增 `-Tasks produce`（每日知识周报 + 合规报告自动生成）；
+- PARSE OK + 巡检 ALL OK（35 任务三件套齐全）+ DryRun 通过。
+
+### 64.2 联邦跨机同步（Task 2）
+
+- `push_remote(target_base, pack, token)`：pack 逐条 POST 目标实例
+  `/v1/memories`（Bearer token 支持，env TRINITY_API_KEY）；
+- 修坑：export tags 为 JSON 字符串（422 根因——解析为 list）；
+  url 端点 /v1/memories；
+- 实测：**76 条全部推送成功**；幂等依赖目标实例 dedup（主库 API 有；gateway 直写无）；
+- 清理验证：主库 decision 无重复（duplicates 0）。
+
+### 64.3 AgentMesh 多 agent 增强（Task 3）
+
+- `decompose(parent_task, subtasks)`：大任务拆分子委托（parent 关联 +
+  subtask_index）；
+- `agent_quota(agent, max_active)`：活跃委托（pending+claimed）配额限制；
+- 实测：decompose 3 子任务（[1/3] 调研…）、quota 3 活跃 max3 → False ✓、
+  max10 → True ✓。
+
+### 64.4 验证与回滚
+
+- pytest 34/34；巡检 ALL OK；API/GATEWAY ok
+- 改动：`dsh-ops/trinity-dsh-maintenance.ps1`、`trinity/agents/federation.py`、
+  `trinity/agents/mesh.py`
+- 回滚：git checkout 对应文件

@@ -29,7 +29,7 @@ param(
 
 # 兼容 powershell -File 传参：命令行里的 "a,b,c" 会以单个字符串到达，
 # 这里统一按逗号拆分 + 校验。
-$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "usage", "rollout-audit", "audit-ps1", "forgetting", "all")  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
+$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "usage", "rollout-audit", "audit-ps1", "forgetting", "produce", "all")  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
 $normalized = @()
 foreach ($t in $Tasks) { $normalized += $t.Split(',') }
 $normalized = $normalized | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
@@ -568,6 +568,18 @@ runpy.run_path(r"$TrinityRoot\scripts\forgetting_score.py", run_name="__main__")
 "@
 $forgettingPrompt = "运行 scripts/forgetting_score.py（遗忘分 TOP + 保守归档 score>0.9 & importance<0.3），汇报候选与归档数。"
 
+# 知识生产+合规（2026-08-27 第二阶段）：每日周报+合规报告
+$produceCmd = @"
+import sys
+sys.path.insert(0, r"$TrinityRoot")
+import runpy
+sys.argv = ["knowledge_produce", "--days", "1"]
+runpy.run_path(r"$TrinityRoot\scripts\knowledge_produce.py", run_name="__main__")
+sys.argv = ["compliance_report"]
+runpy.run_path(r"$TrinityRoot\scripts\compliance_report.py", run_name="__main__")
+"@
+$producePrompt = "运行 knowledge_produce.py（每日周报）+ compliance_report.py（合规报告），汇报产出文件。"
+
 # ── 选择任务 ──────────────────────────────────────────────────────────────
 if ($Tasks -contains "all") { $Tasks = @("health", "evolution", "mirror", "decay", "tiers", "consolidate", "dedup", "sync", "compact", "pagetree", "backup", "selftest") }
 if ($Tasks -contains "compress") { $Tasks = @($Tasks | Where-Object { $_ -ne "compress" }) + "decay" }
@@ -614,6 +626,7 @@ foreach ($t in $Tasks) {
         "evolve-env" { Invoke-Task -Name "evolve-env" -DirectCommand $evolveEnvCmd -DshPrompt $evolveEnvPrompt }  # 2026-08-27 巡检补全
         "audit-ps1" { Invoke-Task -Name "audit-ps1" -DirectCommand $auditPs1Cmd -DshPrompt $auditPs1Prompt }  # 2026-08-27 ps1 自检
         "forgetting" { Invoke-Task -Name "forgetting" -DirectCommand $forgettingCmd -DshPrompt $forgettingPrompt }  # 2026-08-27 遗忘决策
+        "produce"   { Invoke-Task -Name "produce"   -DirectCommand $produceCmd   -DshPrompt $producePrompt }  # 2026-08-27 知识生产+合规
         "backup"    { Write-Log "backup: WAL 安全备份到 ~/.trinity/backups (保留 14 天)"; & "$PSScriptRoot\trinity-backup.ps1" 2>&1 | ForEach-Object { Write-Log $_ } }
         "evolve-env" { Write-Log "evolve-env: 应用自进化采纳 env（evolve_env.json → 进程环境，白名单校验）"; & "$PSScriptRootpply_evolve_env.ps1" -Show 2>&1 | ForEach-Object { Write-Log $_ } }  # 2026-08-25 缺口A
         "consolidate-temporal" { $consArgs = @("--days", "1"); if ((Get-Date).DayOfWeek -eq "Sunday") { $consArgs = @("--days", "7", "--weekly") }; Write-Log "consolidate-temporal: 时间层级巩固（TiMem 式；daily 每日，Sunday 加 weekly）"; & "$Py" "$TrinityRoot\scripts\consolidate_temporal.py" @consArgs 2>&1 | ForEach-Object { Write-Log $_ } }  # 2026-08-25 TiMem 式

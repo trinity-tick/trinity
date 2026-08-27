@@ -25,7 +25,7 @@ class Federation:
 
     def export_pack(self, agent_ids: Optional[List[str]] = None,
                     categories: Optional[List[str]] = None,
-                    limit: int = 2000) -> Dict[str, Any]:
+                    limit: int = 10000) -> Dict[str, Any]:
         """导出记忆包（JSON 可序列化）。"""
         rows = self._mem._adapter.get_all_memories(limit=limit, offset=0)
         items = []
@@ -36,10 +36,16 @@ class Federation:
                 continue
             if categories and (r.get("category") or "") not in categories:
                 continue
+            _tg = r.get("tags") or []
+            if isinstance(_tg, str):
+                try:
+                    _tg = json.loads(_tg) if _tg.strip().startswith("[") else [_tg]
+                except Exception:
+                    _tg = [_tg]
             items.append({
                 "content": r.get("content") or "",
                 "category": r.get("category"),
-                "tags": r.get("tags") or [],
+                "tags": _tg,
                 "importance": r.get("importance"),
                 "agent_id": r.get("agent_id"),
                 "created_at": r.get("created_at"),
@@ -74,3 +80,28 @@ class Federation:
             )
             added += 1
         return added
+
+    def push_remote(self, target_base: str, pack: Dict[str, Any],
+                    timeout: float = 30.0, token: Optional[str] = None) -> int:
+        """2026-08-27 (cross-instance): pack items -> target REST /memories."""
+        import urllib.request as _ur
+        import json as _json
+        n = 0
+        url = target_base.rstrip("/") + "/v1/memories"
+        for it in (pack or {}).get("items") or []:
+            body = {"content": it.get("content") or "",
+                    "category": it.get("category") or "general",
+                    "tags": it.get("tags") or [],
+                    "importance": float(it.get("importance") or 0.5)}
+            _hdrs = {"Content-Type": "application/json"}
+            _tok = token or os.environ.get("TRINITY_API_KEY", "")
+            if _tok:
+                _hdrs["Authorization"] = "Bearer " + _tok
+            req = _ur.Request(url, data=_json.dumps(body).encode("utf-8"), headers=_hdrs)
+            try:
+                with _ur.urlopen(req, timeout=timeout) as resp:
+                    if resp.status < 300:
+                        n += 1
+            except Exception:
+                continue
+        return n

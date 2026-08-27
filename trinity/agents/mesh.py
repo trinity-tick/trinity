@@ -173,3 +173,31 @@ class AgentMesh:
                         "status": d.get("status"), "claimant": d.get("claimant"),
                         "result": d.get("result")})
         return out
+
+    def decompose(self, from_agent: str, to_agent: str, parent_task: str,
+                 subtasks: List[str], ttl_hours: float = 24.0) -> List[str]:
+        """2026-08-27 (multi-agent): split big task into subtasks (parent link)."""
+        ids = []
+        import json as _json
+        conn = self._mem._adapter._conn
+        for i, st in enumerate(subtasks):
+            did = self.create(from_agent, to_agent,
+                              "[" + str(i + 1) + "/" + str(len(subtasks)) + "] " + st,
+                              ttl_hours=ttl_hours)
+            rec = self._mem._adapter.get_memory(did)
+            meta = _parse_meta(rec.get("metadata"))
+            d = meta.get("delegation") or {}
+            d["parent"] = parent_task
+            d["subtask_index"] = i
+            conn.execute("UPDATE memories SET metadata=? WHERE memory_id=?",
+                         (_json.dumps(meta, ensure_ascii=False), did))
+            conn.commit()
+            ids.append(did)
+        return ids
+
+    def agent_quota(self, agent: str, max_active: int = 5) -> bool:
+        """2026-08-27 (quota): agent active delegations (pending+claimed) limit."""
+        self._expire_stale()
+        active = self.inbox(agent, "pending") + self.inbox(agent, "claimed")
+        return len(active) < max_active
+
