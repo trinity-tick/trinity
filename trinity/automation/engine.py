@@ -146,6 +146,7 @@ KNOWN_SCRIPTS = READONLY_SCRIPTS | {
     "consolidate_temporal.py", "compact_structure.py", "entity_dedup.py",
     "cleanup_noise.py", "export_memories_markdown.py", "run_decay_compress.py",
     "harvest_kb_structured.py",  # 2026-08-27（stale 自动采集闭环）
+    "rollout_audit.py",          # 2026-08-27（编排升级）
 }
 _PENDING_FILE = os.path.join(_HOME, "automation", "pending.json")
 _ROLLOUT_DIR = os.path.join(_HOME, "automation", "rollouts")
@@ -318,24 +319,37 @@ class AutomationEngine:
     def _run_action(self, action: Dict[str, Any], payload: Dict[str, Any],
                      rule_name: str = "?") -> bool:
         atype = action.get("type", "notify")
-        try:
-            if action.get("message"):
-                logger.info("[automation] %s", str(action["message"]).format(**payload))
-            if atype == "notify":
-                msg = (action.get("message") or "").format(**payload)
-                logger.info("%s", msg)
-                return True
-            if atype == "exec":
-                if "python" in action:
-                    return self._exec_python(action["python"], action.get("args") or {}, payload)
-                if "command" in action:
-                    return self._exec_command_policy(action, payload, rule_name)
+        # 2026-08-27（编排升级）：动作支持 retries 重试（失败退避 2^attempt 秒）
+        retries = int(action.get("retries", 0) or 0)
+        for attempt in range(retries + 1):
+            try:
+                if action.get("message"):
+                    logger.info("[automation] %s", str(action["message"]).format(**payload))
+                if atype == "notify":
+                    msg = (action.get("message") or "").format(**payload)
+                    logger.info("%s", msg)
+                    return True
+                if atype == "exec":
+                    if "python" in action:
+                        ok = self._exec_python(action["python"], action.get("args") or {}, payload)
+                    elif "command" in action:
+                        ok = self._exec_command_policy(action, payload, rule_name)
+                    else:
+                        ok = False
+                    if ok or attempt >= retries:
+                        return ok
+                    time.sleep(2 ** attempt)  # 指数退避
+                    logger.warning("[automation] action %s retry %d", rule_name, attempt + 1)
+                    continue
+                logger.warning("[automation] unknown action type: %s", atype)
                 return False
-            logger.warning("[automation] unknown action type: %s", atype)
-            return False
-        except Exception as exc:
-            logger.warning("[automation] action failed: %s", exc)
-            return False
+            except Exception as exc:
+                if attempt >= retries:
+                    logger.warning("[automation] action failed: %s", exc)
+                    return False
+                time.sleep(2 ** attempt)
+                logger.warning("[automation] action %s exception retry %d", rule_name, attempt + 1)
+        return False
 
     def _exec_command_policy(self, action: Dict[str, Any], payload: Dict[str, Any],
                              rule_name: str) -> bool:

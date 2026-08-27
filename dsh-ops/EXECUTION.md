@@ -5732,5 +5732,41 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 
 - pytest（goals）7/7；API ok
 - 改动：`trinity/evolution/goals.py`
-- 回滚：git checkout -- trinity/evolution/goals.py（system_health 块移除即回记忆指标专用）
+- 回滚：git checkout -- trinity/evolution/goals.py（system_health 块移除即
+
+---
+
+## 52. 建议继续执行轮（2026-08-27，代码健康目标 + automation retries + judge 蒸馏）
+
+> 执行建议三项（方向1 继续 + 方向2 编排 + 性能）。
+
+### 52.1 代码健康目标（Task 1，方向1 继续）
+
+- default_metrics 增加 `code_health`：eval 12/12 通过率 + 快速专项测试
+  （test_goals/automation/eval）通过率，均值；
+- 实测 **code_health = 1.0**（eval_ok 1.0 + tests_ok 1.0）；
+- 创建"代码健康全绿"目标 → **complete（last=1.0）**；
+- 目标全景：**4 complete（0.752/0.6632/1.0/1.0）+ 1 blocked**——进化引擎已服务
+  记忆/系统/代码三类指标。
+
+### 52.2 automation 编排升级（Task 2，方向2 起步）
+
+- 动作支持 `retries: N`（exec 失败指数退避重试 2^attempt 秒）；
+- 顺带修复：rollout_audit.py 未在白名单（exec 被拒）——已加入 KNOWN_SCRIPTS；
+- 实测：notify/exec 在 retries 字段下正常；白名单拒绝正确不重试。
+
+### 52.3 judge 蒸馏（Task 3，性能）
+
+- `TRINITY_JUDGE_HEURISTIC`（默认 on）：jieba 词重叠率 >= 0.6 的候选**启发式直接选中**
+  并缓存——跳过 LLM（蒸馏：简单情况不用大模型判）；
+- 修复：_pagetree.py 引用未导入的 `resolve_api_key`（NameError 静默→fallback 的隐患）；
+- 实测：高重叠查询 reason 选中 3 条 + 缓存 1 条（**未调 LLM**）；
+- 预期：常见近串查询的 judge LLM 调用大幅减少（缓存+启发式双保险）。
+
+### 52.4 验证与回滚
+
+- pytest 34/34；API ok
+- 改动：`trinity/evolution/goals.py`、`trinity/automation/engine.py`、
+  `trinity/core/client/_pagetree.py`
+- 回滚：git checkout 对应文件；蒸馏可 `TRINITY_JUDGE_HEURISTIC=off` 关闭回记忆指标专用）
 

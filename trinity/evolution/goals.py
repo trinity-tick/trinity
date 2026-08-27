@@ -383,4 +383,27 @@ def default_metrics() -> Dict[str, Any]:
         }
     except Exception:
         pass
+    # 2026-08-27（方向1 继续）：代码健康指标——eval 断言通过率 + 快速专项测试通过率
+    try:
+        import subprocess as _sp2
+        import sys as _sys2
+        _root2 = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        _cpts = []
+        # a) eval 12 项（全量断言，~10s）
+        _re = _sp2.run([_sys2.executable, "-X", "utf8",
+                        os.path.join(_root2, "scripts", "run_evals.py"), "--all"],
+                       capture_output=True, text=True, timeout=180)
+        _cpts.append(1.0 if "12/12 passed" in _re.stdout else 0.0)
+        # b) 快速专项测试（goals/automation/eval）
+        _rt = _sp2.run([_sys2.executable, "-m", "pytest", "-q",
+                        os.path.join(_root2, "tests", "test_goals.py"),
+                        os.path.join(_root2, "tests", "test_automation.py"),
+                        os.path.join(_root2, "tests", "test_eval.py")],
+                       capture_output=True, text=True, timeout=180)
+        _ok = "failed" not in _rt.stdout and "passed" in _rt.stdout
+        _cpts.append(1.0 if _ok else 0.0)
+        metrics["code_health"] = round(sum(_cpts) / len(_cpts), 3)
+        metrics["code_health_parts"] = {"eval_ok": _cpts[0], "tests_ok": _cpts[1]}
+    except Exception:
+        pass
     return metrics

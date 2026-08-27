@@ -304,7 +304,7 @@ class _PagetreeMixin:
         llm_used = False
         selected_ids: List[str] = []
         try:
-            from trinity.llm.client import chat_completion
+            from trinity.llm.client import chat_completion, resolve_api_key
 
             key = resolve_api_key()
             if key:
@@ -362,8 +362,38 @@ class _PagetreeMixin:
                 if _cache_on:
                     _finger = _hl.sha256((query + "||" + cand_text[:4000] + "||" + sys_msg).encode()).hexdigest()[:24]
                     _cached_sel = _JUDGE_CACHE.get(_finger)
+                _heur_sel = None
                 if _cached_sel is not None:
                     content = ""
+                elif os.environ.get("TRINITY_JUDGE_HEURISTIC", "on").strip().lower() not in ("off", "0", "false"):
+                    # 2026-08-27（judge 蒸馏）：高词重叠候选启发式直接选中（跳过 LLM）。
+                    # 词重叠率 >= 0.6 时 judge 必然选中——直接判定省 LLM 调用。
+                    import jieba as _jieba
+                    _qwords = set(t for t in _jieba.cut(query) if t.strip())
+                    _heur = []
+                    for _i, _r in enumerate(ordered[:max_candidates]):
+                        _cw = set(t for t in _jieba.cut(str(_r.get("content") or "")[:400]) if t.strip())
+                        if not _qwords or not _cw:
+                            continue
+                        _overlap = len(_qwords & _cw) / max(1, len(_qwords))
+                        if _overlap >= 0.6:
+                            _heur.append(str(_i))
+                    if _heur:
+                        content = ""
+                        _heur_sel = _heur
+                        sel = _heur
+                        if _cache_on and _finger is not None:
+                            _JUDGE_CACHE[_finger] = list(sel)
+                            _JUDGE_CACHE_TS[_finger] = time.time()
+                    else:
+                        resp = chat_completion(
+                            {"model": _model,
+                             "messages": [{"role": "system", "content": sys_msg},
+                                          {"role": "user", "content": user}],
+                             "temperature": 0.0, "max_tokens": 200},
+                            timeout=60,
+                        )
+                        content = resp.get("content", "")
                 else:
                     resp = chat_completion(
                         {"model": _model,
@@ -375,7 +405,9 @@ class _PagetreeMixin:
                     content = resp.get("content", "")
                 import re as _re
                 m = _re.search(r"\{[^{}]*\}", content)
-                if _cached_sel is not None:
+                if _heur_sel is not None:
+                    sel = _heur_sel
+                elif _cached_sel is not None:
                     sel = _cached_sel
                 else:
                     import json as _json
