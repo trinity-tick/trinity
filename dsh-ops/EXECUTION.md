@@ -5678,3 +5678,32 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
   `scripts/stale_watch.py`（新）
 - 回滚：git checkout 对应文件
 
+---
+
+## 50. 代码优化轮（2026-08-27，P0 LLM 去重 + P1 modules 归档）
+
+> 执行代码优化两项（减重、低风险）。
+
+### 50.1 P0：benchmark LLM 调用去重
+
+- 审计发现：answer_eval/hard_holdout_eval 已统一到 `create_llm_compress_callable`/
+  `trinity.llm.client`，**唯一裸 urllib 在 longmemeval_official_runner.py**（3 份实现之一）；
+- 已替换为 `trinity.llm.client.chat_completion`（key 自动解析/模型路由/usage 规范响应）；
+- 冒烟：10 问 seed 888 运行正常（Session R@10 1.0 / Turn 0.9）。
+
+### 50.2 P1：modules 孤立模块归档（安全版）
+
+- 引用链分析（含包 __init__ 的 from 引用——此前 engine 系列误判孤立）：
+  54 个候选 → **安全归档仅 2 个**（memory_replay_trainer.py / streaming_ingest.py）
+  → 移入 `trinity/modules/_research_archive/`；
+- 其余保持原位（multimodal/open_domain/second_brain 的 __init__ 链均被引用——保守保留）；
+- import 验证：`from trinity import Trinity` OK；pytest 27/27；API ok；
+- 结论：modules 33k 行的"瘦身"实际空间有限（大多数被引用链保护）——归档 2 个 +
+  文档化（MODULES_GUIDE）已是最优解。
+
+### 50.3 验证与回滚
+
+- pytest 27/27；API ok；runner 冒烟通过
+- 改动：`benchmark/longmemeval_official_runner.py`、`trinity/modules/_research_archive/`（新）
+- 回滚：git checkout 对应文件；归档模块移回 `modules/` 根即可
+

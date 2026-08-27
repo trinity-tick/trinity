@@ -31,18 +31,16 @@ with open(os.path.expanduser("~/.dsh/.credentials.yaml"), "r", encoding="utf-8-s
             break
 assert api_key, "DEEPSEEK_API_KEY not found"
 
-import urllib.request
+# 2026-08-27（P0 去重）：统一到 trinity.llm.client（key 自动解析/模型路由/usage）
 def llm_chat(system, user, max_tokens=120, temp=0.0):
-    payload = {"model": "deepseek-chat",
-               "messages": [{"role": "system", "content": system},
-                            {"role": "user", "content": user}],
-               "temperature": temp, "max_tokens": max_tokens}
-    req = urllib.request.Request(
-        "https://api.deepseek.com/v1/chat/completions",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json", "Authorization": "Bearer " + api_key})
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        return json.loads(resp.read().decode("utf-8"))["choices"][0]["message"]["content"].strip()
+    from trinity.llm.client import chat_completion
+    resp = chat_completion({
+        "model": "deepseek-chat",
+        "messages": [{"role": "system", "content": system},
+                     {"role": "user", "content": user}],
+        "temperature": temp, "max_tokens": max_tokens,
+    })
+    return resp.get("content", "").strip()
 
 # Trinity engine (temp store, FTS5+BM25; keep embedding off for speed)
 import tempfile
