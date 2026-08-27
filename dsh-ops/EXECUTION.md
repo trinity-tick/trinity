@@ -6168,3 +6168,32 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - 改动：`dsh-ops/trinity-dsh-maintenance.ps1`、`trinity/agents/federation.py`、
   `trinity/agents/mesh.py`
 - 回滚：git checkout 对应文件
+
+---
+
+## 65. 建议全执行轮（2026-08-27，联邦全链路 + Mesh 订阅 + 阶段2 收官）
+
+> 执行建议三项。
+
+### 65.1 联邦全链路验证（Task 1）
+
+- **export 119 → push_remote 119 → temp 实例 import 78 → search hits 3** 全通；
+- 修坑：TRINITY_STORE 须为已存在目录（isdir 检查——否则回退主库）；
+  gateway 连接中止（重启恢复）。
+
+### 65.2 Mesh 订阅通知（Task 2）
+
+- `subscribe(agent, keyword)`：订阅文件 ~/.trinity/mesh_subscriptions.json；
+- create 时 `_notify_subscribers` 匹配关键词 → **delegation.notify 事件**给订阅者；
+- 实测：subscribe(WMS) → create 匹配 → emitted+3（created+notify）✓。
+
+### 65.3 第二阶段收官汇总（Task 3）
+
+- docs/PHASE2_SUMMARY_20260827.md：本阶段 9 项落地清单 + 联邦全链路 +
+  维护链 35 任务全景 + 测试状态——知识"生产→分发→证明→治理"闭环。
+
+### 65.4 验证与回滚
+
+- pytest 34/34；巡检 ALL OK；API/GATEWAY ok
+- 改动：`trinity/agents/mesh.py`、docs/PHASE2_SUMMARY_20260827.md（新）
+- 回滚：git checkout 对应文件

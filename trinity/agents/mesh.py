@@ -93,6 +93,7 @@ class AgentMesh:
         self._emit("delegation.created", {"from": from_agent, "to": to_agent,
                                           "task": task,
                                           "delegation_id": r.get("memory_id", "")})
+        self._notify_subscribers(task, r.get("memory_id", ""))
         return r.get("memory_id", "")
 
     def _load(self, delegation_id: str) -> Optional[Dict[str, Any]]:
@@ -200,4 +201,36 @@ class AgentMesh:
         self._expire_stale()
         active = self.inbox(agent, "pending") + self.inbox(agent, "claimed")
         return len(active) < max_active
+
+    _SUB_FILE = os.path.join(os.path.expanduser("~/.trinity"), "mesh_subscriptions.json")
+
+    def subscribe(self, agent: str, keyword: str) -> None:
+        """2026-08-27 (订阅通知): agent 订阅关键词——新委托匹配时收到 delegation.notify。"""
+        import json as _json
+        subs = {}
+        if os.path.exists(self._SUB_FILE):
+            try:
+                subs = _json.load(open(self._SUB_FILE, encoding="utf-8"))
+            except Exception:
+                subs = {}
+        agents = set(subs.get(keyword, []))
+        agents.add(agent)
+        subs[keyword] = sorted(agents)
+        with open(self._SUB_FILE, "w", encoding="utf-8") as f:
+            _json.dump(subs, f, ensure_ascii=False, indent=1)
+
+    def _notify_subscribers(self, task: str, delegation_id: str) -> None:
+        import json as _json
+        if not os.path.exists(self._SUB_FILE):
+            return
+        try:
+            subs = _json.load(open(self._SUB_FILE, encoding="utf-8"))
+        except Exception:
+            return
+        for kw, agents in subs.items():
+            if kw and kw in str(task):
+                for a in agents:
+                    self._emit("delegation.notify", {"agent": a, "keyword": kw,
+                                                     "task": task,
+                                                     "delegation_id": delegation_id})
 
