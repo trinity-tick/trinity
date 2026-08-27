@@ -55,3 +55,10 @@ for item in resp["data"]:
 - 层感知：layer_hint=auto 时时间词→episodic、知识词→semantic。
 
 *生成 2026-08-27*
+
+## 鉴权（对外部署时启用，2026-08-27 评估通过）
+
+1. 设置 TRINITY_GATEWAY_TOKEN（supervisor 启动环境或进程 env），然后重启 gateway；
+2. 调用方必须带 Bearer 头（实测：无 token -> 401，有 token -> 200）：
+   curl -s http://127.0.0.1:8002/v1/retrieval -H "Authorization: Bearer your-secret-token" -H "Content-Type: application/json" -d '{"query": "WMS", "top_k": 5}'
+3. 未设置 token 时保持无鉴权（本地开发默认）。

@@ -6293,3 +6293,34 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - 改动：`trinity/agents/federation.py`、`scripts/federation_push.py`、
   `scripts/tune_judge.py`（新）、`gateway/server.py`
 - 回滚：git checkout 对应文件；鉴权仅设 env 才启用
+
+---
+
+## 69. 建议全执行轮（2026-08-27，tune 入链 + 鉴权评估 + tuned 应用接入）
+
+> 执行建议三项（自进化/产品化深化）。
+
+### 69.1 自动调参入维护链（Task 1）
+
+- 新增 `-Tasks tune`（每日 tune_judge 自动 A/B 推荐）；
+- PARSE OK + 巡检 ALL OK（37 任务三件套齐全）+ DryRun 通过。
+
+### 69.2 鉴权启用评估（Task 2）
+
+- 设 TRINITY_GATEWAY_TOKEN 实测：**无 token → 401 ✓、有 token → 200 count=1 ✓**；
+- 评估结论：机制正确——默认保持无鉴权（本地），**启用步骤已文档化**
+  （RAG_SERVICE 文档：设 env + Bearer 头示例）。
+
+### 69.3 tuned_config 应用方接入（Task 3）
+
+- judge 阈值解析链：**env TRINITY_JUDGE_THRESHOLD > tuned_config.json 推荐 >
+  默认 0.55**；
+- 实测：tuned_config（推荐 0.5）存在且 reason 检索正常——**自进化推荐真正
+  应用到运行参数**（闭环完整：tune 推荐 → judge 应用）。
+
+### 69.4 验证与回滚
+
+- pytest 34/34；巡检 ALL OK；API ok
+- 改动：`trinity/core/client/_pagetree.py`（阈值链）、
+  `dsh-ops/trinity-dsh-maintenance.ps1`（tune 任务）、docs/RAG_SERVICE（鉴权步骤）
+- 回滚：git checkout 对应文件；tuned_config 删除即回默认

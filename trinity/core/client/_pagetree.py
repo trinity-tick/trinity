@@ -383,8 +383,20 @@ class _PagetreeMixin:
                         if not _qwords or not _cw:
                             continue
                         _overlap = len(_qwords & _cw) / max(1, len(_qwords))
-                        # 2026-08-27: 阈值可调（TRINITY_JUDGE_THRESHOLD，默认 0.55 蒸馏调优）
-                        _thr = float(os.environ.get("TRINITY_JUDGE_THRESHOLD", "0.55"))
+                        # 2026-08-27: 阈值链 env > tuned_config > 0.55（自动调参应用方接入）
+                        _thr_s = os.environ.get("TRINITY_JUDGE_THRESHOLD", "")
+                        if not _thr_s:
+                            try:
+                                import json as _tj
+                                _tcfg = os.path.expanduser("~/.trinity/tuned_config.json")
+                                if os.path.exists(_tcfg):
+                                    _thr_s = str(_tj.load(open(_tcfg, encoding="utf-8")).get(
+                                        "recommended_threshold", "0.55"))
+                            except Exception:
+                                pass
+                        if not _thr_s:
+                            _thr_s = "0.55"
+                        _thr = float(_thr_s)
                         if _overlap >= _thr:
                             _heur.append(str(_i))
                     if _heur:
