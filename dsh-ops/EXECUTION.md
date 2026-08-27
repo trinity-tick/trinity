@@ -5838,3 +5838,32 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
   `trinity/retrieval/pagetree.py`、`scripts/pagetree_incremental.py`
 - 回滚：git checkout 对应文件；pagetree 任务可回全量（改回 build_memory_pagetree）
 
+---
+
+## 55. 建议全执行轮（2026-08-27，增量实况 + continue_on_error + 阈值 0.55 A/B）
+
+> 执行建议三项。
+
+### 55.1 页树增量实况观察（Task 1）
+
+- 维护链 `-Tasks pagetree` **真实执行**（周四 → 增量分支）：
+  window 检查 13 条新增 → added=1（12 条此前已归属）→ **耗时 1.2s**；
+- 每日增量分支在维护链日常运转验证通过。
+
+### 55.2 编排升级：continue_on_error（Task 2）
+
+- 动作支持 `continue_on_error: true`（失败不中断链）与 `name`（日志/审计更清晰）；
+- 实测：白名单拒绝动作 → "failed but continue" → 后续动作照常执行 ✓。
+
+### 55.3 judge 蒸馏阈值调优（Task 3）
+
+- 阈值可调：`TRINITY_JUDGE_THRESHOLD`（默认 **0.55**，从 0.6 下调）；
+- **holdout A/B：R@10 = 0.5474——与基线一致（不降指标）**；
+- 收益：更多候选启发式选中（更低重叠即跳过 LLM）——LLM 调用进一步减少。
+
+### 55.4 验证与回滚
+
+- pytest 27/27；巡检 ALL OK；API ok
+- 改动：`trinity/automation/engine.py`、`trinity/core/client/_pagetree.py`
+- 回滚：git checkout 对应文件；阈值可 `TRINITY_JUDGE_THRESHOLD=0.6` 回原值
+

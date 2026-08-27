@@ -377,7 +377,9 @@ class _PagetreeMixin:
                         if not _qwords or not _cw:
                             continue
                         _overlap = len(_qwords & _cw) / max(1, len(_qwords))
-                        if _overlap >= 0.6:
+                        # 2026-08-27: 阈值可调（TRINITY_JUDGE_THRESHOLD，默认 0.55 蒸馏调优）
+                        _thr = float(os.environ.get("TRINITY_JUDGE_THRESHOLD", "0.55"))
+                        if _overlap >= _thr:
                             _heur.append(str(_i))
                     if _heur:
                         content = ""
