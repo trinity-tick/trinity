@@ -6095,3 +6095,41 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - 改动：`trinity/automation/engine.py`、docs/RAG_SERVICE_20260827.md（新）、
   docs/EVOLUTION_DIRECTIONS_20260827.md（新）
 - 回滚：git checkout 对应文件
+
+---
+
+## 63. 第二阶段执行轮（2026-08-27，知识生产/联邦/合规报告/stale 动态阈值）
+
+> 执行第二阶段四项。
+
+### 63.1 知识生产（Task 1）
+
+- `scripts/knowledge_produce.py`：高价值决策/知识/总结记忆按类别聚合 →
+  docs/KNOWLEDGE_WEEKLY_*.md 周报；
+- 实测：86 条记忆 → 周报生成 ✓（知识从仓库到文档的自动化生产）。
+
+### 63.2 多实例联邦第一步（Task 2）
+
+- `trinity/agents/federation.py`：export_pack（agent/category 过滤，内容解密+
+  审计哈希）/ import_pack（content_hash 幂等去重）；
+- 实测：export 18 条（decision/knowledge）、主库重复导入 0（幂等 ✓）、dup 检查 ✓。
+
+### 63.3 合规报告一键导出（Task 3）
+
+- `scripts/compliance_report.py`：记忆规模/审计链（59k+）/检索决策样本
+  （query/hits/ms/layer）/自动化 stats → docs/COMPLIANCE_REPORT_*.md。
+
+### 63.4 价值驱动 stale 动态阈值（Task 4）
+
+- knowledge 层支持 `TRINITY_STALE_DAYS` 覆盖（默认 30，实测 45 生效）；
+  高价值源建议放宽（memory_value 0.7+ → 45-60 天）。
+
+### 63.5 环境修复 + 验证
+
+- **修复测试环境污染**：test_knowledge 的 aliases 模块级设置与 test_automation
+  的 TRINITY_HOME 冲突（组合跑失败）——改 autouse fixture（运行时设 HOME+
+  写 aliases+清缓存）——组合 46 passed 全绿；
+- pytest 46/46；巡检 ALL OK；API ok
+- 改动：knowledge_produce.py（新）/federation.py（新）/compliance_report.py（新）/
+  knowledge/__init__.py/tests/test_knowledge.py
+- 回滚：git checkout 对应文件

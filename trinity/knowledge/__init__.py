@@ -38,6 +38,9 @@ KNOWLEDGE_CATEGORIES = (
 )
 # 过时阈值（天）
 STALE_DAYS = 30.0
+# 2026-08-27（价值驱动动态阈值）：TRINITY_STALE_DAYS 覆盖；
+# 高价值源建议放宽（memory_value 0.7+ 可配 45-60）
+_STALE_DAYS_EFFECTIVE = float(os.environ.get("TRINITY_STALE_DAYS", "30"))
 
 _LOCK = threading.RLock()
 _SOURCES_CACHE: Optional[Dict[str, Any]] = None
@@ -60,7 +63,7 @@ def _source_id(rec: Dict[str, Any]) -> str:
 
 def _health(freshness_days: float, usage: int, coverage: int) -> float:
     """健康度 0-1：freshness 分（30 天内线性衰减）+ usage 分（log 归一化）。"""
-    fresh = max(0.0, 1.0 - freshness_days / STALE_DAYS)
+    fresh = max(0.0, 1.0 - freshness_days / _STALE_DAYS_EFFECTIVE)
     use = min(1.0, math.log10(usage + 1) / 2.0)
     cov = min(1.0, coverage / 20.0)
     return round(0.5 * fresh + 0.3 * use + 0.2 * cov, 3)
@@ -162,7 +165,7 @@ def build_sources(client: Any = None, emit_stale: bool = False) -> Dict[str, Any
             "newest_ts": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(a["newest_ts"])) if a["newest_ts"] else "",
             "freshness_days": round(freshness_days, 1),
             "health": _health(freshness_days, a["access_sum"], a["count"]),
-            "stale": freshness_days > STALE_DAYS,
+            "stale": freshness_days > _STALE_DAYS_EFFECTIVE,
         })
     out = {
         "built_at": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime()),
