@@ -6001,3 +6001,34 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - 改动：scripts/forgetting_score.py、trinity/core/client/_search.py、
   trinity/adapters/sqlite/_search.py、trinity/agents/mesh.py（新）
 - 回滚：git checkout 对应文件；降权默认 off；mesh 不导入即无影响
+
+---
+
+## 60. 建议全执行轮（2026-08-27，Mesh 扩展 + 降权默认开启 + 记忆资产化）
+
+> 执行建议三项。
+
+### 60.1 AgentMesh 扩展（Task 1）
+
+- pending 超时**自动回收 expired**（_expire_stale，claim/inbox 前顺带执行）；
+- 事件通知：delegation.created/claimed/completed/expired——automation 规则可响应；
+- 实测：创建→改过期→回收 expired=1、inbox 显示 expired、事件 emitted ✓。
+
+### 60.2 降权默认开启（Task 2）
+
+- **A/B：20 问 off/on 完全一致**（库无高遗忘分记忆——开启无影响）；
+- forgetting_rerank 默认 **True**（向后兼容安全）+ pytest 39/39 全绿；
+- 未来 stale 记忆出现时自动降权（pos 0→9 已验证机制）。
+
+### 60.3 方向C 记忆资产化（Task 3）
+
+- `scripts/memory_value.py`：价值分 = 访问频率0.4 + 时效0.3 + 重要性0.2 + 完整度0.1；
+- 实测：5000 条评分，TOP 0.97（决策/总结类，access 69-121 次——**高频访问
+  恰是高价值记忆**，投资回报验证）；高价值（>=0.7）47 条——优先防过期防遗忘。
+
+### 60.4 验证与回滚
+
+- pytest 39/39；巡检 ALL OK；API ok
+- 改动：`trinity/agents/mesh.py`、`trinity/core/client/_search.py`、
+  `scripts/memory_value.py`（新）
+- 回滚：git checkout 对应文件；降权可 forgetting_rerank=False 关闭

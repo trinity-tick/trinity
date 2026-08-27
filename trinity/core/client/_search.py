@@ -61,7 +61,7 @@ class _SearchMixin:
         visibility_rule: Optional[str] = None,
         reason_deep: bool = False,
         layer_hint: Optional[str] = None,
-        forgetting_rerank: bool = False,
+        forgetting_rerank: bool = True,  # 2026-08-27: A/B 20/20 一致后默认开启
     ) -> Dict[str, Any]:
         """语义记忆搜索。
 
