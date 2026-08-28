@@ -39,3 +39,27 @@ powershell -File dsh-ops\trinity-dsh-maintenance.ps1 -Tasks fulltest          # 
 ```
 
 *生成 2026-08-28*
+
+
+---
+
+## 阶段2（2026-08-28）：自动合入闭环（无人值守）✅
+
+```
+目标 → LLM 补丁 → 校验 → 写入 → git commit → fulltest 门禁（1261+）
+→ 全绿保留 / 失败自动 revert
+```
+
+**首次无人值守实战**（2026-08-28）：
+- 目标：tune_report.py --queries 加 help 文本；
+- 全程：APPLIED → auto committed: True → **GATE PASSED (1261+ tests)** → OK；
+- git log：`091e2bb auto-evolve: 给 --queries 参数添加 help 文本说明用途`——
+  **Trinity 第一次全自动改自己的代码并通过门禁**；
+- 启用方式：`evolve_patch.py --target ... --goal ... --apply --auto`。
+
+## 安全边界（阶段2）
+
+- 白名单仍限 scripts/ .py（≤20KB）；
+- 门禁失败自动 git revert（git 基线兜底）；
+- 每次自改独立 commit（可 revert 精确回退）；
+- 核心代码（trinity/）仍不在白名单（阶段 3）。
