@@ -6381,3 +6381,26 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 
 - 改动：`scripts/tune_judge.py`
 - 回滚：git checkout 对应文件
+
+---
+
+## 72. 建议执行轮（2026-08-28，tune 实况观察落地）
+
+> 执行建议：tune 每日实况长期观察。
+
+### 72.1 观察基线文档（Task 1）
+
+- docs/TUNE_OBSERVATION_20260828.md：基线（10/10 命中 / 0 LLM / 推荐 0.5 +
+  top_k 3）、4 个观察点（命中率/LLM 调用/推荐漂移/**hits 恒 0 告警信号**）、
+  检查命令、三阶段阈值策略。
+
+### 72.2 代表维护链真实执行（Task 2）
+
+- health + tune + forgetting + audit-ps1 四任务全链路：tune 10/10 → 推荐 0.5、
+  forgetting 3000 条评分、audit-ps1 ALL OK、maintenance finished OK ✓；
+- pytest 27/27；API ok。
+
+### 72.3 验证与回滚
+
+- 改动：docs/TUNE_OBSERVATION_20260828.md（新）
+- 回滚：删除文档即回
