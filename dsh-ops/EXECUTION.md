@@ -6357,3 +6357,27 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - 改动：`scripts/tune_judge.py`、`scripts/tune_report.py`（新）、
   docs/OPTIMIZATION_REPORT_20260827.md（新）
 - 回滚：git checkout 对应文件；tuned_config 删除即回默认
+
+---
+
+## 71. 建议执行轮（2026-08-28，tune 合并修复 + 实况确认）
+
+> 执行建议两项（tune 闭环完善）。
+
+### 71.1 tune_judge 合并逻辑修复（Task 1）
+
+- 根因 1：out 定义在合并代码之后（NameError 被 except 吞）——移到合并前；
+- 根因 2：PS 写入的 tuned_config 带 BOM → json.load 失败——改 utf-8-sig；
+- 根因 3（新增）：threshold 分支 `int("0.5")` ValueError → hits 恒 0——
+  修复：top_k 仅在 top_k 分支用 int(cv)，threshold 分支固定 5；
+- 验证：手动加回 threshold 后跑 top_k tune → **双推荐保留**（0.5 + top_k 3）✓。
+
+### 71.2 tune 每日实况（Task 2）
+
+- 维护链 `-Tasks tune` 真实执行：**hits 10/10（修复前 0/10）→ 推荐 0.5** ✓；
+- 巡检 ALL OK（37 任务）；pytest 27/27；API ok。
+
+### 71.3 验证与回滚
+
+- 改动：`scripts/tune_judge.py`
+- 回滚：git checkout 对应文件

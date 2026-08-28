@@ -48,9 +48,10 @@ def main() -> int:
         else:
             os.environ.pop("TRINITY_JUDGE_THRESHOLD", None)
         hits = 0
+        _tk = int(cv) if args.param == "top_k" else 5
         for q in queries:
             try:
-                r = mem.search(query=q, mode="reason", top_k=int(cv))
+                r = mem.search(query=q, mode="reason", top_k=_tk)
                 if r.get("results"):
                     hits += 1
             except Exception:
@@ -65,17 +66,17 @@ def main() -> int:
     rec = {"tuned_param": args.param, "recommended_" + args.param: best,
            "results": results,
            "updated_at": __import__("time").strftime("%Y-%m-%dT%H:%M:%S")}
+    out = os.path.expanduser("~/.trinity/tuned_config.json")
     # 2026-08-27: merge old recommendations
     try:
         import json as _j
-        _old = _j.load(open(out, encoding="utf-8")) if os.path.exists(out) else {}
+        _old = _j.load(open(out, encoding="utf-8-sig")) if os.path.exists(out) else {}
         if isinstance(_old, dict):
             for _k in ("recommended_threshold", "recommended_top_k"):
                 if _k not in rec and _k in _old:
                     rec[_k] = _old[_k]
     except Exception:
         pass
-    out = os.path.expanduser("~/.trinity/tuned_config.json")
     with open(out, "w", encoding="utf-8") as f:
         json.dump(rec, f, ensure_ascii=False, indent=1)
     print("recommended:", best, "->", out)
