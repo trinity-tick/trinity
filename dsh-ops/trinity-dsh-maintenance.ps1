@@ -610,7 +610,12 @@ import sys
 sys.path.insert(0, r"$TrinityRoot")
 import runpy
 import pytest
-rc = pytest.main(["-q", "--tb=line", r"$TrinityRoot\tests"])
+# 2026-08-28: fulltest via fulltest_gate.py (file-redirect subprocess,
+# cwd=trinity root - matches manual run environment)
+import subprocess as _sp, sys as _sys
+rc = _sp.run([_sys.executable, "-X", "utf8",
+              r"$TrinityRoot\scripts\fulltest_gate.py"],
+              cwd=r"$TrinityRoot", timeout=1800).returncode
 print("pytest rc:", rc)
 if rc == 0:
     sys.argv = ["run_evals", "--all"]

@@ -6431,3 +6431,31 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - pytest 34/34；巡检 ALL OK；API ok
 - 改动：`scripts/evolve_patch.py`（新）、`dsh-ops/trinity-dsh-maintenance.ps1`
 - 回滚：git checkout 对应文件；evolve_patch 默认不 apply（仅报告）
+
+---
+
+## 74. 阶段1收官轮（2026-08-28，fulltest 门禁全绿 + 磁盘根因）
+
+> fulltest 门禁真实执行与磁盘根因修复。
+
+### 74.1 fulltest 门禁全绿（关键成果）
+
+- **pytest 全量：1261 passed, 50 skipped, rc=0**（7min22s）+ **Eval 12/12 passed**；
+- fulltest_gate.py 文件重定向 + cwd=trinity + 完整 env（与手动一致的环境）。
+
+### 74.2 大量误失败的磁盘根因（重要发现）
+
+- fulltest 曾报 17-78 failed + 152 errors——**根因是 C 盘满**（free 0.17GB）：
+  pytest cache/临时文件写失败 → 大量误失败（非代码问题）；
+- **元凶**：AppData\Local\Temp **72.5GB 长期堆积**——清理后 **free 80GB**；
+- 同步清理：旧备份 11 个（3GB→保留 3）+ compact 副本 + pip cache 858MB。
+
+### 74.3 运维建议（固化）
+
+- Temp 定期清理（建议入维护链或系统清理计划）；
+- 磁盘 <5GB 时 fulltest/评测结果不可信（先清理再跑）；
+- fulltest 门禁命令：`-Tasks fulltest`（约 8-10 分钟）。
+
+### 74.4 验证
+
+- fulltest 1261 passed + eval 12/12；巡检 ALL OK；pytest 27/27（专项）
