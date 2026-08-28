@@ -27,8 +27,8 @@ _QUERIES = [
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--queries", type=int, default=12)
-    ap.add_argument("--param", default="threshold", choices=["threshold", "top_k"])
+    ap.add_argument("--queries", type=int, default=12, help="要测试的查询数量（默认12）")
+    ap.add_argument("--param", default="threshold", choices=["threshold", "top_k"], help="要调优的参数")
     args = ap.parse_args()
     import trinity.core.client._pagetree as PT
     from trinity import Trinity

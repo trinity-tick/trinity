@@ -610,7 +610,7 @@ import sys
 sys.path.insert(0, r"$TrinityRoot")
 import runpy
 import pytest
-rc = pytest.main(["-q", "--tb=line", "tests"])
+rc = pytest.main(["-q", "--tb=line", r"$TrinityRoot\tests"])
 print("pytest rc:", rc)
 if rc == 0:
     sys.argv = ["run_evals", "--all"]
