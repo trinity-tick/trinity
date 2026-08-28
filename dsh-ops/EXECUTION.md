@@ -6404,3 +6404,30 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 
 - 改动：docs/TUNE_OBSERVATION_20260828.md（新）
 - 回滚：删除文档即回
+
+---
+
+## 73. 阶段1执行轮（2026-08-28，evolve_patch + fulltest 门禁）
+
+> 执行代码自改路线图阶段 1 前置两项。
+
+### 73.1 evolve_patch.py（Task 1，代码自改最小版）
+
+- `scripts/evolve_patch.py`：目标（scripts/ 白名单 .py + 目标描述）→ LLM 生成
+  **文本替换补丁**（REPLACE/WITH 块）→ 唯一匹配校验 → py_compile 冒烟 →
+  保存 temp/patches/ → 报告；`--apply` 验证通过才写入；
+- 演进：diff 模式（LLM hunk 行号不准 → git apply corrupt）→ **文本替换模式**
+  （短块约束 1-3 行 + 3 次重试）——更稳；
+- 实测：生成→校验→APPLIED→应用后编译 OK ✓（副本目标验证）；
+- **意义：自进化从"调参"到"改代码"的桥梁就绪**（人工确认合入为默认）。
+
+### 73.2 fulltest 门禁（Task 2）
+
+- 维护链新增 `-Tasks fulltest`（pytest 全量 + eval 12 一键——补丁验证门禁）；
+- PARSE OK + 巡检 ALL OK（38 任务三件套齐全）+ DryRun 通过。
+
+### 73.3 验证与回滚
+
+- pytest 34/34；巡检 ALL OK；API ok
+- 改动：`scripts/evolve_patch.py`（新）、`dsh-ops/trinity-dsh-maintenance.ps1`
+- 回滚：git checkout 对应文件；evolve_patch 默认不 apply（仅报告）
