@@ -28,6 +28,7 @@ def main() -> int:
     ap.add_argument("--target", required=True)
     ap.add_argument("--goal", required=True)
     ap.add_argument("--apply", action="store_true", help="验证通过后写入文件")
+    ap.add_argument("--auto", action="store_true", help="阶段2：写入+fulltest 门禁+自动 commit（失败回滚）")
     args = ap.parse_args()
 
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -120,6 +121,29 @@ def main() -> int:
         with open(target, "w", encoding="utf-8") as f:
             f.write(patched)
         print("APPLIED (validated + written)")
+    # 2026-08-28（阶段2）：auto 模式——合入+门禁+自动 commit/回滚
+    if ok and args.auto and args.apply:
+        gt = subprocess.run(["git", "-C", _TRINITY_ROOT, "status", "--porcelain"],
+                            capture_output=True, text=True, timeout=30)
+        if gt.stdout.strip():
+            subprocess.run(["git", "-C", _TRINITY_ROOT, "add", "-A"], timeout=30)
+            cm = subprocess.run(["git", "-C", _TRINITY_ROOT, "commit", "-m",
+                                 "auto-evolve: " + args.goal[:60]],
+                                capture_output=True, text=True, timeout=60)
+            print("auto committed:", cm.returncode == 0)
+            # 门禁：fulltest（约 10 分钟）
+            gate = subprocess.run([sys.executable, "-X", "utf8",
+                                   os.path.join(_TRINITY_ROOT, "scripts", "fulltest_gate.py")],
+                                  cwd=_TRINITY_ROOT, timeout=1800)
+            if gate.returncode != 0:
+                print("GATE FAILED - reverting")
+                subprocess.run(["git", "-C", _TRINITY_ROOT, "revert", "--no-edit", "HEAD"],
+                               capture_output=True, timeout=60)
+                ok = False
+            else:
+                print("GATE PASSED (1261+ tests)")
+        else:
+            print("auto: no changes to commit")
     print("RESULT:", "OK" if ok else "REJECTED")
     return 0 if ok else 1
 
