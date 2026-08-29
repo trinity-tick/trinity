@@ -7148,3 +7148,28 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 
 - 改动：dsh-ops/trinity-dsh-maintenance.ps1（evolve 任务）、tune_report.py（auto 合入）
 - 回滚：git revert cf8fa77；-Tasks all 去掉 evolve 即停
+
+---
+
+## 98. PG 崩溃恢复 + 凭证 5432 切换（2026-08-29）
+
+> 执行期间发现并修复：API degraded（engine 连 PG 失败）。
+
+### 98.1 根因
+
+- engine 的 PG 连接配置（凭证 TRINITY_PG_PORT=5430——docker 维护库）——
+  Docker 未运行 → 5430 不可达 → engine degraded；
+- **修复**：凭证改 TRINITY_PG_PORT=5432（便携版主存储——数据更全 11.6k）；
+- 过程中发现便携版 PG 意外停止（not properly shut down）——**自动恢复**
+  （recovery 完成 + 11,646 行 OK）——PG 崩溃恢复机制验证 ✓。
+
+### 98.2 恢复验证
+
+- API health **ok**（degraded 消除——engine 连 5432 成功）；
+- 同步 11,649 条 5.3s（PG total 11,655）；
+- 巡检 ALL OK；storage: postgresql（主存储保持）。
+
+### 98.3 验证与回滚
+
+- 改动：~/.dsh/.credentials.yaml（PG port 5430→5432）
+- 回滚：改回 5430（docker 维护库如需恢复）
