@@ -325,11 +325,21 @@ class _PagetreeMixin:
             if not key and _lla():
                 key = "local"  # 本地判题标记（零成本、无网络依赖）
             if key:
+                # 2026-08-29（GEN-MS）：MS 类目专用组装——命中记忆按时间排序 + 加长截断
+                _ms_mode = os.environ.get("TRINITY_MS_ASSEMBLY", "on") != "off"
+                if _ms_mode:
+                    _sorted = sorted(
+                        ordered[:max_candidates],
+                        key=lambda r: str(r.get("created_at") or ""),
+                        reverse=True)
+                else:
+                    _sorted = ordered[:max_candidates]
+                _clip = 400 if _ms_mode else 280
                 cand_text = "\n".join(
-                    f"[{i}] {str(r.get('content', ''))[:280]}"
+                    f"[{i}] {str(r.get('content', ''))[:_clip]}"
                     + (" [page: " + str(r.get("page_path", "")).split("/")[-1].strip() + "]"
                        if r.get("page_path") else "")
-                    for i, r in enumerate(ordered[:max_candidates])
+                    for i, r in enumerate(_sorted)
                 )
                 _is_changes_q = any(
                     k in query.lower()
@@ -359,6 +369,12 @@ class _PagetreeMixin:
                     "3. Select exactly " + str(top_k) + " items when available (at least 3).\n"
                     # 2026-08-26（下一步建议）：事件规则只进 deep 模式——类目化实测（v5 0.710 < v3 0.752）：规则 4 对 KU/TR 也有副作用；deep 模式（v4 配置）才带规则 4（MS 0.237 + holdout 0.663）。
                     + (cond_rule if _deep else "")
+                    # 2026-08-29 (GEN-MS): multi-session fact rule (TRINITY_MS_ASSEMBLY)
+                    + ("4. The question spans MULTIPLE sessions: select ALL excerpts "
+                       "containing distinct relevant facts (not just one), and prefer "
+                       "excerpts in chronological order." + chr(10)
+                       if os.environ.get("TRINITY_MS_ASSEMBLY", "on") != "off" else "")
+
                     + 'Reply ONLY with JSON: {"selected": ["<idx>", ...]} where idx are '
                     + "the item numbers from the list, best first."
                 )

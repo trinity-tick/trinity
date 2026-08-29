@@ -6530,3 +6530,33 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - 改动：`trinity/llm/client.py`（local 路由）、`trinity/core/client/_pagetree.py`
   （local-first+key 门槛）、`scripts/ms_diagnose.py`（新）
 - 回滚：git checkout 对应文件；本地路由自动探测（Ollama 停即回退云端）
+
+---
+
+## 78. GEN-MS 第二步（2026-08-29，MS 组装 + prompt + A/B）
+
+> GEN-MS 专项第二步（MS 组装改进 + prompt + A/B 验证）。
+
+### 78.1 MS 专用组装（Task 1）
+
+- cand_text 组装：MS 模式下命中记忆**按时间排序** + 截断加长 280→400
+  （多事实需要更完整上下文）；TRINITY_MS_ASSEMBLY=off 可关；
+
+### 78.2 MS 判题 prompt（Task 2）
+
+- sys_msg 增加**多事实规则 4**：跨会话问题选 ALL 相关事实片段（非单条）+
+  时间顺序优先——judge 选中面更宽。
+
+### 78.3 MS A/B 结果（Task 3，诚实记录）
+
+- 8 条 multi-session 真题：ON 8/8 命中 llm=14 / OFF 8/8 命中 llm=14——
+  **检索面/判题选中面无差异**；
+- **归因修正**：MS 0.237 的差距不在检索命中面、也不在 judge 选中——
+  **在答案生成环节**（判题选中后 LLM 生成的答案质量）——GEN-MS 下一步
+  = 答案生成 prompt/策略（非 judge/非检索）。
+
+### 78.4 验证与回滚
+
+- pytest 27/27；巡检此前 ALL OK；API ok
+- 改动：`trinity/core/client/_pagetree.py`（MS 组装+prompt）
+- 回滚：git checkout；TRINITY_MS_ASSEMBLY=off 即关
