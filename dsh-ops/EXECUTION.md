@@ -7061,3 +7061,31 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 
 - 改动：scripts/evolve_patch.py（占位符+双块强制）
 - 回滚：git checkout evolve_patch.py
+
+---
+
+## 95. 递归闭环第二轮（2026-08-29，match 容错 + 持续提升）
+
+> 执行递归闭环第二轮：old 文本两级匹配（match 失败优化）。
+
+### 95.1 两级匹配（完成）
+
+- 精确 count==1 → **行归一化匹配**（strip 行尾空白 → 定位 → 用原文重建精确
+  old 保证替换准确）→ 仍失败安全拒绝；
+- 单元验证：exact 0 → norm 1 → 重建 count 1 ✓（行尾空白差异容忍）。
+
+### 95.2 A/B 结果（持续提升）
+
+- 改后 3 次：**2/3 OK**（无 match 拒绝——match 失败消除）；
+- stats 累积 12 runs / **ok 5**（从 ok 3 → 5，格式修复 + match 容错组合）；
+- 残余：format 失败仍有（LLM 输出波动——stats 建议持续观察）。
+
+### 95.3 意义
+
+- 递归闭环第二轮收益：match 容错让 old 精确性问题缓解；
+- **成功路径更稳**：格式修复（0%→67%）+ match 容错 → 综合成功率提升。
+
+### 95.4 验证与回滚
+
+- 改动：scripts/evolve_patch.py（两级匹配）
+- 回滚：git checkout evolve_patch.py

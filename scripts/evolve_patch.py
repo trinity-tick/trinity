@@ -159,7 +159,34 @@ def main() -> int:
     old_text = old_text.rstrip(chr(10))
     new_text = new_text.rstrip(chr(10))
     cnt = content.count(old_text)
+    # 2026-08-29 (recursive round 2): two-level matching - exact, then line-normalized
     if cnt != 1:
+        _norm_old = chr(10).join(ln.rstrip() for ln in old_text.split(chr(10)))
+        _norm_content = chr(10).join(ln.rstrip() for ln in content.split(chr(10)))
+        _norm_cnt = _norm_content.count(_norm_old)
+        if _norm_cnt == 1:
+            # 找到归一化匹配：用原文中对应行重建精确 old（保证替换准确）
+            _idx = _norm_content.index(_norm_old)
+            _start_line = _norm_content[: _idx].count(chr(10))
+            _old_lines = old_text.split(chr(10))
+            _exact = chr(10).join(content.split(chr(10))[_start_line: _start_line + len(_old_lines)])
+            if content.count(_exact) == 1:
+                old_text = _exact
+                cnt = 1
+                print("normalized match applied (line whitespace tolerance)")
+            else:
+                _last_err = "match"
+                _record_stats(False, _retry_count, _last_err, args.goal, None)
+                print("REJECTED: normalized match not unique")
+                return 1
+        else:
+            _last_err = "match"
+            _record_stats(False, _retry_count, _last_err, args.goal, None)
+            print("REJECTED: old text appears %d times (must be exactly 1)" % cnt)
+            return 1
+    if cnt != 1:
+        _last_err = "match"
+        _record_stats(False, _retry_count, _last_err, args.goal, None)
         print("REJECTED: old text appears %d times (must be exactly 1)" % cnt)
         return 1
 
