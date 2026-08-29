@@ -6820,3 +6820,25 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 
 - git 提交（工作区干净）；PG 主存储正式可用（全模式）；
 - 边界：hybrid full 降级 light（BM25 未索引 PG）；向量/图谱仍 SQLite 侧
+
+---
+
+## 86. 建议执行轮（2026-08-29，PG 双写镜像入链）
+
+> 执行建议：双写镜像过渡（单机内核收官最后一块）。
+
+### 86.1 sync_sqlite_to_pg.py（新）
+
+- SQLite → PG 增量镜像：幂等 upsert（ON CONFLICT DO UPDATE）+ 统计新增/更新；
+- 实测：11,635 条全量 5.1s / 0 错误（PG total 11,641）。
+
+### 86.2 维护链 -Tasks pg-sync（新）
+
+- 每日同步任务（39 任务）——PARSE OK + 巡检 ALL OK + DryRun 通过；
+- **双写镜像过渡就绪**：SQLite 权威 + PG 每日镜像（观察后正式切换）。
+
+### 86.3 状态
+
+- git 提交（工作区干净）；API ok
+- 改动：scripts/sync_sqlite_to_pg.py（新）、dsh-ops/trinity-dsh-maintenance.ps1
+- 回滚：git checkout；-Tasks all 去掉 pg-sync 即停

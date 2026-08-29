@@ -29,7 +29,7 @@ param(
 
 # 兼容 powershell -File 传参：命令行里的 "a,b,c" 会以单个字符串到达，
 # 这里统一按逗号拆分 + 校验。
-$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "usage", "rollout-audit", "audit-ps1", "forgetting", "produce", "federation-sync", "tune", "fulltest", "all")  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
+$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "usage", "rollout-audit", "audit-ps1", "forgetting", "produce", "federation-sync", "tune", "fulltest", "pg-sync", "all")  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
 $normalized = @()
 foreach ($t in $Tasks) { $normalized += $t.Split(',') }
 $normalized = $normalized | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
@@ -625,6 +625,16 @@ else:
 "@
 $fulltestPrompt = "运行 pytest 全量 + eval 12（全量测试门禁），汇报通过数。"
 
+# PG 镜像同步（2026-08-29 双写过渡）：SQLite → PG 每日增量 upsert
+$pgSyncCmd = @"
+import sys
+sys.path.insert(0, r"$TrinityRoot")
+import runpy
+sys.argv = ["sync_sqlite_to_pg"]
+runpy.run_path(r"$TrinityRoot\scripts\sync_sqlite_to_pg.py", run_name="__main__")
+"@
+$pgSyncPrompt = "运行 SQLite → PG 镜像同步（增量 upsert），汇报新增/更新数与 PG 总量。"
+
 # ── 选择任务 ──────────────────────────────────────────────────────────────
 if ($Tasks -contains "all") { $Tasks = @("health", "evolution", "mirror", "decay", "tiers", "consolidate", "dedup", "sync", "compact", "pagetree", "backup", "selftest") }
 if ($Tasks -contains "compress") { $Tasks = @($Tasks | Where-Object { $_ -ne "compress" }) + "decay" }
@@ -675,6 +685,7 @@ foreach ($t in $Tasks) {
         "federation-sync" { Invoke-Task -Name "federation-sync" -DirectCommand $federationSyncCmd -DshPrompt $federationSyncPrompt }  # 2026-08-27 联邦同步
         "tune"      { Invoke-Task -Name "tune"      -DirectCommand $tuneCmd      -DshPrompt $tunePrompt }  # 2026-08-27 自动调参
         "fulltest"  { Invoke-Task -Name "fulltest"  -LeaseJob "fulltest"  -DirectCommand $fulltestCmd  -DshPrompt $fulltestPrompt }  # 2026-08-28 全量门禁
+        "pg-sync"  { Invoke-Task -Name "pg-sync"  -DirectCommand $pgSyncCmd  -DshPrompt $pgSyncPrompt }  # 2026-08-29 PG 镜像
         "backup"    { Write-Log "backup: WAL 安全备份到 ~/.trinity/backups (保留 14 天)"; & "$PSScriptRoot\trinity-backup.ps1" 2>&1 | ForEach-Object { Write-Log $_ } }
         "evolve-env" { Write-Log "evolve-env: 应用自进化采纳 env（evolve_env.json → 进程环境，白名单校验）"; & "$PSScriptRootpply_evolve_env.ps1" -Show 2>&1 | ForEach-Object { Write-Log $_ } }  # 2026-08-25 缺口A
         "consolidate-temporal" { $consArgs = @("--days", "1"); if ((Get-Date).DayOfWeek -eq "Sunday") { $consArgs = @("--days", "7", "--weekly") }; Write-Log "consolidate-temporal: 时间层级巩固（TiMem 式；daily 每日，Sunday 加 weekly）"; & "$Py" "$TrinityRoot\scripts\consolidate_temporal.py" @consArgs 2>&1 | ForEach-Object { Write-Log $_ } }  # 2026-08-25 TiMem 式
