@@ -6796,3 +6796,27 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - 改动：trinity/adapters/postgresql.py（NULL 兼容+params 顺序）、~/.trinity/pgdata
 - 回滚：git checkout adapter；PG 停用即回 SQLite（默认）
 
+---
+
+## 85. 建议执行轮（2026-08-29，PG 全模式 + 切换指南）
+
+> 执行建议：hybrid 通道 PG 化 + PG 正式切换评估。
+
+### 85.1 hybrid PG 化（完成）
+
+- search_hybrid 对 PG adapter 强制 light 路径（BM25 内存索引未构建 PG——避免
+  5 通道空转退化）；
+- **长查询 any-word ILIKE**：jieba 分词 → 任一词 OR 匹配（相邻模式 0 → 621
+  命中）——中文长查询恢复；
+- **验证：PG 全模式通**——hybrid short 3 / hybrid long 3 / keyword 3 /
+  reason 3 / write+read 3 / 审计干净。
+
+### 85.2 PG 正式切换评估（完成）
+
+- docs/PG_SWITCH_GUIDE_20260829.md：三选一切换（单进程/服务级/双写镜像推荐）+
+  回滚方案（env 移除即回 SQLite——SQLite 从未被破坏）+ 验证清单 + 边界。
+
+### 85.3 状态
+
+- git 提交（工作区干净）；PG 主存储正式可用（全模式）；
+- 边界：hybrid full 降级 light（BM25 未索引 PG）；向量/图谱仍 SQLite 侧
