@@ -476,7 +476,11 @@ class PostgreSQLAdapter(StorageAdapter):
         persona_id: Optional[str] = None,
         tenant_id: Optional[str] = None,
         agent_id: Optional[str] = None,
+        app_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+        category: Optional[str] = None,
         top_k: int = 10,
+        **kwargs: Any,
     ) -> List[Dict[str, Any]]:
         import psycopg2.extras
 
@@ -492,19 +496,29 @@ class PostgreSQLAdapter(StorageAdapter):
         if agent_id:
             conditions.append("agent_id = %s")
             params.append(agent_id)
+        if app_id:
+            conditions.append("app_id = %s")
+            params.append(app_id)
+        if category:
+            conditions.append("category = %s")
+            params.append(category)
 
         where = " AND ".join(conditions)
-        params.extend([query, query, top_k])
+        # 2026-08-29: CJK fallback - to_tsvector('simple') misses Chinese; use ILIKE
+        params.extend([query, query, query, "%" + query + "%", top_k])
 
         with self._get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 cur.execute(f"""
                     SELECT *,
-                           ts_rank(to_tsvector('simple', content),
-                                   plainto_tsquery('simple', %s)) as score
+                           CASE WHEN to_tsvector('simple', content) @@ plainto_tsquery('simple', %s)
+                                THEN ts_rank(to_tsvector('simple', content),
+                                             plainto_tsquery('simple', %s))
+                                ELSE 0.1 END as score
                     FROM memories
                     WHERE {where}
-                      AND to_tsvector('simple', content) @@ plainto_tsquery('simple', %s)
+                      AND (to_tsvector('simple', content) @@ plainto_tsquery('simple', %s)
+                           OR content ILIKE %s)
                     ORDER BY score DESC, importance DESC, created_at DESC
                     LIMIT %s
                 """, params)

@@ -6728,3 +6728,40 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - 改动：scripts/evolve_patch.py（白名单）
 - PG 受阻：环境问题，待系统侧处理
 
+---
+
+## 83. P1 单机内核 → PG 主存储升级（2026-08-29，完成）
+
+> 用便携版 PG 完成主存储升级（系统服务版 0xC0000142 崩溃——便携版绕过）。
+
+### 83.1 PG 部署
+
+- 用户提供便携版 PG（Desktop\pgsql）——initdb 到 ~/.trinity/pgdata，
+  **autovacuum=off** 启动（避免 0xC0000142 worker 崩溃——环境问题绕行）；
+- 创建 trinity 角色/库（UTF8）+ psycopg2 连接验证（PG 18.6 ✓）。
+
+### 83.2 数据迁移（SQLite → PG）
+
+- 全量迁移：**SQLite 11,632 条 → PG（4.3s，0 错误）**；
+- schema 对齐：35 列（自动从 SQLite PRAGMA 补列）+ memory_versions/audit_log 表。
+
+### 83.3 adapter 修复与验证
+
+- search_memories 兼容 app_id/session_id/category 参数（Trinity 包装层调用）；
+- **CJK 检索修复**：to_tsvector('simple') 不含中文——加 ILIKE 回退（468 条命中）；
+- 参数占位符修复（5 个 %s）；
+- **验证**：adapter 层检索 3 命中 ✓ / ingest 写入 ✓ / SQL ILIKE 468 ✓。
+
+### 83.4 边界（诚实记录）
+
+- Trinity 包装层（keyword 模式）对 PG 返回 0——包装层非 SQLite adapter 的
+  支持有限（channel/层过滤依赖 SQLite 特性）——**adapter 层达标，包装层待后续**；
+- 主存储切换方式：TRINITY_PG_URL env + adapter=postgresql（可选，非默认）；
+- SQLite 仍为运行时权威库（加密/FTS/维护链依赖）——PG 为可选主存储/镜像。
+
+### 83.5 验证与回滚
+
+- 改动：trinity/adapters/postgresql.py（参数兼容+CJK 检索）、
+  scripts/migrate_sqlite_to_pg.py（既有）、~/.trinity/pgdata（新）
+- 回滚：git checkout adapter；PG 停用即回 SQLite（默认）
+
