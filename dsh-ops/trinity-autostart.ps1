@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Trinity DSH 自启循环 — 无需管理员权限的"计划任务"替代品。
 
@@ -40,7 +40,7 @@ function Write-Log {
 }
 
 function Invoke-Script {
-    param([string]$Path, [string[]]$ArgsList, [string]$Label)
+    param([string]$Path, [string[]]$ArgsList, [string]$Label, [int]$TimeoutSec = 600)
     try {
         # 2026-08-15 修复：改用文件重定向 + Wait-Process 超时，
         # 避免 `& ... 2>&1` 管道被孙进程句柄持有导致父循环永久卡死
@@ -53,8 +53,8 @@ function Invoke-Script {
         $argList = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$Path`"")
         if ($ArgsList -and $ArgsList.Count -gt 0) { $argList += $ArgsList }
         $child = Start-Process -FilePath "powershell.exe" -ArgumentList $argList -WindowStyle Hidden -RedirectStandardOutput $outFile -RedirectStandardError $errFile -PassThru
-        try { Wait-Process -Id $child.Id -Timeout 600 -ErrorAction Stop } catch {
-            Write-Log "$Label timed out (600s) — killing" "WARN"
+        try { Wait-Process -Id $child.Id -Timeout $TimeoutSec -ErrorAction Stop } catch {
+            Write-Log "$Label timed out ($TimeoutSec) — killing" "WARN"
             Stop-Process -Id $child.Id -Force -ErrorAction SilentlyContinue
         }
         $tail = if (Test-Path $outFile) { Get-Content $outFile -Tail 1 -ErrorAction SilentlyContinue } else { $null }
@@ -87,7 +87,7 @@ while ($true) {
     # ── 每日 03:00-03:10：decay + tiers + sync（需 PG）──────────
     $today = $now.ToString("yyyyMMdd")
     if ((Test-Path $Maintenance) -and $now.Hour -eq 3 -and $now.Minute -lt 10 -and $lastDaily -ne $today) {
-        Invoke-Script -Path $Maintenance -ArgsList @("-Tasks", "mirror,decay,tiers,consolidate,dedup,sync,compact,agent-ttl,active-health,backup") -Label "maintenance(decay,tiers,sync)"
+        Invoke-Script -Path $Maintenance -ArgsList @("-Tasks", "mirror,decay,tiers,consolidate,dedup,sync,compact,agent-ttl,active-health,backup") -Label "maintenance(decay,tiers,sync)" -TimeoutSec 2400
         $lastDaily = $today
     }
 

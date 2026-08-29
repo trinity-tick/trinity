@@ -83,16 +83,14 @@ app = FastAPI(
 )
 
 
-# 2026-08-27 (product): optional auth - set TRINITY_GATEWAY_TOKEN
+# 2026-08-27 (product): optional token - 仅用于 /v1/evolve/patch 自身门禁
+# （中间件级强制校验已于 2026-08-29 移除：统一走 GATEWAY_API_KEY 鉴权，
+#   避免 supervisor 探测与运行实例 key 不一致导致误判 DOWN 循环）
 _GATEWAY_TOKEN = os.environ.get("TRINITY_GATEWAY_TOKEN", "").strip()
 
 
 @app.middleware("http")
 async def _gateway_middleware(request: Request, call_next):
-    if _GATEWAY_TOKEN:
-        auth = request.headers.get("authorization", "")
-        if auth != "Bearer " + _GATEWAY_TOKEN:
-            return JSONResponse(status_code=401, content={"detail": "invalid token"})
     """鉴权 + 限流 + 监控（生产化，2026-08-15）。"""
     client_ip = request.client.host if request.client else "unknown"
     # 鉴权

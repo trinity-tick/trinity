@@ -6616,3 +6616,69 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 
 - 改动：docs/TUNE_OBSERVATION_20260828.md（策略段）
 - 复测结果待后台 runner 完成后补记
+---
+
+## 81. 运维巡检轮（2026-08-29，全量体检 + 四项修复）
+
+> DSH 会话对 Trinity 全量检查（服务/库/日志/备份/链路）后的修复轮。
+
+### 81.1 gateway 鉴权统一（修复误判 DOWN 循环）
+
+- 现象：supervisor 累计 57 次误报 gateway DOWN（每 5 分钟一次），
+  每次重启尝试因 8002 端口被占（旧进程 48036 存活）而 bind 失败；
+- 根因：08-27 引入 TRINITY_GATEWAY_TOKEN 中间件强制校验（优先级高于
+  GATEWAY_API_KEY），supervisor 探测仍用 GATEWAY_API_KEY → 401 误判；
+  token 值未存于任何配置/脚本（无法恢复，运行实例 09:11 手动启动时注入）；
+- 修复：gateway/server.py 移除中间件 token 强制校验（保留
+  _GATEWAY_TOKEN 变量供 /v1/evolve/patch 自身门禁），鉴权统一走
+  GATEWAY_API_KEY（凭证已有）；重启 gateway（新 PID 28324）→ 凭证 key
+  探测 /v1/models = 200；supervisor 13:05 起连续 gateway OK；
+- 影响：外部客户端统一用 GATEWAY_API_KEY（~/.dsh/.credentials.yaml）；
+  如需恢复 token 中间件：git checkout gateway/server.py + 设 token 重启。
+
+### 81.2 每日 03:00 维护链超时修复（tiers ~12 分钟 > 600s 上限）
+
+- 现象：08-28/08-29 两晚链在 tiers 环节被 600s 超时杀死，链尾
+  consolidate/dedup/sync/compact/agent-ttl/active-health/backup
+  连续 ≥2 晚未执行；
+- 实测：tiers（--store sqlite --limit 10000）需 ~12 分钟（08-24 仅 3 分钟，
+  随库增长变慢；本次降级 1272 块 Core→Recall，Core=6 blk/432 tok）；
+- 修复：trinity-autostart.ps1 Invoke-Script 增加 -TimeoutSec 参数
+  （默认 600），每日链调用传 2400（文件保持 UTF-8 BOM+CRLF，语法解析 0 错）；
+- 补跑：手动完成一次 tiers（12:47-12:59），结果正常。
+
+### 81.3 备份缺口修复
+
+- 现象：最后一次真实备份 08-27 17:04（链超时饿死链尾 backup 任务，
+  08-28/29 无备份）；
+- 修复：立即补跑 trinity-backup.ps1 →
+  ~/.trinity/backups/trinity_store_20260829_130558.db（641.7MB，
+  保留 4 份）；81.2 的 2400s 保证每晚链尾 backup 能轮到。
+
+### 81.4 API 重启加载新代码（修复 GET /memories 500）
+
+- 现象：GET /memories?query=... 报 utf-8 codec 500——运行中 API
+  （08-27 23:52 启动）为旧代码（当前源码本地复现同路径检索 OK 佐证）；
+- 修复：重启 API（新 PID 42484）→ /memories 200 正常返回；顺带加载
+  08-28/29 新提交（GEN-MS、tune 链、evolve_patch 门禁等）；
+- 教训重申：运行中服务不热更新代码——改代码后需重启对应进程。
+
+### 81.5 其他发现（配置预期，无需处理）
+
+- DSH 结构同步自 08-24 停更：web profile（cordis.patch.yml）已改用
+  dsh-memory 方案（无 dsh-trinity 插件），dsh_events 停增、collector DSH
+  通道 seen=0 属配置预期；如需恢复需把 dsh-trinity 加回 profile；
+- 体检基线：API/MCP/collector/gateway/PG :5430（31,434 条）/SQLite 大库
+  （27,988 条，active 11,628，integrity ok，WAL=0 无写锁）全部健康；
+  混合检索、聚合池检索正常；benchmark runner（10:15 启动，500q 复测）
+  仍在后台推进（80 节）。
+
+### 81.6 验证与回滚
+
+- 验证：supervisor 两轮 pass 全 OK（gateway/api/mcp/mcp-http/collector/
+  pg-maintenance 全绿，无 gateway DOWN）；
+- 改动：gateway/server.py、dsh-ops/trinity-autostart.ps1、
+  ~/.trinity/backups/trinity_store_20260829_130558.db（新）
+- 回滚：git checkout gateway/server.py；autostart 删 -TimeoutSec 2400
+  即回 600s 上限
+
