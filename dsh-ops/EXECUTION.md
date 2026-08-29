@@ -6682,3 +6682,23 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - 回滚：git checkout gateway/server.py；autostart 删 -TimeoutSec 2400
   即回 600s 上限
 
+---
+
+## 81. 建议执行轮（2026-08-29，混合判题配置）
+
+> 执行建议：批量评测速度优化（混合判题）。
+
+### 81.1 runner --judge 混合模式（Task）
+
+- longmemeval_runner 新增 `--judge heuristic|llm`（默认 llm 语义 judge；
+  heuristic = difflib 重叠/包含判定，无 LLM——批量快速 smoke 用）；
+- 实测：10 问 90.9s（含检索+生成——judge 零 LLM）；QA 0.0（heuristic 对推理型
+  答案过严——**质量权衡记录**：heuristic 仅 smoke/进度，正式成绩用 llm）；
+- 修坑：插入块缩进两处（else 块内缩进 + jv 分支缩进）；
+- 结论：混合策略落地——**批量评测 = 启发式 smoke + 正式 llm**（云端）+ 长尾
+  本地（Ollama）三档可配。
+
+### 81.2 状态
+
+- 500q seed 555 复测仍在后台（本地判题慢——CPU 2.7h+ 推进中）
+

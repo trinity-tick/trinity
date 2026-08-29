@@ -19,6 +19,7 @@ parser.add_argument("--limit", type=int, default=0, help="0=all 500")
 parser.add_argument("--top-k", type=int, default=10)
 parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--qa", action="store_true", help="enable QA accuracy (DeepSeek judge)")
+parser.add_argument("--judge", default="llm", choices=["llm", "heuristic"], help="QA judge mode (heuristic = fast bulk, no LLM)")
 parser.add_argument("--out", default=r"C:\Users\Administrator\.trinity\bench-official\lme_s_results.json")
 args = parser.parse_args()
 
@@ -159,13 +160,24 @@ for qi, q in enumerate(data):
             if (qa_raw or "").strip().upper() == "UNKNOWN":
                 qa_correct = False
             else:
+                # 2026-08-29 (bulk): heuristic judge - overlap based, no LLM
+                _heuristic_ok = None
+                if args.judge == "heuristic":
+                    import difflib as _dl
+                    _exp = (answer or "").strip()
+                    _got = (qa_raw or "").strip()
+                    _sim = _dl.SequenceMatcher(None, _exp, _got).ratio()
+                    _heuristic_ok = _sim >= 0.5 or (_exp and _exp in (_got or ""))
                 j_sys = ("You are a strict but fair judge. Decide if the ANSWER semantically "
                          "matches the EXPECTED answer (same fact/value/intent/advice-direction, "
                          "paraphrasing ok; preference-style answers match if the same preference "
                          "or recommendation direction is expressed). Reply ONLY with YES or NO.")
                 j_usr = "ANSWER: " + qa_raw + "\n" + "EXPECTED: " + expected
                 try:
-                    jv = llm_chat(j_sys, j_usr, max_tokens=8).strip().upper()
+                    if _heuristic_ok is not None:
+                        jv = "YES" if _heuristic_ok else "NO"
+                    else:
+                        jv = llm_chat(j_sys, j_usr, max_tokens=8).strip().upper()
                     qa_correct = jv.startswith("YES")
                 except Exception:
                     norm = lambda s: (s or "").strip().lower()
