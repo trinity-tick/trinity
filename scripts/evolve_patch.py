@@ -131,9 +131,17 @@ def main() -> int:
     _retry_count = 0
     _last_err = ""
     for attempt in range(3):
+        _msg = prompt
+        if attempt > 0 and out:
+            # 2026-08-29 (recursive round 3): attach failure feedback for context learning
+            _msg = prompt + chr(10) + chr(10) + (
+                "Your previous output was malformed (missing complete REPLACE/WITH blocks). "
+                "It was:" + chr(10) + out[-400:] + chr(10) + chr(10) +
+                "Now output ONLY the two complete blocks again."
+            )
         resp = chat_completion({
             "model": "deepseek-chat",
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": [{"role": "user", "content": _msg}],
             "temperature": 0.0, "max_tokens": 1200,
         }, api_key=key)
         out = resp.get("content", "")
