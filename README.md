@@ -2,6 +2,16 @@
 
 <!-- mcp-name: io.github.trinity-tick/trinity-memory -->
 
+<p align="center">
+<img alt="License" src="https://img.shields.io/badge/license-MIT-blue.svg">
+<img alt="Python" src="https://img.shields.io/badge/python-3.10%2B-blue.svg">
+<img alt="Tests" src="https://img.shields.io/badge/tests-1261%20passed-brightgreen.svg">
+<img alt="Commits" src="https://img.shields.io/badge/commits-335-green.svg">
+<img alt="Storage" src="https://img.shields.io/badge/storage-PostgreSQL%2BSQLite-orange.svg">
+<img alt="QA" src="https://img.shields.io/badge/MS%20QA-0.467-brightgreen.svg">
+</p>
+
+
 > **v8.2.1** — 治理优先的记忆操作系统：模型会换、框架会换，但记忆不换。
 > Trinity 是让记忆**可迁移、可治理、可交易**的基础设施。
 
@@ -22,6 +32,17 @@
 > 快速接入见 [docs/QUICKSTART_20260829.md](docs/QUICKSTART_20260829.md) · 
 > 完整总览见 [docs/TRINITY_SUMMARY_20260827.md](docs/TRINITY_SUMMARY_20260827.md) · 
 > 优化报告见 [docs/OPTIMIZATION_REPORT_20260827.md](docs/OPTIMIZATION_REPORT_20260827.md)。
+
+
+## ✨ 亮点（为什么值得看）
+
+1. **可证明的记忆**：每条记忆带 SHA-256 审计回执（可独立重算）+ CRDT 版本链
+   ——全网唯一 inspectable memory 完整实践；
+2. **自进化引擎**：参数自动调优 → LLM 代码补丁 → 门禁验证自动合入（无人值守）；
+3. **自运行平台**：39 任务每日维护链（健康/调参/遗忘/联邦/镜像同步）+ 自愈 + 秒级回滚；
+4. **PG 主存储**：PostgreSQL 正式主存储 + SQLite 镜像（一键切换/回滚）；
+5. **MS 类目突破**：multi-session QA 0.237→0.467（答案生成时序列表策略）；
+6. **零成本判题**：Ollama 本地 judge（云调用 0）+ 启发式蒸馏。
 
 ## Quick Start
 
