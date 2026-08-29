@@ -41,3 +41,10 @@ python scripts/fulltest_gate.py              # 手动门禁
 - 长期：auto-evolve 纳入维护链（按需触发——非定时循环）。
 
 *生成 2026-08-28*
+
+## 回放验证（2026-08-29，首次安全网实测）
+
+- 对 auto-evolve commit 091e2bb 执行 git revert → 文件恢复原状 ✓
+→ revert the revert → 补丁恢复（help 行恢复）✓ 编译 OK ✓；
+- **结论：安全网真实可用**（门禁失败时的 revert 路径已实证）；
+- git log 新增 Revert/Reapply 对（历史清晰可溯）。

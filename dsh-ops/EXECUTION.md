@@ -6483,3 +6483,23 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 ### 74.4 验证
 
 - fulltest 1261 passed + eval 12/12；巡检 ALL OK；pytest 27/27（专项）
+
+---
+
+## 76. 观察轮（2026-08-29，auto-evolve 安全网回放验证）
+
+> 观察期首次安全网实测。
+
+### 76.1 revert/恢复机制回放验证（Task 1）
+
+- 对 auto-evolve commit 091e2bb 执行 git revert → 文件恢复 ✓；
+- revert the revert → 补丁恢复 ✓ + 编译 OK ✓；
+- **结论：门禁失败时的 revert 安全网真实可用**（历史回放实证）。
+
+### 76.2 观察文档更新（Task 2）
+
+- AUTO_EVOLVE_OBSERVATION.md 加入回放验证记录。
+
+### 76.3 状态
+
+- git log：Revert/Reapply 对（历史清晰）；工作区干净；编译 OK
