@@ -69,6 +69,16 @@ $lastDaily = ""
 
 Write-Log "autostart loop started (supervisor=${SupervisorIntervalSec}s, maint=${MaintIntervalSec}s)"
 
+# 2026-08-29 (PG main storage): ensure portable PG on 5432
+if (-not (Get-NetTCPConnection -LocalPort 5432 -State Listen -ErrorAction SilentlyContinue)) {
+    $pgbin = "C:\Users\Administrator\Desktop\pgsql\bin"
+    $pgdata = "C:\Users\Administrator\.trinity\pgdata"
+    if (Test-Path "$pgbin\pg_ctl.exe" -and (Test-Path "$pgdata\PG_VERSION")) {
+        Start-Process -FilePath "$pgbin\pg_ctl.exe" -ArgumentList @("start","-D",$pgdata,"-l","$pgdata\pg.log") -WindowStyle Hidden
+        Start-Sleep 3
+    }
+}
+
 while ($true) {
     $now = Get-Date
 
