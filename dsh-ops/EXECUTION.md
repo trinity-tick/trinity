@@ -7032,3 +7032,32 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 
 - 改动：scripts/evolve_patch.py（stats 记录+报告+递归）
 - 回滚：git checkout evolve_patch.py
+
+---
+
+## 94. 递归闭环首次收益（2026-08-29，格式成功率 0%→67%）
+
+> 执行递归补丁应用——stats 建议驱动的 prompt 强化落地。
+
+### 94.1 根因链（format 失败的三层原因）
+
+1. **长 prompt 输出截断**：文件全文塞 prompt → 模型复制 prompt 结构
+   （占位符当字面量）——**占位符 <old>/<new> → [OLD_TEXT]/[NEW_TEXT]**；
+2. **漏掉 WITH 块**：模型只输出 REPLACE 块——**规则 5 强制两块必须完整输出**；
+3. 残余：old 文本精确性（match 失败——下一轮优化点）。
+
+### 94.2 A/B 结果（stats 前后对比）
+
+- 改前：0/3 OK（全 format 失败）；
+- **改后：2/3 OK（格式成功率 0% → 67%）**；
+- stats 累积 9 runs（ok 3/fail 6——历史数据含改前）。
+
+### 94.3 意义（递归闭环闭环验证）
+
+- **stats 建议 → prompt 强化 → 格式成功率提升——闭环真实收益**；
+- auto-evolve 的自我改进第一次产生可测量改进。
+
+### 94.4 验证与回滚
+
+- 改动：scripts/evolve_patch.py（占位符+双块强制）
+- 回滚：git checkout evolve_patch.py

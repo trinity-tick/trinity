@@ -107,13 +107,25 @@ def main() -> int:
         "FILE CONTENT:" + chr(10) + content + chr(10) + chr(10) +
         "OUTPUT EXACTLY this format (no other text):" + chr(10) +
         "REPLACE_START" + chr(10) +
-        "<exact old text to replace, copied verbatim from the file>" + chr(10) +
+        "[OLD_TEXT]" + chr(10) +
         "REPLACE_END" + chr(10) +
         "WITH_START" + chr(10) +
-        "<new text>" + chr(10) +
+        "[NEW_TEXT]" + chr(10) +
         "WITH_END" + chr(10) + chr(10) +
-        "Rules: old text must appear EXACTLY once in the file; keep changes minimal and safe. "
-        "IMPORTANT: keep the old text SHORT (1-3 lines max, copied exactly — never truncate mid-block)."
+        "EXAMPLE (if replacing a one-line call):" + chr(10) +
+        "REPLACE_START" + chr(10) +
+        "    old_function_call()" + chr(10) +
+        "REPLACE_END" + chr(10) +
+        "WITH_START" + chr(10) +
+        "    new_function_call()  # improved" + chr(10) +
+        "WITH_END" + chr(10) + chr(10) +
+        "Rules:" + chr(10) +
+        "1. old text must be copied CHARACTER-EXACT (including leading spaces) from the file — never paraphrase or truncate mid-block." + chr(10) +
+        "2. old text must appear EXACTLY once in the file." + chr(10) +
+        "3. Keep changes minimal and safe (no new imports unless necessary)." + chr(10) +
+        "4. Keep old text SHORT (1-3 lines max)." + chr(10) +
+        "5. Output BOTH blocks in order: REPLACE_START...REPLACE_END then WITH_START...WITH_END. BOTH are mandatory — never omit WITH." + chr(10) +
+        "6. No preamble, no explanation, no code fences."
     )
     out = ""
     _retry_count = 0
@@ -200,7 +212,13 @@ def main() -> int:
                 print("GATE PASSED (1261+ tests)")
         else:
             print("auto: no changes to commit")
-    _record_stats(ok, _retry_count, _last_err, args.goal, diff if ok else None)
+    _diff = None
+    if ok:
+        try:
+            _diff = patch_path
+        except Exception:
+            _diff = None
+    _record_stats(ok, _retry_count, _last_err, args.goal, _diff)
     print("RESULT:", "OK" if ok else "REJECTED")
     return 0 if ok else 1
 
