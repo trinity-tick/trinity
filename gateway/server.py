@@ -23,6 +23,7 @@
     uvicorn server:app --host 0.0.0.0 --port 8002
 """
 import os
+import sys
 import time as _time
 import threading as _threading
 from typing import Any, Dict, List, Optional
@@ -351,6 +352,30 @@ def compliance(days: int = 7) -> Dict[str, Any]:
     return {"object": "compliance", "days": days, "api_status": status,
             "note": "detailed report: docs/COMPLIANCE_REPORT_*.md (daily auto)"}
 
+
+# 2026-08-29 (self-edit API): evolve patch trigger (token-protected)
+class EvolvePatchIn(BaseModel):
+    target: str
+    goal: str
+    apply: bool = False
+
+
+@app.post("/v1/evolve/patch")
+def evolve_patch(body: EvolvePatchIn) -> Dict[str, Any]:
+    """外部触发自进化补丁（阶段2 API）——须 TRINITY_GATEWAY_TOKEN 且
+    evolve_patch 自身校验 scripts/ 白名单；门禁失败自动回滚。"""
+    if not _GATEWAY_TOKEN:
+        raise HTTPException(status_code=403, detail="evolve API requires TRINITY_GATEWAY_TOKEN set")
+    import subprocess as _sp
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    args = [sys.executable, "-X", "utf8", os.path.join(root, "scripts", "evolve_patch.py"),
+            "--target", body.target, "--goal", body.goal]
+    if body.apply:
+        args.append("--apply")
+    p = _sp.run(args, cwd=root, timeout=600, capture_output=True, text=True,
+                encoding="utf-8", errors="replace")
+    return {"object": "evolve_patch", "returncode": p.returncode,
+            "output": (p.stdout or "")[-1500:], "ok": p.returncode == 0}
 
 # ── 聊天代理（记忆自动注入）──────────────────────────────────────────
 

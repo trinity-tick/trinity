@@ -14,6 +14,15 @@
 > **0.467（升级口径：top-3 完整上下文 + 语义 judge，300 问）**
 > ——检索对齐头部（TiMem/Mem0 0.9+）；结果带 manifest 完全可复现。
 
+
+> 🧠 **自进化认知协作平台（2026-08-29）**：八大能力在线——记忆（加密+审计+版本链）、
+> 知识层（198 源）、自进化引擎（记忆/系统/代码三类指标）、自动化编排（8 规则+全编排）、
+> AgentMesh 协作（委托+订阅+配额）、记忆资产化、联邦同步、RAG 服务化（/v1/retrieval）。
+> **代码自改三级达成**（参数/脚本/自动合入，fulltest 门禁保障）。
+> 快速接入见 [docs/QUICKSTART_20260829.md](docs/QUICKSTART_20260829.md) · 
+> 完整总览见 [docs/TRINITY_SUMMARY_20260827.md](docs/TRINITY_SUMMARY_20260827.md) · 
+> 优化报告见 [docs/OPTIMIZATION_REPORT_20260827.md](docs/OPTIMIZATION_REPORT_20260827.md)。
+
 ## Quick Start
 
 ```bash
