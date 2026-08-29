@@ -23,7 +23,7 @@ _QUERIES = [
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--queries", type=int, default=10, help="要评估的查询数量（默认: 10，最大: %d）" % len(_QUERIES))
+    ap.add_argument("--queries", type=int, default=10)
     args = ap.parse_args()
     import trinity.core.client._pagetree as PT
     from trinity import Trinity
