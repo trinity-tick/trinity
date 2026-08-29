@@ -25,6 +25,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--queries", type=int, default=10, help="要评估的查询数量（默认: 10，最大: %d）" % len(_QUERIES))
     args = ap.parse_args()
+    if args.queries < 1:
+        args.queries = 1
     import trinity.core.client._pagetree as PT
     from trinity import Trinity
     mem = Trinity(adapter="sqlite")
