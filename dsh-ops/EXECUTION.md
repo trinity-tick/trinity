@@ -6893,3 +6893,34 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 
 - 改动：scripts/switch_storage.py（新）
 - 回滚：git checkout；切回 sqlite 即回（默认）
+
+---
+
+## 89. PG 正式切换完成（2026-08-29，里程碑）
+
+> 执行建议：一键正式切换——**PG 成为 API 主存储**（里程碑）。
+
+### 89.1 supervisor 注入补全
+
+- 凭证注入列表加 TRINITY_STORAGE_BACKEND（API/MCP 子进程继承 env）；
+- PARSE OK（BOM 规范化）。
+
+### 89.2 正式切换执行
+
+- `switch_storage.py to postgresql`（持久化）→ 重启 API 8001（PG-backed）；
+- **全验证通过**：
+  - /health ok（engine healthy）；
+  - /memory/search/explain 返回 PG 数据（mem_711a71...）✓；
+  - /agents/memory/search total=3（hybrid PG-backed）✓；
+- 坑：/memory/search 端点不存在（用 /memory/search/explain 与
+  /agents/memory/search——之前 0 是端点路径错误非存储问题）。
+
+### 89.3 回滚预案（就绪）
+
+- `switch_storage.py to sqlite` + 重启 = 秒级回滚（SQLite 数据完好）；
+- 每日 pg-sync 镜像继续（PG 为正式 + 镜像双向保障）。
+
+### 89.4 验证与回滚
+
+- 改动：dsh-ops/trinity-supervisor.ps1（注入列表）、~/.dsh/.credentials.yaml
+- 回滚：switch_storage.py to sqlite + 重启（秒级）
