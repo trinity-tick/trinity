@@ -33,8 +33,11 @@ def main() -> int:
 
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     target = os.path.normpath(os.path.join(_TRINITY_ROOT, args.target))
-    if not target.startswith(os.path.join(_TRINITY_ROOT, "scripts")) or not target.endswith(".py"):
-        print("REJECTED: target must be under scripts/ and .py")
+    # 2026-08-29（阶段2.5）：白名单扩展——scripts/ 全目录 + tests/ 辅助文件
+    _allowed = (os.path.join(_TRINITY_ROOT, "scripts"),
+                os.path.join(_TRINITY_ROOT, "tests"))
+    if not any(target.startswith(p) for p in _allowed) or not target.endswith(".py"):
+        print("REJECTED: target must be under scripts/ or tests/ and .py")
         return 2
     if not os.path.exists(target):
         print("REJECTED: target not found:", target)
