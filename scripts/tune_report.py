@@ -22,6 +22,9 @@ _QUERIES = [
 
 
 def main() -> int:
+    if not _QUERIES:
+        print("No queries available for evaluation.")
+        return 1
     ap = argparse.ArgumentParser()
     ap.add_argument("--queries", type=int, default=10, help="要评估的查询数量（默认: 10，最大: %d）" % len(_QUERIES))
     args = ap.parse_args()
