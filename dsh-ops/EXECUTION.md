@@ -6262,6 +6262,30 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 
 ---
 
+## 75. 阶段2收官轮（2026-08-28，观察基线 + 阶段3 设计稿）
+
+> auto-evolve 长期观察 + 下一站设计。
+
+### 75.1 auto-evolve 观察基线（Task 1）
+
+- docs/AUTO_EVOLVE_OBSERVATION.md：基线（首次无人值守 2026-08-28）、5 观察点
+  （门禁失败率/补丁质量/白名单遵守/commit 增长/git 健康）、告警信号
+  （失败率>50%/越界修改/门禁超时）、检查命令。
+
+### 75.2 阶段3 前置设计稿（Task 2）
+
+- docs/PHASE3_DESIGN_CORE_SELF_EDIT.md：核心代码受控自改的**双环境基准 A/B**
+  设计（fresh 环境基准对比 + 300q/holdout 自动回归 + 白名单分级 + approval
+  人工闸门）——**未实施**（阶段 2 稳定 4 周后启动）。
+
+### 75.3 状态
+
+- pytest 22/22（此前）；巡检 ALL OK；git 提交（文档）
+- 改动：docs/AUTO_EVOLVE_OBSERVATION.md（新）、docs/PHASE3_DESIGN_CORE_SELF_EDIT.md（新）
+- 回滚：删除文档即回
+
+---
+
 ## 68. 建议全执行轮（2026-08-27，联邦一致性 + 自动调参 + 对外产品化）
 
 > 执行建议三项（评价后的差距补齐）。
