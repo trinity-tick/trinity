@@ -37,7 +37,7 @@ $StateFile = Join-Path $LogDir "dsh-supervisor-state.json"
 # ── 凭证注入：从 ~/.dsh/.credentials.yaml 注入敏感环境变量（未设置时），
 #    供 Start-Process 拉起的 api/mcp 子进程继承（继承当前进程环境）。
 . (Join-Path $PSScriptRoot "dsh-credentials.ps1")
-foreach ($cred in @("TRINITY_PG_HOST", "TRINITY_PG_PORT", "TRINITY_PG_DB", "TRINITY_PG_USER", "TRINITY_PG_PASSWORD", "TRINITY_API_KEY", "TRINITY_STORE", "GATEWAY_API_KEY")) {  # 2026-08-17 安全加固：注入 gateway 鉴权 key
+foreach ($cred in @("TRINITY_PG_HOST", "TRINITY_PG_PORT", "TRINITY_PG_DB", "TRINITY_PG_USER", "TRINITY_PG_PASSWORD", "TRINITY_API_KEY", "TRINITY_STORE", "TRINITY_STORAGE_BACKEND", "GATEWAY_API_KEY")) {  # 2026-08-17 安全加固：注入 gateway 鉴权 key
     if (-not [Environment]::GetEnvironmentVariable($cred, "Process")) {
         $v = Get-DshCredential $cred
         if ($v) { [Environment]::SetEnvironmentVariable($cred, $v, "Process") }
