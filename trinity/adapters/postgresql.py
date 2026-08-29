@@ -491,10 +491,11 @@ class PostgreSQLAdapter(StorageAdapter):
             conditions.append("persona_id = %s")
             params.append(persona_id)
         if tenant_id:
-            conditions.append("tenant_id = %s")
+            # 2026-08-29: NULL 记忆全局可见（与 SQLite 行为一致——迁移数据 tenant_id 为 NULL）
+            conditions.append("(tenant_id = %s OR tenant_id IS NULL)")
             params.append(tenant_id)
         if agent_id:
-            conditions.append("agent_id = %s")
+            conditions.append("(agent_id = %s OR agent_id IS NULL)")
             params.append(agent_id)
         if app_id:
             conditions.append("app_id = %s")
@@ -504,8 +505,8 @@ class PostgreSQLAdapter(StorageAdapter):
             params.append(category)
 
         where = " AND ".join(conditions)
-        # 2026-08-29: CJK fallback - to_tsvector('simple') misses Chinese; use ILIKE
-        params.extend([query, query, query, "%" + query + "%", top_k])
+        # 2026-08-29: params order = SELECT placeholders first (2), then WHERE, then tail
+        params = [query, query] + params + [query, "%" + query + "%", top_k]
 
         with self._get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:

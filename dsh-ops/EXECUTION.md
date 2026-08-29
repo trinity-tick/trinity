@@ -6765,3 +6765,34 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
   scripts/migrate_sqlite_to_pg.py（既有）、~/.trinity/pgdata（新）
 - 回滚：git checkout adapter；PG 停用即回 SQLite（默认）
 
+---
+
+## 84. 包装层 PG 支持完成（2026-08-29，PG 主存储全链路）
+
+> 建议执行：包装层 PG 支持（keyword 通道适配）——PG 主存储正式可用。
+
+### 84.1 根因链（0 命中的三连环）
+
+1. **tenant 过滤**：包装层传 tenant_id='default'，迁移数据 tenant_id 全 NULL →
+   严格匹配 0 命中 → **NULL 兼容**（(tenant_id=%s OR tenant_id IS NULL)，agent 同）；
+2. **params 顺序**：SELECT 的 %s（ts_rank/CASE WHEN）在 WHERE 之前——params 顺序
+   错位 → **params = [query×2] + where_params + [query, %query%, top_k]**；
+3. **audit 列**：audit_log 重建为 adapter 期望 schema（id/timestamp/checksum/prev_checksum）。
+
+### 84.2 验证（全链路）
+
+- keyword 3 命中 ✓ / reason 3（mode=llm 本地 judge）✓ / write+read 3 ✓；
+- 无审计错误（audit 链完整——链式 SHA-256 可追溯）；
+- **PG 主存储正式可用**：TRINITY_PG_URL + adapter=postgresql 全功能（检索/判题/
+  写入/回读/审计）。
+
+### 84.3 边界
+
+- hybrid 模式仍依赖 SQLite 通道（BM25/向量未索引 PG）——keyword/reason 已通；
+- SQLite 仍为默认（加密/FTS/维护链依赖）；PG 为完整可选主存储。
+
+### 84.4 验证与回滚
+
+- 改动：trinity/adapters/postgresql.py（NULL 兼容+params 顺序）、~/.trinity/pgdata
+- 回滚：git checkout adapter；PG 停用即回 SQLite（默认）
+
