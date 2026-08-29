@@ -7120,3 +7120,31 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 
 - 改动：scripts/evolve_patch.py（重试反馈）
 - 回滚：git checkout evolve_patch.py
+
+---
+
+## 97. 递归闭环真实使用（2026-08-29，无人值守合入 + 每日自改入链）
+
+> 执行递归闭环稳定运转：真实目标 --auto + 维护链接入。
+
+### 97.1 真实目标无人值守（里程碑）
+
+- auto-evolve --auto（生成→门禁→自动合入）：tune_report.py 加 queries
+  最小值保护——**commit cf8fa77 自动合入**（门禁通过才 commit）；
+- **Trinity 无人值守改进真实代码**（防御性 guard——非演示目标）。
+
+### 97.2 维护链 -Tasks evolve（40 任务）
+
+- 每日 auto-evolve 真实小目标（--apply --auto 无人值守，门禁+回滚保障）；
+- PARSE OK + 巡检 ALL OK + DryRun 通过；
+- **每日自改成为维护链常态任务**（40 任务——健康/调参/遗忘/同步/自改）。
+
+### 97.3 意义
+
+- 递归闭环从"演示"到"生产"：每天自动生成补丁→门禁→合入（或回滚）；
+- **Trinity 现在每天都会自己改进自己**（有门禁、有回滚、有 stats 记录）。
+
+### 97.4 验证与回滚
+
+- 改动：dsh-ops/trinity-dsh-maintenance.ps1（evolve 任务）、tune_report.py（auto 合入）
+- 回滚：git revert cf8fa77；-Tasks all 去掉 evolve 即停
