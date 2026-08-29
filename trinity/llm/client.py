@@ -157,6 +157,44 @@ def cache_hit_stats(usage: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+# 2026-08-29（P0 本地 judge）：Ollama 本地路由（网络免疫 + 成本↓）
+_LOCAL_BASE = os.environ.get("TRINITY_LOCAL_LLM_BASE", "http://127.0.0.1:11434/v1")
+_LOCAL_MODEL = os.environ.get("TRINITY_LOCAL_LLM_MODEL", "qwen3:4b")
+_local_ok: Optional[bool] = None  # None=未探测
+
+
+def local_llm_available() -> bool:
+    """探测 Ollama 本地服务（一次探测，缓存结果）。"""
+    global _local_ok
+    if _local_ok is not None:
+        return _local_ok
+    try:
+        import urllib.request as _ur
+        base_root = _LOCAL_BASE.rsplit("/v1", 1)[0]
+        with _ur.urlopen(base_root + "/api/tags", timeout=3) as _r:
+            _local_ok = (_r.status == 200)
+    except Exception:
+        _local_ok = False
+    return _local_ok
+
+
+def chat_completion_local(payload: Dict[str, Any], timeout: int = 120) -> Dict[str, Any]:
+    """本地 Ollama 判题（OpenAI 兼容端点）。失败抛异常（调用方回退云端）。"""
+    import urllib.request as _ur
+    import json as _j
+    body = dict(payload)
+    body["model"] = _LOCAL_MODEL
+    req = _ur.Request(_LOCAL_BASE + "/chat/completions",
+                      data=_j.dumps(body).encode("utf-8"),
+                      headers={"Content-Type": "application/json"})
+    with _ur.urlopen(req, timeout=timeout) as resp:
+        data = _j.loads(resp.read().decode("utf-8"))
+    msg = (data.get("choices") or [{}])[0].get("message", {})
+    return {"content": msg.get("content", ""), "reasoning": "",
+            "finish_reason": data.get("choices", [{}])[0].get("finish_reason", ""), "model": _LOCAL_MODEL,
+            "usage": data.get("usage", {})}
+
+
 def chat_completion(
     payload: Dict[str, Any],
     api_key: Optional[str] = None,

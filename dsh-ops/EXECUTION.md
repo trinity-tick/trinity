@@ -6503,3 +6503,30 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 ### 76.3 状态
 
 - git log：Revert/Reapply 对（历史清晰）；工作区干净；编译 OK
+
+---
+
+## 77. P0 执行轮（2026-08-29，本地 judge + MS 归因诊断）
+
+> 执行评价落地 P0 两项（短板 2/3 直接回应）。
+
+### 77.1 Ollama 本地 judge（Task 1，短板 2 修复第一步）
+
+- llm/client 新增 **local 路由**：local_llm_available（Ollama 探测）+
+  chat_completion_local（qwen3:4b，OpenAI 兼容 :11434/v1）；
+- _pagetree 判题改为 **local-first**（Ollama 可用→本地，失败回退云端）+ **key 门槛
+  放开**（本地可用时无云端 key 也可判题——key="local" 标记）；
+- 实测：local available=True、**mode=llm、云调用 0**（本地 qwen3:4b 判题成功）；
+- 意义：**判题网络免疫 + 零成本**（短板 2 直接回应）。
+
+### 77.2 MS 归因诊断（Task 2，GEN-MS 第一步）
+
+- `scripts/ms_diagnose.py`：MS 类目（133 题）抽样检索诊断；
+- 实测：**8 样本检索面全命中**（kw=10/hy=10）——**检索无问题，差距确认在生成侧**
+  （与 37.4 judge 证伪结论一致）——GEN-MS 下一步=MS 专用上下文组装+类目 prompt。
+
+### 77.3 验证与回滚
+
+- 改动：`trinity/llm/client.py`（local 路由）、`trinity/core/client/_pagetree.py`
+  （local-first+key 门槛）、`scripts/ms_diagnose.py`（新）
+- 回滚：git checkout 对应文件；本地路由自动探测（Ollama 停即回退云端）

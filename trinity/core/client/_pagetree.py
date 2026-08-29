@@ -307,13 +307,23 @@ class _PagetreeMixin:
         llm_used = False
         selected_ids: List[str] = []
         try:
-            from trinity.llm.client import chat_completion as _cc_impl, resolve_api_key
+            from trinity.llm.client import chat_completion as _cc_impl, resolve_api_key, local_llm_available, chat_completion_local
             def chat_completion(*_a, **_k):
                 global _JUDGE_LLM_CALLS
                 _JUDGE_LLM_CALLS += 1
+                # 2026-08-29 (P0 local judge): Ollama first, cloud fallback
+                if local_llm_available():
+                    try:
+                        return chat_completion_local(*_a, **_k)
+                    except Exception:
+                        pass
                 return _cc_impl(*_a, **_k)
 
             key = resolve_api_key()
+            # 2026-08-29 (P0): 本地 Ollama 可用时无需云端 key 也可判题
+            from trinity.llm.client import local_llm_available as _lla
+            if not key and _lla():
+                key = "local"  # 本地判题标记（零成本、无网络依赖）
             if key:
                 cand_text = "\n".join(
                     f"[{i}] {str(r.get('content', ''))[:280]}"
