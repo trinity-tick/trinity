@@ -6924,3 +6924,29 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 
 - 改动：dsh-ops/trinity-supervisor.ps1（注入列表）、~/.dsh/.credentials.yaml
 - 回滚：switch_storage.py to sqlite + 重启（秒级）
+
+---
+
+## 90. PG 全服务覆盖验证（2026-08-29）
+
+> 执行建议：PG 主存储稳定性观察第一轮（全服务覆盖确认）。
+
+### 90.1 gateway 自动 PG ✓
+
+- /v1/retrieval（Bearer key）返回 3 条 PG 数据（走 API 8001 → 自动 PG）；
+- 401 是 gateway 自身鉴权（GATEWAY_API_KEY 设了——带 key 即通）。
+
+### 90.2 MCP 同切闭环 ✓
+
+- MCP 用 Trinity() 构造——STORAGE_BACKEND env 全局生效（supervisor 注入 →
+  子进程继承 → PG）——**拉起即 PG（自动闭环）**。
+
+### 90.3 维护链健康 + 双向同步 ✓
+
+- health + pg-sync 任务：11,639 条同步 5.1s / 0 错误 / PG total 11,645；
+- **PG 主存储 + SQLite 镜像双向保障闭环**。
+
+### 90.4 状态
+
+- API ok（PG-backed）、gateway ok、维护链 ok；
+- 无异常——正式切换后观察第一轮通过
