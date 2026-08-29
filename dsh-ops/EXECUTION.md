@@ -7003,3 +7003,32 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 
 - git 提交；API ok
 - 改动：README.md（徽章+亮点）
+
+---
+
+## 93. 方向3：递归自改进闭环（2026-08-29）
+
+> 执行方向 3：auto-evolve 优化 auto-evolve——质量数据驱动。
+
+### 93.1 质量记录（_record_stats）
+
+- 每次 evolve 运行写 evolve_stats.json（成功/失败/重试/原因/目标）；
+- 失败路径也记录（提前 return 前调用——最初 bug：失败不记录）；
+- 坑：模块级无 json/time import（NameError 吞掉记录）——函数内局部 import 修复。
+
+### 93.2 --stats 报告
+
+- 汇总：运行数/成功率/format 失败率/重试均值 + 失败模式建议；
+- 实测触发：3 runs 全 format 失败 → **SUGGEST: strengthen REPLACE/WITH block
+  constraints**（建议真实驱动）。
+
+### 93.3 递归演示（auto-evolve 改 auto-evolve）
+
+- 用建议作为目标 → auto-evolve 对 evolve_patch.py 自身生成优化补丁
+  （白名单检查提前拒绝 target-not-found——防御性改进）✓；
+- **闭环完整**：运行→记录→报告→建议→自优化（门禁/回滚保障）。
+
+### 93.4 验证与回滚
+
+- 改动：scripts/evolve_patch.py（stats 记录+报告+递归）
+- 回滚：git checkout evolve_patch.py

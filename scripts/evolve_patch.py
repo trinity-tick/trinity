@@ -23,15 +23,64 @@ os.environ.setdefault("TRINITY_MEMORY_ENABLED", "0")
 _PATCH_DIR = os.path.join(_TRINITY_ROOT, "temp", "patches")
 
 
+def _record_stats(ok, retries, last_err, goal, diff):
+    """Record one evolve run quality stats (recursive self-improvement data)."""
+    import json as _json
+    import time as _time
+    try:
+        _stats_path = os.path.join(_TRINITY_ROOT, "temp", "patches", "evolve_stats.json")
+        _entries = []
+        if os.path.exists(_stats_path):
+            try:
+                _entries = _json.load(open(_stats_path, encoding="utf-8"))
+            except Exception:
+                _entries = []
+        _entries.append({"ts": _time.strftime("%Y-%m-%dT%H:%M:%S"), "ok": ok,
+                         "retries": retries, "reason": last_err or ("ok" if ok else "other"),
+                         "patch_lines": diff.count(chr(10)) if diff else 0, "goal": goal[:60]})
+        _entries = _entries[-50:]
+        with open(_stats_path, "w", encoding="utf-8") as f:
+            _json.dump(_entries, f, ensure_ascii=False, indent=1)
+    except Exception as _e:
+        print("STATS_ERR:", type(_e).__name__, str(_e)[:120])
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--target", required=True)
     ap.add_argument("--goal", required=True)
     ap.add_argument("--apply", action="store_true", help="验证通过后写入文件")
     ap.add_argument("--auto", action="store_true", help="阶段2：写入+fulltest 门禁+自动 commit（失败回滚）")
+    ap.add_argument("--stats", action="store_true", help="递归自改进：汇总补丁质量+失败模式+改进建议")
     args = ap.parse_args()
 
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+    # 2026-08-29 (recursive): stats report mode
+    if args.stats:
+        import json as _json
+        _stats_path = os.path.join(_TRINITY_ROOT, "temp", "patches", "evolve_stats.json")
+        entries = []
+        if os.path.exists(_stats_path):
+            try:
+                entries = _json.load(open(_stats_path, encoding="utf-8"))
+            except Exception:
+                entries = []
+        n = len(entries)
+        ok_n = sum(1 for e in entries if e.get("ok"))
+        fmt_fail = sum(1 for e in entries if not e.get("ok") and e.get("reason") == "format")
+        retries = [e.get("retries", 0) for e in entries]
+        print("evolve stats: " + str(n) + " runs | ok " + str(ok_n) + " | fail " + str(n - ok_n) + " | format-fail " + str(fmt_fail))
+        if retries:
+            print("retries avg: " + str(sum(retries) / len(retries))[:4] + " | max " + str(max(retries)))
+        if n >= 3 and fmt_fail / max(1, n) > 0.3:
+            print("SUGGEST: format-fail high - strengthen REPLACE/WITH block constraints in prompt")
+        elif n >= 3 and (n - ok_n) / max(1, n) > 0.3:
+            print("SUGGEST: overall fail high - check LLM quality / target complexity")
+        else:
+            print("SUGGEST: quality good - keep observing; try higher-value targets")
+        return 0
+
     target = os.path.normpath(os.path.join(_TRINITY_ROOT, args.target))
     # 2026-08-29（阶段2.5）：白名单扩展——scripts/ 全目录 + tests/ 辅助文件
     _allowed = (os.path.join(_TRINITY_ROOT, "scripts"),
@@ -67,6 +116,8 @@ def main() -> int:
         "IMPORTANT: keep the old text SHORT (1-3 lines max, copied exactly — never truncate mid-block)."
     )
     out = ""
+    _retry_count = 0
+    _last_err = ""
     for attempt in range(3):
         resp = chat_completion({
             "model": "deepseek-chat",
@@ -90,6 +141,8 @@ def main() -> int:
     new_text = _between("WITH_START", "WITH_END")
     if old_text is None or new_text is None:
         print("REJECTED: LLM output format invalid (missing REPLACE/WITH blocks)")
+        _last_err = "format"
+        _record_stats(False, _retry_count, _last_err, args.goal, None)
         return 1
     old_text = old_text.rstrip(chr(10))
     new_text = new_text.rstrip(chr(10))
@@ -147,6 +200,7 @@ def main() -> int:
                 print("GATE PASSED (1261+ tests)")
         else:
             print("auto: no changes to commit")
+    _record_stats(ok, _retry_count, _last_err, args.goal, diff if ok else None)
     print("RESULT:", "OK" if ok else "REJECTED")
     return 0 if ok else 1
 
