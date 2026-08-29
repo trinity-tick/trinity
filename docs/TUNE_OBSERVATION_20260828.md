@@ -33,3 +33,9 @@ python scripts/tune_report.py                                      # 效果评�
 - 告警：维护链输出 hits 异常即触发 investigation（记录 EXECUTION）。
 
 *生成 2026-08-28*
+
+## 500q 官方口径复测策略（2026-08-29 启动）
+
+- 分块跑避免 4h 卡死重演（runner 无 --offset——用 seed 区分块：555/556）；
+- MS 时序列表经验已应用到升级口径（answer_eval MS suffix 已升级）；
+- 预期：QA 0.4667（300 问）→ MS 经验推及后整体再提升。
