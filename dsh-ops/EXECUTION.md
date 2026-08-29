@@ -7228,3 +7228,30 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 ### 100.4 验证
 
 - 巡检全绿；改动：无代码（观察记录）
+
+---
+
+## 101. PG 全量迁移完成（2026-08-29，28k 含归档）
+
+> 执行 PG 全量迁移评估（含归档补齐——active 子集边界解决）。
+
+### 101.1 根因与修复
+
+- 同步脚本用 get_all_memories（只取 active）→ PG 只有 11.6k；
+- **修复**：直接 SQL 全量取数（含所有 status——archived/lme/merged/deleted）；
+- 修复 2：memory_id 空行跳过（429 条 NULL 主键失败——NotNullViolation）。
+
+### 101.2 全量同步结果
+
+- **PG total 28,017**（archived 15,979 + active 11,658 + merged 219 + deleted 161）；
+- 12.8s / 0 错误——**PG 主存储含完整数据**（active 子集边界消除）。
+
+### 101.3 意义
+
+- PG 主存储从"检索面副本"升级为"完整镜像"（历史/归档可查询）；
+- 500q 基准仍用 SQLite 同口径（历史一致）——PG 数据完整性独立验证。
+
+### 101.4 验证与回滚
+
+- 改动：scripts/sync_sqlite_to_pg.py（全量取数+空 id 跳过）
+- 回滚：git checkout sync 脚本；PG 重跑 sync 即回

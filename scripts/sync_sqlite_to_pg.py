@@ -27,9 +27,17 @@ def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
     import psycopg2
-    from trinity import Trinity
-    src = Trinity(adapter="sqlite")
-    rows = src._adapter.get_all_memories(limit=args.limit or 60000, offset=0)
+    import sqlite3 as _sq
+    # 2026-08-29 (full): direct SQL - include ALL statuses (archived/lme etc)
+    _db = os.path.join(os.path.expanduser("~/.trinity/store"), "trinity_store.db")
+    if os.environ.get("TRINITY_DB_PATH"):
+        _db = os.environ["TRINITY_DB_PATH"]
+    _conn = _sq.connect(_db)
+    _conn.row_factory = _sq.Row
+    _limit = args.limit or 100000
+    _cursor = _conn.execute("SELECT * FROM memories ORDER BY created_at DESC LIMIT ?", (_limit,))
+    rows = [dict(r) for r in _cursor.fetchall()]
+    _conn.close()
     conn = psycopg2.connect(PG_URL)
     cur = conn.cursor()
     if args.full:
@@ -47,6 +55,8 @@ def main() -> int:
         conn.commit()
     t0 = time.time(); ins = 0; upd = 0; err = 0
     for r in rows:
+        if not r.get("memory_id"):
+            continue  # 2026-08-29: skip rows without memory_id (PG PK constraint)
         try:
             cur.execute("""
                 INSERT INTO memories (memory_id, content, content_hash, persona_id,
@@ -72,8 +82,10 @@ def main() -> int:
                 ins += 1
             else:
                 upd += 1
-        except Exception:
+        except Exception as _e:
             err += 1
+            if err <= 2:
+                print("ERR:", type(_e).__name__, str(_e)[:150])
     conn.commit()
     cur.execute("SELECT count(*) FROM memories")
     total = cur.fetchone()[0]
