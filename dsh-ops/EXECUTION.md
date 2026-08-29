@@ -6869,3 +6869,27 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - 改动：trinity/core/client/_construction.py（STORAGE_BACKEND）、
   docs/PG_SWITCH_GUIDE（演练结果）
 - 回滚：git checkout _construction.py；env 不设即 SQLite（默认）
+
+---
+
+## 88. 建议执行轮（2026-08-29，一键正式切换脚本化）
+
+> 执行建议：一键正式切换（PG 切换动作脚本化）。
+
+### 88.1 scripts/switch_storage.py（新）
+
+- `status` / `to postgresql` / `to sqlite`：持久化 TRINITY_STORAGE_BACKEND
+  到凭证文件（~/.dsh/.credentials.yaml——supervisor 启动时读取注入）；
+- round-trip 验证：postgresql → status postgresql → sqlite → status sqlite ✓；
+- 重启 supervisor/API 生效；回滚=切回 sqlite（秒级）。
+
+### 88.2 意义
+
+- **正式切换 = 一条命令**：`python scripts/switch_storage.py to postgresql` +
+  重启 supervisor——PG 主存储切换动作完整脚本化；
+- SQLite 数据永不破坏（PG 是镜像副本——回滚即回）。
+
+### 88.3 验证与回滚
+
+- 改动：scripts/switch_storage.py（新）
+- 回滚：git checkout；切回 sqlite 即回（默认）
