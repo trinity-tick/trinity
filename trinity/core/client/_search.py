@@ -953,6 +953,10 @@ class _SearchMixin:
           2026-08-24（R8 P0-3）：短查询走 FTS 轻通道是引擎已验证的最优路径
           （FTS R@5=0.975 > hybrid-rrf 0.942），此前默认 off 使该性能特性空转。
         """
+        # 2026-08-29 (PG): non-SQLite adapter (PG) - force light (BM25 index not built for PG)
+        _pg_mode = self._adapter is not None and type(self._adapter).__name__.lower().find("postgres") >= 0
+        if _pg_mode:
+            routing = "light"
         env = os.environ.get("TRINITY_ADAPTIVE_ROUTING", "on").strip().lower()
         if routing == "auto":
             if env != "on":

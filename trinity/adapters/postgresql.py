@@ -505,8 +505,20 @@ class PostgreSQLAdapter(StorageAdapter):
             params.append(category)
 
         where = " AND ".join(conditions)
-        # 2026-08-29: params order = SELECT placeholders first (2), then WHERE, then tail
-        params = [query, query] + params + [query, "%" + query + "%", top_k]
+        # 2026-08-29: long CJK queries - any-word ILIKE OR (jieba split)
+        _like_clause = "content ILIKE %s"
+        _tail_params = [query, "%" + query + "%", top_k]
+        if len(query) > 8:
+            try:
+                import jieba as _jb
+                _words = [w for w in _jb.cut(query) if w.strip() and len(w.strip()) > 1][:6]
+            except Exception:
+                _words = []
+            if _words:
+                _like_clause = "(" + " OR ".join(["content ILIKE %s"] * len(_words)) + ")"
+                _tail_params = [query] + ["%" + w + "%" for w in _words] + [top_k]
+        # params order = SELECT placeholders first (2), then WHERE, then tail
+        params = [query, query] + params + _tail_params
 
         with self._get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
@@ -519,7 +531,7 @@ class PostgreSQLAdapter(StorageAdapter):
                     FROM memories
                     WHERE {where}
                       AND (to_tsvector('simple', content) @@ plainto_tsquery('simple', %s)
-                           OR content ILIKE %s)
+                           OR {_like_clause})
                     ORDER BY score DESC, importance DESC, created_at DESC
                     LIMIT %s
                 """, params)
