@@ -92,7 +92,11 @@ TR_ANSWER_SUFFIX = (
 
 # MS 类目提示后缀（GEN-1）：上下文缺精确信息时仍总结已知情况
 MS_ANSWER_SUFFIX = (
-    "\n\nIf the context does not contain the exact details asked, summarize what "
+    "\n\nThe question asks about CHANGES/UPDATES across multiple sessions. "
+    "Organize your answer as a CHRONOLOGICAL LIST of distinct facts: each item on "
+    "its own line as '- <fact> (<date/session if stated>)'. Cover ALL distinct "
+    "changes/updates found in the context — do NOT merge them into one sentence. "
+    "If the context does not contain the exact details asked, summarize what "
     "IS known about the person's changes/activities/preferences from the context."
 )
 

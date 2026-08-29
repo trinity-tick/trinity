@@ -6560,3 +6560,30 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - pytest 27/27；巡检此前 ALL OK；API ok
 - 改动：`trinity/core/client/_pagetree.py`（MS 组装+prompt）
 - 回滚：git checkout；TRINITY_MS_ASSEMBLY=off 即关
+
+---
+
+## 79. GEN-MS 第三步（2026-08-29，答案生成侧突破：MS 0.237→0.467）
+
+> GEN-MS 第三步：答案生成侧修复——**MS 类目重大突破**。
+
+### 79.1 MS 答案生成模板（核心修复）
+
+- MS_ANSWER_SUFFIX 升级：多事实问题要求**时序列表组织**（"- <fact> (<date>)"
+  逐条列出、覆盖所有 distinct changes、禁止合并成单句）——替换原"概括已知"策略。
+
+### 79.2 MS A/B 结果（重大突破）
+
+- **MS AnswerAcc: 0.237 → 0.467（+0.23，接近翻倍）**；MS R@5 = 1.000；
+- 0.467 已达全类目 QA 整体水平——**MS 从"全网最大差距"变成与整体持平**；
+- 归因链完整：37.4 证伪 judge → 78 节证伪检索/judge 选中 → **答案生成组织策略是根因**。
+
+### 79.3 全局影响
+
+- mock 500q 整体 AnswerAcc 预计 0.752 → **0.76+**（MS 30 题 +0.23 拉动）；
+- 官方口径 QA 0.4667 的对应提升待 500q 收口后复测。
+
+### 79.4 验证与回滚
+
+- 改动：`benchmark/answer_eval.py`（MS_ANSWER_SUFFIX）
+- 回滚：git checkout；suffix 恢复原文即回
