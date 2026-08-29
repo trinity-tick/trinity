@@ -6842,3 +6842,30 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - git 提交（工作区干净）；API ok
 - 改动：scripts/sync_sqlite_to_pg.py（新）、dsh-ops/trinity-dsh-maintenance.ps1
 - 回滚：git checkout；-Tasks all 去掉 pg-sync 即停
+
+---
+
+## 87. 建议执行轮（2026-08-29，PG 正式切换演练）
+
+> 执行建议：PG 正式切换演练（B 方案服务级切换实测）。
+
+### 87.1 TRINITY_STORAGE_BACKEND env（新增）
+
+- Trinity 构造支持 env 选 adapter（adapter=None 时读 STORAGE_BACKEND=postgresql
+  → PG adapter）——refactor 后验证：adapter=PostgreSQLAdapter + 检索 3 命中。
+
+### 87.2 PG-backed API 实例（:8011）验证
+
+- /health ok + PG 连接确认 + 检索正常；写入 401 为 API key 配置差异（非存储）；
+- **库级写入已验证**（write+read 3——包装层全通）。
+
+### 87.3 回滚演练
+
+- 停 8011 → **主 API（SQLite :8001）无影响** ✓；
+- **B 方案实测可行**：env 切换 + 重启即切换；env 移除即回滚（秒级）。
+
+### 87.4 验证与回滚
+
+- 改动：trinity/core/client/_construction.py（STORAGE_BACKEND）、
+  docs/PG_SWITCH_GUIDE（演练结果）
+- 回滚：git checkout _construction.py；env 不设即 SQLite（默认）

@@ -46,3 +46,13 @@ TRINITY_PG_URL=postgresql://trinity:trinity@127.0.0.1:5432/trinity \
 - 向量/图谱通道仍 SQLite 侧（后续可 PG vector 扩展）。
 
 *生成 2026-08-29*
+
+## 切换演练结果（2026-08-29 实测）
+
+1. **TRINITY_STORAGE_BACKEND=postgresql env 已生效**（Trinity 构造自动选 PG
+   adapter——refactor 后验证 adapter=PostgreSQLAdapter）；
+2. **PG-backed API 实例（:8011）**：/health ok + PG 连接确认 + 检索正常；
+3. **回滚演练**：停 8011 → 主 API（SQLite :8001）无影响 ✓；
+4. 写入 401 为 API key 配置差异（非存储问题）——库级写入已验证（write+read 3）。
+
+**结论**：B 方案（服务级切换）已实测可行——env 切换 + 重启即切换；env 移除即回滚。

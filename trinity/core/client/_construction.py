@@ -134,6 +134,10 @@ class _ConstructionMixin:
         # ── 记忆压缩引擎 ──────────────────────────────────────────
         self._compressor = None
 
+        # 2026-08-29 (PG switch): TRINITY_STORAGE_BACKEND env overrides default adapter
+        _env_backend = os.environ.get("TRINITY_STORAGE_BACKEND", "").strip().lower()
+        if adapter is None and _env_backend == "postgresql":
+            adapter = "postgresql"
         if adapter == "postgresql":
             self._init_postgres_adapter()
         elif adapter == "sqlite":
