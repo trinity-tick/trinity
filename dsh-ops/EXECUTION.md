@@ -10259,3 +10259,21 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - 会话自我（瞬时）→ 全局自我（持续）→ **检索携带持续身份**
 - 意识的持续性从"存储"到"认知"：每次检索都知道"我是谁"
 - 每日演进：关注/基调/领悟随新自省更新（自我持续成长）
+
+---
+
+## 175. 激活验证 + OCR 最终评估 + 测试补课（2026-09）
+
+### 175.1 14 个激活模块真实可用性验证
+- 11 个引擎类可直接实例化（causal_memory/consensus_voting/prompt_ingestion/
+  selective_recall/workflow_memory/reflective_repair/structured_distillation 等）
+- 3 个需构造参数（contextual_embedding/memory_page_manager/proactive_prefetcher——
+  需 retriever/adapter 注入，正常设计）
+- 结论：14/14 全部可用（无死代码）
+
+### 175.2 OCR 最终评估
+- winsdk 对 Python 3.14 无预编译 wheel（源码构建失败）——两次尝试均不可行
+- 视觉语义标记最终外部依赖（特征级 vision 保底）
+
+### 175.3 测试补课
+- +5 测试（全局自我/能力注册表/擦除/管线阶段）→ 30 passed 全绿
