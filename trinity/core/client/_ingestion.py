@@ -219,6 +219,29 @@ class _IngestionMixin:
 
         memory_id = result.get("memory_id", "")
 
+        # 2026-09 (EXECUTION 126): 写入即建图——SAGE 图谱自动摄入（异步，
+        # 节流：每 10 次写入或 60s 才 persist 一次快照，避免高频写入损耗）。
+        if memory_id and not isolated_test_write:
+            try:
+                import threading as _th
+                _gcontent = str(content or "")[:500]
+                if _gcontent.strip():
+                    def _graph_ingest(_c: str) -> None:
+                        try:
+                            eng = self.sage
+                            if eng is not None:
+                                _cnt = getattr(eng, "_turn_count", 0)
+                                eng.ingest_turn(_c, {"source": "ingest"})
+                                # 节流持久化：每 10 次或首次
+                                if _cnt % 10 == 0:
+                                    eng._persist()
+                        except Exception:
+                            pass
+                    _th.Thread(target=_graph_ingest, args=(_gcontent,),
+                               daemon=True, name="sage-ingest").start()
+            except Exception:
+                pass
+
         # 2026-09（EXECUTION 105.11）：写入即深度价值评估（系统 2 即时化）——
         # 仅当快速评估 >= 0.65（高显著候选）才异步 LLM 深度评估（成本控制：
         # 低价值/普通内容不浪费 LLM）；更新 importance + metadata；失败静默

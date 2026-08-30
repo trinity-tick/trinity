@@ -177,8 +177,8 @@ class MemoryWriter:
 
             # 简单实体提取 (大写词)
             import re
-            capital_words = set(re.findall(r'\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)\b', content))
-            capital_words = {w for w in capital_words if len(w) > 3}
+            capital_words = set(re.findall(r'\b([A-Z][A-Za-z0-9]+(?:\s[A-Z][A-Za-z0-9]+)*)\b', content))
+            capital_words = {w for w in capital_words if len(w) > 2}
 
             for word in capital_words:
                 self._write_count += 1
@@ -456,6 +456,7 @@ class SAGEGraphMemoryEngine:
             return 0
         n = 0
         try:
+            _seen_names = set()
             for ed in snap.get("entities", []):
                 ent = StructuredEntity(
                     entity_id=ed.get("entity_id") or ("e%d" % n),

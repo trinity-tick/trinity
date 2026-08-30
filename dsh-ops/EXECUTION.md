@@ -9064,3 +9064,34 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
   _search.py（图谱钩子）、_advanced.py（property 修复）
 - 回滚：git checkout 4 文件 + DROP TABLE sage_graph；
 - 后续：图谱 ingest 接写入路径（每次记忆写入自动建图）。
+---
+
+## 126. 图谱自动建图闭环（2026-09）
+
+### 126.1 目标
+
+- 上轮接通 SAGE 图谱检索；本轮：写入即建图——记忆写入自动摄入图，
+  图谱随记忆自然生长（Mem0/Zep 同级：写入侧自动提取实体关系）。
+
+### 126.2 实施（完成）
+
+- _ingestion.py ingest 成功后异步 sage_ingest（daemon 线程，节流 persist）；
+- 修复实体提取正则：大写中缀词完整保留（PostgreSQL 不再截断成 Postgre）；
+- 修复快照恢复去重（同名实体跳过）；
+- 隔离测试写入跳过建图（防污染）。
+
+### 126.3 验证
+
+- 写入 3 条记忆 → 图 6 实体 + 3 关系（PostgreSQL/Redis/DeepSeek/Ollama/Trinity）；
+- sage_query('PostgreSQL') → 命中实体；图谱召回闭环完整；
+- API health 200。
+
+### 126.4 意义
+
+- 写入→建图→召回 全自动闭环：图谱不再是人工 seed，而是随使用生长；
+- 大脑化机制 #7（图谱记忆）完整：检索通道 + 自动生长。
+
+### 126.5 验证与回滚
+
+- 改动：_ingestion.py（自动建图）、sage_graph_memory_engine.py（正则/去重）
+- 回滚：git checkout 两文件；快照可清（DELETE FROM sage_graph）。
