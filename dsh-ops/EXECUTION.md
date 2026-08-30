@@ -9261,3 +9261,11 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - 改动：_ingestion.py（postprocess 回填块）
 - 回滚：git checkout _ingestion.py（新写入不再自动回填，可跑 backfill 脚本）；
 - 后续：monitor 巡检 embedding 覆盖率（可加维护任务）。
+---
+
+## 131b. 数据完整性收尾（2026-09）
+
+- 131 轮修复后全面巡检：embeddings 28,070/28,070（100%）+ tsv_zh 补齐 42 条 →
+  28,070/28,070（100%）——**所有记忆向量+分词全覆盖**；
+- 稳态检索 763-830ms；审计链 integrity True（545）；DCPM 81 信念；
+- 守护链 OK（supervisor pass complete）；磁盘 C 100/D 466.9；WAL 受控。
