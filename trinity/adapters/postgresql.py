@@ -463,7 +463,7 @@ class PostgreSQLAdapter(StorageAdapter):
                             %s, %s::jsonb, %s,
                             %s::timestamptz, %s::timestamptz)
                 """, (memory_id, session_id, persona_id, tenant_id, agent_id, content, role,
-                      importance, tags or [], category, sha256_hash, ttl_seconds, now,
+                      importance, json.dumps(tags or [], ensure_ascii=False), category, sha256_hash, ttl_seconds, now,
                       sha256_hash, modality, json.dumps(metadata or {}, ensure_ascii=False),
                       source_uri, now, now))
 
@@ -1797,6 +1797,44 @@ class PostgreSQLAdapter(StorageAdapter):
         except Exception as e:
             logger.warning("replay_agent_session failed: %s", e)
             return []
+
+    # ── 2026-09 (EXECUTION 117): DCPM System1 信念持久化 ─────────────
+    def dcpm_store_belief(self, belief_id, subject, predicate, obj, superseded_by=None):
+        """持久化 System1 信念（跨进程可见，供夜间整合读取）。"""
+        try:
+            with self._get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO dcpm_beliefs (belief_id, subject, predicate, object, superseded_by)
+                        VALUES (%s, %s, %s, %s, %s)
+                        ON CONFLICT (belief_id) DO NOTHING
+                    """, (belief_id, subject, predicate, obj, superseded_by))
+                conn.commit()
+            return True
+        except Exception:
+            return False
+
+    def dcpm_get_beliefs(self, limit=500):
+        """读取全部持久化信念（夜间整合输入）。"""
+        import psycopg2.extras
+        try:
+            with self._get_conn() as conn:
+                with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                    cur.execute(
+                        "SELECT belief_id, subject, predicate, object, superseded_by, created_at "
+                        "FROM dcpm_beliefs ORDER BY created_at DESC LIMIT %s", (limit,))
+                    return [dict(r) for r in cur.fetchall()]
+        except Exception:
+            return []
+
+    def dcpm_count(self):
+        try:
+            with self._get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT count(*) FROM dcpm_beliefs")
+                    return int(cur.fetchone()[0])
+        except Exception:
+            return 0
 
     def verify_audit_integrity(self) -> Dict[str, Any]:
         """验证审计链完整性。"""

@@ -8745,3 +8745,43 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - 改动：trinity/core/client/_search.py（DCPM 钩子）
 - 回滚：git checkout _search.py（钩子失败静默，无数据影响）；
 - 后续：System2 接入维护链夜间任务（dcpm_consolidate → schema 落库）。
+---
+
+## 117. 大脑化第二步：DCPM System2 夜间归纳入链（2026-09）
+
+### 117.1 目标
+
+- 116 轮接通 System1（检索即记录信念）；本轮完成 System2 闭环：
+  信念持久化 → 夜间归纳 schema → 记忆落库 → 每日自动运行。
+
+### 117.2 实施（完成）
+
+- **信念持久化**：PG 新增 dcpm_beliefs 表 + adapter 方法
+  （dcpm_store_belief/dcpm_get_beliefs/dcpm_count）；search_hybrid 的
+  System1 钩子从内存改为 **PG 落库**（跨进程可见）；
+- **整合脚本** scripts/dcpm_consolidate.py：PG 读信念 → System2 归纳
+  schema + 冲突检测 + 跨域抽象 → dcpm-schema/dcpm-core 记忆落库（--write）；
+- **维护链**：新增 dcpm-consolidate 任务（带租约）+ 加入 autostart 每日链
+  （03:00 时段）——System2 真正"夜间"运行；
+- **顺带修复**：store_memory 的 tags 未 json.dumps → jsonb 列类型不匹配
+  （DatatypeMismatch）——API 路径因同步转换未暴露，直调暴露。
+
+### 117.3 验证
+
+- 4 次检索 → 4 条信念落库；System2 整合：4 信念 → 1 schema + 1 core →
+  2 条 schema 记忆落库（可检索）；
+- API 重启后检索 → dcpm_beliefs 4→5（运行时自动持久化闭环）；
+- health 200 / 检索 3 命中 / 维护链 dcpm-consolidate OK / parse 0 errors。
+
+### 117.4 意义（大脑化）
+
+- **双过程闭环完整**：检索（验证）→ System1 信念（快写，PG）→
+  System2 夜间归纳（慢，每日）→ schema 记忆 → 未来检索可命中模式；
+- System1/System2 跨进程解耦（PG 为共享信念库）——符合昼夜节律设计。
+
+### 117.5 验证与回滚
+
+- 改动：postgresql.py（dcpm 持久化 + tags 修复）、_search.py（持久化钩子）、
+  scripts/dcpm_consolidate.py（新）、maintenance/autostart（任务入链）、PG 表
+- 回滚：git checkout 3 文件；DROP TABLE dcpm_beliefs；任务从链移除；
+- 幂等：整合脚本可重跑（ON CONFLICT DO NOTHING）。

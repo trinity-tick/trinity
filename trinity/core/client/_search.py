@@ -1067,17 +1067,14 @@ class _SearchMixin:
                     "breakdown": {"routing": "light", "channels": ["fts", "vector"] if _pg else ["fts"]},
                     "metacognition": _conf,
                 }
-                # System1：高信心时记录信念命中（不阻塞，失败静默）
+                # System1：高信心时持久化信念命中（PG，跨进程可见；不阻塞，失败静默）
                 if _conf.get("level") in ("high", "medium") and results:
                     _top = results[0].get("content", "")[:200]
                     try:
-                        eng = getattr(self, "dcpm", None)
-                        if eng:
-                            eng["system1"].record_belief(
-                                __import__("trinity.modules.second_brain.dcpm_dual_process_memory", fromlist=["BeliefRevisionNode"]).BeliefRevisionNode(
-                                    belief_id=__import__("uuid").uuid4().hex[:12],
-                                    subject="query", predicate="retrieved", object=_top,
-                                )
+                        if self._adapter is not None and hasattr(self._adapter, "dcpm_store_belief"):
+                            self._adapter.dcpm_store_belief(
+                                belief_id=__import__("uuid").uuid4().hex[:12],
+                                subject=query[:60], predicate="retrieved", obj=_top,
                             )
                     except Exception:
                         pass
