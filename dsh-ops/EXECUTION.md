@@ -8675,3 +8675,37 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - C:\.trinity\store 646MB 被锁（D 有副本，PG 主存储不受影响）；
   Harness 重启后可删；
 - 重启电脑恢复链：VBS → C junction → D 真脚本（已闭环）。
+---
+
+## 115. 深扫巡检：审计链 timestamp 缺陷 + Docker 服务恢复（2026-09）
+
+### 115.1 审计链完整性缺陷（严重，已修复）
+
+- 深扫发现 /audit/integrity 持续 false：tampered 2→412；
+- 根因 ①：audit_log.timestamp 列是 **text 类型无默认值**（迁移遗留），
+  write_audit_log INSERT 不写 timestamp → 新记录 timestamp=NULL；
+- 根因 ②：verify_audit_integrity 基于 timestamp 算哈希，NULL 与原始
+  checksum 失配（校验用 None，写入时基于真实时间）——链式验证失败；
+- 修复：①write_audit_log INSERT 显式写 _now_iso（datetime.now(utc).isoformat()）
+  + 哈希 payload 含 timestamp（与 verify 对齐）；②历史 413 条 NULL 补齐
+  时间戳 + 全链 417 条按新 schema 重算 checksum（幂等脚本）；
+- 验证：integrity_ok=true / tampered=0 / null_ts=0；新写入正常。
+
+### 115.2 Docker Desktop 服务停止（已恢复）
+
+- 深扫发现 com.docker.service Stopped → 所有容器（trinity 栈 + smartcos）
+  停机；启动服务 + Docker Desktop 应用后恢复（trinity-db healthy）；
+- 可能原因：迁移期间进程清理的副作用；已确认自动恢复。
+
+### 115.3 其他检查（无异常）
+
+- 硬编码 C 路径：运行时代码仅 drill_selfheal.ps1（junction 已兼容）；
+- Python 依赖（psycopg2/jieba/fastapi/torch）OK；Ollama 14 模型 UP；
+- SQLite 镜像 D 盘 28,024 条（与 PG 差 12 属 PG 直写预期）；
+- .cache 5GB（C 盘充裕，暂不迁移）；无残留进程；计划任务正常。
+
+### 115.4 验证与回滚
+
+- 改动：trinity/adapters/postgresql.py（write_audit_log timestamp）、audit_log 数据
+- 回滚：git checkout postgresql.py（新记录回 NULL，需再重算链）；
+- 数据修复幂等（可重跑重建脚本）。

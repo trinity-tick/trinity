@@ -1705,6 +1705,7 @@ class PostgreSQLAdapter(StorageAdapter):
                     )
                     prev = cur.fetchone()
                     prev_checksum = prev[0] if prev and prev[0] else ""
+                    _now_iso = datetime.now(timezone.utc).isoformat()
 
                     # 计算链式哈希
                     payload = json.dumps({
@@ -1719,11 +1720,11 @@ class PostgreSQLAdapter(StorageAdapter):
                     chain_checksum = hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
                     cur.execute("""
-                        INSERT INTO audit_log (id, memory_id, action, agent_id, persona_id, details, checksum)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        INSERT INTO audit_log (id, memory_id, action, agent_id, persona_id, details, checksum, timestamp)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     """, (
                         audit_id, memory_id, action, agent_id, persona_id,
-                        json.dumps(details_dict), chain_checksum,
+                        json.dumps(details_dict), chain_checksum, _now_iso,
                     ))
                 conn.commit()
         except Exception as e:
