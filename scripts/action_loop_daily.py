@@ -12,7 +12,11 @@ def main():
     al = ActionLoop()
     stim = al.detect_stimuli()
     res = al.respond(stim)
+    # EXECUTION 182: 行动经验学习（成功率累积）+ 经验入记忆
+    stats = al.learn(res) if res else {}
+    exp_ok = al.experience_to_memory() if stats else False
     print(json.dumps({"stimuli": list(stim.keys()), "actions": len(res),
+                      "learned": bool(stats), "experience_memory": exp_ok,
                       "total": al.report()["actions_taken"]}, ensure_ascii=False))
     return 0
 

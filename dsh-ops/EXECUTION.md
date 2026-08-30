@@ -10392,3 +10392,20 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 ### 181.3 入链
 - action-loop 维护链任务（16 个任务）——每日自动响应刺激
 - 大脑化：从"感知-记忆"到"感知-行动"（反射弧）
+
+---
+
+## 182. 行动经验学习：条件反射（2026-09）
+
+### 182.1 实施（完成）
+- action_loop 加 learn（成功率统计）/ best_action（成功率优选）/
+  experience_to_memory（经验入记忆）
+- 大脑对应：**条件反射**（巴甫洛夫）——刺激-动作关联强化（成功升权）
+
+### 182.2 验证
+- stats: missing_vectors|backfill ok 2/fail 1 → best backfill（67% 优选）
+- 经验记忆: '[action-experience] missing_vectors|backfill 成功率66%'
+
+### 182.3 闭环（行动-学习-记忆）
+- 刺激→动作→结果→成功率学习→经验记忆→未来优选——条件反射全通
+- 每日驱动：action-loop 任务（learn + experience_to_memory）

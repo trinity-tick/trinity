@@ -167,3 +167,68 @@ class ActionLoop:
             "actions_taken": len(self.history),
             "history_tail": self.history[-5:],
         }
+
+
+    # ── 2026-09 (EXECUTION 182): 行动经验学习（条件反射）──
+    def learn(self, results: list) -> dict:
+        """从行动结果学习：更新刺激-动作成功率（巴甫洛夫式关联强化）。
+
+        每次行动后调用：成功 → 关联权重上升；失败 → 下降。
+        未来同类刺激优先选成功率高的动作。
+        """
+        stats = self._load_stats()
+        for r in results:
+            stim = r.get("stimulus", "?")
+            action = r.get("action", "?")
+            done = bool(r.get("result", {}).get("done"))
+            key = stim + "|" + action
+            s = stats.get(key, {"ok": 0, "fail": 0})
+            if done:
+                s["ok"] += 1
+            else:
+                s["fail"] += 1
+            stats[key] = s
+        self._save_stats(stats)
+        return stats
+
+    def _load_stats(self) -> dict:
+        try:
+            with open(self.action_log.replace(".json", "_stats.json"), encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+
+    def _save_stats(self, stats: dict):
+        try:
+            with open(self.action_log.replace(".json", "_stats.json"), "w", encoding="utf-8") as f:
+                json.dump(stats, f, ensure_ascii=False, indent=1)
+        except Exception:
+            pass
+
+    def best_action(self, stimulus: str) -> str:
+        """按成功率选最优动作（有学习时）；无记录回退规则映射。"""
+        stats = self._load_stats()
+        cands = [(k.split("|")[1], s) for k, s in stats.items() if k.startswith(stimulus + "|")]
+        if not cands:
+            entry = STIMULUS_ACTIONS.get(stimulus)
+            return entry[0] if entry else None
+        cands.sort(key=lambda x: (x[1]["ok"] / max(x[1]["ok"] + x[1]["fail"], 1)), reverse=True)
+        return cands[0][0]
+
+    def experience_to_memory(self) -> bool:
+        """行动经验写入记忆（经验闭环到记忆层）。"""
+        try:
+            stats = self._load_stats()
+            if not stats:
+                return False
+            summary = "；".join(
+                f"{k} 成功率{int(v['ok'] * 100 / max(v['ok'] + v['fail'], 1))}%" for k, v in stats.items()
+            )
+            sys.path.insert(0, r"D:\trinity-code")
+            from trinity import Trinity
+            m = Trinity(adapter="postgresql")
+            m.ingest("[action-experience] " + summary[:200], category="action-experience",
+                     tags=["action", "learning"], importance=0.7, wait_backfill=True)
+            return True
+        except Exception:
+            return False
