@@ -236,7 +236,15 @@ runpy.run_path(r"C:\Users\Administrator\trinity\scripts\cognition_agent.py", run
 $cognitionAgentPrompt = "运行 scripts/cognition_agent.py（主动主体：扫描开放缺口与感知事件，主动思考并沉淀记忆），汇报触发与落库统计。"
 
 $healthCmd = @"
-import subprocess, sys
+import subprocess, sys, os
+# 2026-09 (EXECUTION 111): 控制台 GBK 编码兼容——UTF-8 输出（health_check 含
+# � 替换符字符时 print 到 GBK 终端报 UnicodeEncodeError，health 误报 FAILED）
+os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
 r = subprocess.run([sys.executable, r"$TrinityRoot\health_check.py"], cwd=r"$TrinityRoot",
                    capture_output=True, text=True, encoding="utf-8", errors="replace")  # 2026-09: 显式 utf-8 解码
 print(r.stdout[-3000:] if r.stdout else "")

@@ -8514,3 +8514,43 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - 回滚：git checkout postgresql.py；DROP COLUMN content_tsv_zh + DROP INDEX
   （数据可从 content 重建，幂等）；
 - 后续：halfvec 迁移（100k 时）与 tsv_zh 无冲突。
+---
+
+## 111. 磁盘耗尽危机处置 + WAL 保留策略 + health 编码修复（2026-09）
+
+### 111.1 事故：ENOSPC（磁盘满）
+
+- 现象：maintenance 日志写入失败 ENOSPC；pg-sync err 23,369（DiskFull）；
+- 根因：**pg_wal_archive 累积 3,322 个 WAL 文件 / 51.9GB**（106 轮启用归档后
+  无保留策略；pg-sync/回填高频写入每 ~20s 切一个 WAL）；C 盘一度仅剩
+  0GB 可用（日志写失败）。
+
+### 111.2 处置（完成）
+
+- 清理：删除 >6h 的归档 WAL（2,161 个）→ 剩 1,160 / 18.1GB → **C 盘
+  空闲 37.3→71.1GB**；
+- 策略：archive_wal.py 重写——**RETENTION_HOURS=6 + MAX_FILES=1500** 双保险
+  （每日 pg_dump 全量已覆盖 PITR，6h WAL 窗口足够）；每次归档后自动清理；
+- 教训：归档启用必须同步保留策略（已入 EXECUTION 记录）。
+
+### 111.3 health 任务编码修复（完成）
+
+- 现象：health 任务 FAILED——UnicodeEncodeError: 'gbk' codec（health_check
+  输出含 \ufffd 替换符，临时脚本 print 到 GBK 终端失败）；
+- 修复：healthCmd 临时脚本加 PYTHONIOENCODING=utf-8 + stdout/stderr
+  reconfigure(encoding='utf-8', errors='replace')；
+- 验证：health OK（104.10 修过 subprocess 解码，本次修输出端）。
+
+### 111.4 数据一致性确认
+
+- pg-sync 恢复 0 错误（500 行测试 + 全量）；SQLite 28,024 vs PG 28,036
+  （差 12 为 PG 主存储直写，SQLite 单向镜像——预期行为）；
+- 全链路回归：health OK / API 检索正常 / 向量/中文通道正常。
+
+### 111.5 验证与回滚
+
+- 改动：~/.trinity/archive_wal.py（保留策略）、dsh-ops/trinity-dsh-maintenance.ps1
+  （healthCmd 编码）；
+- 回滚：archive_wal.py 还原（git 无跟踪——备份原逻辑在 EXECUTION 106）；
+  maintenance.ps1 git checkout；
+- 监控：pg_wal_archive 应稳定在 <=1500 文件 / ~24GB 内。
