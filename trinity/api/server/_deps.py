@@ -143,6 +143,14 @@ def _startup_prewarm() -> None:
                     eng.embed("warmup")
             except Exception:
                 pass
+        # 2026-09 (EXECUTION 123): jieba 词典预热——首个中文检索不再卡
+        # 1.8s（词典构建是进程级一次性，从首请求移到启动期）。
+        try:
+            import jieba as _jb
+            _jb.setLogLevel(60)
+            _jb.cut("预热中文分词词典")
+        except Exception:
+            pass
 
     _th.Thread(target=_warm, daemon=True, name="api-startup-prewarm").start()
 

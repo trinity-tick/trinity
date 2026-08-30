@@ -75,6 +75,25 @@ def llm_chat(prompt: str, max_tokens: int = 500, temperature: float = 0.3,
         return body["choices"][0]["message"]["content"]
     except Exception as e:  # noqa: BLE001
         logger.warning("llm_chat failed: %s", e)
+        # 2026-09 (EXECUTION 123): 本地降级——DeepSeek API 不可用时切
+        # Ollama 本地模型（默认 qwen3:4b，TRINITY_LLM_LOCAL_MODEL 可配；
+        # TRINITY_LLM_LOCAL_FALLBACK=0 关闭）。本地慢但保住离线可用性。
+        if os.environ.get("TRINITY_LLM_LOCAL_FALLBACK", "1") != "0":
+            try:
+                _local = os.environ.get("TRINITY_LLM_LOCAL_MODEL") or "qwen3:4b"
+                _body = json.dumps({
+                    "model": _local, "prompt": prompt, "stream": False,
+                    "options": {"temperature": temperature, "num_predict": max_tokens},
+                }).encode("utf-8")
+                _req = urllib.request.Request(
+                    "http://127.0.0.1:11434/api/generate", data=_body,
+                    headers={"Content-Type": "application/json"},
+                )
+                with urllib.request.urlopen(_req, timeout=timeout + 60) as _resp:
+                    _rb = json.loads(_resp.read().decode("utf-8"))
+                return _rb.get("response")
+            except Exception as e2:
+                logger.warning("local llm fallback failed: %s", e2)
         return None
 
 

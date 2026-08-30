@@ -8965,3 +8965,35 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - API health 200 / situation 端点 3 命中 / 冲突告警审计标记就绪；
 - 改动：_routers_explain.py（situation）、dcpm_consolidate.py（告警）
 - 回滚：git checkout 两文件。
+---
+
+## 123. 依赖闭环优化 + 性能提升 + 自包含评估（2026-09）
+
+### 123.1 依赖全景实测
+
+- 嵌入：Ollama bge-m3（本地进程，有 ONNX 降级）——**已本地化**；
+- LLM：DeepSeek API（唯一真·外部网络依赖）；rerank：本地降级链；
+- 结论：**关键路径（检索/嵌入/rerank）已完全本地**；LLM 是唯一外部依赖。
+
+### 123.2 性能优化（完成）
+
+- **embed 7,195ms → 85ms（84x）**：Ollama keep_alive 常驻（bge-m3/nomic 永久加载）；
+- **FTS SQL 0.8ms**（importance 索引命中）——1.6s 是 jieba 首次词典构建；
+- **jieba 预热**加入 API 启动（_deps.py）——首查不再卡 1.8s；
+- 稳态检索：**~1,021ms**（embed 85ms + FTS 152ms + 向量 11ms + RRF + rerank）；
+- 冷启动：首次 12-30s（BM25 构建 + reranker 首次加载，预热部分覆盖）。
+
+### 123.3 完全自包含评估
+
+- 本地 LLM 实测：qwen3:8b 51s/次（thinking 慢）——**全本地会牺牲可用性**；
+- **分层策略**：关键路径 100% 本地 + LLM 双层（DeepSeek API 快路径 →
+  Ollama qwen3:4b 降级）；llm_chat 已加本地降级（TRINITY_LLM_LOCAL_FALLBACK）
+  ——实测假 key 强制失败 → 自动本地 qwen3 返回结果；
+- 结论：**运行不依赖外部（断网可用）**，LLM 质量在断网时降级但可用。
+
+### 123.4 验证与回滚
+
+- API health 200 / 检索稳定 1s / LLM 降级链验证通过；
+- 改动：_deps.py（jieba 预热）、value_encoder.py（本地 LLM 降级）、Ollama 配置；
+- 回滚：git checkout 两文件；keep_alive 恢复默认；
+- 后续：TRINITY_PREWARM 扩展覆盖 reranker/BM25；稳态 1s → 500ms 目标。
