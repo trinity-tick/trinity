@@ -8936,3 +8936,32 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - 改动：trinity/core/client/_search.py（value_weight）
 - 回滚：git checkout _search.py；
 - 后续：500q A/B 校准 k 值；API 暴露 situation/value 参数。
+---
+
+## 122. 大脑化收尾优化：API situation + 冲突告警 + 参数校准（2026-09）
+
+### 122.1 API 层暴露 situation（完成）
+
+- /memory/search/explain 新增 situation 查询参数（透传 search_hybrid）；
+- 实测：q=数据库&situation=数据库迁移D盘部署 → top1 '模型部署到生产环境
+  Kubernetes'（情境命中）；
+- 外部调用者现可直接使用情境检索（编码特异性落地 API）。
+
+### 122.2 DCPM 冲突检测告警（完成）
+
+- dcpm_consolidate.py：collisions > 0 时写审计标记 action=dcpm_collision
+  （含 schemas/cores 详情）——运维可 /audit/query 追踪记忆矛盾；
+- 与元认知/审计链一致（可证明、可追溯）。
+
+### 122.3 参数小型校准（完成）
+
+- value_boost_k ∈ {0, 0.3, 0.6} 三档对比（5 查询 top1 importance）：
+  三档均 0.700——top1 由语义主导，价值加权不干扰 top1，仅微调中后段；
+- 确认默认 k=0.30 温和系数安全（不过度干预语义排序）；
+- synapse K1=1.0/K2=0.15 同保守区间（118 轮 A/B 已验证认知语义）。
+
+### 122.4 验证与回滚
+
+- API health 200 / situation 端点 3 命中 / 冲突告警审计标记就绪；
+- 改动：_routers_explain.py（situation）、dcpm_consolidate.py（告警）
+- 回滚：git checkout 两文件。

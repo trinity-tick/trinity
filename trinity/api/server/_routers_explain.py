@@ -170,6 +170,7 @@ async def search_explain(
     q: Optional[str] = Query(None, description="搜索查询字符串"),
     top_k: int = Query(5, description="返回结果数量（默认 5，经 clamp_top_k 钳制在 1..20）"),
     strategy: str = Query("rrf", description="融合策略: fusion / rrf / cascade"),
+    situation: Optional[str] = Query(None, description="情境文本（编码特异性：情境相关记忆优先，EXECUTION 122）"),
 ):
     """召回可解释端点（白盒调试）。
 
@@ -188,6 +189,7 @@ async def search_explain(
             query=q,
             top_k=k,
             strategy=strategy,
+            situation=situation,
         )
     except Exception as exc:  # pragma: no cover - 异常路径
         logger.error("search/explain retrieval failed: %s", exc, exc_info=True)

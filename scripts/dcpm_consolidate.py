@@ -56,6 +56,19 @@ def main():
         abstractor = CrossDomainAbstractor()
         cores = abstractor.abstract(schemas)
         print(f"schemas: {len(schemas)} | collisions: {collisions} | core: {len(cores)}")
+        # 2026-09 (EXECUTION 122): 冲突检测告警——跨域信念冲突（记忆矛盾）
+        # 写审计标记（action=dcpm_collision），运维可查 /audit/query
+        if collisions > 0:
+            try:
+                a.write_audit_log(
+                    memory_id=None, action="dcpm_collision",
+                    agent_id="dcpm-system2",
+                    details={"collisions": collisions, "schemas": len(schemas),
+                             "core_schemas": len(cores)},
+                )
+                print(f"collision alert written (audit dcpm_collision x{collisions})")
+            except Exception as e:
+                print(f"collision alert fail: {e}")
 
         if args.write:
             from trinity import Trinity
