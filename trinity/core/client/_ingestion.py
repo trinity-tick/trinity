@@ -483,6 +483,48 @@ class _IngestionMixin:
                     target=self._ann_incremental_add, args=(memory_id, content),
                     daemon=True,
                 ).start()
+            # 2026-09 (EXECUTION 131): PG 主存储向量+分词回填——新写入记忆
+            # 必须可被向量/中文检索（此前仅 backfill 脚本一次性回填，API 写入
+            # 的记忆 embedding=NULL 不可向量检索）。幂等 + 失败静默。
+            try:
+                _adp = self._adapter
+                if _adp is not None and hasattr(_adp, "set_embedding"):
+                    _tname = type(_adp).__name__.lower()
+                    if "postgres" in _tname:
+                        _eng = None
+                        try:
+                            from trinity.core.client._helpers import _get_embedding_engine
+                            _eng = _get_embedding_engine()
+                        except Exception:
+                            _eng = None
+                        if _eng is not None:
+                            _v = _eng.embed(str(content)[:500])
+                            _vec = [float(x) for x in _v]
+                            try:
+                                _adp.set_embedding(memory_id, _vec)
+                            except Exception:
+                                pass
+                        # 中文分词回填
+                        try:
+                            import jieba as _jb
+                            _jb.setLogLevel(60)
+                            _words = [w.strip() for w in _jb.cut(str(content))
+                                      if w.strip() and len(w.strip()) >= 2][:12]
+                            if _words:
+                                import psycopg2 as _pg
+                                _conn = _pg.connect(host="127.0.0.1", port=5432,
+                                                    dbname="trinity", user="trinity", password="trinity")
+                                _conn.autocommit = True
+                                _cur = _conn.cursor()
+                                _cur.execute(
+                                    "UPDATE memories SET content_tsv_zh = to_tsvector('simple', %s) WHERE memory_id = %s",
+                                    (" | ".join(_words), memory_id))
+                                _conn.close()
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
             all_ids = [memory_id] + linked_ids if memory_id else linked_ids
             pushed = self.proactive_push(all_ids)
             if result is not None:

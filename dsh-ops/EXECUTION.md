@@ -9235,3 +9235,29 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
   答案精确命中受召回窗口影响（67%@12）——量化暴露优化点；
 - 认知能力（回忆/缺口/工作记忆/价值/扰动）全部 PASS——大脑化可测；
 - 待办：LongMemEval-V2 官方数据（gated）认证后可跑完整版。
+---
+
+## 131. 修复：API 写入记忆向量/分词自动回填（2026-09）
+
+### 131.1 问题
+
+- 130 轮评测暴露：经 /memories API 写入的记忆 embedding=NULL（不可向量检索）——
+  PG 主存储的向量靠 backfill 脚本一次性回填，写入路径无自动回填；
+- 影响：所有 API 新写入记忆在向量通道不可见（FTS 中文也不分词）。
+
+### 131.2 修复
+
+- _postprocess_memory 加 PG 回填块：embed（引擎）→ set_embedding +
+  jieba 分词 → content_tsv_zh 更新；幂等 + 失败静默（daemon 线程内）；
+- 验证：新写入记忆 vec=t/tsv=t；存量 30 条缺失全部回填（remaining 0）。
+
+### 131.3 意义
+
+- 写入→可检索闭环真正完整（此前仅检索侧完整，写入侧靠人工 backfill）；
+- 与 128 轮感知回填、130 轮评测发现形成完整修复链。
+
+### 131.4 验证与回滚
+
+- 改动：_ingestion.py（postprocess 回填块）
+- 回滚：git checkout _ingestion.py（新写入不再自动回填，可跑 backfill 脚本）；
+- 后续：monitor 巡检 embedding 覆盖率（可加维护任务）。
