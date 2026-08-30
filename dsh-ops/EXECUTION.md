@@ -9890,3 +9890,28 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 
 - 工作记忆持久化 ✅ / 认知告警 ✅；剩余：LongMemEval 官方（gated）、
   OmniMemEval 上榜（需数据）。
+---
+
+## 158. 网络感知通道：Trinity 的"网络感官"（2026-09）
+
+### 158.1 实施（完成）
+
+- scripts/web_perception.py：5 个可达 RSS 源（oschina/cnblogs/jetbrains/
+  infoq/hnrss——BBC 被墙排除）定时抓取 → 标题/链接提取 → 感知入记忆
+  （channel=web）；URL 指纹幂等；零第三方依赖；
+- perception.py 加 web 通道显著性基线 0.6（默认 0.4 不过编码阈值——
+  真实 bug 修复：web 信号此前 encoded=false 被过滤）；
+- 修复 dry-run 写 state 的 bug（136 轮同款）；
+- 维护链 web-perception 任务 + 每日链。
+
+### 158.2 验证
+
+- 真实感知 15 条网络新闻（JetBrains AI Agents/CLion Roadmap/混元等）；
+- 维护链任务 OK（perceived 15）；幂等（state_size 去重）。
+
+### 158.3 意义（大脑化）
+
+- **第 4 种感官**：日志/文件/视觉/网络——Trinity 现在能实时从网络
+  获取质料（回答用户问题："能"）；
+- 感知体系完整：环境（日志/文件）+ 视觉（图像）+ 网络（RSS）——
+  感知具身 60% → **70%**。
