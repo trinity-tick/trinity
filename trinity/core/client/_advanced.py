@@ -274,6 +274,7 @@ class _AdvancedMixin:
             ("autobiographical", "trinity.brain.autobiographical"),
             ("self_assessment", "trinity.brain.self_assessment"),
             ("cognition_pipeline", "trinity.brain.cognition_pipeline"),
+            ("social_memory", "trinity.brain.social_memory"),
         ]:
             try:
                 __import__(mod)
