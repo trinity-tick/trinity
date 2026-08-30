@@ -428,6 +428,20 @@ class _SearchMixin:
         try:
             parts = []
             _lq = getattr(self, "_last_query", "")
+            # 2026-09 (EXECUTION 149): 自我模型雏形——会话身份进入情境
+            try:
+                from trinity.brain.self_model import build_identity as _bi
+                _sidm = getattr(self, "_last_session_id", None) or "default"
+                _pctx2 = None
+                if self._adapter is not None and hasattr(self._adapter, "context_load"):
+                    _pctx2 = self._adapter.context_load(_sidm)
+                _aff2 = (_pctx2 or {}).get("affect") if _pctx2 else None
+                _lq2 = (_pctx2 or {}).get("last_query", "") if _pctx2 else ""
+                _idn = _bi(_lq2 or _lq, _aff2)
+                if _idn:
+                    parts.append(_idn)
+            except Exception:
+                pass
             # EXECUTION 141: persistent context load
             _pctx = None
             if self._adapter is not None and hasattr(self._adapter, "context_load"):
@@ -1388,13 +1402,18 @@ class _SearchMixin:
                 try:
                     if self._adapter is not None and hasattr(self._adapter, 'context_save'):
                         _pp = getattr(self, '_recent_percepts', None)
-                        # EXECUTION 146: 情绪延续——查询情感状态随上下文持久化
+                        # EXECUTION 149: 情绪状态机——查询情绪 EMA 累积进会话状态
                         _aff = None
                         try:
                             from trinity.brain.affect import assess as _affassess
+                            from trinity.brain.affect_state import update_state as _upd
                             _ar = _affassess(str(query))
-                            if _ar.get("polarity") != "neu":
-                                _aff = {"valence": _ar["valence"], "polarity": _ar["polarity"]}
+                            _prev = None
+                            try:
+                                _prev = self._adapter.context_load(getattr(self, "_last_session_id", None) or "default").get("affect")
+                            except Exception:
+                                _prev = None
+                            _aff = _upd(_prev, _ar)
                         except Exception:
                             pass
                         self._adapter.context_save(str(query)[:100], _pp or [], affect=_aff,
