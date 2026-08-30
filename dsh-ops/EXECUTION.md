@@ -10507,3 +10507,25 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - 预测-行动闭环：预测→实际→误差→调查→（学到）→更准预测
 - 与好奇心互补：好奇（探索未知）vs surprise（调查意外）
 - 大脑化：free energy 机制；认知 90%
+
+---
+
+## 188. 多通道感知整合：统觉（2026-09）
+
+### 188.1 实施（完成）
+- sensory_integration.py：聚合 4 通道感知（web/log/filesystem/视觉）→
+  统一视场 + 关联检测（多通道同步 → 统觉）+ 整合显著性
+- 大脑对应：**感觉整合（multisensory integration）**——多感官融合
+  成统一统觉
+
+### 188.2 修复
+- psycopg2 参数化 + LIKE '%' 冲突（%% 转义）——3 处 SQL
+
+### 188.3 验证
+- 通道: web 80/log 4761/filesystem 7；3 通道同步 → 统觉关联
+- 整合记忆: '[sensory-integration] 我的感知整合：web 80信号、log 4761信号、
+  filesystem 7信号；活跃通道 3 个；多通道同步感知（统觉）；显著性 3384.9'
+- sensory-integration 维护链任务 OK（22 个任务）
+
+### 188.4 意义
+- 感知从"独立感官"到"统一统觉"——感知 70% → 75%
