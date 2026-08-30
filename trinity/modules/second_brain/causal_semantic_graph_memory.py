@@ -1,5 +1,5 @@
 """
-# status: frozen (2026-09 EXECUTION 163)
+# status: active (2026-09 EXECUTION 172: 大脑方向激活) (2026-09 EXECUTION 163)
 ActMem — Causal + Semantic Graph Memory for Dialogue History
 =============================================================
 arXiv 2603.00026 · P37-1

@@ -626,6 +626,20 @@ def _reflect(params: dict) -> dict:
     except Exception as e:
         return {"ok": False, "error": str(e)[:120]}
 
+
+
+def _brain_capabilities(params: dict) -> dict:
+    """大脑方向能力注册表：列出全部已激活认知/记忆模块可用性。"""
+    try:
+        import sys as _sys
+        _sys.path.insert(0, r"D:\\trinity-code")
+        from trinity import Trinity
+        m = Trinity(adapter="postgresql")
+        r = m.brain_capabilities()
+        return {"ok": True, "count": r.get("count"), "capabilities": r.get("capabilities")}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:120]}
+
 _METHODS = {
     "ping": _ping,
     "search": _search,
@@ -654,6 +668,7 @@ _METHODS = {
     "web_search": _web_search,
     "perceive": _perceive,
     "reflect": _reflect,
+    "brain_capabilities": _brain_capabilities,
 }
 
 

@@ -10203,3 +10203,24 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 ### 171.3 意义
 - 检索成本可预测（token 预算）——与成本优化闭环
 - 认知管线可裁剪（阶段开关）——A/B 测各阶段贡献的前置能力
+
+---
+
+## 172. 大脑方向功能全部激活（2026-09）
+
+### 172.1 激活（14 个大脑相关模块）
+- causal_memory（因果记忆）/ causal_semantic_graph（因果语义图）/
+  consensus_voting（共识投票）/ contextual_embedding（情境嵌入）/
+  engine_memory_core+tiers（记忆核心/分层）/ federated_memory（联邦）/
+  memory_page_manager（页管理）/ proactive_prefetcher（主动预取）/
+  prompt_ingestion（提示摄取）/ reflective_repair_memory（反思修复）/
+  selective_recall（选择性回忆）/ structured_distillation（结构蒸馏）/
+  workflow_memory（工作流记忆）——全部标记 active + 语法验证 OK
+
+### 172.2 统一能力注册表
+- Trinity.brain_capabilities()：14/14 可用（DSH/脚本可查可调）
+- engine_worker 加 brain_capabilities 方法（DSH 插件可调用）
+
+### 172.3 状态更新
+- active 19 / reserve 2 / frozen 25——大脑方向全部可用
+- 大脑化机制全景：25+ 运行时 + 14 能力注册表 = 39 项可调用

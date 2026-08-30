@@ -4,7 +4,7 @@
 # 用结构化 prompt 模板替代 engine_data_pipeline.py 中的 ad-hoc 吞入逻辑，
 # 实现五阶段可观测记忆消化管道：Extract → Filter → Dedup → Summarize → Store
 #
-# status: frozen (2026-09 EXECUTION 163)
+# status: active (2026-09 EXECUTION 172: 大脑方向激活) (2026-09 EXECUTION 163)
 # 对两篇论文:
 #   - GEM: Governed Evolving Memory for Lifelong Agent Learning (arXiv:2605.xxxxx, Mem0 2026-05)
 #   - Letta: Self-Evolving Memory for Agentic Systems (arXiv:2606.xxxxx, Letta 2026-06)

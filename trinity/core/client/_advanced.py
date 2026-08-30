@@ -246,6 +246,33 @@ class _AdvancedMixin:
             return {**eng.query(query_text), "sage": True}
         except Exception:
             return {"sage": False, "entities": [], "relations": []}
+    def brain_capabilities(self) -> Dict[str, Any]:
+        """2026-09 (EXECUTION 172): 大脑方向能力注册表——列出全部已激活
+        的认知/记忆模块及其可用性（DSH/脚本可按需调用）。"""
+        caps = {}
+        for name, mod in [
+            ("causal_memory", "trinity.modules.second_brain.causal_memory"),
+            ("causal_semantic_graph", "trinity.modules.second_brain.causal_semantic_graph_memory"),
+            ("consensus_voting", "trinity.modules.second_brain.consensus_voting"),
+            ("contextual_embedding", "trinity.modules.second_brain.contextual_embedding"),
+            ("engine_memory_core", "trinity.modules.second_brain.engine_memory_core"),
+            ("engine_memory_tiers", "trinity.modules.second_brain.engine_memory_tiers"),
+            ("federated_memory", "trinity.modules.second_brain.federated_memory"),
+            ("memory_page_manager", "trinity.modules.second_brain.memory_page_manager"),
+            ("proactive_prefetcher", "trinity.modules.second_brain.proactive_prefetcher"),
+            ("prompt_ingestion", "trinity.modules.second_brain.prompt_ingestion"),
+            ("reflective_repair_memory", "trinity.modules.second_brain.reflective_repair_memory"),
+            ("selective_recall", "trinity.modules.second_brain.selective_recall"),
+            ("structured_distillation", "trinity.modules.second_brain.structured_distillation_compressor"),
+            ("workflow_memory", "trinity.modules.second_brain.workflow_memory"),
+        ]:
+            try:
+                __import__(mod)
+                caps[name] = {"available": True}
+            except Exception as e:
+                caps[name] = {"available": False, "error": str(e)[:60]}
+        return {"capabilities": caps, "count": sum(1 for v in caps.values() if v.get("available"))}
+
     def sage_evolve(self) -> Dict[str, Any]:
         """触发 SAGE 自进化轮（图结构调整）。"""
         eng = self.sage

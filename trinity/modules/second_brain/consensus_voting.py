@@ -4,7 +4,7 @@
 # 解决 conflict_resolver.py "最新优先"策略在用户反复修正同一事实后
 # Agent 仍复述旧陈述的局限性，引入版本化快照 + 加权共识投票。
 #
-# status: frozen (2026-09 EXECUTION 163)
+# status: active (2026-09 EXECUTION 172: 大脑方向激活) (2026-09 EXECUTION 163)
 # 对标论文:
 #   - Mnemos: Self-Evolving Memory Consensus for Agentic Systems (arXiv:2607.xxxxx, SITS2026)
 #   - Consensus Memory Architecture for Multi-Source Agent Systems (SITS2026 闭门报告)

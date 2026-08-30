@@ -1,5 +1,5 @@
 """
-# status: frozen (2026-09 EXECUTION 163)
+# status: active (2026-09 EXECUTION 172: 大脑方向激活) (2026-09 EXECUTION 163)
 P5-2: Causal Reasoning Memory Engine (对标 ActMem)
 =====================================================
 
