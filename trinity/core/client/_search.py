@@ -716,6 +716,18 @@ class _SearchMixin:
             # importance_score（五因素价值模型，value-recalib 补标）以温和
             # 系数调制检索得分：高价值记忆更容易被想起。与突触衰减互补
             # （价值=编码强度，衰减=遗忘速度）。系数可配置（value_boost_k）。
+            # 2026-09 (EXECUTION 180): 进化偏好行为化——谨慎模式调制排序
+            try:
+                import os as _os2, json as _json2
+                _evf = _os2.path.join(_os2.path.expanduser("~"), ".trinity", "evolution_state.json")
+                _cautious = 0.0
+                if _os2.path.exists(_evf):
+                    _evd = _json2.load(open(_evf, encoding="utf-8"))
+                    _cautious = float(_evd.get("active_preferences", {}).get("self:cautious_mode", 0) or 0)
+                if _cautious > 0.5:
+                    _value_k = max(_value_k, 0.45)  # 价值加权（选重要记忆）
+            except Exception:
+                pass
             _imp_score = float(item.get("importance_score") or item.get("importance") or 0.5)
             _value_k = float(getattr(self, "value_boost_k", 0.30))
             value_weight = 1.0 + _value_k * (_imp_score - 0.5)
