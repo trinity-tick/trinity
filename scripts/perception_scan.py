@@ -58,6 +58,57 @@ def _perceive(signal):
         return False
 
 
+
+# -- file/event stream perception (EXECUTION 138) --
+WATCH_DIRS = [
+    os.path.expanduser("~/.trinity/reports"),
+    r"D:\trinity-code\docs",
+    os.path.expanduser("~/.trinity"),
+]
+WATCH_EXTS = (".md", ".json", ".log", ".yaml", ".yml", ".txt", ".csv")
+
+
+def _scan_files(state, new_state, dry, _max):
+    perceived = 0
+    now = time.time()
+    for d in WATCH_DIRS:
+        if not os.path.isdir(d):
+            continue
+        for root, dirs, files in os.walk(d):
+            dirs[:] = [x for x in dirs if x not in ("__pycache__", "node_modules",
+                                                    ".git", "pgdata", "store",
+                                                    "pg_wal_archive", "models",
+                                                    "backups", "logs")]
+            for fn in files:
+                if not fn.endswith(WATCH_EXTS):
+                    continue
+                fp = os.path.join(root, fn)
+                try:
+                    st = os.stat(fp)
+                    if now - st.st_mtime > 86400:
+                        continue
+                    if fn.startswith("tmp_") or fn.endswith(".lock"):
+                        continue
+                    sig = "f:" + hashlib.sha256(
+                        (fp + ":" + str(int(st.st_mtime)) + ":" + str(st.st_size)).encode()).hexdigest()[:20]
+                    if sig in state:
+                        continue
+                    if dry:
+                        print("DRY-FILE:", fp, round(st.st_size / 1024, 1), "KB")
+                        new_state.add(sig)
+                        continue
+                    rel = os.path.relpath(fp, d)
+                    signal = "[filesystem] " + os.path.basename(fp) + " (" + str(round(st.st_size/1024,1)) + "KB, " + rel + ")"
+                    ok = _perceive(signal)
+                    new_state.add(sig)
+                    if ok:
+                        perceived += 1
+                        if perceived >= _max:
+                            return perceived
+                except Exception:
+                    continue
+    return perceived
+
 def main():
     dry = "--dry-run" in sys.argv
     _max = 30
@@ -114,8 +165,11 @@ def main():
         except Exception:
             continue
     if not dry:
+        _fs = _scan_files(state, new_state, dry, max(1, _max // 2))
+    if not dry:
         _save_state(new_state)
-    print(json.dumps({"perceived": perceived, "skipped": skipped,
+    perceived += _fs
+    print(json.dumps({"perceived": perceived, "skipped": skipped, "files": _fs,
                       "state_size": len(new_state)}, ensure_ascii=False))
     return 0
 
