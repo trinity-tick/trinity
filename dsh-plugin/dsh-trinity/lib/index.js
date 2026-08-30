@@ -23,7 +23,7 @@ const inject = ["tools"];
 /** 默认工具调用超时（worker 直连远快于 MCP 桥，60s 兜底足够）。 */
 const DEFAULT_TOOL_CALL_TIMEOUT_MS = 60_000;
 /** worker 默认路径（trinity 仓库 trinity/engine_worker.py）。 */
-const DEFAULT_WORKER_PATH = "C:\\Users\\Administrator\\trinity\\trinity\\engine_worker.py";
+const DEFAULT_WORKER_PATH = "D:\\trinity-code\\trinity\\engine_worker.py";  // 2026-09 (EXECUTION 166): D 盘绝对路径（消除 junction 依赖）
 /** 默认系统 Python（api/mcp/collector 统一解释器）。 */
 const DEFAULT_PYTHON_PATH = "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python314\\python.exe";
 /** 重连策略（与 dsh-mcp-client 对齐）。 */

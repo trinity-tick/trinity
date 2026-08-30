@@ -10073,3 +10073,25 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 
 - 机制从散落 → 固定管线（可观测可重排）；回填反复踩坑 → 根治；
 - 运维从个人经验 → 手册化（单点依赖对冲）；漂移类问题 → 自动检测。
+---
+
+## 166. P3 DSH 深度集成：worker 新能力 + D 盘路径（2026-09）
+
+### 166.1 实施（完成）
+
+- DSH 插件（dsh-trinity）：workerPath 改 D 盘绝对路径（消除 junction 依赖）；
+- engine_worker 加 3 个新方法（DSH 侧可直接调用大脑化能力）：
+  web_search（Bing 搜索+感知）/ perceive（信号感知）/ reflect（会话自省）；
+- 修复：函数定义移到 _METHODS 前（模块加载 NameError）。
+
+### 166.2 验证
+
+- worker: ping True / perceive True / reflect True——DSH 插件现在
+  能调用 Trinity 的网络搜索/感知/自省（不限于旧 11 方法）；
+- 插件路径 D 盘（node --check 通过）。
+
+### 166.3 意义（P3 战略）
+
+- DSH 集成从"记忆读写"升级为"认知能力调用"——DSH 会话内可直接
+  搜索网络/感知信号/自省（Trinity 成为 DSH 的认知后端）；
+- 迁移一致性：插件路径 D 盘（不再依赖 C junction）。

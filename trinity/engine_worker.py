@@ -573,6 +573,59 @@ def _session_dispose_summary(params: dict) -> dict:
         conn.close()
 
 
+def _web_search(params: dict) -> dict:
+    """网络搜索（Bing）：按查询搜索并感知入记忆。"""
+    query = str(params.get("query") or "")
+    if not query:
+        return {"error": "query required"}
+    try:
+        import sys as _sys
+        _sys.path.insert(0, r"D:\\trinity-code")
+        import runpy
+        _sys.argv = ["web_search", "--query=" + query[:60], "--max=5"]
+        runpy.run_path(r"D:\\trinity-code\\scripts\\web_search.py", run_name="__main__")
+        return {"ok": True, "query": query[:60]}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:120]}
+
+
+def _perceive(params: dict) -> dict:
+    """感知：向 /memory/perceive 发送信号（channel/importance）。"""
+    signal = str(params.get("signal") or "")
+    channel = str(params.get("channel") or "user")
+    if not signal:
+        return {"error": "signal required"}
+    try:
+        import urllib.request as _ur, json as _json
+        _payload = json.dumps({"channel": channel, "signal": signal[:300],
+                                "importance": float(params.get("importance") or 0.6)}).encode()
+        _req = _ur.Request("http://127.0.0.1:8001/memory/perceive",
+                           data=_payload, headers={"Content-Type": "application/json"})
+        with _ur.urlopen(_req, timeout=30) as _resp:
+            _body = _json.loads(_resp.read().decode())
+        return {"ok": bool(_body.get("encoded")), "response": _body}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:120]}
+
+
+def _reflect(params: dict) -> dict:
+    """自省：对指定会话生成自省并写入记忆。"""
+    sid = str(params.get("session_id") or "default")
+    try:
+        import sys as _sys
+        _sys.path.insert(0, r"D:\\trinity-code")
+        from trinity.adapters.postgresql import PostgreSQLAdapter
+        from trinity.brain.self_model import reflect_to_memory
+        _a = PostgreSQLAdapter(auto_connect=True)
+        _a.connect()
+        try:
+            ok = reflect_to_memory(_a, sid)
+            return {"ok": ok, "session_id": sid}
+        finally:
+            _a.disconnect()
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:120]}
+
 _METHODS = {
     "ping": _ping,
     "search": _search,
@@ -597,6 +650,10 @@ _METHODS = {
     "goal_list": _goal_list,
     "schedule_upsert": _schedule_upsert,
     "schedule_list": _schedule_list,
+    # ── 2026-09 (EXECUTION 166): 大脑化新能力（DSH 侧可用）──
+    "web_search": _web_search,
+    "perceive": _perceive,
+    "reflect": _reflect,
 }
 
 
@@ -643,3 +700,6 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+# ── 2026-09 (EXECUTION 166): 大脑化新能力（DSH 侧工具）──────────
