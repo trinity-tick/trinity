@@ -1848,32 +1848,35 @@ class PostgreSQLAdapter(StorageAdapter):
             return None
 
     # ── 2026-09 (EXECUTION 141): 持久会话状态 ─────────────
-    def context_save(self, last_query: str, percepts: list, affect=None) -> bool:
-        """持久化最近上下文（跨进程/重启保留）。"""
+    def context_save(self, last_query: str, percepts: list, affect=None,
+                     session_id: str = "default") -> bool:
+        """持久化最近上下文（跨进程/重启保留；按会话隔离）。"""
         try:
             with self._get_conn() as conn:
                 with conn.cursor() as cur:
                     _aff = json.dumps(affect, ensure_ascii=False) if affect else None
+                    _ctx_id = "ctx:" + str(session_id or "default")[:40]
                     cur.execute("""
                         INSERT INTO session_context (id, last_query, percepts, affect)
-                        VALUES ('ctx', %s, %s, %s)
+                        VALUES (%s, %s, %s, %s)
                         ON CONFLICT (id) DO UPDATE SET
                             last_query = EXCLUDED.last_query,
                             percepts = EXCLUDED.percepts,
                             affect = EXCLUDED.affect,
                             updated_at = NOW()
-                    """, (last_query, json.dumps(percepts, ensure_ascii=False), _aff))
+                    """, (_ctx_id, last_query, json.dumps(percepts, ensure_ascii=False), _aff))
                 conn.commit()
             return True
         except Exception:
             return False
 
-    def context_load(self):
-        """读取持久化上下文（无则 None）。"""
+    def context_load(self, session_id: str = "default"):
+        """读取持久化上下文（无则 None；按会话隔离）。"""
         try:
             with self._get_conn() as conn:
                 with conn.cursor() as cur:
-                    cur.execute("SELECT last_query, percepts, affect FROM session_context WHERE id = 'ctx'")
+                    _ctx_id = "ctx:" + str(session_id or "default")[:40]
+                    cur.execute("SELECT last_query, percepts, affect FROM session_context WHERE id = %s", (_ctx_id,))
                     row = cur.fetchone()
                     if not row:
                         return None

@@ -432,7 +432,7 @@ class _SearchMixin:
             _pctx = None
             if self._adapter is not None and hasattr(self._adapter, "context_load"):
                 try:
-                    _pctx = self._adapter.context_load()
+                    _pctx = self._adapter.context_load(getattr(self, "_last_session_id", None) or "default")
                 except Exception:
                     _pctx = None
             if _pctx and _pctx.get("last_query"):
@@ -1394,7 +1394,8 @@ class _SearchMixin:
                                 _aff = {"valence": _ar["valence"], "polarity": _ar["polarity"]}
                         except Exception:
                             pass
-                        self._adapter.context_save(str(query)[:100], _pp or [], affect=_aff)
+                        self._adapter.context_save(str(query)[:100], _pp or [], affect=_aff,
+                                                     session_id=getattr(self, "_last_session_id", None) or "default")
                 except Exception:
                     pass
                 # System1：高信心时持久化信念命中（PG，跨进程可见；不阻塞，失败静默）
