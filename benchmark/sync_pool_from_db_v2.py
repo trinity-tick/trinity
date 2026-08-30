@@ -78,6 +78,8 @@ def main():
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--no-watermark", action="store_true",
                         help="全量扫描（content 跳过兜底），不按 watermark 过滤")
+    parser.add_argument("--active-only", action="store_true",
+                        help="只同步 status='active' 记忆（检索面所需；默认全量非 deleted）")
     parser.add_argument("--reset-watermark", action="store_true",
                         help="清空水位（下次从 rowid=0 全量）")
     args = parser.parse_args()
@@ -118,8 +120,11 @@ def main():
         print(f"[sync] 直接写盘完成: {len(self._pool)} 条")
 
     MemoryAggregator._save = _direct_save
-    # 关闭 debounce 定时器干扰：把脏计数阈值调大
-    agg_mod.PERSIST_MAX_DIRTY = 10**9
+    # 关闭 debounce 定时器干扰（2026-08-30 修复）：PERSIST_MAX_DIRTY 经
+    # from _constants import 绑定，patch 模块属性无效——每 50 条会触发一次
+    # 全量写盘（2.7 万条 × 557 次 ≈ 数小时）。直接置空 _mark_dirty，
+    # 让 _save 只在脚本末尾执行一次。
+    MemoryAggregator._mark_dirty = lambda self: None
 
     # ── 1. 读大库（watermark 增量 or 全量）──
     conn = sqlite3.connect(SRC_DB)
@@ -133,14 +138,14 @@ def main():
     if use_watermark:
         rows = conn.execute(
             "SELECT rowid, memory_id, content, category, created_at, status FROM memories "
-            "WHERE status != 'deleted' AND rowid > ? ORDER BY rowid",
+            "WHERE %s AND rowid > ? ORDER BY rowid" % ("status = 'active'" if args.active_only else "status != 'deleted'"),
             (watermark,),
         ).fetchall()
         print(f"[sync] watermark 增量: 上次水位 rowid={watermark}, 待处理 {len(rows)} 条")
     else:
         rows = conn.execute(
             "SELECT rowid, memory_id, content, category, created_at, status FROM memories "
-            "WHERE status != 'deleted'"
+            "WHERE %s" % ("status = 'active'" if args.active_only else "status != 'deleted'")
         ).fetchall()
         print(f"[sync] 全量扫描: {len(rows)} 条 (watermark 关闭)")
     conn.close()

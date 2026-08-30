@@ -10683,3 +10683,43 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 ### 196.3 诚实说明
 - "top5 不命中测试短内容"是 RRF 候选池排序偏好（短内容竞争不过
   长文语义记忆），非能力退化——纯向量/FTS 双通道直接命中证明
+
+---
+
+## 197. 闭环修复：PG schema 补齐 + mirror tags 适配 + 聚合池恢复（2026-08-30 夜）
+
+> 背景：用户巡检 Trinity 闭环发现三处断点/隐患，经批准执行修复。
+
+### 197.1 发现（巡检实证）
+- **聚合池已空**：data/aggregator_pool.json 8/26 被标记 corrupt（corrupt_1787991784，
+  2.09MB），8/30 18:35 重建为 363B 空池（memories=[]）。API /agents/memory/search
+  实测 total=0；pool-sync 任务 8/29 因 API 在线守卫被 SKIP，一直未恢复。
+- **每日链 mirror 8/30 03:00 FAILED**：relation "tenants" does not exist——原生 PG
+  库缺 tenants/personas/sessions 三表（8/29-30 库重建遗留），ensure_pg_schema
+  只 ADD COLUMN 不建表，缺表即炸。
+- **pg-sync 12:16 瞬时磁盘满**：DiskFull No space left on device，err 23,369 行
+  同步失败（当前 C: 99.1GB 空闲已恢复，瞬时峰值）。
+- 其余闭环健康：PG 33,003 条 / 引擎检索 / 进化 / 维护链 / 防循环全部正常。
+
+### 197.2 修复动作
+1. **PG 补齐三表**（temp/fix_pg_missing_tables.sql，init_pg.sql 同款 DDL）：
+   tenants / personas / sessions + tenants_name_key 唯一索引。验证：
+   tenants=1, personas=5, sessions=10,495（mirror seed 预置），mem_total=33,003。
+2. **mirror 脚本 tags 适配**（scripts/sqlite_pg_mirror.py）：按列类型探测
+   （jsonb vs text[]）选择参数——原生 PG tags 为 jsonb，脚本原传 list 报
+   column "tags" is of type jsonb but expression is of type text[]（4 条失败）。
+   修复后 mirror：added=4 skipped=11,664 errors=0。
+3. **聚合池恢复**（维护窗：停 autostart 循环 + API → sync → 重启）：
+   - benchmark/sync_pool_from_db_v2.py 两处修复：
+     a) PERSIST_MAX_DIRTY = 10**9 patch 无效（from _constants import 绑定），
+        每 50 条触发一次全量写盘（2.7 万条 × 557 次 → 数小时）——改为
+        MemoryAggregator._mark_dirty = lambda self: None，_save 只在末尾一次；
+     b) 新增 --active-only 参数（只同步 status=active，检索面所需）。
+   - 以 --active-only 全量重建聚合池（11,668 条 active）。
+
+### 197.3 影响与回滚
+- 影响：聚合池恢复期间 API 停机约 1.5h（MCP worker/gateway/collector 不受影响）；
+  mirror 脚本改动为幂等兼容（jsonb/text[] 双类型）。
+- 回滚：mirror tags 改动 git revert；聚合池重跑
+  python benchmark/sync_pool_from_db_v2.py --active-only（维护窗内）；
+  PG 三表删除需先确认无引用。
