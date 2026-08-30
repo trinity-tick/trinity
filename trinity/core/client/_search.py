@@ -837,6 +837,7 @@ class _SearchMixin:
                         agent_id=getattr(self, "_search_agent_id", None),
                         persona_id=getattr(self, "_search_persona_id", None),
                         tenant_id=getattr(self, "_search_tenant_id", None),
+                        exclude_categories=[chr(34)+chr(112)+chr(101)+chr(114)+chr(99)+chr(101)+chr(112)+chr(116)+chr(105)+chr(111)+chr(110)+chr(34)],  # 176
                     )
                     if _pgv:
                         return _pgv
@@ -1307,6 +1308,7 @@ class _SearchMixin:
                                     agent_id=agent_id or None,
                                     persona_id=persona_id or None,
                                     tenant_id=tenant_id or None,
+                                    exclude_categories=["perception"],  # 176: 感知不占语义候选
                                 )
                             except Exception:
                                 _sit_vec = None
@@ -1316,6 +1318,7 @@ class _SearchMixin:
                             agent_id=agent_id or None,
                             persona_id=persona_id or None,
                             tenant_id=tenant_id or None,
+                            exclude_categories=["perception"],  # 176: 感知不占语义候选
                         )
                         # 2026-09 (EXECUTION 154): 感知记忆降权——环境噪音类不主导语义检索
                         _r_perc = [x for x in results if str(x.get('category') or '') == 'perception']

@@ -610,6 +610,7 @@ class PostgreSQLAdapter(StorageAdapter):
         persona_id: Optional[str] = None,
         tenant_id: Optional[str] = None,
         status: str = "active",
+        exclude_categories: Optional[list] = None,
     ) -> List[Dict[str, Any]]:
         """pgvector HNSW 余弦相似检索（embedding <=> query_vec）。
 
@@ -634,6 +635,8 @@ class PostgreSQLAdapter(StorageAdapter):
             conditions.append("(tenant_id = %s OR tenant_id IS NULL)"); cond_params.append(tenant_id)
         if agent_id:
             conditions.append("(agent_id = %s OR agent_id IS NULL)"); cond_params.append(agent_id)
+        if exclude_categories:
+            conditions.append("category != ALL(%s)"); cond_params.append(exclude_categories)
         where = " AND ".join(conditions)
         params = params + cond_params + [vec_str, top_k]
 
