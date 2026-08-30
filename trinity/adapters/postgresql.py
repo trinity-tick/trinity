@@ -1714,6 +1714,7 @@ class PostgreSQLAdapter(StorageAdapter):
                         "action": action,
                         "agent_id": agent_id,
                         "persona_id": persona_id,
+                        "timestamp": _now_iso,  # 2026-09 (EXECUTION 123): 与 verify 一致
                         "details": details_dict,
                         "prev_checksum": prev_checksum,
                     }, sort_keys=True, ensure_ascii=False)
