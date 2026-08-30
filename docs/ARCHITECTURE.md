@@ -95,3 +95,41 @@ benchmark_scripts、tests（独立测试）、migrations、cluster、**neuromorp
 - 本文件每次模块分级变更同步更新（维护链 audit 任务自动提示）；
 - core 模块冻结需本文件记录理由；
 - 本文件由记忆系统自动归档（重要程度 0.9）。
+---
+
+# 大脑化全景（2026-08-30，EXECUTION 116-135）
+
+> Trinity 的认知机制（全部运行时生效，非储备）。
+
+## 14 项运行时机制
+
+### 记忆类（8）
+| 机制 | 认知依据 | 数据落点 | 轮次 |
+|---|---|---|---|
+| DCPM 双过程 | System1 快写/System2 慢归纳 | dcpm_beliefs 表 + dcpm-schema 记忆 | 116-117 |
+| 突触权重衰减 | 用进废退（importance+access 调制半衰期） | 检索 Layer 2 | 118 |
+| 情境依赖检索 | 编码特异性（Tulving） | situation 参数 + 向量融合 | 119 |
+| 情节→语义泛化 | 海马体重放 | semantic-generalization 记忆 | 120 |
+| 价值编码 | 杏仁核通路（五因素模型） | importance_score + value_weight | 121 |
+| 图谱检索 | 联想网络 | sage_graph 快照 + graph_score | 125 |
+| 图谱生长 | 突触连接形成 | 写入即建图（ingest 钩子） | 126 |
+| 感知通道 | 感官显著性 + 习惯化 | perceptions 表 + perception 记忆 | 128 |
+
+### 认知类（6）
+| 机制 | 认知依据 | 数据落点 | 轮次 |
+|---|---|---|---|
+| 元认知置信 | 知道自己知道 | metacognition 字段 | 105 |
+| 置信度评分 | 四维来源可信度 | confidence_score 字段 | 127 |
+| serendipity | 探索-利用平衡（默认模式网络） | TRINITY_SERENDIPITY 开关 | 127 |
+| intent | 意图感知（前额叶） | TRINITY_INTENT_ACTIVE 开关 | 127 |
+| 预测编码 | 预测-误差-修正 | prediction 字段 + EMA | 129 |
+| 情感层 | 杏仁核-海马体耦合 | metadata.affect + affect_match | 132 |
+
+## 运维真相（135 轮教训）
+- 维护链租约 SKIP 是"假 OK"陷阱：SKIP 时子命令不执行但报 OK → 已全移除 LeaseJob
+- 异步回填对短进程不可靠（daemon 线程被杀）→ 脚本场景显式回填
+- 完整性巡检（pg_integrity_monitor）每日自愈，见 scripts/
+
+## 评估
+- 记忆器官 ~95% / 认知架构 ~60%（ZenBrain 7 层全对齐）
+- 基准：lmev2_synth strict 67% / loose 100%；认知能力全 PASS（130 轮）

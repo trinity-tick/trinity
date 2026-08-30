@@ -790,32 +790,32 @@ foreach ($t in $Tasks) {
             try { Invoke-RestMethod -Uri "http://127.0.0.1:8001/evolution/cycle/run" -Method Post -TimeoutSec 120 | Out-Null } catch { Write-Log "API evolution cycle failed: $_" "WARN" }
             Invoke-Task -Name "evolution" -DirectCommand $evoCmd -DshPrompt $evoPrompt
         }
-        "decay"     { Invoke-Task -Name "decay"     -LeaseJob "decay"     -DirectCommand $decayCmd  -DshPrompt $decayPrompt }
-        "tiers"     { Invoke-Task -Name "tiers"     -LeaseJob "tiers"     -DirectCommand $tiersCmd  -DshPrompt $tiersPrompt }
-        "mirror"    { Invoke-Task -Name "mirror"    -LeaseJob "mirror"    -DirectCommand $mirrorCmd -DshPrompt $mirrorPrompt }
-        "consolidate" { Invoke-Task -Name "consolidate" -LeaseJob "consolidate" -DirectCommand $consolidateCmd -DshPrompt $consolidatePrompt }
-        "dedup"      { Invoke-Task -Name "dedup"      -LeaseJob "dedup"      -DirectCommand $dedupCmd      -DshPrompt $dedupPrompt }
-        "sync"      { Invoke-Task -Name "sync"      -LeaseJob "sync"      -DirectCommand $syncCmd   -DshPrompt $syncPrompt }
-        "agent-sync" { Invoke-Task -Name "agent-sync" -LeaseJob "agent-sync" -DirectCommand $agentSyncCmd -DshPrompt $agentSyncPrompt }  # 2026-08-21 多机同步
-        "pool-sync" { Invoke-Task -Name "pool-sync" -LeaseJob "pool-sync" -DirectCommand $poolSyncCmd -DshPrompt $poolSyncPrompt }  # 2026-08-21 P0-2 聚合池水位同步（维护窗口任务）
+        "decay"     { Invoke-Task -Name "decay"         -DirectCommand $decayCmd  -DshPrompt $decayPrompt }
+        "tiers"     { Invoke-Task -Name "tiers"         -DirectCommand $tiersCmd  -DshPrompt $tiersPrompt }
+        "mirror"    { Invoke-Task -Name "mirror"       -DirectCommand $mirrorCmd -DshPrompt $mirrorPrompt }
+        "consolidate" { Invoke-Task -Name "consolidate" -DirectCommand $consolidateCmd -DshPrompt $consolidatePrompt }
+        "dedup"      { Invoke-Task -Name "dedup"           -DirectCommand $dedupCmd      -DshPrompt $dedupPrompt }
+        "sync"      { Invoke-Task -Name "sync"           -DirectCommand $syncCmd   -DshPrompt $syncPrompt }
+        "agent-sync" { Invoke-Task -Name "agent-sync" -DirectCommand $agentSyncCmd -DshPrompt $agentSyncPrompt }  # 2026-08-21 多机同步
+        "pool-sync" { Invoke-Task -Name "pool-sync" -DirectCommand $poolSyncCmd -DshPrompt $poolSyncPrompt }  # 2026-08-21 P0-2 聚合池水位同步（维护窗口任务）
         "consistency" { Invoke-Task -Name "consistency" -DirectCommand $consistencyCmd -DshPrompt $consistencyPrompt }  # 2026-08-21 治理层只读一致性校验（显式调用，不进 all 链）
-        "compact"   { Invoke-Task -Name "compact"   -LeaseJob "compact"   -DirectCommand $compactCmd  -DshPrompt $compactPrompt }
-        "pagetree"  { Invoke-Task -Name "pagetree"  -LeaseJob "pagetree"  -DirectCommand $pagetreeCmd -DshPrompt $pagetreePrompt }  # 2026-08-26 PageIndex 借鉴
+        "compact"   { Invoke-Task -Name "compact"     -DirectCommand $compactCmd  -DshPrompt $compactPrompt }
+        "pagetree"  { Invoke-Task -Name "pagetree"   -DirectCommand $pagetreeCmd -DshPrompt $pagetreePrompt }  # 2026-08-26 PageIndex 借鉴
         "eval"      { Invoke-Task -Name "eval"      -DirectCommand $evalCmd      -DshPrompt $evalPrompt }  # 2026-08-26 DSH 借鉴
         "review"    { Invoke-Task -Name "review"    -DirectCommand $reviewCmd   -DshPrompt $reviewPrompt }  # 2026-08-26 Claude Science 借鉴
         "usage"     { Invoke-Task -Name "usage"     -DirectCommand $usageCmd     -DshPrompt $usagePrompt }  # 2026-08-27 使用伙伴闭环
         "rollout-audit" { Invoke-Task -Name "rollout-audit" -DirectCommand $rolloutAuditCmd -DshPrompt $rolloutAuditPrompt }  # 2026-08-27 rollout 审计
         "selftest"  { Invoke-Task -Name "selftest"  -DirectCommand $selftestCmd -DshPrompt $selftestPrompt }
-        "session-summarize" { Invoke-Task -Name "session-summarize" -LeaseJob "session-summarize" -DirectCommand $sessionSummaryCmd -DshPrompt $sessionSummaryPrompt }
-        "session-auto" { Invoke-Task -Name "session-auto" -LeaseJob "session-auto" -DirectCommand $sessionAutoCmd -DshPrompt $sessionAutoPrompt }
+        "session-summarize" { Invoke-Task -Name "session-summarize" -DirectCommand $sessionSummaryCmd -DshPrompt $sessionSummaryPrompt }
+        "session-auto" { Invoke-Task -Name "session-auto" -DirectCommand $sessionAutoCmd -DshPrompt $sessionAutoPrompt }
         "agent-ttl" { Invoke-Task -Name "agent-ttl" -DirectCommand $agentTtlCmd -DshPrompt $agentTtlPrompt }
         "slo"      { Invoke-Task -Name "slo"      -DirectCommand $sloCmd      -DshPrompt $sloPrompt }  # 2026-08-18 SRE
         "db-health" { Invoke-Task -Name "db-health" -DirectCommand $dbHealthCmd -DshPrompt $dbHealthPrompt }
         "active-health" { Invoke-Task -Name "active-health" -DirectCommand $activeHealthCmd -DshPrompt $activeHealthPrompt }
-        "backup"    { Invoke-Task -Name "backup"    -LeaseJob "backup"    -DirectCommand $backupCmd    -DshPrompt $backupPrompt }  # 2026-08-27 巡检补全
-        "memory-ops" { Invoke-Task -Name "memory-ops" -LeaseJob "memory-ops" -DirectCommand $memoryOpsCmd -DshPrompt $memoryOpsPrompt }  # 2026-08-27 巡检补全
-        "consolidate-temporal" { Invoke-Task -Name "consolidate-temporal" -LeaseJob "consolidate-temporal" -DirectCommand $consolidateTemporalCmd -DshPrompt $consolidateTemporalPrompt }  # 2026-08-27 巡检补全
-        "compress"  { Invoke-Task -Name "compress"  -LeaseJob "compress"  -DirectCommand $compressCmd  -DshPrompt $compressPrompt }  # 2026-08-27 巡检补全
+        "backup"    { Invoke-Task -Name "backup"       -DirectCommand $backupCmd    -DshPrompt $backupPrompt }  # 2026-08-27 巡检补全
+        "memory-ops" { Invoke-Task -Name "memory-ops" -DirectCommand $memoryOpsCmd -DshPrompt $memoryOpsPrompt }  # 2026-08-27 巡检补全
+        "consolidate-temporal" { Invoke-Task -Name "consolidate-temporal" -DirectCommand $consolidateTemporalCmd -DshPrompt $consolidateTemporalPrompt }  # 2026-08-27 巡检补全
+        "compress"  { Invoke-Task -Name "compress"   -DirectCommand $compressCmd  -DshPrompt $compressPrompt }  # 2026-08-27 巡检补全
         "evolve-auto" { Invoke-Task -Name "evolve-auto" -DirectCommand $evolveAutoCmd -DshPrompt $evolveAutoPrompt }  # 2026-08-27 巡检补全
         "evolve-env" { Invoke-Task -Name "evolve-env" -DirectCommand $evolveEnvCmd -DshPrompt $evolveEnvPrompt }  # 2026-08-27 巡检补全
         "audit-ps1" { Invoke-Task -Name "audit-ps1" -DirectCommand $auditPs1Cmd -DshPrompt $auditPs1Prompt }  # 2026-08-27 ps1 自检
@@ -823,9 +823,9 @@ foreach ($t in $Tasks) {
         "produce"   { Invoke-Task -Name "produce"   -DirectCommand $produceCmd   -DshPrompt $producePrompt }  # 2026-08-27 知识生产+合规
         "federation-sync" { Invoke-Task -Name "federation-sync" -DirectCommand $federationSyncCmd -DshPrompt $federationSyncPrompt }  # 2026-08-27 联邦同步
         "tune"      { Invoke-Task -Name "tune"      -DirectCommand $tuneCmd      -DshPrompt $tunePrompt }  # 2026-08-27 自动调参
-        "fulltest"  { Invoke-Task -Name "fulltest"  -LeaseJob "fulltest"  -DirectCommand $fulltestCmd  -DshPrompt $fulltestPrompt }  # 2026-08-28 全量门禁
+        "fulltest"  { Invoke-Task -Name "fulltest"   -DirectCommand $fulltestCmd  -DshPrompt $fulltestPrompt }  # 2026-08-28 全量门禁
         "pg-sync"  { Invoke-Task -Name "pg-sync"  -DirectCommand $pgSyncCmd  -DshPrompt $pgSyncPrompt }  # 2026-08-29 PG 镜像
-        "evolve"  { Invoke-Task -Name "evolve"  -LeaseJob "evolve"  -DirectCommand $evolveCmd  -DshPrompt $evolvePrompt }  # 2026-08-29 每日自改
+        "evolve"  { Invoke-Task -Name "evolve"   -DirectCommand $evolveCmd  -DshPrompt $evolvePrompt }  # 2026-08-29 每日自改
         "observe" { Invoke-Task -Name "observe" -DirectCommand $observeCmd -DshPrompt $observePrompt }  # 2026-09 Ollama 解耦观察期检查
         "value-recalib" { Invoke-Task -Name "value-recalib" -DirectCommand $valueRecalibCmd -DshPrompt $valueRecalibPrompt }  # 2026-09 价值驱动编码补标
         "replay" { Invoke-Task -Name "replay" -DirectCommand $replayCmd -DshPrompt $replayPrompt }  # 2026-09 海马体重放巩固

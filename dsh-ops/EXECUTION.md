@@ -9351,3 +9351,31 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - 此前每日链的 dcpm/replay 是"假 OK"（SKIP 算 OK）——本轮让夜间整合
   真正生效，大脑化闭环从"代码存在"变为"每日运行"；
 - 修复链：117 接入 → 120 接入 → 133 发现 SKIP → 134 根治。
+---
+
+## 135. 系统梳理：文档同步 + 租约根治 + ROADMAP + 测试（2026-09）
+
+### 135.1 发现：维护链 18 个租约任务假 SKIP（严重）
+
+- 盘点发现 18 个任务带 LeaseJob（decay/tiers/mirror/consolidate/dedup/sync/
+  agent-sync/pool-sync/compact/pagetree/session-summarize/session-auto/backup/
+  memory-ops/consolidate-temporal/compress/fulltest/evolve）——SKIP 时子命令
+  不执行但报 OK（假 OK）；备份/衰减/同步等每日链核心任务实际未执行；
+- **根治**：统一移除全部 LeaseJob（与 133/134 同策略——无并发风险，
+  autostart 单实例串行）；decay 验证：Pipeline complete（2000 活跃扫描）真实运行。
+
+### 135.2 文档同步
+
+- ARCHITECTURE.md 补『大脑化全景』章节：14 项机制（记忆类 8 + 认知类 6）
+  + 认知依据 + 数据落点 + 运维真相（租约陷阱/异步回填边界）+ 评估；
+- docs/ROADMAP.md 新建：遗留集中清单（P0 数据安全/P1 运维/P2 性能/P3 基准）。
+
+### 135.3 测试快照
+
+- 1,311 收集；核心 741 passed / 7 skipped / 0 failed——零回归。
+
+### 135.4 意义
+
+- 发现并根治**最严重运维隐患**：每日链核心任务（备份/衰减/同步）此前
+  因租约假 SKIP 实际未执行——现全部真实运行；
+- 文档与代码同步；遗留集中可追踪。
