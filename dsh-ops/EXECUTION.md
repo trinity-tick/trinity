@@ -8894,3 +8894,45 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - 改动：scripts/memory_replay_consolidate.py（新）、maintenance/autostart/
   supervisor（任务+TRINITY_STORE 统一）、job_lease.py（env 跟随）、_search.py
 - 回滚：git checkout 相关文件；泛化记忆可保留（幂等）。
+---
+
+## 121. 大脑化收官：价值编码加权接入检索（2026-09）
+
+### 121.1 目标
+
+- 大脑化路线图最后一项：价值编码（杏仁核通路）接入检索路径——
+  高价值记忆更容易被想起（编码强度→检索权重）。
+
+### 121.2 实施（完成）
+
+- 侦察：value_encoder（105 轮）已有 quick_value/estimate_value/batch_estimate，
+  ingest 已接 quick_value，cognition 已引 llm_chat——但检索排序无价值维度；
+- 接入：_rank_results 综合得分加 value_weight = 1 + k*(importance_score-0.5)，
+  k=0.30（value_boost_k，可配置）；layer_scores 暴露 value_weight；
+- 与突触衰减（118）互补：价值=编码强度，衰减=遗忘速度——两机制相乘进
+  final_score（semantic × time_decay × agent × modality × value）。
+
+### 121.3 A/B 验证
+
+- importance_score 0.74 → value_weight 1.0725；0.6 → 1.03；0.7 → 1.06；
+- 高价值记忆 final_score 提升（如 0.0215 例中 value 贡献明显）；
+- API 重启 health 200 / 检索正常。
+
+### 121.4 大脑化路线图收官
+
+| 能力 | 认知机制 | 轮次 |
+|---|---|---|
+| 双过程记忆 | System1/System2 | 116-117 |
+| 突触权重衰减 | 用进废退 | 118 |
+| 情境依赖检索 | 编码特异性 | 119 |
+| 情节→语义泛化 | 海马体重放 | 120 |
+| 睡眠式整合 | System2 夜间 schema | 117 |
+| 价值编码 | 杏仁核通路 | 121（本轮） |
+
+**ARCHITECTURE.md 大脑化路线图 P 级能力全部完成。**
+
+### 121.5 验证与回滚
+
+- 改动：trinity/core/client/_search.py（value_weight）
+- 回滚：git checkout _search.py；
+- 后续：500q A/B 校准 k 值；API 暴露 situation/value 参数。

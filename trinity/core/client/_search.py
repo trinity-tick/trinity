@@ -518,9 +518,17 @@ class _SearchMixin:
                 item.get("modality", "text"), 1.0
             )
 
+            # 2026-09 (EXECUTION 121): 价值编码加权（杏仁核通路）——
+            # importance_score（五因素价值模型，value-recalib 补标）以温和
+            # 系数调制检索得分：高价值记忆更容易被想起。与突触衰减互补
+            # （价值=编码强度，衰减=遗忘速度）。系数可配置（value_boost_k）。
+            _imp_score = float(item.get("importance_score") or item.get("importance") or 0.5)
+            _value_k = float(getattr(self, "value_boost_k", 0.30))
+            value_weight = 1.0 + _value_k * (_imp_score - 0.5)
+
             # ── 综合得分 ─────────────────────────────────────────
             final_score = (
-                semantic_score * time_decay_score * agent_weight_score * modality_weight
+                semantic_score * time_decay_score * agent_weight_score * modality_weight * value_weight
             )
 
             ranked.append({
@@ -531,6 +539,7 @@ class _SearchMixin:
                     "time_decay_score": round(time_decay_score, 6),
                     "agent_weight_score": round(agent_weight_score, 4),
                     "modality_weight": round(modality_weight, 4),
+                    "value_weight": round(value_weight, 4),
                 },
             })
 
