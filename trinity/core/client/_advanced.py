@@ -265,6 +265,15 @@ class _AdvancedMixin:
             ("selective_recall", "trinity.modules.second_brain.selective_recall"),
             ("structured_distillation", "trinity.modules.second_brain.structured_distillation_compressor"),
             ("workflow_memory", "trinity.modules.second_brain.workflow_memory"),
+            # 2026-09 (EXECUTION 191): 大脑化新机制（181-190 轮）
+            ("action_loop", "trinity.brain.action_loop"),
+            ("curiosity", "trinity.brain.curiosity"),
+            ("predictive_loop", "trinity.brain.predictive_loop"),
+            ("sensory_integration", "trinity.brain.sensory_integration"),
+            ("emotional_consolidation", "trinity.brain.emotional_consolidation"),
+            ("autobiographical", "trinity.brain.autobiographical"),
+            ("self_assessment", "trinity.brain.self_assessment"),
+            ("cognition_pipeline", "trinity.brain.cognition_pipeline"),
         ]:
             try:
                 __import__(mod)

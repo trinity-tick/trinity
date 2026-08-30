@@ -78,12 +78,37 @@ def _evolution_alive():
         return {"ok": False, "error": str(e)[:60]}
 
 
+def _new_mechanisms_alive() -> dict:
+    """大脑化新机制心跳（EXECUTION 191）：状态文件/记忆类别存在。"""
+    alive = {}
+    try:
+        import os as _o
+        # 行动回路（状态文件）
+        alive["action_loop"] = _o.path.exists(_o.path.expanduser("~/.trinity/action_loop_stats.json"))
+        # 预测环（状态文件）
+        alive["predictive_loop"] = _o.path.exists(_o.path.expanduser("~/.trinity/predictive_state.json"))
+        # 记忆类别（叙事/整合/评估/经验）
+        import psycopg2
+        conn = psycopg2.connect(host="127.0.0.1", port=5432, dbname="trinity",
+                                user="trinity", password="trinity")
+        cur = conn.cursor()
+        for cat in ("self-narrative", "sensory-integration", "self-assessment", "action-experience"):
+            cur.execute("SELECT count(*) FROM memories WHERE category=%s", (cat,))
+            alive[cat] = cur.fetchone()[0] > 0
+        conn.close()
+    except Exception:
+        pass
+    n_ok = sum(1 for v in alive.values() if v)
+    return {"ok": n_ok >= 3, "alive": n_ok, "total": len(alive), "details": alive}
+
+
 def main():
     report = {"ok": True, "ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
               "brainification": {}}
     report["brainification"]["daily_chain"] = _chain_running()
     report["brainification"]["growth"] = _growth()
     report["brainification"]["evolution"] = _evolution_alive()
+    report["brainification"]["new_mechanisms"] = _new_mechanisms_alive()
 
     for k, v in report["brainification"].items():
         if isinstance(v, dict) and v.get("ok") is False:

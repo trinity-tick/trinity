@@ -10565,3 +10565,20 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 ### 190.3 意义
 - 自我层级完整：身份（我是谁）→ 评估（我表现如何）→ **故事（我经历了什么）**
 - 自传体记忆 = 连续自我的原料（时间线叙事让"我"有历史）
+
+---
+
+## 191. 大脑化机制统一集成（2026-09）
+
+### 191.1 能力注册表扩展
+- brain_capabilities()：14 → **22 项**（+8 个大脑化新机制：
+  action_loop/curiosity/predictive_loop/sensory_integration/
+  emotional_consolidation/autobiographical/self_assessment/cognition_pipeline）
+
+### 191.2 进程守卫扩展
+- brainification_guard 加 new_mechanisms 心跳（状态文件+记忆类别）
+- 验证：alive 5/6（action_loop/predictive/sensory/assessment/experience 活）
+
+### 191.3 意义
+- 新机制不再孤岛——注册表可查、守卫可监测
+- 大脑化体系完整：22 能力注册 + 4 维度守卫 + 24 任务
