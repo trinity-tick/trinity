@@ -115,3 +115,69 @@ def reflect_to_memory(adapter, session_id: str) -> bool:
         return False
     except Exception:
         return False
+
+
+def global_identity(adapter=None) -> str:
+    """跨会话持续自我（EXECUTION 173）：从全部自省记忆/会话上下文
+    聚合出"全局自我"——跨会话的关注领域、情绪基调、经验教训。
+
+    会话自我 = 当下身份（瞬时）；全局自我 = 持续身份（跨会话累积）。
+    意识的持续性来源：知道"我一直关注什么/我经历了什么"。
+    """
+    try:
+        import psycopg2
+        conn = psycopg2.connect(host="127.0.0.1", port=5432, dbname="trinity",
+                                user="trinity", password="trinity")
+        cur = conn.cursor()
+        # 1) 全部自省记忆
+        cur.execute("SELECT content FROM memories WHERE category='self-reflection' ORDER BY created_at DESC LIMIT 20")
+        reflections = [str(r[0]) for r in cur.fetchall()]
+        # 2) 全部会话的关注（last_query）
+        cur.execute("SELECT last_query FROM session_context ORDER BY updated_at DESC LIMIT 10")
+        queries = [str(r[0]) for r in cur.fetchall() if r[0]]
+        conn.close()
+        # 3) 聚合关注领域（词频）
+        from collections import Counter
+        words = Counter()
+        for q in queries:
+            import re
+            for w in re.findall(r"[一-鿿]{2,}", q):
+                words[w] += 1
+        top = [w for w, _ in words.most_common(5) if w not in ("系统", "状态", "我的")]
+        # 4) 情绪基调（最近自省）
+        mood = "未知"
+        for r in reflections:
+            if "我的状态：谨慎" in r:
+                mood = "谨慎（经历偏消极）"
+                break
+            if "我的状态：积极" in r:
+                mood = "积极"
+                break
+        # 5) 教训（从自省/感知提取）
+        lessons = [r[:50] for r in reflections[:3] if "我的学习" in r]
+        parts = []
+        if top:
+            parts.append("我持续关注：" + "、".join(top[:5]))
+        parts.append("我的情绪基调：" + mood)
+        if lessons:
+            parts.append("我最近的领悟：" + " | ".join(lessons)[:100])
+        parts.append("我已积累 " + str(len(reflections)) + " 次自我反思")
+        return "；".join(parts)
+    except Exception:
+        return ""
+
+
+def global_identity_to_memory(adapter) -> bool:
+    """把全局自我写入记忆（category=self-identity，跨会话可检索）。"""
+    try:
+        txt = global_identity(adapter)
+        if txt:
+            from trinity import Trinity
+            m = Trinity(adapter="postgresql")
+            m.ingest("[self-identity] " + txt, category="self-identity",
+                     tags=["self", "identity", "global"], importance=0.85,
+                     wait_backfill=True)
+            return True
+        return False
+    except Exception:
+        return False
