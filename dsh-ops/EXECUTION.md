@@ -9132,3 +9132,35 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 
 - 改动：_search.py（三项钩子 + helper）；
 - 回滚：git checkout _search.py；开关默认关（零行为影响）。
+---
+
+## 128. 感知层闭环补齐（2026-09）
+
+### 128.1 目标
+
+- 感知通道（/memory/perceive，105.7 已实现）存在但**感知记忆不可检索**——
+  INSERT 直接写 PG 未生成 embedding/中文分词（感知闭环缺最后一环）。
+
+### 128.2 实施（完成）
+
+- perception.py 新增 backfill_signal_async（异步：embed → 向量回填 +
+  jieba → content_tsv_zh 更新）；API perceive 成功后调用；
+- 修复 numpy.float32 psycopg2 适配错误（[float(x) for x in _v]）；
+- 全链路：感知信号 → 显著性/习惯化 → 写入 → 回填 → 可检索。
+
+### 128.3 验证
+
+- perceive alert 'D 盘空间低于 15%' → encoded true + vec=t/tsv=t；
+- 检索验证：'D 盘空间低于 15%' → 感知记忆相似度 0.6524 最高命中；
+- 之前不可检索（向量缺失）→ 现在完整可检索。
+
+### 128.4 意义（大脑化）
+
+- 感知闭环完整：感官输入→显著性筛选→记忆编码→可回忆（ZenBrain 感知层对齐）；
+- 习惯化机制（重复刺激衰减）运行时已有——感知层两机制（显著性+习惯化）全工作；
+- 大脑化机制：感知通道成为第 12 项运行时能力。
+
+### 128.5 验证与回滚
+
+- 改动：perception.py（backfill 函数 + numpy 修复）、_routers_brain.py（调用）；
+- 回滚：git checkout 两文件；已回填数据保留（幂等）。

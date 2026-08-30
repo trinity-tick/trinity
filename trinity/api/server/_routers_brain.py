@@ -233,6 +233,9 @@ def memory_perceive(
                   ev["importance"], session_id, skey))
             conn.close()
             encoded = True
+            # 2026-09 (EXECUTION 128): perception backfill
+            from trinity.brain.perception import backfill_signal_async
+            backfill_signal_async(str(signal))
         except Exception:
             pass
     return {

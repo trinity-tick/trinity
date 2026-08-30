@@ -99,3 +99,46 @@ def get_perception_engine() -> PerceptionEngine:
     if _PERCEPTION is None:
         _PERCEPTION = PerceptionEngine()
     return _PERCEPTION
+# -*- coding: utf-8 -*-
+# EXECUTION 128: 感知记忆向量+分词异步回填（独立函数，供 API 调用）
+def backfill_signal_async(signal_text: str) -> None:
+    import threading as _th
+    _sig = str(signal_text)[:800]
+    if not _sig.strip():
+        return
+
+    def _work() -> None:
+        try:
+            import sys as _sys, os as _os
+            _root = r"D:\\trinity-code"
+            if _root not in _sys.path:
+                _sys.path.insert(0, _root)
+            _os.environ.setdefault("HF_HUB_OFFLINE", "1")
+            from trinity.core.client._helpers import _get_embedding_engine
+            import psycopg2 as _pg
+            _eng = _get_embedding_engine()
+            _vec = None
+            if _eng is not None:
+                _v = _eng.embed(_sig)
+                _vec = [float(x) for x in _v] if hasattr(_v, '__iter__') else None
+            _tsv = None
+            try:
+                import jieba as _jb
+                _jb.setLogLevel(60)
+                _words = [w.strip() for w in _jb.cut(_sig) if w.strip() and len(w.strip()) >= 2][:12]
+                if _words:
+                    _tsv = " | ".join(_words)
+            except Exception:
+                pass
+            if _vec or _tsv:
+                _conn = _pg.connect(host="127.0.0.1", port=5432,
+                                    dbname="trinity", user="trinity", password="trinity")
+                _conn.autocommit = True
+                _cur = _conn.cursor()
+                _sql = "UPDATE memories SET embedding = %s, content_tsv_zh = to_tsvector('simple', %s) WHERE content = %s AND category = 'perception'"
+                _cur.execute(_sql, (_vec, _tsv or "", _sig))
+                _conn.close()
+        except Exception:
+            pass
+
+    _th.Thread(target=_work, daemon=True, name="perception-backfill").start()
