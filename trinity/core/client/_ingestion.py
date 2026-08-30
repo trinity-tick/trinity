@@ -116,6 +116,7 @@ class _IngestionMixin:
         self,
         content: str,
         source_window: str = "",
+        wait_backfill: bool = False,  # 2026-09 (EXECUTION 165): 短进程同步回填
         role: str = "user",
         importance: float = 0.5,
         tags: Optional[List[str]] = None,
@@ -392,6 +393,14 @@ class _IngestionMixin:
         llm_sync = os.environ.get(
             "TRINITY_LLM_EXTRACT_SYNC", "").strip().lower() in ("1", "on", "true", "yes")
         if postprocess and not isolated_test_write and memory_id:
+            # 2026-09 (EXECUTION 165): wait_backfill 时同步执行（短进程场景）
+            if wait_backfill:
+                try:
+                    self._postprocess_memory(memory_id, content, result)
+                    result["postprocess"] = "done_sync"
+                except Exception:
+                    result["postprocess"] = "failed"
+                return result
             result.setdefault("pushed_memories", [])
             result["extracted_entities"] = 0
             result["postprocess"] = "pending"

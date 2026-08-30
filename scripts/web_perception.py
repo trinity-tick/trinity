@@ -58,7 +58,14 @@ def _parse_rss(xml_text):
 
 
 def _extract_body(html_text, limit=BODY_LIMIT):
-    """html.parser 提取正文文本（去标签/脚本/样式）。"""
+    """正文提取 v2（EXECUTION 165）：trafilatura 优先，html.parser fallback。"""
+    try:
+        import trafilatura
+        _t = trafilatura.extract(html_text, include_comments=False, include_tables=False)
+        if _t and len(_t.strip()) > 30:
+            return _t.strip()[:limit]
+    except Exception:
+        pass
     try:
         from html.parser import HTMLParser
 

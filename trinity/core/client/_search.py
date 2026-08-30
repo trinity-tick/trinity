@@ -1426,6 +1426,20 @@ class _SearchMixin:
                                   "error": round(_prediction_error, 3),
                                   "corrected": _corrected},
                 }
+                # 2026-09 (EXECUTION 165): 认知编排层观测——各认知阶段状态
+                try:
+                    from trinity.brain.cognition_pipeline import run_pipeline as _cp
+                    _stages = {
+                        "context": bool(situation or getattr(self, "_last_query", None)),
+                        "affect": bool(getattr(self, "_emo_bias", None)),
+                        "graph": bool(getattr(self, "_last_graph", None)),
+                        "confidence": True,
+                        "prediction": True,
+                        "hebbian": bool(results and int(results[0].get("access_count") or 0) >= 5),
+                    }
+                    result["cognition"] = _cp(self, query, results, _stages)
+                except Exception:
+                    pass
                 # 2026-09 (EXECUTION 141): persistent session context
                 try:
                     if self._adapter is not None and hasattr(self._adapter, 'context_save'):

@@ -10047,3 +10047,29 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 ### 164.3 意义
 - 135 轮绕行 → 164 轮修复（根因定位 + 解决）
 - 并发安全机制恢复可用；with_lease 保留 detail 打印（故障可见）
+
+---
+
+## 165. P1+P2 六项：认知编排/回填根治/语义提取/测试/漂移/运维手册（2026-09）
+
+### P1 架构收敛（完成）
+
+- **认知编排层**（cognition_pipeline.py）：6 阶段固定管线（context/affect/
+  graph/confidence/prediction/hebbian）观测报告进 result（零行为影响）；
+- **短进程回填根治**：ingest 加 wait_backfill=True（同步 postprocess）——
+  验证 done_sync + vec immediately True（131/154/158 三次踩坑的终结）；
+- **语义提取**：trafilatura 安装 + web 正文提取升级（trafilatura 优先 +
+  html.parser fallback）。
+
+### P2 可持续性（完成）
+
+- **测试补课**：+8 测试（认知管线/情绪状态机/自我模型/web 感知）全 PASS；
+- **配置漂移检测**（config_drift_check.py + drift-check 任务）：TRINITY_STORE
+  一致性/pg_hba 检查（143/152 轮漂移类问题的预防）；
+- **OPERATIONS.md 运维手册**：服务组成/9 个每日任务/故障排查/已知边界——
+  第二个维护者可上手。
+
+### 意义
+
+- 机制从散落 → 固定管线（可观测可重排）；回填反复踩坑 → 根治；
+- 运维从个人经验 → 手册化（单点依赖对冲）；漂移类问题 → 自动检测。
