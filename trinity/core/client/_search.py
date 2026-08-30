@@ -461,6 +461,17 @@ class _SearchMixin:
                     pass
             for _p in _pc[:2]:
                 parts.append(str(_p)[:40])
+            # 2026-09 (EXECUTION 146): 工作记忆接入——当前会话注意项并入情境
+            # （工作记忆 = 更"当下"的上下文，注意门控后保留）
+            try:
+                from trinity.brain.working_memory import get_working_memory
+                _wm = get_working_memory()
+                _sid = getattr(self, "_last_session_id", None) or "default"
+                _wm_items = _wm.get(_sid, top_k=3)
+                for _wi in _wm_items[:3]:
+                    parts.append(str(_wi.get("content", ""))[:40])
+            except Exception:
+                pass
             return " ".join(parts).strip() if parts else ""
         except Exception:
             return ""
@@ -1374,7 +1385,16 @@ class _SearchMixin:
                 try:
                     if self._adapter is not None and hasattr(self._adapter, 'context_save'):
                         _pp = getattr(self, '_recent_percepts', None)
-                        self._adapter.context_save(str(query)[:100], _pp or [])
+                        # EXECUTION 146: 情绪延续——查询情感状态随上下文持久化
+                        _aff = None
+                        try:
+                            from trinity.brain.affect import assess as _affassess
+                            _ar = _affassess(str(query))
+                            if _ar.get("polarity") != "neu":
+                                _aff = {"valence": _ar["valence"], "polarity": _ar["polarity"]}
+                        except Exception:
+                            pass
+                        self._adapter.context_save(str(query)[:100], _pp or [], affect=_aff)
                 except Exception:
                     pass
                 # System1：高信心时持久化信念命中（PG，跨进程可见；不阻塞，失败静默）

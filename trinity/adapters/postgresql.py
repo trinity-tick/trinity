@@ -1848,19 +1848,21 @@ class PostgreSQLAdapter(StorageAdapter):
             return None
 
     # ── 2026-09 (EXECUTION 141): 持久会话状态 ─────────────
-    def context_save(self, last_query: str, percepts: list) -> bool:
+    def context_save(self, last_query: str, percepts: list, affect=None) -> bool:
         """持久化最近上下文（跨进程/重启保留）。"""
         try:
             with self._get_conn() as conn:
                 with conn.cursor() as cur:
+                    _aff = json.dumps(affect, ensure_ascii=False) if affect else None
                     cur.execute("""
-                        INSERT INTO session_context (id, last_query, percepts)
-                        VALUES ('ctx', %s, %s)
+                        INSERT INTO session_context (id, last_query, percepts, affect)
+                        VALUES ('ctx', %s, %s, %s)
                         ON CONFLICT (id) DO UPDATE SET
                             last_query = EXCLUDED.last_query,
                             percepts = EXCLUDED.percepts,
+                            affect = EXCLUDED.affect,
                             updated_at = NOW()
-                    """, (last_query, json.dumps(percepts, ensure_ascii=False)))
+                    """, (last_query, json.dumps(percepts, ensure_ascii=False), _aff))
                 conn.commit()
             return True
         except Exception:
@@ -1871,7 +1873,7 @@ class PostgreSQLAdapter(StorageAdapter):
         try:
             with self._get_conn() as conn:
                 with conn.cursor() as cur:
-                    cur.execute("SELECT last_query, percepts FROM session_context WHERE id = 'ctx'")
+                    cur.execute("SELECT last_query, percepts, affect FROM session_context WHERE id = 'ctx'")
                     row = cur.fetchone()
                     if not row:
                         return None
@@ -1879,7 +1881,11 @@ class PostgreSQLAdapter(StorageAdapter):
                     if isinstance(_p, str):
                         import json as _j
                         _p = _j.loads(_p)
-                    return {"last_query": row[0] or "", "percepts": _p or []}
+                    _a = row[2]
+                    if isinstance(_a, str):
+                        import json as _j2
+                        _a = _j2.loads(_a)
+                    return {"last_query": row[0] or "", "percepts": _p or [], "affect": _a or None}
             return None
         except Exception:
             return None

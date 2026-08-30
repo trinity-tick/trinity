@@ -175,8 +175,29 @@ def memory_perceive(
     signal: str = Body(...),
     importance: float = Body(None),
     session_id: str = Body(None),
+    image: Optional[str] = Body(None),
 ):
-    """具身感知：外部信号进入记忆（显著性评估 + 习惯化 + 感知编码）。"""
+    """具身感知：外部信号进入记忆（显著性评估 + 习惯化 + 感知编码）。
+
+    EXECUTION 146: image 可选——base64 截图/图像经视觉描述后感知
+    （视觉通道；描述失败降级用原始 signal）。
+    """
+    if image:
+        try:
+            import base64 as _b64, io as _io
+            from trinity.core.client._helpers import _get_embedding_engine
+            from PIL import Image as _PIL
+            _img = _PIL.open(_io.BytesIO(_b64.b64decode(image)))
+            # 视觉描述：走已有 image 描述能力（失败静默降级）
+            try:
+                from trinity.vision import describe_image as _desc
+                _desc_text = _desc(_img)
+                if _desc_text:
+                    signal = f"[vision] {signal} | 画面: {str(_desc_text)[:300]}"
+            except Exception:
+                signal = f"[vision] {signal} (截图 {_img.size})"
+        except Exception:
+            pass  # image 解析失败 → 用原始 signal
     from trinity.brain.perception import get_perception_engine
     import psycopg2
     import hashlib

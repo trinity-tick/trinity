@@ -63,6 +63,23 @@ def main():
         pairs = trainer.generate_query_pairs(mems, queries_per_memory=2)
         triplets = trainer.compute_contrastive_pairs(pairs, mems, negative_count=3)
         print(f"query pairs: {len(pairs)} | contrastive triplets: {len(triplets)}")
+        # 2026-09 (EXECUTION 146): 对比强化训练——用三元组批量 Hebbian
+        # （正样本强化 + 负样本远离 = 轻量对比学习）
+        try:
+            from trinity.brain.hebbian import batch_contrastive
+            _trip = []
+            for _t in triplets[:30]:
+                _q = getattr(_t, "query", None)
+                _p = getattr(_t, "positive_memory_id", None) or getattr(_t, "positive", None)
+                _n = getattr(_t, "negative_memory_id", None) or getattr(_t, "negative", None)
+                if _q and _eng is not None:
+                    _qv = _eng.embed(str(_q)[:200])
+                    _trip.append((_qv, _p, _n))
+            if _trip:
+                _r = batch_contrastive(a, _trip)
+                print(f"contrastive training: {_r}")
+        except Exception as e:
+            print(f"contrastive skipped: {e}")
 
         # 4) 语义泛化：从记忆内容提取高频概念词（jieba 分词，滤停用词）
         from collections import Counter

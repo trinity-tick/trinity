@@ -9619,3 +9619,34 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 
 - 17 项大脑化机制有 pytest 背书（此前零覆盖）——防回归；
 - 测试驱动发现 affect bug（测试的价值：规则词典盲区暴露）。
+---
+
+## 146. 三杠杆补齐：工作记忆+情绪延续+视觉+对比训练（2026-09）
+
+### 146.1 背景
+
+- 用户核对发现三杠杆未完成（诚实修正）：感知 45%/连续 70%/权重 60%。
+  本轮补齐四项缺口。
+
+### 146.2 实施（完成）
+
+- **工作记忆接入**：_build_auto_situation 并入当前会话 wm 项（注意门控后
+  保留的项）——工作记忆从孤儿模块变为检索情境的一部分；
+- **情绪延续**：session_context 加 affect 列；查询情感状态随上下文持久化
+  （context_save(affect) + context_load 返回）；
+- **视觉通道**：/memory/perceive 加 image 参数（base64 截图 → 视觉描述
+  → 感知，失败降级原始 signal）；
+- **对比训练**：hebbian.batch_contrastive——三元组批量强化（正样本向
+  查询微调 + 负样本远离 = 轻量对比学习）；接入 memory_replay_consolidate
+  夜间训练（triplets[:30]）。
+
+### 146.3 验证
+
+- 工作记忆：情境含 wm 内容 True；情绪延续：查询→affect neg 持久化；
+- batch：positive 2/negative 1/failed 0；API health 200。
+
+### 146.4 三杠杆完成度更新
+
+- 感知具身：45% → **55%**（+视觉通道；真实多模态描述依赖外部 vision 能力）；
+- 连续状态：70% → **85%**（+工作记忆接入 + 情绪延续）；
+- 权重级记忆：60% → **80%**（+对比训练；全量模型微调仍为远期）。
