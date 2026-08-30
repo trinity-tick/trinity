@@ -416,6 +416,52 @@ class _SearchMixin:
                 rec["verify_hint"] = "需复核（弱证据：低 importance 或无版本链）"
             enriched.append(rec)
         return enriched
+    def _score_retrieval_confidence(self, item: dict, semantic_score: float):
+        """EXECUTION 127: 单条检索结果的四维置信度（元认知层）。
+
+        category→SourceType 映射（权威性基础分）+ 新鲜度 + 语义相似度。
+        失败返回 None（调用方静默）。
+        """
+        try:
+            from trinity.modules.second_brain.confidence_scored_retrieval import (
+                ConfidenceScorer, SourceType, ValidityCategory,
+            )
+            _cat = str(item.get("category") or "general").lower()
+            _src_map = {
+                "decision": SourceType.USER_CONFIRMED,
+                "preference": SourceType.USER_CONFIRMED,
+                "lesson": SourceType.VERIFIED_DATABASE,
+                "incident": SourceType.VERIFIED_DATABASE,
+                "security": SourceType.VERIFIED_DATABASE,
+                "dcpm-schema": SourceType.LLM_GENERATED,
+                "dcpm-core": SourceType.LLM_GENERATED,
+                "semantic-generalization": SourceType.LLM_GENERATED,
+                "perception": SourceType.OFFICIAL_DOCUMENT,
+            }
+            _st = _src_map.get(_cat, SourceType.UNVERIFIED)
+            _created = None
+            _ca = item.get("created_at")
+            if _ca:
+                try:
+                    from datetime import datetime, timezone as _tz
+                    _dt = _ca if not isinstance(_ca, str) else datetime.fromisoformat(_ca.replace("Z", "+00:00"))
+                    if _dt.tzinfo is None:
+                        _dt = _dt.replace(tzinfo=_tz.utc)
+                    _created = _dt.timestamp()
+                except Exception:
+                    _created = None
+            _vc = ValidityCategory.FACTS if _cat in ("decision", "incident") else ValidityCategory.GENERAL_KNOWLEDGE
+            _score = ConfidenceScorer().score(
+                source_type=_st,
+                citation_count=int(item.get("access_count") or 0),
+                created_at=_created,
+                validity_category=_vc,
+                semantic_similarity=max(0.0, min(1.0, float(semantic_score))),
+            )
+            return round(_score.overall, 4)  # overall 是属性
+        except Exception:
+            return None
+
     def _apply_layered_ranking(
         self,
         raw_results: List[Dict[str, Any]],
@@ -525,6 +571,16 @@ class _SearchMixin:
             _imp_score = float(item.get("importance_score") or item.get("importance") or 0.5)
             _value_k = float(getattr(self, "value_boost_k", 0.30))
             value_weight = 1.0 + _value_k * (_imp_score - 0.5)
+
+            # 2026-09 (EXECUTION 127): 置信度评分（元认知层）——
+            # 来源权威（category→SourceType 映射）+ 新鲜度 + 语义相似度
+            # 四维置信度，注入 confidence_score 字段；失败静默。
+            try:
+                _conf_score = self._score_retrieval_confidence(item, semantic_score)
+                if _conf_score is not None:
+                    item["confidence_score"] = _conf_score
+            except Exception:
+                pass
 
             # ── 综合得分 ─────────────────────────────────────────
             final_score = (
@@ -1098,6 +1154,42 @@ class _SearchMixin:
                         _sg = getattr(self, "_last_graph", None) or {}
                         _sg["entities"] = _gnames[:5]
                         self._last_graph = _sg
+            except Exception:
+                pass
+
+            # 2026-09 (EXECUTION 127): serendipity 意外发现——低置信查询时
+            # 启用温度采样（TRINITY_SERENDIPITY=1，默认关）；intent 意图感知
+            # 重排（TRINITY_INTENT_ACTIVE=1，默认关）。两者默认关闭保持确定性。
+            try:
+                import os as _os
+                if _os.environ.get("TRINITY_SERENDIPITY", "0") == "1" and results:
+                    from trinity.modules.second_brain.serendipity_retrieval_engine import (
+                        WanderRetriever, RetrievalHit,
+                    )
+                    _hits = []
+                    for _r in results[:10]:
+                        try:
+                            _hits.append(RetrievalHit(
+                                memory_id=str(_r.get("memory_id") or ""),
+                                content=str(_r.get("content", ""))[:200],
+                                relevance=float(_r.get("score") or 0.1),
+                            ))
+                        except Exception:
+                            continue
+                    if _hits:
+                        _wander = WanderRetriever(temperature=1.5, sample_count=min(len(_hits), 3))
+                        _sampled = _wander.wander(_hits)
+                        _sampled_ids = {h.memory_id for h in _sampled}
+                        # 采样的结果前移（惊喜项）
+                        results.sort(key=lambda x: (0.0 if str(x.get("memory_id")) in _sampled_ids else 1.0,
+                                                    -float(x.get("score") or 0)))
+                if _os.environ.get("TRINITY_INTENT_ACTIVE", "0") == "1" and results:
+                    from trinity.modules.second_brain.intent_compression import IntentAwareRetriever
+                    _ia = IntentAwareRetriever()
+                    # 意图感知重排（轻量：按 query 与内容词重叠微调）
+                    _qwords = set(str(query).lower().split())
+                    results.sort(key=lambda x: (-sum(1 for w in _qwords if w in str(x.get("content", "")).lower()),
+                                                -float(x.get("score") or 0)))
             except Exception:
                 pass
 

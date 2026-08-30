@@ -9095,3 +9095,40 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 
 - 改动：_ingestion.py（自动建图）、sage_graph_memory_engine.py（正则/去重）
 - 回滚：git checkout 两文件；快照可清（DELETE FROM sage_graph）。
+---
+
+## 127. 大脑化 P0：三项认知模块接通（2026-09）
+
+### 127.1 目标
+
+- 接通 3 个 reserve 认知模块（2,716 行已有代码）到检索运行时：
+  置信度评分（元认知）/ serendipity（意外发现）/ intent（意图感知）。
+
+### 127.2 实施（完成）
+
+- **confidence**：_apply_layered_ranking 加 _score_retrieval_confidence helper——
+  category→SourceType 映射（decision/preference=USER_CONFIRMED 0.75，
+  dcpm=LLM_GENERATED 0.50，默认 UNVERIFIED 0.25）+ 新鲜度 + 语义相似度
+  四维评分 → confidence_score 字段（失败静默）；
+- **serendipity**：TRINITY_SERENDIPITY=1 时 WanderRetriever 温度采样
+  （默认关，保持确定性）；
+- **intent**：TRINITY_INTENT_ACTIVE=1 时意图感知重排（默认关）；
+- 修复：ConfidenceScore.overall 是属性非方法（'float' not callable）。
+
+### 127.3 验证
+
+- dcpm-core/schema（LLM 生成）→ confidence 0.42；test-graph（未验证）→ 0.345；
+- 分层正确（权威性基础分生效）；serendipity 开关 5 命中正常；
+- API health 200 / 检索 3 命中。
+
+### 127.4 意义（大脑化）
+
+- 检索结果现在带**四维置信度**（知道自己信多少——元认知深化）；
+- serendipity/intent 提供**探索-利用平衡**（wander vs query 模式，对应
+  大脑默认模式网络 vs 任务正网络）；
+- 大脑化机制增至 **11 项**运行时（8 + confidence + serendipity + intent）。
+
+### 127.5 验证与回滚
+
+- 改动：_search.py（三项钩子 + helper）；
+- 回滚：git checkout _search.py；开关默认关（零行为影响）。
