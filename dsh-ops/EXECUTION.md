@@ -8785,3 +8785,39 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
   scripts/dcpm_consolidate.py（新）、maintenance/autostart（任务入链）、PG 表
 - 回滚：git checkout 3 文件；DROP TABLE dcpm_beliefs；任务从链移除；
 - 幂等：整合脚本可重跑（ON CONFLICT DO NOTHING）。
+---
+
+## 118. 大脑化第三步：突触权重衰减（2026-09）
+
+### 118.1 目标
+
+- 按大脑化路线图 P0：把遗忘从"固定规则"升级为"突触可塑性"——
+  检索时记忆权重随重要性（突触强度）与使用频率（突触激活）自适应衰减。
+
+### 118.2 现状
+
+- decay 引擎已有 Ebbinghaus 曲线（score = importance * exp(-λ*t)，归档决策用）；
+- 检索 Layer 2 时间衰减为**固定半衰期**（half_life_days，所有记忆同权）。
+
+### 118.3 实施（完成）
+
+- _search.py 三层排序 Layer 2 升级为**突触自适应半衰期**：
+  half_life_eff = half_life * (1 + importance*K1) * (1 + min(access,20)*K2)
+  ——高重要性（强突触）衰减更慢；高访问频率（突触使用）增强持久性；
+  K1=1.0 / K2=0.15（getattr 可配置，默认内建）；
+- 与 decay 引擎（归档决策）互补：decay 管"何时归档"，突触衰减管"检索时权重"。
+
+### 118.4 A/B 验证
+
+- 30 天旧记忆对比：
+  高重要性+高访问（0.9/15）：0.552 → **0.908**（+0.36，强突触持久）
+  低价值（0.3/2）：0.552 → 0.704（弱突触更快遗忘）
+  边缘（0.1/20）：0.552 → 0.874（访问频率挽救）
+- 实机：8/21 记忆 time_decay_score=0.588（自适应）；新建 dcpm 记忆=1.0（无衰减）；
+- 认知语义正确：重要且常用的记忆抵抗遗忘，边缘记忆更快消退。
+
+### 118.5 验证与回滚
+
+- 改动：trinity/core/client/_search.py（Layer 2 突触衰减）
+- 回滚：git checkout _search.py；
+- 后续：K1/K2 参数化后做 500q A/B 校准（当前默认值保守）。

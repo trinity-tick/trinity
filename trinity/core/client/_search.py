@@ -483,9 +483,16 @@ class _SearchMixin:
                             dt = dt.replace(tzinfo=timezone.utc)
                         days_since = (now - dt).total_seconds() / 86400.0
                         if half_life_days > 0:
-                            time_decay_score = math.pow(
-                                2, -days_since / half_life_days
-                            )
+                            # 2026-09 (EXECUTION 118): 突触权重衰减——
+                            # 自适应半衰期：高重要性（强突触）衰减更慢，
+                            # 高访问频率（突触使用）也增强持久性。
+                            # half_life_eff = half_life * (1 + imp*K1) * (1 + min(acc,cap)*K2)
+                            _imp = float(item.get("importance") or 0.5)
+                            _acc = int(item.get("access_count") or 0)
+                            _syn_k1 = float(getattr(self, "synapse_importance_boost", 1.0))
+                            _syn_k2 = float(getattr(self, "synapse_access_boost", 0.15))
+                            _hl = half_life_days * (1.0 + _imp * _syn_k1) * (1.0 + min(_acc, 20) * _syn_k2)
+                            time_decay_score = math.pow(2, -days_since / max(_hl, 0.5))
                         else:
                             time_decay_score = 1.0
                 except Exception:
