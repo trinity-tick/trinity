@@ -10095,3 +10095,24 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - DSH 集成从"记忆读写"升级为"认知能力调用"——DSH 会话内可直接
   搜索网络/感知信号/自省（Trinity 成为 DSH 的认知后端）；
 - 迁移一致性：插件路径 D 盘（不再依赖 C junction）。
+---
+
+## 167. P3 记忆市场落地 + 多 Agent 共享验证（2026-09）
+
+### 167.1 记忆市场完整流程（验证通过）
+
+- 挂单：agent-A 发布记忆资产（price 5.0 trust_score）→ 订单簿 1 单；
+- 搜索：market/search 1 命中；订单簿可见；
+- 购买：agent-B 购买 → tx 完成（tx_id/5.0 credits）；
+- **信誉系统**：agent-A score 0→0.3 + trade_success_rate 1.0（交易驱动信誉）。
+
+### 167.2 多 Agent 共享（验证通过）
+
+- agent-A 发布的记忆资产被 agent-B 购买——**记忆跨 Agent 交易流转**；
+- 与 agent_id 隔离互补：隔离管私有，市场管共享（差异化能力）。
+
+### 167.3 意义（P3 战略）
+
+- 记忆市场从"端点存在"到"流程可用"（list→search→buy→reputation 全通）；
+- 多 Agent 记忆共享层落地（交易流转 = 共享的显式机制）；
+- 信誉驱动：诚实交易提升信誉——**市场有激励机制**。
