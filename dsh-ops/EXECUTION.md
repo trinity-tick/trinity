@@ -9830,3 +9830,24 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 
 - 情绪与反思能力**量化达标**（对标 2026 学术方案指标）；
 - 自省记忆现在可检索（向量 0.77）；感知记忆不再主导语义检索。
+---
+
+## 155. 认知自检入维护链（2026-09）
+
+### 155.1 实施（完成）
+
+- 维护链 cognition-check 任务（brain_cognition_eval.py——情绪指标 +
+  反思三能力量化评测）；
+- 与数据完整性巡检（pg_integrity_monitor）对称：**数据自检 + 认知自检**
+  双保险；每日链自动运行。
+
+### 155.2 验证
+
+- 维护链：cognition-check OK（emotion EMA/polarity/bias + reflect
+  retain/quality/recall 全 PASS）。
+
+### 155.3 意义
+
+- 大脑化能力**每日自检**（防退化——机制改动后自动发现）；
+- 每日链大脑化任务增至 6 个：dcpm/replay/integrity/self-reflect/
+  perception-scan/cognition-check。
