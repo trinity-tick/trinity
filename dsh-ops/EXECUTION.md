@@ -9453,3 +9453,27 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
   报告/数据文件变化（环境感知双通道）；
 - 感知具身：第 2 种感官输入（文件系统=触觉/本体觉）；
 - 大脑化机制 15 项运行时（感知含双通道）。
+---
+
+## 139. 连续状态：会话延续（2026-09）
+
+### 139.1 实施（完成）
+
+- search_hybrid：situation 为空时自动注入 _build_auto_situation()——
+  上次查询（_last_query）+ 最近 3 条感知记忆（进程内缓存，直接 SQL 查）；
+- 模拟大脑"当下"：连续对话中检索自动带最近上下文（会话延续）；
+- 修复：感知记忆经 search_memories 查不到（FTS 不匹配）→ 改直接 SQL。
+
+### 139.2 验证
+
+- auto situation: '数据库 [filesystem] evolution_optimizer_stats.json
+  [filesystem] ROADMAP.md...'（上次查询 + 感知事件拼接）；
+- 连续查询自动带上下文；API health 200。
+
+### 139.3 意义（大脑化）
+
+- 连续状态第一步：Trinity 不再是"每次失忆"——检索带"当下"（最近
+  查询 + 最近感知），对话有连续性；
+- 与情境检索（119）互补：显式 situation=任务情境，自动 situation=
+  状态延续（工作记忆的检索侧实现）；
+- 大脑化机制 16 项运行时（连续状态）。

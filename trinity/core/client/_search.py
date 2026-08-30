@@ -417,6 +417,44 @@ class _SearchMixin:
                 rec["verify_hint"] = "需复核（弱证据：低 importance 或无版本链）"
             enriched.append(rec)
         return enriched
+
+    # 2026-09 (EXECUTION 139): 连续状态——自动情境（最近查询 + 感知事件）
+    def _build_auto_situation(self) -> str:
+        """构造自动情境：上次查询 + 最近感知记忆的关键词。
+
+        模拟大脑的"当下"：检索默认带最近上下文（会话延续）。
+        失败返回空串（保持无情境行为）。
+        """
+        try:
+            parts = []
+            _lq = getattr(self, "_last_query", "")
+            if _lq:
+                parts.append(str(_lq)[:60])
+            # 最近感知事件（process 内缓存，避免每次查库）
+            _pc = getattr(self, "_recent_percepts", None)
+            if _pc is None:
+                _pc = []
+                self._recent_percepts = _pc
+                try:
+                    if self._adapter is not None and hasattr(self._adapter, "_get_conn"):
+                        import psycopg2 as _pg
+                        _conn = _pg.connect(host="127.0.0.1", port=5432,
+                                            dbname="trinity", user="trinity", password="trinity")
+                        _cur = _conn.cursor()
+                        _cur.execute("SELECT content FROM memories WHERE category='perception' AND status='active' ORDER BY created_at DESC LIMIT 3")
+                        for _row in _cur.fetchall():
+                            _c = str(_row[0] or "")[:40]
+                            if _c:
+                                _pc.append(_c)
+                        _conn.close()
+                except Exception:
+                    pass
+            for _p in _pc[:2]:
+                parts.append(str(_p)[:40])
+            return " ".join(parts).strip() if parts else ""
+        except Exception:
+            return ""
+
     # 2026-09 (EXECUTION 129): prediction coding helpers
     def _predict_hits(self, query, top_k):
         """Predict hit count before retrieval (query features + EMA baseline)."""
@@ -1180,6 +1218,10 @@ class _SearchMixin:
                         # 情境向量召回 + 查询向量召回 RRF 融合；失败静默回退。
                         _q_for_vec = query
                         _sit_vec = None
+                        # 2026-09 (EXECUTION 139): 连续状态——situation 为空时自动注入最近上下文
+                        # （上次查询 + 最近感知事件），会话延续（大脑的"当下"）。
+                        if not situation:
+                            situation = self._build_auto_situation()
                         if situation:
                             try:
                                 _qv_sit = _eng.embed(str(situation)[:200])
