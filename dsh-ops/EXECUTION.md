@@ -9767,3 +9767,25 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - 自我反思成为**每日周期行为**（与睡眠整合同节奏）——大脑化闭环：
   白天使用（感知/检索/情绪）→ 夜间反思+整合+重放（自省/重放/对比训练）；
 - 自省记忆可作 auto-evolve 输入（自我观察→自我改进的原料）。
+---
+
+## 152. 自省驱动进化：自我观察入进化周期（2026-09）
+
+### 152.1 实施（完成）
+
+- evolution core 加 _self_reflection_observation_hook：从 self-reflection
+  记忆提取 self_state（cautious/positive）观察，注册为默认观察钩子；
+- **修复**：_audit_observation_hook 读 C 盘旧库（178 行）→ 改 TRINITY_STORE
+  优先（迁移 D 盘后权威库——进化观察此前在喂旧数据！）；
+- 修复钩子注册位置（try 块内）。
+
+### 152.2 验证
+
+- observe() 产出 {pattern: 10, preference: 2, self_state: 2}——自省状态
+  已进入进化输入；self hook 独立验证 2 条 cautious。
+
+### 152.3 意义（大脑化）
+
+- 自我观察→自我改进闭环：夜间自省（状态/关注）→ 进化观察输入 →
+  分析 → 可触发改进（auto-evolve 真正"看见自己"）；
+- 修复 C 库路径 bug：进化此前学习旧数据（重大正确性修复）。

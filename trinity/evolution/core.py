@@ -122,6 +122,8 @@ class MetaEvolution:
         try:
             if os.environ.get("TRINITY_TESTING") != "1":
                 self._observation_hooks.append(self._audit_observation_hook)
+                self._observation_hooks.append(self._audit_observation_hook)
+                self._observation_hooks.append(self._self_reflection_observation_hook)
         except Exception:
             pass
 
@@ -175,7 +177,12 @@ class MetaEvolution:
         try:
             import sqlite3
             from pathlib import Path
-            db = os.path.join(os.path.expanduser("~"), ".trinity", "store", "trinity_store.db")
+            # 2026-09 (EXECUTION 152): 存储统一——优先 TRINITY_STORE（迁移 D 盘后权威库）
+            _store = os.environ.get("TRINITY_STORE", "")
+            if _store:
+                db = os.path.join(_store, "trinity_store.db")
+            else:
+                db = os.path.join(os.path.expanduser("~"), ".trinity", "store", "trinity_store.db")
             if not os.path.exists(db):
                 return []
             conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=5)
@@ -240,6 +247,38 @@ class MetaEvolution:
                 })
             conn.close()
             return observations
+        except Exception:
+            return []
+
+
+    def _self_reflection_observation_hook(self, context: Dict[str, Any]) -> List[Dict]:
+        """2026-09 (EXECUTION 152): 自省观察——从 self-reflection 记忆提取
+        会话状态信号（情绪基调/关注领域），供进化周期使用。
+        失败静默。
+        """
+        try:
+            import psycopg2
+            conn = psycopg2.connect(host="127.0.0.1", port=5432, dbname="trinity",
+                                    user="trinity", password="trinity")
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT content FROM memories WHERE category='self-reflection' "
+                "ORDER BY created_at DESC LIMIT 5")
+            rows = cur.fetchall()
+            conn.close()
+            obs = []
+            for (content,) in rows:
+                text = str(content or "")
+                if "我的状态：谨慎" in text:
+                    obs.append({"type": "self_state", "signal": "cautious",
+                                "detail": text[:120]})
+                elif "我的状态：积极" in text:
+                    obs.append({"type": "self_state", "signal": "positive",
+                                "detail": text[:120]})
+                if "近期关注" in text:
+                    obs.append({"type": "self_focus", "signal": "focus",
+                                "detail": text[:120]})
+            return obs
         except Exception:
             return []
 
