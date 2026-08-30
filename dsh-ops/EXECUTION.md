@@ -9807,3 +9807,26 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 
 - 系统处于完整交付状态：25 机制 + 全闭环 + 文档同步 + 测试背书；
 - 大脑化从"机制积累"到"体系成型"（记忆/认知/自我三层俱全）。
+---
+
+## 154. 认知量化评测：情绪指标 + 反思三能力（2026-09）
+
+### 154.1 实施（完成）
+
+- scripts/brain_cognition_eval.py：对标 MATE 情绪指标（EMA 收敛/极性/偏置）
+  + Hindsight 反思三能力（retain/recall/reflect 质量）；
+- 发现并修复：reflect_to_memory 直写无向量回填 → 改 Trinity.ingest；
+  self_reflect_daily 加 sleep 等异步回填（短进程线程被杀边界）；
+- 发现 RRF 混合被感知记忆主导（4,763 条噪音类）→ search_hybrid 加
+  感知记忆降权（过半时剔除）。
+
+### 154.2 验证（全 PASS）
+
+- 情绪：EMA 收敛（-0.8 neg）/ 极性正确 / 偏置正确（incident）；
+- 反思：retain 28 / quality 9/9 / recall vector 0.77 命中；
+- API health 200。
+
+### 154.3 意义
+
+- 情绪与反思能力**量化达标**（对标 2026 学术方案指标）；
+- 自省记忆现在可检索（向量 0.77）；感知记忆不再主导语义检索。

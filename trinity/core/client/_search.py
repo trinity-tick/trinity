@@ -1298,6 +1298,10 @@ class _SearchMixin:
                             persona_id=persona_id or None,
                             tenant_id=tenant_id or None,
                         )
+                        # 2026-09 (EXECUTION 154): 感知记忆降权——环境噪音类不主导语义检索
+                        _r_perc = [x for x in results if str(x.get('category') or '') == 'perception']
+                        if _r_perc and len(_r_perc) > len(results) // 2:
+                            results = [x for x in results if str(x.get('category') or '') != 'perception']
                         if _sit_vec:
                             _sit_ids = {x.get("memory_id") for x in _sit_vec}
                             for _r in _sit_vec:

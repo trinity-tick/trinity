@@ -83,19 +83,35 @@ def reflect(last_query: str, affect, percepts=None) -> str:
 
 
 def reflect_to_memory(adapter, session_id: str) -> bool:
-    """把会话自省写入记忆（category=self-reflection，可检索）。"""
+    """把会话自省写入记忆（category=self-reflection，可检索）。
+
+    EXECUTION 154: 改用 Trinity.ingest 走完整 postprocess（向量+分词回填）——
+    此前 adapter.store_memory 直写导致 self-reflection 记忆不可检索。
+    """
     try:
         _ctx = adapter.context_load(session_id) if adapter and hasattr(adapter, "context_load") else None
         if not _ctx:
             return False
         _txt = reflect(_ctx.get("last_query", ""), _ctx.get("affect"), _ctx.get("percepts"))
-        if _txt and hasattr(adapter, "store_memory"):
-            adapter.store_memory(
-                content="[self-reflection] " + _txt,
-                category="self-reflection",
-                tags=["self", "reflection"], importance=0.5,
-            )
-            return True
+        if _txt:
+            try:
+                from trinity import Trinity
+                m = Trinity(adapter="postgresql")
+                m.ingest(
+                    content="[self-reflection] " + _txt,
+                    category="self-reflection",
+                    tags=["self", "reflection"], importance=0.5,
+                )
+                return True
+            except Exception:
+                # 降级：adapter 直写（无回填但保底）
+                if hasattr(adapter, "store_memory"):
+                    adapter.store_memory(
+                        content="[self-reflection] " + _txt,
+                        category="self-reflection",
+                        tags=["self", "reflection"], importance=0.5,
+                    )
+                    return True
         return False
     except Exception:
         return False

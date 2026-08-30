@@ -35,6 +35,10 @@ def main():
                     done += 1
             except Exception:
                 pass
+        # EXECUTION 154: 等待异步回填完成（短进程线程被杀边界）
+        import time
+        if done:
+            time.sleep(15)
         print(json.dumps({"sessions": len(sessions), "reflected": done}))
         return 0
     finally:
