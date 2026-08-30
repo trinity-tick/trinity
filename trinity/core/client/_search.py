@@ -442,6 +442,21 @@ class _SearchMixin:
                     parts.append(_idn)
             except Exception:
                 pass
+            # 2026-09 (EXECUTION 174): 全局自我——持续身份进入情境（跨会话）
+            try:
+                import psycopg2 as _pg2
+                _gconn = _pg2.connect(host="127.0.0.1", port=5432, dbname="trinity",
+                                     user="trinity", password="trinity")
+                _gcur = _gconn.cursor()
+                _gcur.execute("SELECT content FROM memories WHERE category='self-identity' ORDER BY created_at DESC LIMIT 1")
+                _grow = _gcur.fetchone()
+                _gconn.close()
+                if _grow:
+                    _gid = str(_grow[0]).replace("[self-identity] ", "")
+                    if _gid and _gid not in parts:
+                        parts.append("[自我] " + _gid[:120])
+            except Exception:
+                pass
             # EXECUTION 141: persistent context load
             _pctx = None
             if self._adapter is not None and hasattr(self._adapter, "context_load"):
