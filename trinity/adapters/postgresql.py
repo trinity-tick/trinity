@@ -581,6 +581,7 @@ class PostgreSQLAdapter(StorageAdapter):
                         "category": row["category"],
                         "modality": row["modality"],
                         "created_at": row["created_at"].isoformat() if hasattr(row["created_at"], "isoformat") else str(row["created_at"]),
+                        "metadata": row["metadata"] if "metadata" in row.keys() else None,
                         "score": float(row["score"]) if row["score"] else 0.0,
                     })
 
@@ -661,6 +662,7 @@ class PostgreSQLAdapter(StorageAdapter):
                         "category": row["category"],
                         "modality": row["modality"],
                         "created_at": row["created_at"].isoformat() if hasattr(row["created_at"], "isoformat") else str(row["created_at"]),
+                        "metadata": row["metadata"] if "metadata" in row.keys() else None,
                         "score": float(row["score"]) if row["score"] is not None else 0.0,
                     })
                 return results

@@ -1,0 +1,1 @@
+{"marker":"    def search_hybrid(\n        self,\n        query: str,","insert":"    def search_hybrid(\n        self,\n        query: str,","add_before":"        self._last_query = query  # EXECUTION 132: affect 钩子用\n        "}

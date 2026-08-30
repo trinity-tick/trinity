@@ -163,7 +163,19 @@ class _IngestionMixin:
                 importance = quick_value(str(content or ""), str(category or ""))
             except Exception:
                 pass
-        # 2026-08-16(基建夯实):压测/锁测试写入隔离——已知测试 agent/category/
+        # 2026-09 (EXECUTION 132): 情感层——写入即情感标记（杏仁核通路扩展，零 LLM）
+        try:
+            from trinity.brain.affect import assess as _affect_assess
+            _aff = _affect_assess(str(content or ""))
+            if _aff.get("polarity") != "neu":
+                metadata = dict(metadata or {})
+                metadata["affect"] = {"valence": _aff["valence"],
+                                       "arousal": _aff["arousal"],
+                                       "polarity": _aff["polarity"]}
+        except Exception:
+            pass
+
+        # 2026-08-16(基建夯实):压测/锁测试写入隔离        # 2026-08-16(基建夯实):压测/锁测试写入隔离——已知测试 agent/category/
         # 标签/内容标记的写入强制 archived(仍落库可查、不占 active 检索面)。
         # 开关 TRINITY_ISOLATE_TEST_WRITES=off 可关闭。
         isolated_test_write = self._is_isolated_test_write(

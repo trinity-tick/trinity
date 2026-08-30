@@ -9269,3 +9269,39 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
   28,070/28,070（100%）——**所有记忆向量+分词全覆盖**；
 - 稳态检索 763-830ms；审计链 integrity True（545）；DCPM 81 信念；
 - 守护链 OK（supervisor pass complete）；磁盘 C 100/D 466.9；WAL 受控。
+---
+
+## 132. 大脑化收官：情感层（ZenBrain 对齐）（2026-09）
+
+### 132.1 目标
+
+- ZenBrain 7 层架构最后缺失：情感层——杏仁核情感显著性深化为
+  情感极性（valence）+ 唤醒度（arousal）标记 + 检索情感匹配。
+
+### 132.2 实施（完成）
+
+- 新增 trinity/brain/affect.py：中文情感词典（积极/消极词+否定反转+
+  强度唤醒）规则评估，零 LLM 毫秒级；assess→valence/arousal/polarity；
+- ingest 写入：情感标记进 metadata.affect（非中性时）；
+- 检索：_apply_layered_ranking 情感匹配——查询含情感词时同极性记忆
+  affect_match=1.0 排序前移；
+- 顺带修复：search_memories 结果补 metadata 字段（此前缺失，affect 不可见）；
+  _last_query 在 search/search_hybrid 两路径记录。
+
+### 132.3 验证
+
+- assess('数据库故障导致数据丢失') → neg -0.7；'项目成功上线用户满意' → pos 0.9；
+- 检索'数据库事故 崩溃 教训' → '严重事故…' affect_match=1.0（同极性命中）；
+- API health 200；写入标记落库（metadata.affect 正确）。
+
+### 132.4 意义（大脑化）
+
+- ZenBrain 7 层全对齐：感知/工作/情景/语义/程序/元认知/**情感**（本轮）；
+- 情感调制回忆 = 杏仁核-海马体耦合（情绪记忆优先回忆）；
+- 大脑化机制增至 14 项运行时。
+
+### 132.5 验证与回滚
+
+- 改动：affect.py（新）、_ingestion.py（标记）、_search.py（匹配+排序）、
+  postgresql.py（metadata 字段）
+- 回滚：git checkout 4 文件；情感标记可保留（幂等）。

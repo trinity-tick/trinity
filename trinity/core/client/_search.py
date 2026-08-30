@@ -301,6 +301,7 @@ class _SearchMixin:
             raw_results = deduped
 
         if ranked and raw_results:
+            self._last_query = query  # EXECUTION 132: affect 钩子用
             raw_results = self._apply_layered_ranking(
                 raw_results=raw_results,
                 top_k=top_k,
@@ -598,7 +599,28 @@ class _SearchMixin:
                 item.get("modality", "text"), 1.0
             )
 
-            # 2026-09 (EXECUTION 121): 价值编码加权（杏仁核通路）——
+            # 2026-09 (EXECUTION 132): 情感匹配加权（情感层）——查询含情感
+            # 词时，同极性记忆 affect_match=1.0 排序前移（情绪色彩调制回忆）。
+            try:
+                from trinity.brain.affect import query_affect_terms as _qat
+                _qterms = _qat(getattr(self, "_last_query", ""))
+                if _qterms:
+                    _meta = item.get("metadata") or {}
+                    if isinstance(_meta, str):
+                        import json as _j
+                        try:
+                            _meta = _j.loads(_meta)
+                        except Exception:
+                            _meta = {}
+                    _aff = _meta.get("affect") or {}
+                    _pol = str(_aff.get("polarity") or "neu")
+                    _qpol = _qterms[0][1]
+                    if _pol == _qpol:
+                        item["affect_match"] = 1.0
+            except Exception:
+                pass
+
+            # 2026-09 (EXECUTION 121): 价值编码加权（杏仁核通路）——            # 2026-09 (EXECUTION 121): 价值编码加权（杏仁核通路）——
             # importance_score（五因素价值模型，value-recalib 补标）以温和
             # 系数调制检索得分：高价值记忆更容易被想起。与突触衰减互补
             # （价值=编码强度，衰减=遗忘速度）。系数可配置（value_boost_k）。
@@ -633,7 +655,7 @@ class _SearchMixin:
                 },
             })
 
-        ranked.sort(key=lambda x: x["final_score"], reverse=True)
+        ranked.sort(key=lambda x: (0.0 if x.get("affect_match") else 1.0, x["final_score"]), reverse=True)
         return ranked[:top_k]
     def _search_with_vector(
         self,
@@ -1113,6 +1135,7 @@ class _SearchMixin:
                 routing = "light" if len(query.strip()) <= 8 else "full"
 
         # ── light 路径：FTS 快通道（~3ms），天然支持过滤 ──────────
+        self._last_query = query  # EXECUTION 132: affect 钩子用
         if routing == "light" and self._adapter is not None:
             # 2026-09 (EXECUTION 129): 预测编码（大脑预测-误差机制）——
             # 检索前预测命中数（基于查询长度/词数 + 历史 EMA），检索后
