@@ -48,9 +48,50 @@ async def hybrid_search(request: HybridSearchRequest):
             try:
                 detail = adapter.get_memory(mid)
                 if detail and detail.get("content"):
-                    r["content_preview"] = detail["content"][:200]
+                    _c = detail["content"]
+                    # 2026-09（EXECUTION 105.18）：回填路径解密缺失——get_memory
+                    # 返回 enc:v1: 密文（存储加密默认开），需显式解密
+                    if isinstance(_c, str) and _c.startswith("enc:v1:")                             and hasattr(adapter, "_decrypt_content"):
+                        try:
+                            _c = adapter._decrypt_content(_c)
+                        except Exception:
+                            pass
+                    r["content_preview"] = _c[:200]
             except Exception:
                 pass
+    # 2026-09（EXECUTION 105.8）认知循环集成：检索响应默认附加轻量元认知
+    # （confidence + gap 提示）——零额外延迟（基于已有结果计算，不调 LLM/嵌入）。
+    try:
+        from trinity.brain.metacognition import assess_confidence
+        _channels = []
+        if isinstance(data, dict):
+            _channels = (data.get("breakdown") or {}).get("channels", [])
+        _meta = assess_confidence(results, _channels)
+        _scores = [r.get("score") for r in results
+                   if isinstance(r.get("score"), (int, float))]
+        _all_fallback = len(results) > 0 and all(
+            (s or 0) <= 0.15 for s in _scores)
+        _gap_hint = (len(results) == 0
+                     or (_all_fallback and _meta["confidence"] < 0.4))
+        _meta["gap_hint"] = _gap_hint
+        if isinstance(data, dict):
+            data["metacognition"] = _meta
+    except Exception:
+        pass
+    # 2026-09（EXECUTION 105.11）：按需重建式回忆（recall=True 时附加；
+    # 默认 False 保持取档式性能——深度加工按需）
+    if getattr(request, "recall", False) and isinstance(data, dict) and results:
+        try:
+            from trinity.brain.value_encoder import recall_reconstruct
+            _sources = [{"memory_id": r.get("memory_id"),
+                         "content": str(r.get("content_preview") or r.get("content") or "")[:300],
+                         "created_at": str(r.get("created_at"))[:10] if r.get("created_at") else ""}
+                        for r in results[:8]]
+            _raw = recall_reconstruct(request.query, _sources, top_k=8)
+            if _raw:
+                data["recall"] = {"text": _raw.strip(), "confidence": 0.7}
+        except Exception:
+            pass
     return data
 
 
@@ -172,14 +213,39 @@ async def vector_search(
     query: str = Body(...), top_k: int = Body(10),
     index_backend: str = Body("numpy"), embed_backend: str = Body("auto"),
 ):
-    """Semantic vector search."""
+    """Semantic vector search (PG pgvector HNSW direct when available)."""
     try:
         from trinity.embeddings import create_engine
-        from trinity.vector_index import create_index
         import numpy as np
         eng = create_engine(backend=embed_backend)
-        idx = create_index(backend=index_backend, dim=eng.embedding_dim())
+        qv = np.asarray(eng.embed(query), dtype=np.float32)
         mem = get_memory()
+        # 2026-09（EXECUTION 104.9）：PG 主存储直接 pgvector HNSW 直查——
+        # 原实现每次全量拉 200 条 + 内存重建索引 + 逐条嵌入（实测 >90s）；
+        # 直查 ~15ms。失败自动回退下方内存路径。
+        adapter = getattr(mem, "_adapter", None)
+        if adapter is not None and hasattr(adapter, "vector_search"):
+            try:
+                res = adapter.vector_search(
+                    qv, top_k=top_k,
+                    agent_id=getattr(mem, "_search_agent_id", None),
+                    persona_id=getattr(mem, "_search_persona_id", None),
+                    tenant_id=getattr(mem, "_search_tenant_id", None),
+                )
+                if res:
+                    return {
+                        "query": query, "total": len(res),
+                        "model": eng.model_name(), "dim": eng.embedding_dim(),
+                        "index_backend": "pgvector-hnsw",
+                        "results": [{"id": r.get("memory_id"),
+                                     "score": round(float(r.get("score", 0.0)), 4),
+                                     "metadata": r} for r in res],
+                    }
+            except Exception:
+                pass  # fall through to in-memory path
+        # fallback: in-memory index path (non-PG adapters or direct-query failure)
+        from trinity.vector_index import create_index
+        idx = create_index(backend=index_backend, dim=eng.embedding_dim())
         memories = []
         if hasattr(mem, '_adapter') and mem._adapter:
             try:

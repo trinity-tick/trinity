@@ -163,8 +163,11 @@ class PostgreSQLAdapter(StorageAdapter):
                     self._min_conn, self._max_conn,
                 )
 
-            self._create_tables()
+            # 2026-09 修复：先置 _connected 再建表（否则 _get_conn 在
+            # _create_tables 内抛 "not connected"，schema 创建被 except 吞掉
+            # —— 新库永远建不出表。旧库表为早年 SQL 迁移所建，未暴露。）
             self._connected = True
+            self._create_tables()
 
     @contextmanager
     def _get_conn(self) -> Iterator[Any]:
@@ -204,6 +207,8 @@ class PostgreSQLAdapter(StorageAdapter):
         init_sql = """
         CREATE EXTENSION IF NOT EXISTS pg_trgm;
         CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+        -- 2026-09: pgvector 向量通道（融合第 2 步）——embedding 列 + HNSW 索引
+        CREATE EXTENSION IF NOT EXISTS vector;
 
         CREATE TABLE IF NOT EXISTS memories (
             memory_id     UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -212,6 +217,8 @@ class PostgreSQLAdapter(StorageAdapter):
             tenant_id     VARCHAR(128) NOT NULL DEFAULT 'default',
             agent_id      VARCHAR(128) NOT NULL DEFAULT 'default',
             content       TEXT NOT NULL,
+            content_tsv   tsvector GENERATED ALWAYS AS (to_tsvector('simple', content)) STORED,  -- 2026-09: 物化 tsvector（检索排序加速，EXECUTION 104.8）
+            embedding     vector(1024),          -- 2026-09: pgvector 语义向量（可选，回填后参与向量检索）
             role          VARCHAR(32) NOT NULL DEFAULT 'user',
             importance    DOUBLE PRECISION NOT NULL DEFAULT 0.5,
             tags          TEXT[] DEFAULT '{}',
@@ -252,6 +259,11 @@ class PostgreSQLAdapter(StorageAdapter):
         CREATE INDEX IF NOT EXISTS idx_memories_tags ON memories USING GIN(tags);
         CREATE INDEX IF NOT EXISTS idx_memories_content_fts
             ON memories USING GIN(to_tsvector('simple', content));
+        CREATE INDEX IF NOT EXISTS idx_memories_content_tsv
+            ON memories USING GIN(content_tsv);
+        -- 2026-09: pgvector HNSW 余弦索引（向量直查通道）
+        CREATE INDEX IF NOT EXISTS idx_memories_embedding
+            ON memories USING hnsw (embedding vector_cosine_ops);
         CREATE INDEX IF NOT EXISTS idx_memories_ttl ON memories(ttl_seconds, created_at);
         CREATE INDEX IF NOT EXISTS idx_memories_last_access ON memories(last_accessed_at);
         CREATE INDEX IF NOT EXISTS idx_memories_modality ON memories(modality);
@@ -383,9 +395,10 @@ class PostgreSQLAdapter(StorageAdapter):
         CREATE INDEX IF NOT EXISTS idx_agent_registry_status ON agent_registry(status);
 
         -- Insert sample data if empty
+        -- 2026-09 修复: sha256() 返回 bytea, 转 varchar(64) 会超长(backslash-x 转义) -> encode hex (新库必炸, 旧库表非空未触发)
         INSERT INTO memories (memory_id, session_id, persona_id, tenant_id, content, role, sha256_hash, category)
         SELECT uuid_generate_v4(), uuid_generate_v4(), 'system', 'default', 'Trinity PostgreSQL initialized at ' || NOW(), 'system',
-               sha256('Trinity PostgreSQL initialized'), 'system'
+               encode(sha256('Trinity PostgreSQL initialized'), 'hex'), 'system'
         WHERE NOT EXISTS (SELECT 1 FROM memories WHERE persona_id = 'system' AND role = 'system');
         """
 
@@ -505,32 +518,50 @@ class PostgreSQLAdapter(StorageAdapter):
             params.append(category)
 
         where = " AND ".join(conditions)
-        # 2026-08-29: long CJK queries - any-word ILIKE OR (jieba split)
+        # 2026-09（EXECUTION 109，pg_jieba 方案 C 应用层落地）：
+        # 中文查询优先走 content_tsv_zh（jieba 分词 tsvector，GIN 索引），
+        # 排序用 ts_rank；ILIKE OR 降级为兜底（tsv_zh 缺失/空结果时）。
+        import jieba as _jb
+        _jb.setLogLevel(60)
+        _zh_words = []
+        try:
+            _zh_words = [w.strip() for w in _jb.cut(query)
+                         if w.strip() and len(w.strip()) >= 2][:12]
+        except Exception:
+            _zh_words = []
+        # OR 语义（词间 |）：中文长查询任一命中即可（AND 会 0 命中——
+        # 实测 '用户偏好 咖啡' AND 无记忆同时含三词）；与向量通道互补。
+        # 注意：plainto_tsquery 不识别 |（按空格拆 AND），须用 to_tsquery。
+        if _zh_words:
+            _tsv_zh_query = " | ".join(_zh_words)
+            _tsv_zh_fn = "to_tsquery"
+        else:
+            _tsv_zh_query = query
+            _tsv_zh_fn = "plainto_tsquery"
         _like_clause = "content ILIKE %s"
-        _tail_params = [query, "%" + query + "%", top_k]
+        _tail_params = [_tsv_zh_query, "%" + query + "%", top_k]
         if len(query) > 8:
             try:
-                import jieba as _jb
-                _words = [w for w in _jb.cut(query) if w.strip() and len(w.strip()) > 1][:6]
+                _words = [w for w in _zh_words if len(w) >= 3][:6]
             except Exception:
                 _words = []
             if _words:
-                _like_clause = "(" + " OR ".join(["content ILIKE %s"] * len(_words)) + ")"
-                _tail_params = [query] + ["%" + w + "%" for w in _words] + [top_k]
-        # params order = SELECT placeholders first (2), then WHERE, then tail
-        params = [query, query] + params + _tail_params
+                _like_clause = "(content ILIKE %s OR " + " OR ".join(["content ILIKE %s"] * len(_words)) + ")"
+                _tail_params = [_tsv_zh_query, "%" + query + "%"] + ["%" + w + "%" for w in _words] + [top_k]
+        # params order = SELECT(1) + tsv_zh SELECT(1) + WHERE + tail
+        params = [_tsv_zh_query, _tsv_zh_query] + params + _tail_params
 
         with self._get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 cur.execute(f"""
                     SELECT *,
-                           CASE WHEN to_tsvector('simple', content) @@ plainto_tsquery('simple', %s)
-                                THEN ts_rank(to_tsvector('simple', content),
-                                             plainto_tsquery('simple', %s))
+                           CASE WHEN content_tsv_zh @@ {_tsv_zh_fn}('simple', %s)
+                                THEN ts_rank(content_tsv_zh,
+                                             {_tsv_zh_fn}('simple', %s))
                                 ELSE 0.1 END as score
                     FROM memories
                     WHERE {where}
-                      AND (to_tsvector('simple', content) @@ plainto_tsquery('simple', %s)
+                      AND (content_tsv_zh @@ {_tsv_zh_fn}('simple', %s)
                            OR {_like_clause})
                     ORDER BY score DESC, importance DESC, created_at DESC
                     LIMIT %s
@@ -545,7 +576,7 @@ class PostgreSQLAdapter(StorageAdapter):
                         "persona_id": row["persona_id"],
                         "session_id": str(row["session_id"]),
                         "role": row["role"],
-                        "importance": float(row["importance"]),
+                        "importance": float(row["importance"]) if row["importance"] is not None else 0.0,  # 2026-09 NULL 防御
                         "tags": row["tags"],
                         "category": row["category"],
                         "modality": row["modality"],
@@ -568,6 +599,107 @@ class PostgreSQLAdapter(StorageAdapter):
                     conn.commit()
 
         return results
+
+    # ── 2026-09: pgvector 向量通道（PG 融合第 2 步）──────────────────
+    def vector_search(
+        self,
+        query_vec: Any,
+        top_k: int = 10,
+        agent_id: Optional[str] = None,
+        persona_id: Optional[str] = None,
+        tenant_id: Optional[str] = None,
+        status: str = "active",
+    ) -> List[Dict[str, Any]]:
+        """pgvector HNSW 余弦相似检索（embedding <=> query_vec）。
+
+        仅返回已回填 embedding 的记忆；未回填时自然排除（embedding IS NOT NULL）。
+        与 search_memories 输出 schema 一致，供引擎 _vector_search 直查。
+        """
+        import psycopg2.extras
+        try:
+            import numpy as _np
+            vec = _np.asarray(query_vec, dtype=_np.float32).reshape(-1)
+        except Exception:
+            vec = list(query_vec)
+        vec_str = "[" + ",".join(f"{float(x):.6f}" for x in vec) + "]"
+
+        conditions = ["status = %s", "embedding IS NOT NULL"]
+        # 占位符顺序 = SELECT(1) + WHERE 条件 + ORDER BY(1) + LIMIT(1)
+        params: List[Any] = [vec_str]  # SELECT 里的 %s::vector
+        cond_params: List[Any] = [status]
+        if persona_id:
+            conditions.append("persona_id = %s"); cond_params.append(persona_id)
+        if tenant_id:
+            conditions.append("(tenant_id = %s OR tenant_id IS NULL)"); cond_params.append(tenant_id)
+        if agent_id:
+            conditions.append("(agent_id = %s OR agent_id IS NULL)"); cond_params.append(agent_id)
+        where = " AND ".join(conditions)
+        params = params + cond_params + [vec_str, top_k]
+
+        with self._get_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                cur.execute(f"""
+                    SELECT memory_id, content, persona_id, session_id, role,
+                           importance, tags, category, modality, created_at,
+                           1 - (embedding <=> %s::vector) AS score
+                    FROM memories
+                    WHERE {where}
+                    ORDER BY embedding <=> %s::vector
+                    LIMIT %s
+                """, params)
+                results = []
+                for row in cur.fetchall():
+                    results.append({
+                        "memory_id": str(row["memory_id"]),
+                        "content": row["content"],
+                        "content_preview": row["content"][:100],
+                        "persona_id": row["persona_id"],
+                        "session_id": str(row["session_id"]),
+                        "role": row["role"],
+                        "importance": float(row["importance"]) if row["importance"] is not None else 0.0,  # 2026-09 NULL 防御
+                        "tags": row["tags"],
+                        "category": row["category"],
+                        "modality": row["modality"],
+                        "created_at": row["created_at"].isoformat() if hasattr(row["created_at"], "isoformat") else str(row["created_at"]),
+                        "score": float(row["score"]) if row["score"] is not None else 0.0,
+                    })
+                return results
+
+    def set_embedding(self, memory_id: str, query_vec: Any) -> bool:
+        """写入单条记忆的 pgvector embedding（回填/增量用）。"""
+        import psycopg2.extras
+        try:
+            import numpy as _np
+            vec = _np.asarray(query_vec, dtype=_np.float32).reshape(-1)
+        except Exception:
+            vec = list(query_vec)
+        vec_str = "[" + ",".join(f"{float(x):.6f}" for x in vec) + "]"
+        with self._get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE memories SET embedding = %s::vector, updated_at = NOW() WHERE memory_id = %s",
+                    (vec_str, memory_id),
+                )
+                conn.commit()
+                return cur.rowcount > 0
+
+    def count_embeddings(self) -> int:
+        """已回填向量条数（回填进度监控用）。"""
+        with self._get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT count(*) FROM memories WHERE embedding IS NOT NULL")
+                return int(cur.fetchone()[0])
+
+    def get_memories_missing_embedding(self, limit: int = 500) -> List[Dict[str, Any]]:
+        """分批取未回填向量记忆（回填脚本用）。"""
+        import psycopg2.extras
+        with self._get_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                cur.execute(
+                    "SELECT memory_id, content FROM memories WHERE embedding IS NULL ORDER BY created_at LIMIT %s",
+                    (limit,),
+                )
+                return [{"memory_id": str(r["memory_id"]), "content": r["content"]} for r in cur.fetchall()]
 
     def get_memory(self, memory_id: str) -> Optional[Dict[str, Any]]:
         import psycopg2.extras

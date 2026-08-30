@@ -280,6 +280,7 @@ class HybridSearchRequest(BaseModel):
     agent_id: Optional[str] = Field(None, description="按Agent 过滤")
     persona_id: Optional[str] = Field(None, description="按角色过滤")
     tenant_id: Optional[str] = Field(None, description="按租户过滤")
+    recall: bool = Field(False, description="2026-09 EXECUTION 105.11：为 True 时响应附加重建式回忆（按需深度加工）")
 
 class CrossModalSearchRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=32768, description="文字查询或图片文件路径")

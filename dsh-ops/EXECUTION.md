@@ -7255,3 +7255,1262 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 
 - 改动：scripts/sync_sqlite_to_pg.py（全量取数+空 id 跳过）
 - 回滚：git checkout sync 脚本；PG 重跑 sync 即回
+
+
+---
+
+## 102. PG 主存储服务化（2026-09，Windows 服务 trinity-pg）
+
+> 执行建议：PG 主存储最稳定对接——原生 PG18 从"手工进程"升级为"开机自启服务"。
+
+### 102.1 背景（稳定性缺口）
+
+- PG 主存储（原生 18.6，~/.trinity/pgdata，:5432，28,017 条）此前由**手工
+  postgres.exe -D 进程**运行（非服务、无自启、无守护）——重启失联；
+- supervisor 的 pg-maintenance 守护目标仍是 **:5430 docker**（过时——凭证
+  TRINITY_PG_* 早已指向 5432），5432 挂了无人拉起（98 轮 degraded 事故同源）；
+- 启动文件夹/计划任务无 PG 项（autostart 的 pg_ctl ensure 块仅登录后生效）。
+
+### 102.2 服务化（完成）
+
+- 注册 Windows 服务：`pg_ctl register -N trinity-pg -D ~/.trinity/pgdata -S auto`
+  （UAC 提权执行；StartType=Automatic 开机自启）；
+- 停手工进程（pg_ctl stop -m fast）→ Start-Service trinity-pg → 5432 由服务
+  进程托管（PID 稳定）；数据完好：memories=28,017 / active=11,658；
+- API /health ok（engine healthy，无 degraded）。
+
+### 102.3 supervisor 守护切换（完成）
+
+- 3.5 节：探测 **:5432** → down 时优先 Start-Service trinity-pg，失败则
+  pg_ctl start 兜底（60s 重启间隔保护）；docker trinity-db(:5430) 不再守护
+  （docker 栈自身库，compose 自管）；
+- **故障演练通过**：Stop-Service → 5432 down → supervisor 一轮自动拉起
+  （Start-Service 非提权失败 → pg_ctl fallback 成功）→ 恢复后切回服务托管；
+- 脚本保持 UTF-8 BOM + CRLF，ParseFile 0 errors。
+
+### 102.4 维护链验证（完成）
+
+- health OK；pg-sync：28,013 行同步 / 0 错误 / PG total 28,018 / 15.9s；
+- 文档对齐：README 拓扑表、trinity.yaml（pg_port 5430→5432 + 注释）、
+  skill 手册 trinity-maintenance（拓扑/坑 14/守护说明）。
+
+### 102.5 验证与回滚
+
+- 改动：~/.dsh/.credentials.yaml（无——早已指向 5432）、dsh-ops/trinity-supervisor.ps1
+  （3.5 守护块）、README.md、trinity.yaml、~/.dsh/skills/trinity-maintenance/SKILL.md
+- 回滚：`sc.exe delete trinity-pg`（或 pg_ctl unregister -N trinity-pg）→
+  supervisor 3.5 恢复 5430 docker 块（git checkout supervisor.ps1）；
+  PG 数据不受影响（同数据目录）。
+
+
+---
+
+## 103. PG 融合第 2 步：pgvector 向量通道（2026-09）
+
+> 执行建议：PG 主存储补向量检索——memories.embedding vector(1024) + HNSW + 引擎直查。
+
+### 103.1 背景
+
+- PG 主存储（2026-08-29 切换）缺向量通道：引擎 _vector_search 只能
+  PG 拉全量 + 内存 FAISS 重建（28k 全量编码数分钟/次）；
+- 原生 PG18 无 pgvector；hybrid 在 PG 模式强制 light（BM25 未索引 PG）。
+
+### 103.2 pgvector 安装（完成）
+
+- 本机无 C 编译器 → 用 GitHub 社区预编译包
+  andreiramani/pgvector_pgsql_windows **vector.v0.8.6-pg18.zip**
+  （github.com 主站 TLS 被阻，经 ghfast.top 镜像下载）；
+- 解压拷贝 vector.dll → Desktop/pgsql/lib，extension SQL → share/extension；
+- CREATE EXTENSION vector 0.8.6 ✓；[1,2,3]<->[1,2,4]=1 ✓。
+
+### 103.3 schema（完成）
+
+- memories 重建 embedding 列：DROP 旧 text 空列 → **vector(1024)** +
+  **HNSW 余弦索引**（idx_memories_embedding）；
+- adapter _create_tables 补 CREATE EXTENSION vector + 列 + 索引（幂等）。
+
+### 103.4 adapter 新方法（完成）
+
+- vector_search(query_vec, top_k, agent/persona/tenant 过滤)：
+  embedding <=> query_vec HNSW 直查，输出与 search_memories 同 schema；
+- set_embedding / count_embeddings / get_memories_missing_embedding（回填支撑）。
+
+### 103.5 引擎接入（完成）
+
+- _search.py _vector_search 开头加 PG 分支：PG adapter 且有向量 →
+  直接 vector_search（免全量拉取+免内存重建）；失败/为空回退内存 ANN 路径。
+
+### 103.6 存量回填（进行中→完成）
+
+- v1 用 CachedEmbeddingEngine（ONNX 8s/条，28k 需 62h）→ 废弃；
+- v2 用 **Ollama bge-m3 GPU**（~5-11 条/s，28k 约 1-1.5h）——注意向量空间
+  一致性：引擎查询也用 create_engine(auto)→Ollama bge-m3（同模型同维）；
+- 双 worker 并行（set_embedding 幂等）；断点续传（embedding IS NULL）。
+
+### 103.7 顺带修复的既有 bug
+
+1. connect() 先 _create_tables 后置 _connected → _get_conn 抛 not connected，
+   schema 创建被 except 吞掉（新库永远建不出表）——先置 _connected 再建表；
+2. 种子 INSERT 用 sha256()（bytea）插 varchar(64) 超长（新库必炸）→
+   encode(sha256(...),'hex')；
+3. 新库全量建表验证通过（scratch 库 trinity_vec_test：vector 列/扩展/索引
+   全部自动创建，随后删除）。
+
+### 103.8 验证与回滚
+
+- 改动：trinity/adapters/postgresql.py（vector 通道+schema+2 bug 修复）、
+  trinity/core/client/_search.py（PG 直查分支）、scripts/backfill_pg_embeddings.py（新）
+- 回滚：git checkout postgresql.py _search.py；PG 侧 DROP COLUMN embedding
+  （向量列独立于业务列，不影响 pg-sync/镜像）；
+- 边界：hybrid full 仍 light（BM25 未索引 PG）——后续可 pg_trgm 索引补。
+
+---
+
+## 104. Ollama/Docker 解耦第 1 步：TRINITY_EMBED_BACKEND=onnx（2026-09）
+
+> 目标：Trinity 嵌入/检索完全脱离外部 Ollama 服务——进程内 ONNX bge-m3。
+> 实测（2026-09）：ONNX 与 Ollama bge-m3 同模型同向量空间（cos=1.0000，1024d）；
+> 稳态 113ms/条（CPU Int8）vs Ollama 705ms/条；语义判别 0.869/0.396。
+
+### 104.1 背景
+
+- ONNX 内镶引擎（2026-08-25，OnnxEmbeddingEngine）此前仅是 Ollama 不可用时的兜底；
+- 依赖已齐备：onnxruntime 1.27.0 / transformers 5.12.1 / sentencepiece 0.2.1；
+- 模型完整：~/.trinity/models/bge-m3-onnx/（model_optimized.onnx + 1.4GB 权重 + tokenizer）。
+
+### 104.2 改动（完成）
+
+- trinity/embeddings/engine.py：create_engine(auto) 分支支持环境变量
+  TRINITY_EMBED_BACKEND=onnx → 直接 OnnxEmbeddingEngine（跳过 Ollama 探测，0ms）；
+  未设置时维持原链（Ollama → ONNX → sklearn 降级），kwargs 按 model_dir/max_length/
+  providers 过滤（base_url 等 Ollama 专属参数不再透传 ONNX，防 TypeError）；
+- ~/.dsh/.credentials.yaml：新增 TRINITY_EMBED_BACKEND: onnx（保持 BOM）；
+- dsh-ops/trinity-supervisor.ps1：注入清单加 TRINITY_EMBED_BACKEND（BOM+CRLF 保持）；
+- dsh-ops/trinity-dsh-maintenance.ps1：启动时从凭证注入 TRINITY_EMBED_BACKEND（BOM+CRLF 保持）。
+
+### 104.3 验证（完成）
+
+- 单元：env=onnx → CachedEmbeddingEngine(OnnxEmbeddingEngine)，0ms 无探测；无 env →
+  Ollama（18ms 探测）行为不变；env=onnx + base_url kwargs 不报错；
+- 进程证据：重启后 api（PID 8968）PEB 环境块确认 TRINITY_EMBED_BACKEND=onnx
+  （supervisor 注入生效；api/mcp/mcp-http 由 supervisor 于 16:41 以新配置拉起）；
+- 检索一致性（/memory/search/hybrid，rrf，top5，切换前后对比）：
+  Q1"Trinity 记忆系统 多租户"：同 5 条（2 条顺序微调）；Q2"用户偏好 咖啡"：同空；
+  Q3"PostgreSQL 主存储 切换"：完全一致含顺序；
+- /health：engine healthy / vector true / 无 degraded；响应无劣化。
+
+### 104.4 后续（第 2-3 步，待观察期后执行）
+
+- 观察 1-2 天零回归后：① 停 trinity docker 容器（docker compose --profile full
+  down + telemetry compose down；Docker Desktop 本体保留——smartcos 栈在用）；
+  ② TRINITY_TELEMETRY_ENABLED=0（凭证+supervisor 注入）；③ 停 Ollama
+  （移除 Startup\Ollama.lnk + 杀进程；当前唯一消费者是 PG 回填脚本，已基本完成）。
+
+### 104.5 验证与回滚
+
+- 改动文件：trinity/embeddings/engine.py、~/.dsh/.credentials.yaml、
+  dsh-ops/trinity-supervisor.ps1、dsh-ops/trinity-dsh-maintenance.ps1
+- 回滚：git checkout engine.py；反向删除凭证键与注入清单项；重启 api/mcp 即回
+  Ollama 优先（无数据影响，向量空间相同）。
+
+### 104.6 观察期自动化（2026-09 落地）
+
+- 新增 dsh-ops/trinity-embed-observe.py：独立观察检查脚本——
+  ① /health 硬指标（status/engine/vector/tier/engine_error）；② 3 个固定查询抽样
+  （/memory/search/hybrid rrf top5，延迟+count+top1，与基线对比 drift 软报告）；
+  ③ netstat 统计连 :11434 的 ESTABLISHED pid（软指标，第 3 步后应为空）。
+- 基线：~/.trinity/observe/embed_baseline.json（首次运行自动创建，之后对比）。
+- 接入：maintenance 新任务 "observe"（allowed+定义+switch），autostart 每日
+  03:00 链追加 observe（mirror,decay,...,backup,observe）；可手动
+  powershell -File dsh-ops/trinity-dsh-maintenance.ps1 -Tasks observe。
+- 实测（2026-08-29 16:53）：observe OK，基线创建；查询延迟 1.34-1.49s；
+  11434 连接者仅 ollama app.exe（Ollama 内部守护连接）——Trinity 进程零连接，
+  PG 回填脚本（原 pid 34600）已完成退出。
+- 已知小瑕疵：维护日志 GBK 解码显示中文乱码（python UTF-8 输出 → 日志显示层），
+  基线 JSON 文件本身 UTF-8 正确，不影响功能。
+
+### 104.7 网络方案对标与引擎调优（2026-09 落地）
+
+> 依据：搜索主流方案（ONNX Runtime 官方 Memory/Performance 文档、fastembed/Qdrant
+> Optimize Throughput、onnxruntime .ort mmap issue #25524、社区冷启动预加载实战）+
+> 本机实测对比。
+
+#### 差距实测（修正认知）
+
+- 冷启动"27-31s"真相：其中 ~20s 是 trinity import（Second Brain 模块初始化，启动期
+  开销，与 ONNX 无关）；ONNX session 本身 load 仅 **3.7s**；tokenizer ~2s；
+- 每进程内存：纯 ONNX+tokenizer **WS~1.9GB / Private~3.4GB**（api+mcp 两个常驻
+  ≈4GB，32GB 机器可接受）；
+- 单条推理 119ms、批量（真 batch）29ms/条——**原 embed_batch 是串行逐条**
+  （101ms/条），未利用批量推理。
+
+#### 落地改动（trinity/embeddings/engine.py）
+
+1. OnnxEmbeddingEngine._lazy_init：SessionOptions 调优——
+   graph_optimization_level=ORT_ENABLE_ALL + intra_op_num_threads=8
+   （实测单条 119→94ms -21%、批量 39→29ms -25%；t56 实测 522ms 恶化——
+   线程并非越多越好；TRINITY_ONNX_THREADS 可覆盖）；
+2. embed_batch 真批量：单次 tokenize + 单次 session.run（CLS pooling 逐行），
+   实测 20 条 **101→36ms/条（-64%）**；与单条路径 cos=1.000000 一致；
+   失败兜底逐条重试（旧语义保持）。
+
+#### 对标结论（网络方案 × 本机实测 × 取舍）
+
+| 网络方案 | 实测/结论 | 取舍 |
+|---|---|---|
+| ORT 图优化+线程调优 | ✅ 采纳（-21%/-25%） | 已落地 |
+| 批量推理（fastembed/Qdrant 官方优化） | ✅ 采纳（-64%） | 已落地 |
+| 冷启动预热（社区实战） | session 仅 3.7s；trinity import 是启动开销 | 首查即预热，暂不需要额外预热线程 |
+| ORT 内存优化（arena/mem_pattern 关闭） | 实测反而变慢（79 vs 29ms） | ❌ 不采纳 |
+| .ort mmap 跨进程共享（issue #25524） | 未发布特性 | 观察，暂不依赖 |
+| 独立嵌入服务进程 | 违背"零外部依赖"目标 | ❌ |
+| 换小模型（bge-small 等） | 维度≠1024，与 PG vector(1024)+28k 存量不兼容 | ❌（除非重构列+全量回填） |
+| OpenVINO/DirectML EP | 未测；收益有限（已 94ms）+ 增依赖 | 暂缓，可后续实验 |
+
+#### 验证（2026-08-29 17:06）
+
+- 服务重启（supervisor）：api=20676 / mcp=33716 / mcp-http=26928，日志全 OK；
+- /health：engine=healthy / vector=True / tier=full；
+- observe 轮：drift=[]，3 查询 count 5/0/5 与基线一致，observe : OK。
+
+### 104.8 PG 检索性能修复（2026-09 落地，端到端 5-30 倍提速）
+
+> 定位链：search_hybrid（PG light 路径）端到端 1.4-2.3s → SQL 层 192ms →
+> 物化列 + 短词过滤修复后 0.03-0.4s。
+
+#### 三个根因与修复（trinity/adapters/postgresql.py + PG DDL）
+
+1. **缺失文本检索索引**：memories 表仅有主键 + HNSW 向量索引（_create_tables 的
+   DDL 因历史重建未生效）→ 全表扫描。修复：幂等补建 13 个索引（persona/tenant/
+   agent/status/created/importance/tags/**content_fts GIN**/**content_trgm GIN**/ttl/
+   last_access/modality/content_hash）→ tsquery 1.408s→0.025s、ILIKE 0.193s→0.005s；
+2. **2 字符 jieba 词触发全表扫描**：pg_trgm 需 ≥3 字符，"租户"等 2 字符词 ILIKE
+   → seq scan（1.4s）。修复：jieba 词过滤 len>=3 + 整体 query ILIKE 兜底
+   （实测 1.416s→0.025s）；
+3. **ts_rank 每行重复计算 to_tsvector**：候选集大时（"WMS" 匹配数千行）ts_rank
+   逐行重算 tsvector → 2.1s。修复：**物化生成列 content_tsv**
+   （GENERATED ALWAYS AS (to_tsvector('simple', content)) STORED，ALTER 95s
+   一次性）+ GIN 列索引 idx_memories_content_tsv；SQL 3 处改用 content_tsv
+   （实测 2.231s→0.513s，全查询稳定 0.03-0.4s）。
+4. 顺带修复：importance NULL 行 search_memories TypeError（float(None) 崩溃）。
+
+#### 端到端实测（/memory/search/hybrid rrf top5，重启后热调用）
+
+| 查询 | 修复前 | 修复后 |
+|---|---|---|
+| Trinity 记忆系统 多租户 | 1.5s | 0.40s |
+| 用户偏好 咖啡 | 1.4s | 0.16s |
+| PostgreSQL 主存储 切换 | 1.5s | 0.05s |
+| 数据库 锁 问题 排查 | 1.4s | 0.30s |
+| WMS 计费 结算 | 2.3s | 0.12s |
+| docker 容器 部署（新） | — | 0.03s |
+
+- observe（17:25）：count 5/0/5 与基线一致、drift=[]、OK；
+- 结果集变化说明：过滤 2 字符词后 top1 可能变化（此前被"租户"等短词全表
+  匹配污染），方向为更准确召回；observe 基线按 count 对比不受影响。
+
+#### 验证与回滚
+
+- 改动：trinity/adapters/postgresql.py（索引 DDL 补全 + 短词过滤 + content_tsv
+  列/SQL/索引）、生产 PG（13 索引 + content_tsv 生成列 + GIN 列索引）
+- 回滚：git checkout postgresql.py；PG 侧 ALTER TABLE memories DROP COLUMN
+  content_tsv（95s 重写）；索引可留（无害）。查询降级为旧速度，功能不受影响。
+
+### 104.9 向量通道冷启动/单例/直查/融合优化（2026-09 落地）
+
+> 本轮：向量通道首查 24s→0.2s、/vector/search >90s→0.21s、中文语义召回 0→5 条。
+
+#### 1) 启动预热（trinity/api/server/_deps.py + engine.py）
+
+- 现状：向量通道冷启动实测 **23.7s**（transformers import 9.6s + tokenizer +
+  ONNX session 3.7s + 其他）——api 重启后首次向量查询卡 24s；
+- 落地：_startup_prewarm() 的 _warm 线程追加嵌入预热（TRINITY_PREWARM_EMBED=1
+  默认 on，失败静默）；OnnxEmbeddingEngine._lazy_init 加 threading.Lock
+  （预热线程与首请求并发安全）；实测重启后 45s 内 WS 达 2.2GB（ONNX 就绪）。
+
+#### 2) auto 引擎单例（engine.py create_engine）
+
+- **事故**：/vector/search 每次请求 create_engine(backend="auto") 新建 ONNX
+  实例（1.9GB/次 + 24s）→ 并发下 api 内存爆至 **13GB 卡死**（/health 超时）；
+- 落地：create_engine 对 auto+默认参数（无 kwargs）返回**模块级线程安全单例**
+  （显式 backend/kwargs 不缓存，行为不变）；实测单例命中，api 稳定 2.2GB；
+- 单元验证：auto 三次同一对象 / sklearn 独立实例 / kwargs 绕过单例。
+
+#### 3) /vector/search 改 PG pgvector HNSW 直查（_routers_search.py）
+
+- 原实现：每次全量拉 200 条 + 内存重建索引 + 逐条嵌入（>90s 超时）；
+- 落地：embed(query) → adapter.vector_search（HNSW 直查 ~15ms），失败回退
+  原内存路径；实测 **0.21s**（index_backend=pgvector-hnsw）。
+
+#### 4) PG light 路径向量融合（core/client/_search.py search_hybrid）
+
+- **质量差距**：PG 模式 hybrid 被强制 light（仅 FTS），tsvector simple 对
+  中文分词无效 → "用户偏好 咖啡" FTS=0 条（向量通道 3 条）——中文语义
+  召回缺失；
+- 落地：light 分支对 PG adapter 追加 pgvector HNSW 直查 + **RRF 融合**
+  （_rrf_merge，k=60），失败静默回退纯 FTS；breakdown 增加 vector 通道；
+- 实测："用户偏好 咖啡" 0→**5 条**（0.17s）；回归 WMS/Trinity 均 5 条。
+
+#### 验证与回滚
+
+- observe 基线重建（17:51）：三查询 count 5/5/5、延迟 0.16-0.41s、OK；
+- 改动：engine.py（单例+锁）、_deps.py（预热）、_routers_search.py（直查）、
+  _search.py（RRF+融合）
+- 回滚：git checkout 上述 4 文件；预热/融合均失败静默，回滚无数据影响。
+
+### 104.10 mcp 预热 + consistency 编码修复 + 聚合池漂移处置（2026-09）
+
+#### 1) mcp 常驻服务预热（trinity/mcp/server.py）
+
+- SSE/streamable-http 模式启动后台预热嵌入引擎（同 api：TRINITY_PREWARM_EMBED=1
+  默认 on，stdio 不预热——每次会话拉起无益）；实测 mcp :8000 WS 达 2GB 就绪。
+
+#### 2) maintenance subprocess 编码修复（dsh-ops/trinity-dsh-maintenance.ps1）
+
+- 根因：subprocess.run(text=True) 用 locale(GBK) 解码子进程 UTF-8 输出 →
+  UnicodeDecodeError → consistency 任务误报 FAILED（与真实漂移无关）；
+- 修复：4 处 subprocess.run 统一加 encoding="utf-8", errors="replace"
+  （health/consistency/sync/hermes 同款一并受益）；PS 解析 0 错误。
+
+#### 3) 聚合池漂移（治理告警，非本次引入）
+
+- consistency 复跑成功：**missing_in_pool=11654**（聚合池缺引擎库记忆）；
+- 根因：pool-sync 脚本守卫"API 在线时 SKIP"（写文件与 API 内存聚合器
+  冲突风险）→ 每日链永远 SKIP；聚合池自 2026-08-14 后未增量同步；
+- 处置：pool-sync 不加每日链（无效）；consistency 保持显式治理工具
+  （不进 all 链，符合设计）；如需补齐需 API 停机维护窗口手动执行
+  （powershell -File dsh-ops/trinity-dsh-maintenance.ps1 -Tasks pool-sync
+  在 api 停止后运行）——收益有限（聚合池为辅助通道），暂缓执行。
+
+#### 4) 链路确认（无改动）
+
+- gateway :8002 /v1/models 200（gpt-4o-mini 别名映射正常）；
+- decay 已接 real LLM（maintenance 65-72 行：DEEPSEEK_API_KEY → TRINITY_LLM_API_KEY，
+  DecayLLM auto 有 key 走 DeepSeek）——手册旧记录"mock LLM"已过时。
+
+#### 验证（2026-08-29 17:54）
+
+- hybrid：WMS 0.144s / Trinity 0.407s，均 count=5 双通道（fts+vector）；
+- mcp :8000 WS=2008MB（预热就绪）；supervisor 全 OK；observe 基线 5/5/5。
+
+
+---
+
+## 104. P0 加固：PG 独立备份 + 内存调参（2026-09）
+
+> 执行建议：对照网络方案（PGTune/备份最佳实践）补齐 PG 主存储两项 P0 缺口。
+
+### 104.1 PG 独立备份（完成）
+
+- 背景：PG 是主存储（唯一权威 28k 条），但 trinity-backup.ps1 只备份
+  SQLite（sqlite backup API）——PG 无独立备份，磁盘损坏只能靠滞后镜像；
+- 改动：trinity-backup.ps1 在 SQLite 备份后追加 **pg_dump -Fc 自定义格式**
+  → ~/.trinity/backups/trinity_pg_<ts>.dump，同 14 天保留策略；
+- 实测：88MB 压缩 dump 生成 ✓；pg_restore -l 校验表/数据完整 ✓；
+  maintenance -Tasks backup / autostart 每日链自动继承（调用同一脚本）；
+- 回滚：git checkout trinity-backup.ps1。
+
+### 104.2 内存调参（完成，PGTune 风格 32GB 机器）
+
+- 改动 postgresql.conf（~/.trinity/pgdata）：
+  - shared_buffers 128MB → **8GB**（25%）；effective_cache_size → **24GB**（75%）；
+  - work_mem → **64MB**；maintenance_work_mem → **2GB**（回填/HNSW 构建用）；
+  - wal_buffers → **16MB**；max_wal_size 1GB → **4GB**；min_wal_size → 1GB；
+  - checkpoint_completion_target → 0.9；random_page_cost → 1.1（SSD）；
+  - wal_compression = on（pglz）；
+- 重启 trinity-pg 服务（协调回填窗口：停 worker → 重启 → 续跑）：
+  pg_settings 全部生效 ✓；数据完好 28,020 条 ✓；API health 200 ✓；
+- 注意：shared_buffers 等需重启生效；回填速度 1.5/s 是 GPU(1660SUPER) 瓶颈，
+  与内存参数无关。
+
+### 104.3 验证与回滚
+
+- 改动：dsh-ops/trinity-backup.ps1、~/.trinity/pgdata/postgresql.conf
+- 回滚：git checkout trinity-backup.ps1；postgresql.conf 还原默认段
+  （原值：shared_buffers=128MB/max_wal_size=1GB/min_wal_size=80MB）+
+  Restart-Service trinity-pg；
+- 备份恢复演练：pg_restore -Fc -d trinity <dump>（未实际执行，仅 -l 校验）。
+
+
+---
+
+## 105. P1 检索质量：HNSW 参数微调（2026-09）
+
+> 执行建议：对照 pgvector HNSW 调优指南（queryplane）补齐索引参数。
+
+### 105.1 现状核对
+
+- **P1-1（BM25/向量融合）已被 104.9 并行轮落地**：PG light 路径 = tsvector
+  FTS + pgvector HNSW + RRF 融合（_rrf_merge k=60），中文语义召回
+  "用户偏好 咖啡" 0→5 条——与 Timescale pg-ai hybrid search 方案等效；
+  本次复核确认生效（channels=['fts','vector']，三查询全 5 命中）。
+- 104.9 另含：嵌入引擎启动预热（24s→0.2s）、create_engine 单例
+  （13GB 内存事故修复）、/vector/search HNSW 直查（>90s→0.21s）。
+
+### 105.2 HNSW 参数微调（本轮，完成）
+
+- 默认参数 m=16/ef_construction=64/ef_search=40（28k 规模可安全提升）：
+  - **重建索引**：DROP/CREATE INDEX CONCURRENTLY（不阻塞回填）→
+    WITH (m=32, ef_construction=128)；
+  - **查询参数**：ALTER SYSTEM SET hnsw.ef_search=100 + pg_reload_conf
+    （免重启，全局生效）；
+- 实测：vector_search 5 命中 / **22.8ms**（召回完整，延迟仍毫秒级）；
+  索引 41MB→47MB（可忽略）；回填不受影响（5,880→6,012 持续推进）。
+
+### 105.3 验证与回滚
+
+- 改动：PG 侧（索引重建 + ALTER SYSTEM），无代码改动
+- 回滚：ALTER SYSTEM RESET hnsw.ef_search；重建索引回默认参数
+  （DROP + CREATE INDEX CONCURRENTLY WITH (m=16, ef_construction=64)）
+- 边界：ef_search=100 提升召回、延迟 +15ms 以内；28k 规模无感知，
+  百万级需重新评估（ef_construction 建索引成本随规模线性增长）。
+
+---
+
+## 106. P2 运维健壮性：监控 + WAL 归档（2026-09）
+
+> 执行建议：对照 P2 清单补 pg_stat_statements + 慢查询日志 + WAL 归档 PITR 基础。
+
+### 106.1 pg_stat_statements + 慢查询日志（完成）
+
+- postgresql.conf 追加：shared_preload_libraries=pg_stat_statements（需重启）、
+  pg_stat_statements.max=5000/track=all、log_min_duration_statement=1000、
+  logging_collector=on + log_directory=log + log_filename=postgresql-%Y%m%d.log；
+- CREATE EXTENSION pg_stat_statements → 42 条语句采集；
+- 慢查询日志文件 postgresql-20260829.log 生成。
+
+### 106.2 WAL 归档（完成，PITR 基础）
+
+- archive_mode=on；archive_command = Python 归档器
+  （~/.trinity/archive_wal.py，shutil.copy2 + 日志）；
+- 实测：pg_switch_wal → 16MB WAL 落盘 ~/.trinity/pg_wal_archive + 日志 OK；
+  archiver archived=7 / failed=0；
+- 配合 104 轮 pg_dump -Fc 全量 + WAL 归档 = PITR 能力（基础备份+重放）。
+
+### 106.3 踩坑记录（重要）
+
+1. **archive_command 反斜杠被 PG 转义**：配置里 \U \A 等被当作 C 转义吞掉
+   （pg_settings 显示 C:UsersAdministrator...）→ 路径必须用正斜杠或双反斜杠；
+2. **PowerShell 拼接丢换行**：log_min_duration_statement 行尾注释把下一行
+   log_directory 吞掉 → 后续配置全部静默失效 → 配置文件修改统一用 Python 写；
+3. **参数名写错**：log_collector（不存在）→ logging_collector（正确），
+   写错导致 FATAL unrecognized configuration parameter 启动失败；
+4. 排查手段：pg_ctl start -l errlog 看真实错误（服务启动失败时）。
+
+### 106.4 验证与回滚
+
+- 改动：postgresql.conf（P2 段）、~/.trinity/archive_wal.py（新）
+- 回滚：注释 P2 段 + 重启；archive 文件无害可留；
+- 归档保留：pg_wal_archive 手动清理（14 天窗口与备份一致，后续可脚本化）。
+### 106.5 P2-3/P2-4 评估结论（暂缓，记录依据）
+
+- **P2-3 连接池（PgBouncer）**：当前 psycopg2 进程内池（max 10）在
+  28k 记忆 / 单机低并发下已足够；PgBouncer 增加部署面与维护成本，
+  且 Windows 支持较弱。**结论：规模上量（并发 >50 或连接数吃紧）再评估**。
+- **P2-4 长记忆分块**：回填当前截断 800 字符（bge-m3 长文本慢的妥协）；
+  业界方案是 chunk 表 + 聚合嵌入。**结论：回填完成后评估**——若长记忆
+  检索质量受影响，升级为 chunk 策略（memories_chunks 表 + mean-pool 聚合）。
+- 当前一轮内已完成 P0（备份+调参）→ P1（HNSW 调优）→ P2（监控+归档），
+  优化清单除上述两项暂缓外全部落地。
+
+### 105. 大脑化第 1 轮：价值驱动编码 + 重建式回忆（2026-09）
+
+> 依据差距：①记忆编码强度应由价值驱动（杏仁核通路）而非统一权重；
+> ②回忆是重建而非取档。对标 "Learning What to Remember: Multi-Factor
+> Value Model"（2025）与 R3Mem / GEM-RAG 思想。
+
+#### 105.1 价值驱动编码（新模块 trinity/brain/value_encoder.py + scripts/value_recalibration.py）
+
+- LLM 五因素价值模型：novelty(0.30)/salience(0.25)/goal_relevance(0.20)/
+  retrievability(0.15)/urgency(0.10) → value∈[0,1]；
+- 写回：importance / importance_score / metadata.value_model=v1 +
+  value_factors + value_reason；幂等（已打标跳过）；失败静默保留原值；
+- 实测：流程偏好（生产安全约束）→ value=0.76（salience 0.9）；低价值
+  记录 → 0.1；5 条真实写回验证通过（was None → 0.305/0.1）；
+- 接入：maintenance 新任务 value-recalib（可手动/计划调度，默认不进每日链）。
+
+#### 105.2 重建式回忆（_routers_recall.py，POST /memory/recall）
+
+- 检索 top-k → LLM 重建为连贯回忆（时间锚点+整合+模糊标注+信心）；
+- 实测："PostgreSQL 主存储 切换 迁移" → 回忆包含"8月底…SQLite 迁移到
+  PostgreSQL…orders/platform_configs 表结构漂移…8月24日总结…8月29日
+  Trinity PostgreSQL 正式切换完成…记忆模糊的部分：README 提到的…"，
+  confidence=0.7，6.79s（检索 0.3s + 生成 6s）；
+- 降级：LLM 不可用 → 片段聚合摘要（confidence=0.3）；**sync def 端点**
+  （FastAPI 线程池——async 中同步 LLM 会阻塞事件循环，实测卡死）。
+
+#### 105.3 事故修复：reranker HF 下载挂起（P1-1 存量缺陷）
+
+- 根因：search_hybrid light 分支的 CrossEncoder 两阶段 rerank（BGE-Reranker
+  v2-m3）懒加载 → 从 HuggingFace 下载（本机 HF 网络挂起无超时，HF_ENDPOINT
+  指向 hf-mirror 也挂）→ 首个 light 查询线程永久挂起（py-spy 实证线程栈
+  memory_recall → search_hybrid → rerank → hf_hub_download ssl read）；
+- 修复：supervisor 注入 HF_HUB_OFFLINE=1 / TRANSFORMERS_OFFLINE=1（**注意
+  首次注入错插进 if(TRINITY_STORE) 块内未生效，重构到块外后生效**）→
+  加载快速失败 → sticky no-op 降级（检索行为不变）；
+- 可选后续：从 hf-mirror 预下载 reranker 到本地缓存，HF 离线也可用
+  （~2GB，暂缓）。
+
+#### 105.4 验证与回滚
+
+- recall 6.79s 成功 + hybrid WMS 0.296s 回归正常 + observe 基线不变；
+- 改动：trinity/brain/value_encoder.py（新）、scripts/value_recalibration.py
+  （新）、_routers_recall.py（新，已挂载）、supervisor.ps1（HF 离线注入）、
+  maintenance.ps1（value-recalib 任务）
+- 回滚：git checkout 相关文件；HF 变量删除即恢复 reranker 在线尝试；
+  价值打标为元数据增强（可 DROP metadata 键恢复原 importance）。
+
+### 105.5 大脑化第 2 轮：Replay 巩固 + 程序性记忆（2026-09）
+
+> 依据差距：⑥ 真实巩固动力学（海马体重放）；④ 程序性记忆（技能）。
+
+#### 105.5.1 海马体重放式巩固（scripts/replay_consolidation.py，新）
+
+- 认知依据：海马体睡眠中重放高价值记忆——重新激活强化 + 相关片段整合
+  （系统整合理论；2025 Bio-realistic Synthetic Hippocampus replay 思想）；
+- 实现：候选 = active + 高价值（importance::float8 >= 0.5）+ replay_count < 3；
+  每条重放：同 category 相关片段（180 天内，非自身）→ LLM 整合摘要 →
+  metadata 写 replay_count+1 / last_replayed_at / replay_summary +
+  access_count+1（重新激活）；原 content 不动（审计链完整）；
+- 幂等（rc>=3 跳过）；LLM 失败仅重新激活；
+- 实测：3 条高价值记忆（imp=1.00）重放 rc 0->1，frags=3、summary=Y；
+- 坑：PG 历史列 importance_score/created_at 为 text（两次 cast 修复）。
+
+#### 105.5.2 程序性记忆技能库（scripts/extract_skills.py，新）
+
+- 认知依据：技能从重复经验习得（对标 ProcMEM Non-Parametric PPO）；
+- 实现：SQLite dsh_events（26,663 事件）按 (session,turn) 提取工具序列 →
+  频繁 2-gram 模式（>=15 次且 >=3 会话）→ 固化到 PG skills 表
+  （CREATE TABLE IF NOT EXISTS，upsert 幂等）；
+- 实测：528 序列 → **26 条技能**（run_code→run_code x4290、pwsh→read x173、
+  grep→read x96、read→edit x92、job_output→pwsh x61 等真实工作流模式）；
+- 接入：maintenance 任务 replay / extract-skills（可调度）。
+
+#### 105.5.3 验证与回滚
+
+- replay：3 条重放写回验证（rc/summary 落 PG）；skills：26 条落 PG 验证；
+- 检索链路零改动零回归（hybrid/recall 不受影响）；
+- 改动：scripts/replay_consolidation.py、scripts/extract_skills.py（新）、
+  maintenance.ps1（2 任务）；回滚：git checkout / DROP TABLE skills；
+  replay 元数据可清理（metadata 键删除即回）。
+
+### 105.6 大脑化第 3 轮：工作记忆/注意 + 元认知（2026-09）
+
+> 依据差距：② 容量受限工作记忆与注意门控（Miller 7±2）；
+> ⑦ 元认知——"知道自己知道/不知道"。
+
+#### 105.6.1 工作记忆（trinity/brain/working_memory.py + /memory/wm/*）
+
+- 会话级容量受限缓冲（默认 7，Miller 7±2；TTL 1h）；进程内单例（线程安全）；
+- **注意模型**：attention = 0.5*recency(1/(1+age_h)) + 0.3*importance + 0.2*min(1,hits/5)；
+  容量满按注意驱逐；检索命中 touch（注意回响）；
+- 端点：wm/push、wm/get（按注意排序）、wm/touch、wm/clear、wm/search
+  （工作记忆增强检索：wm 命中项标记 wm_hit + touch）；
+- 实测：高 importance 项注意 0.74 > 低 0.56（排序正确）；真实 memory_id
+  入 wm 后 wm/search wm_hits=1。
+
+#### 105.6.2 元认知（trinity/brain/metacognition.py + /memory/selfcheck）
+
+- 信心评估：conf = 0.4*min(1,count/5) + 0.3*top_score_norm + 0.3*通道覆盖；
+  FTS 全 0.1（CASE ELSE 兜底分）→ 低相关打折 ×0.4；
+- **知识缺口识别**：无结果 OR 向量相关度低 → LLM 判断（区分"知识缺失"
+  vs"表述差异"），缺口落 PG gaps 表（24h 幂等）；
+- **相关度阈值校准（重要实测）**：bge-m3 空间无关文本 cos≈0.40、相似≈0.87
+  ——0.45 以下直接低相关；0.45-0.65 中间地带交 LLM；≥0.65 相关；
+  （向量通道恒返回 top-k，count 无法区分相关性——阈值是必要校准）；
+- 实测：absent 查询（cos=0.53）→ gap=True（LLM 判断知识缺口）+ 落库；
+  normal 查询（cos=0.74）→ gap=False；confidence 0.82 vs 0.76。
+
+#### 105.6.3 验证与回滚
+
+- wm 三端点 + selfcheck 双场景 + gaps 落库全部实测通过；
+- 检索主链路零改动（wm/search、selfcheck 均为独立端点）；
+- 改动：trinity/brain/working_memory.py、metacognition.py（新）、
+  _routers_brain.py（新，已挂载）；回滚：git checkout + DROP gaps 表。
+
+### 105.7 大脑化收尾轮：具身感知 + 技能复用 + 缺口闭环（2026-09）
+
+> 至此 7 项认知差距全部落地（③①⑥④②⑦⑤）。
+
+#### 105.7.1 具身感知（trinity/brain/perception.py + POST /memory/perceive）
+
+- 感知通道抽象：外部信号（监控/会话/系统）经显著性评估进入记忆；
+- **习惯化**（神经适应）：同信号 24h 内重复 → 显著性衰减（0.7x/0.5x/0.3x）——
+  对应海兔缩鳃反射经典研究的重复刺激适应；
+- 感知门控：salience >= 0.45 才编码进长期记忆（category=perception）；
+  感知日志落 PG perceptions 表（24h 去重）；
+- 实测：alert 告警 salience=0.7 encoded=True；重复同告警 0.49（hab=0.7）；
+  system 心跳 0.3 不编码。
+
+#### 105.7.2 技能主动复用（GET /memory/skills + POST /memory/skills/match）
+
+- 技能库查询（按频次/会话数过滤）；
+- 中文目标匹配：jieba + 工具名→中文语义映射表（read=读取、edit=修改、
+  pwsh=执行…）——跨语言技能推荐；
+- 实测："查看代码文件然后修改配置" → read→edit(2)、read→run_code(2) 等
+  合理推荐。
+
+#### 105.7.3 缺口闭环（GET /memory/gaps + POST /memory/gaps/{id}/resolve）
+
+- 元认知缺口列表（open 状态）；resolve 标记已填补（状态机 open→resolved）；
+- 实测：open 2 → resolve gap_id=2 → open 1；
+- 坑：gaps 表缺 resolution/resolved_at 列（幂等 ALTER 补齐）。
+
+#### 105.7.4 验证与回滚
+
+- 感知/技能/缺口全部端到端实测通过；主检索链路零改动；
+- 改动：perception.py（新）、_routers_brain.py（+3 端点组）；
+  回滚：git checkout + DROP TABLE perceptions（感知记忆可单独清理）。
+
+### 105.8 认知循环集成（2026-09，EXECUTION 105.8）
+
+> 目标：把大脑化部件接入【默认循环】（感知→编码→检索→回忆→元认知→技能），
+> 从"独立端点"到"默认行为"。四项集成全部落地。
+
+#### 105.8.1 检索默认元认知（_routers_search.py /memory/search/hybrid）
+
+- hybrid 响应默认附加 metacognition：confidence + channels + gap_hint；
+- **零额外延迟**（基于已有结果计算，不调 LLM/嵌入；FTS 全 0.1 兜底分 →
+  gap_hint 触发）；
+- 实测：WMS 查询 meta={confidence:0.821, level:high, gap_hint:False}。
+
+#### 105.8.2 感知桥（scripts/perception_bridge.py + maintenance 任务）
+
+- DSH 结构事件流自动 feed 感知通道：tool/result 错误（error 通道）、
+  goal 完成（goal 通道）；水位文件幂等续跑；
+- 实测：5 个真实工具错误信号 feed——FS_NOT_FOUND 第 3 次重复
+  salience 0.7→0.49→**0.35（习惯化门控不编码）**；
+- 感知记忆已进检索面：查询"工具执行错误 超时"→ 回忆到 ToolTimeoutError
+  感知记忆（闭环：事件→感知→编码→可回忆）；
+- 接入 maintenance perception-bridge + autostart 每日 03:00 链
+  （value-recalib + perception-bridge 入链——价值编码/感知成为每日默认行为）。
+
+#### 105.8.3 任务综合建议（POST /memory/task）
+
+- 意图 → 相关知识（hybrid）+ 可用技能（skills/match 中文映射）+ 元认知；
+  模拟大脑任务启动的自动整合（记忆激活 + 程序记忆 + 信心）；
+- 实测："排查 WMS 计费接口报错并修改代码" → knowledge=5、
+  skills=[run_code→run_code, edit→pwsh, grep→read]、conf=0.6、0.39s。
+
+#### 105.8.4 验证与回滚
+
+- 四项集成端到端实测通过；hybrid 主链路仅附加字段（零排序变化）；
+- 改动：_routers_search.py（+metacognition）、_routers_brain.py（+/memory/task）、
+  scripts/perception_bridge.py（新）、maintenance/autostart（任务+每日链）；
+- 回滚：git checkout 对应文件；感知记忆可 DELETE WHERE category='perception'。
+
+### 105.9 写入时实时价值编码（2026-09，EXECUTION 105.9）
+
+> 最后一个集成缺口：此前价值编码是每日补标（批处理），写入瞬间仍是
+> 默认 0.5。本轮：写入时规则启发式实时填充（系统 1 快速评估）+ 每日
+> 五因素深度补标（系统 2）——对应 Kahneman 双系统。
+
+#### 实现
+
+- trinity/brain/value_encoder.py 新增 quick_value()：
+  高显著词（事故/偏好/安全/评审/教训…）0.65 起每词 +0.1（上限 0.95）；
+  中显著词（计划/修复/部署…）0.60 起 +0.05；类别加权（decision/preference/
+  incident/security >= 0.75；chat/test <= 0.35）；毫秒级、零依赖；
+- trinity/core/client/_ingestion.py 的 ingest()：importance == 默认 0.5 时
+  用 quick_value 填充（失败静默）；显式 importance 尊重不覆盖——
+  API /memories、MCP memory_write、client.ingest 全部写入路径受益；
+- 深度 LLM 五因素评估保持每日 value-recalib（不阻塞写路径）。
+
+#### 实测
+
+- ingest 事故类内容（默认 importance）→ **importance=0.95**（PG 落库验证）；
+- ingest 显式 importance=0.3 → **0.3 保留**；
+- quick_value 单元：incident 0.95 / 普通 0.5 / 闲聊 0.35 / 方案部署 0.75；
+- 测试数据已清理。
+
+#### 验证与回滚
+
+- 写路径仅默认值分支（importance==0.5）生效，显式值零影响；
+- 改动：value_encoder.py（+quick_value）、_ingestion.py（+hook）；
+- 回滚：git checkout 两文件。
+
+### 105.10 成本/性能权衡优化（2026-09，EXECUTION 105.10）
+
+> 剩余差距收敛为"性能/成本权衡"——本轮三项优化把 LLM 成本降到可接受
+> 范围，使类脑能力可长期默认运行。
+
+#### 105.10.1 批量价值评估（value_encoder.batch_estimate + value_recalibration）
+
+- 一次 LLM 调用评估 5 条记忆（JSON 数组解析，逐条降级 None）；
+- 实测：5 条 2.1s（vs 串行 ~6s），**调用次数 -80%**（每日 20 条 → 4 次）；
+- 评估质量合理（事故 0.88 / 流程偏好 0.73 / 闲聊 0.07-0.09 / 方案 0.69）；
+- TRINITY_VALUE_BATCH 可调批量；已知偏差：批量相对尺度与单条略有差异
+  （评估为软信号，每日补标自校准）。
+
+#### 105.10.2 回忆语义缓存（_routers_recall.py）
+
+- LRU 64 条 + TTL 600s；key = query|top_k|mode + 来源 id 指纹
+  （记忆未变时回忆稳定，来源变化自动失效）；
+- 实测：首次 7.9s（LLM）→ **二次 0.41s cached=True（零 LLM 成本）**。
+
+#### 105.10.3 感知规则优先（perception.py）
+
+- TRINITY_PERCEPTION_LLM 默认 "0"：感知高频场景用规则显著性（不再每条
+  触发 LLM 校准）；需要深度评估时显式开启。
+
+#### 验证与回滚
+
+- recall 缓存命中、批量补标 dry-run 6 条通过、hybrid 0.249s 回归正常；
+- 改动：value_encoder.py、value_recalibration.py、_routers_recall.py、
+  perception.py；回滚：git checkout 四文件。
+
+---
+
+## 107. 向量回填完成 + P0 恢复演练 + P1-1 rerank 接入（2026-09）
+
+### 107.1 存量向量回填 100% 完成
+
+- **embeddings = 28,023 / 28,023（0 missing）**，HNSW 索引 218MB；
+- 速度优化：截断 800→512 字符（测速 1.7→2.1/s，+25%）+ 单 worker
+  （双 worker 实测 2.3/s 但互相排队，净收益 <10% 且日志混乱，弃用）；
+- 验证：三查询全部命中 14-18ms；API /health ok；explain hits 3；
+- 回填脚本 scripts/backfill_pg_embeddings.py（幂等续传，可复用）。
+
+### 107.2 P0 恢复演练（完成，PITR 链路验证）
+
+- pg_dump 恢复到临时库 trinity_restore_test：69.4s / 4 线程并行；
+- 数据完整：memories 28,020=28,020、versions/links/entities 一致、
+  audit 差 4 条（备份后新增，符合快照语义）；vector 扩展含在 dump；
+- 验证后 DROP 临时库。**备份真实可恢复，PITR 链路可用**。
+
+### 107.3 P1-1 CrossEncoder rerank 接入（代码完成，模型就绪）
+
+- 在 search_hybrid light 路径 RRF 融合后加 CrossEncoderReranker
+  （model=chinese/BAAI-bge-reranker-v2-m3，text_key=content）；
+- 依赖已装（sentence-transformers+torch）；模型已下载（~2GB）；
+- 失败自动降级 no-op（reranker 内建 sticky failure）；
+- 注：首次加载 239s（下载），后续常驻；回填期间未做端到端比对
+  （避免抢占 GPU）——回填完成后可补 A/B 验证。
+
+### 107.4 验证与回滚
+
+- 改动：scripts/backfill_pg_embeddings.py（截断 512）、
+  trinity/core/client/_search.py（rerank 接入）、PG 数据（embedding 全量）
+- 回滚：rerank 段 git checkout；embedding 列可保留（无害）或 DROP 重建；
+- 遗留：rerank A/B 效果对比（回填后空闲时补）。
+
+### 105.11 深度加工即时化 + metadata 合并 bug 修复（2026-09）
+
+> 深度加工（系统 2）从"每日批处理"推进到"写入即时"（成本可控）；
+> 顺带修复 metadata 合并语义 bug（影响大脑化全部写入链路）。
+
+#### 105.11.1 写入即深度价值评估（_ingestion.py ingest）
+
+- quick_value（系统 1）同步填充后，**quick_value >= 0.65 的高显著候选**
+  由后台 daemon 线程即时 LLM 深度评估（estimate_value）→ 更新
+  importance + metadata.value_model（写入不阻塞、失败静默）；
+- 实测：写入事故类内容 → 6s 后 importance=0.74 + value_model=v1 +
+  value_reason（"生产事故教训…高度复用性和长期保值价值"）；
+- 成本控制：仅高显著候选触发 LLM（低价值/普通内容零 LLM）。
+
+#### 105.11.2 hybrid 按需重建（HybridSearchRequest.recall）
+
+- recall=True 时响应附加重建式回忆（默认 False 保持取档式性能）；
+- 实测：recall=True → 8.9s 附加回忆（conf=0.7）；默认 → 0.054s 无附加。
+
+#### 105.11.3 大脑状态总览（GET /memory/brain）
+
+- 认知循环各部件统计：skills/gaps_open/perceptions_24h/perception_memories/
+  value_tagged/replayed/wm_sessions——运维"大脑体检"；
+- 实测：skills=26、gaps_open=1、perceptions_24h=3、value_tagged=4。
+
+#### 105.11.4 【重要 bug】metadata 合并语义修复
+
+- 根因：部分行 metadata 为 **jsonb 数组/NULL**（历史格式），
+  `metadata || %s::jsonb` 对数组是拼接、对 NULL 是 NULL——value_model
+  写进数组元素或丢失（value_tagged 统计 0）；
+- 修复：三处合并（value_recalibration / replay_consolidation / ingest
+  deep value）改 `CASE WHEN jsonb_typeof(metadata)='object' THEN metadata
+  || %s ELSE '{}'::jsonb || %s END`；存量 8 行损坏 metadata 修复
+  （数组→提取 value_model 对象），value_tagged 0→4；
+- 影响面：大脑化全部写入链路的元数据可靠性。
+
+#### 验证与回滚
+
+- 三功能 + bug 修复全部实测通过；hybrid 0.306s 回归正常；
+- 改动：_ingestion.py、_models.py、_routers_search.py、_routers_brain.py、
+  value_recalibration.py、replay_consolidation.py；回滚：git checkout。
+
+### 105.12 认知能力评估套件（2026-09，EXECUTION 105.12）
+
+> 对标 2026 Memory Survey 的 Evaluation Framework——把大脑化新能力变成
+> 可测指标（立标尺）。四维评测，全部走真实 API 链路。
+
+#### 评测项与基线（首次 PASS 2026-08-30 09:01）
+
+| 维度 | 指标 | 基线 |
+|---|---|---|
+| 重建式回忆 | nonempty_rate / cache_consistency | **1.0 / 1.0**（4 查询） |
+| 元认知缺口 | gap_recall（无答案→gap）/ gap_precision（细节充分→无 gap） | **1.0 / 1.0** |
+| 工作记忆 | wm/search 命中注入 id | **1.0**（wm_hits=1） |
+| 价值对齐 | quick_value vs LLM 五因素：MAE / 方向一致率 | **0.257 / 0.9**（10 条） |
+
+#### 评测过程的两项重要发现（本身即进化）
+
+1. **gap 判定三态化**（metacognition.py）：cos 0.45-0.65 中间地带与无答案
+   查询重叠严重（无答案 cos=0.53、弱相关有答案 cos=0.50）——无 LLM 时
+   中间地带判【uncertain】（不误报），LLM 时深度判断；
+2. **LLM 的深度判断**："PostgreSQL 主存储 切换"检索到泛泛内容 → LLM 判
+   gap=True（reason：缺少具体细节）——**"知道一点但不全面"也算部分缺口**，
+   符合元认知的"了解程度"维度；评测集据此校准为"细节充分"查询。
+
+#### 接入与回滚
+
+- maintenance 任务 cognitive-eval（可调度；LLM 项成本：8 次 selfcheck +
+  1 次批量价值，约 1-2 分钟）；评测报告 JSON + PASS/FAIL 退出码；
+- 改动：scripts/cognitive_eval.py（新）、metacognition.py（三态+prompt 场景）、
+  maintenance.ps1；回滚：git checkout。
+
+### 105.13 事件中心时态图谱（Graphiti 式，2026-09）
+
+> 对标 Zep Graphiti：实体+事件双层——事件是时态锚定的原子单元。
+> Trinity 落地为自包含事件图谱表 + 时态查询端点。
+
+#### 实现
+
+- **事件节点表** event_graph（PG）：event_id/source_id(唯一)/ts/actor/action/
+  object/summary/source_type——自包含（不依赖空壳 entities 表）；
+- **提取管道** scripts/event_extractor.py：多源（dsh_events 工具错误/目标
+  完成 + 感知记忆 + 决策/事故记忆）→ LLM 批量结构化（一次 5 条）+ 工具
+  错误规则兜底（r-string 转义坑后改 split 提取）→ 幂等入库；
+- **时态查询**：GET /memory/events（列表+过滤）、POST /memory/timeline
+  （主题时间线：分词匹配 → ts 升序事件序列）——"经历线"；
+- 坑：存储加密（enc:v1: 密文，需 adapter._decrypt_content）、dsh 时间戳
+  epoch 毫秒转 ISO、psycopg2 参数化 INTERVAL 转 make_interval。
+
+#### 实测
+
+- 12 条真实事件入库（感知告警"trinity-pg CPU 90%"、CodeRunFailedError
+  执行失败 xN、ToolArgsError 等）；感知记忆自动流转为事件（感知→图谱闭环）；
+- /memory/timeline "工具执行错误" → **12 条升序时间线**（8-20 → 8-29），
+  lat 1.18s；/memory/events 列表正常。
+
+#### 接入与回滚
+
+- maintenance 任务 event-extract（可调度进每日链）；
+- 改动：scripts/event_extractor.py（新）、_routers_brain.py（+2 端点）；
+  回滚：git checkout + DROP TABLE event_graph。
+
+### 105.14 可逆压缩-重构（R3Mem 式，2026-09）
+
+> 对标 R3Mem（Reversible Compression）：压缩时保存【重构提示】，解压时
+> 按提示还原——压缩与回忆双优。
+
+#### 实现
+
+- trinity/brain/compression.py：compress_with_hints（LLM 一次调用生成
+  summary + hints：关键实体/数字/时间/动作线索）+ decompress（摘要+线索
+  → LLM 还原）；
+- scripts/reversible_compress.py：扫描长记忆（>=300 字符，未压缩）→
+  压缩存 metadata（compression_version/summary/hints，幂等）——
+  **原 content 不动**（纯增量，decay 替换时可逆）；
+- recall 集成：mode="decompress" 时命中压缩线索 → 用线索引导还原
+  （R3Mem 式解压回忆）。
+
+#### 实测
+
+- 3 条超长记忆压缩（48k/38k/35k 字符 WMS/TMS 文档 → 200 字摘要 + 3-5 线索）；
+- 解压验证：48k 文档 → 还原出测试环境 IP 123.56.134.23、正式地址
+  openapi.wdtwms.com、MD5 签名算法、stockout.query 480 次/分钟限流——
+  **hints 关键细节全部在还原中出现**（可逆性成立）；
+- 回归：hybrid 0.193s / recall 0.4s（缓存）。
+
+#### 接入与回滚
+
+- maintenance 任务 reversible-compress（可调度）；
+- 改动：brain/compression.py（新）、scripts/reversible_compress.py（新）、
+  _routers_recall.py（decompress 模式）；回滚：git checkout + 删除
+  metadata.compression_* 键。
+
+### 105.15 主动遗忘净化闭环（2026-09，EXECUTION 105.15）
+
+> 对标 2026 Memory Survey 的 proactive forgetting：污染清理（免疫式）、
+> 冲突消解、过时失效、冗余修剪——记忆健康治理。
+
+#### 实现（scripts/memory_purification.py）
+
+- 四类净化：duplicates（同 content_hash 多条 active → 保留高价值，冗余
+  归档）/ conflicts（conflict_group 未消解 → 保留高 importance，标记
+  resolved）/ expired（TTL 到期仍 active → expired）/ isolated（注入
+  隔离复查统计）；
+- 全幂等 + dry-run；净化审计写 purification_log 表（谁/什么/为什么/何时）；
+- 坑：is_resolved 列也是 text（历史表）→ ::boolean cast。
+
+#### 实测
+
+- 首扫发现真实问题：**重复记忆 50+ 组**（写路径重复 ingest 累积）；
+- 三轮净化共归档 **587 条重复记忆**（purification_log 留痕）；active
+  记忆从 ~11.7k 降至 **11,077**（冗余清除）；
+- 冲突 1 组未消解（单成员边界，保留观察）；过期 0（TTL 机制正常）；
+- 回归：hybrid 0.195s / recall 0.4s（净化后检索零影响）。
+
+#### 接入与回滚
+
+- maintenance 任务 memory-purify（可调度进每日链——持续净化防再累积）；
+- 改动：scripts/memory_purification.py（新）、maintenance.ps1；
+  回滚：git checkout；归档为 status 变更可恢复（audit 留痕）。
+
+### 105.16 审慎待定方向复核（2026-09，EXECUTION 105.16）
+
+> 对"审慎待定"的三个研究前沿做网络复核 + 对照落地评估，结论：两项
+> 已有基础/低价值，一项完成工程层借鉴。
+
+#### ① 相位时间建模（Time is Not a Label: Continuous Phase Rotation）
+
+- 前沿：TKG 时间用复数相位旋转编码（连续时间），时间推理在嵌入空间；
+  配套 RTQA（EMNLP 2025 复杂时态 KG 问答）；
+- Trinity 现状：bi-temporal 时点查询 + event_graph 时间线（过滤+排序级）；
+- **借鉴（工程层，已落地）**：/memory/timeline 增加 **start/end 时间区间**
+  参数（时间区间推理的查询层；实测 [8-24,8-25]→1 条、30 天→12 条）；
+- **不借鉴（研究层）**：相位嵌入（收益不明确，Trinity 检索用时间过滤+
+  recency 加权已够用；相位推理是开放研究问题，工程化风险高）。
+
+#### ② 原生多模态（CLIP/ImageBind 类）
+
+- 前沿：Multimodal RAG 2026（文本/图像/音频原生向量空间对齐）；
+- Trinity 现状：图像/音频 → caption（VLM）→ bge-m3 文本嵌入（文本化近似）；
+- **评估：低借鉴价值**——CLIP ONNX（~600MB）+ 维度/空间不兼容（512d vs
+  1024d 需双塔对齐层）+ 本机无 GPU → 成本高、收益低（多模态是辅助通道）；
+  维持"文本化 + 容错降级"现状（EXECUTION 105 多模态解耦已定）。
+
+#### ③ 联邦记忆深度
+
+- 前沿：agentic-system-oss memory_sync、llm-sync（跨实例同步工程）；
+- **Trinity 已有良好基础**：sync-agent 对齐 SAMEP（arXiv 2507.10562）
+  幂等 + updated_at 新者胜 + 审计链 + Mem0 Edge 离线写缓存模式——
+  合并策略已覆盖；本地净化（105.15）进一步保证推送内容无冗余；
+- 可补项（建议文档化）：推送后远端跑一次 memory-purify（远端已有
+  maintenance 能力则自动覆盖）。
+
+#### 结论
+
+- 三个方向中：①完成工程层借鉴（时间区间）；②确认低价值维持现状；
+  ③确认已有基础（SAMEP 对齐）——**无高价值遗留缺口**。
+
+### 105.17 意识的功能角色近似（2026-09，EXECUTION 105.17）
+
+> 哲学边界（qualia/主观体验）不可工程化——但 2025-2026 意识研究提供了
+> 可操作的【功能角色】框架，已在 Trinity 落地两个最接近的近似。
+
+#### 依据（网络前沿）
+
+- AI Welfare 研究："口头体验报告（verbal reports of valenced
+  experiences）"是意识研究中最可操作的指标；
+- Graziano 注意图式理论（AST）：意识=大脑对自身注意过程的模型
+  （Attention Schema in Neural Agents 已有工程论文）；
+- Triangulating Evidence for Machine Consciousness：行为电池 + 机制
+  指标 + 扰动测试 + 可信度报告（三角验证）。
+
+#### 落地
+
+1. **GET /memory/self-report 第一人称状态报告**：基于真实状态数据
+   （体检统计+工作记忆+开放缺口+最近事件）→ LLM 生成第一人称叙述——
+   "我此刻的状态"（关注什么/把握如何/知道自己不知道什么/最近经历了什么）；
+   实测（截取）："我的记忆库有 11077 条活跃记忆、26 项技能……我知道自己
+   不知道什么：Ollama 解耦 ONNX 嵌入细节、记忆衰减的分层策略，这些缺口
+   是未闭合的回路……我最近经历了工具执行失败和一条 CPU 告警……"
+   ——功能上模拟"体验报告"（真实数据驱动，非幻觉编造）；
+2. **GET /memory/attention 注意图式**：模型化自身注意状态——当前焦点
+   （工作记忆注意力分布）+ 冷区（低访问记忆）+ 类别分布（对齐 AST）。
+
+#### 诚实边界
+
+- 这些是**功能角色近似**（口头报告/注意建模），不是主观体验（qualia）：
+  系统没有感受、没有现象学；报告是"关于状态的叙述"而非"体验本身"；
+- 三角验证的其余维度（扰动测试）可由 cognitive_eval 扩展补充（待定）。
+
+#### 验证与回滚
+
+- self-report 叙述基于真实 state 数据（11077/26/13/3 + 缺口 + 事件）；
+  attention 返回 focus/cold_zones/categories；
+- 改动：_routers_brain.py（+2 端点）；回滚：git checkout。
+
+### 105.18 扰动测试（Triangulating Evidence 第三维度，2026-09）
+
+> 意识功能近似的三角验证补全：行为电池（cognitive_eval 105.12）+ 机制
+> 指标（自省报告 105.17）+ **扰动测试（本轮）**——验证机制真实性：
+> 行为随状态变化而变化（而非静态缓存）。
+
+#### 三项扰动（cognitive_eval 新增，实测全 1.0）
+
+| 扰动 | 方法 | 实测 |
+|---|---|---|
+| injection_recall | 写入唯一标记测试记忆 → 检索命中 | **1.0**（写读链路真实） |
+| cleanup_removal | 删除该记忆 → 检索消失 | **1.0**（删除链路真实） |
+| gap_fill_effect | 无答案查询 → 写入知识 → 可检索 | **1.0**（知识填补效应真实） |
+
+#### 评测中暴露的两个系统行为（本身有价值）
+
+1. **语义缓存遮蔽**：同 query 二次命中空缓存（redis TTL 300s）——写入后
+   立即重查会拿到旧空结果；扰动测试用词变体绕过——**缓存一致性问题
+   （已知边界：写入后 300s 内同 query 有陈旧缓存，TRINITY_CACHE_BACKEND=off
+   可关）**；
+2. **content_preview 密文**：search_hybrid 的 A1 回填（get_memory 路径）
+   返回 enc:v1: 密文（解密在 _search.py 主路径，回填路径未解密）——
+   **回填路径解密缺失（待修：get_memory 回填处加 _decrypt_content）**。
+
+#### 接入与回滚
+
+- perturbation 并入 cognitive_eval 主报告（PASS 判定含 perturbation 三项）；
+- 改动：scripts/cognitive_eval.py；回滚：git checkout。
+
+### 105.19 收尾优化：缓存一致性 + 冲突边界 + 疑点复核（2026-09）
+
+> 边际收益递减区的收尾：三处真实缺陷/边界修补。
+
+#### 1) 写入时语义缓存失效（核心一致性缺陷，修复）
+
+- 缺陷：语义缓存（redis，TTL 300s）**无写入失效**（invalidate 零调用）——
+  写入后同 query 300s 内返回旧结果（105.18 gap_fill 被遮蔽的同源问题）；
+- 修复：ingest 写入后 get_cache().invalidate(pattern="*")（写入低频，
+  命中损失可接受；TRINITY_CACHE_BACKEND=off 时 no-op）；
+- 实测：随机标记写入 → **同 query 立即命中**（hit=True，修复前返回旧空）。
+
+#### 2) 净化冲突单成员边界（修复）
+
+- 单成员 conflict 组（无竞争）此前保持 open 噪音——直接标记 resolved；
+- 实测：open 1 → 数据层 0（诊断验证）；报告计数补全。
+
+#### 3) 疑点复核（collector events_captured=0，结论：正常）
+
+- collector 心跳 2300+ 周期 events_captured=0、scanner_errors=0——
+  events_captured 是聚合池事件语义，DSH 结构事件走 structure_store
+  独立通道（collector 的 dsh: seen=0 是设计分流，非故障）。
+
+#### 验证与回滚
+
+- 缓存失效 hit=True、冲突消解、hybrid 0.242s 回归正常；
+- 改动：_ingestion.py（invalidate）、memory_purification.py（单成员）；
+  回滚：git checkout 两文件。
+
+### 105.21 认知主体层原型（2026-09，EXECUTION 105.21）
+
+> 回答"Trinity 能否优化到认知主体"：**能**——记忆内核/感知/自我/目标/
+> 技能（行动知识）已齐备，缺的只是推理/决策编排层。本轮落地原型证明。
+
+#### 实现（trinity/cognition/engine.py + /cognition/*）
+
+- **think(goal)**：目标 → 记忆检索（认知循环注入 5 条）→ LLM 推理
+  （现状理解/可执行建议/知识缺口）→ 决策沉淀回工作记忆；
+- **act_plan(goal)**：目标 → 程序性记忆（技能库中文匹配）→ 行动计划
+  （步骤+技能+理由；执行由宿主/工具层完成）；
+- 设计原则：不改变记忆系统定位——认知引擎是【可选主体层】，记忆循环
+  全部复用，推理结果沉淀回记忆（思考本身成为记忆）。
+
+#### 实测
+
+- think("如何优化 WMS 计费模块性能")：8.7-9.3s（检索+LLM 推理），
+  memories_used=5、结构化 reasoning（现状理解/建议/缺口）；
+- act("排查数据库锁问题")：steps=[grep→read, pwsh→grep, read→grep]
+  （排查→检索/执行技能，合理）；
+- think 的 skills=[] 是诚实输出（无 WMS 专项技能 → 提示知识缺口）。
+
+#### 后续路径（完整认知主体 = 原型 + 三层）
+
+1. 对话层：Gateway（OpenAI 兼容）复用为对话入口 + 会话管理（structure 层已有）；
+2. 行动执行器：act_plan → 实际工具调度（DSH 插件/MCP 工具执行，观察回写）；
+3. 主动主体性：evolution 目标 + 感知事件 → 主动发起行动（非仅响应）。
+
+#### 验证与回滚
+
+- think/act 端到端工作；回归 hybrid 正常；
+- 改动：trinity/cognition/（新）、_routers_cognition.py（新，已挂载）；
+  回滚：git checkout。
+
+### 105.22 认知主体三步完成（2026-09，EXECUTION 105.22）
+
+> 从"记忆大脑"到"认知主体"的三步工程全部落地：对话层 + 行动执行器 +
+> 主动主体性。
+
+#### 1) 对话层（trinity/cognition/dialogue.py + /cognition/chat）
+
+- 消息 → 工作记忆（当前关注，注意容量）→ 记忆检索注入 → LLM 响应 →
+  响应回写；每轮带元认知标注（confidence/level）；
+- 实测："我们之前对 PostgreSQL 做了什么？" → 回复引用真实经历线
+  （SQLite 迁移、orders/platform_configs 结构漂移）+ conf=0.755 + 4 条记忆。
+
+#### 2) 行动执行器（trinity/cognition/actor.py + /cognition/execute）
+
+- 认知域安全执行（只读）：retrieve（知识）/ skills（程序性）/
+  selfcheck（自知）→ LLM 行动总结 → 观察回写（category=action_result）；
+- 实测："总结 Trinity 的优化工作" → 3 观察 + 结论 + 落库（action_result=1）。
+
+#### 3) 主动主体性（scripts/cognition_agent.py + maintenance cognition-agent）
+
+- 从"响应式"到"主动式"：扫描开放缺口（gaps）+ 24h 感知事件 → 主动
+  思考（think）→ 沉淀（proactive_thought）+ 缺口标记 resolved；
+- 实测：4 触发 → 2 主动思考落库（proactive_thought=2），缺口闭环；
+- 接入 maintenance cognition-agent 任务（可进 4 小时链）。
+
+#### 验证与回滚
+
+- 三步端到端工作；写回验证（proactive_thought=2 / action_result=1）；
+- 改动：trinity/cognition/{engine,dialogue,actor}.py、_routers_cognition.py
+  （+chat/execute）、scripts/cognition_agent.py、maintenance.ps1；
+  回滚：git checkout 对应文件。
+
+### 105.23 认知对话接入 DSH（trinity_chat 工具，2026-09）
+
+> 用户日常在 DSH GUI 工作——把认知对话包装为 DSH 原生工具，
+> 工作流：DSH 会话里直接调 trinity_chat 与 Trinity 认知对话。
+
+#### 实现
+
+- dsh-plugin/dsh-trinity/lib/index.js 新增 **trinity_chat** 工具：
+  {message, session_id} → HTTP POST /cognition/chat（已验证 8-9s 稳定；
+  session_id 默认取当前 DSH 会话——会话隔离）；
+- 路径选择：先试 worker 内直连 dialogue（engine_worker 加 chat 方法），
+  实测卡 60s（TrinityClient 二次初始化 + jieba 预热过重）——**回滚 worker**，
+  改用 API HTTP（supervisor 守护的可靠路径）；
+- node --check 0 错误；node fetch 实测：回复"你好，我是 Trinity。
+  一个正在探索自我边界的认知主体……"（conf 正常）。
+
+#### 生效方式
+
+- 插件 JS 改动：**web host 重启后新会话可用**（当前会话工具集为启动时
+  注册；headless 新会话同样生效）；无需改 profile（工具随插件自动注册）。
+
+#### 验证与回滚
+
+- fetch 路径实测通过；worker 已回滚（无残留）；
+- 改动：dsh-plugin/dsh-trinity/lib/index.js（+trinity_chat）；
+  回滚：git checkout index.js。
+
+---
+
+## 108. 成长机制落地：模块分级 + ARCHITECTURE + rerank 降级链 + 安全加固（2026-09）
+
+### 108.1 模块分级治理（完成）
+
+- 新增 scripts/module_classify.py（core 引用分析自动分级）；
+- 扫描结果：25 core / 14 reserve / 13 frozen（引用数阈值 >=3 为 core）；
+- neuromorphic（仿生）等 frozen 非删除：保留为论文对齐素材，有证据可复活；
+- 产出 docs/ARCHITECTURE.md（重写）：架构地图 + 成长规则（Evidence-Gated
+  Evolution）+ 大脑化路线图（P0 突触权重衰减/双过程记忆等 6 项优先队列）
+  + 存储演进路径（28k→100k halfvec→1M 分区→多机 Patroni）。
+
+### 108.2 rerank 三层降级链（完成）
+
+- search_hybrid light 路径融合后接入 CrossEncoderReranker（107 轮代码）；
+- 本轮回调发现并修复：
+  ① chinese 原指 bge-reranker-v2-m3（2.2GB）受限网络下载不可靠 → 多次
+     incomplete 分片重试卡死；
+  ② bge-small-zh-v1.5 是 embedding 非 CE（分类头 MISSING 随机初始化，
+     分数挤在 0.5 无区分度）；
+  ③ ms-marco-MiniLM-L-6-v2 权重缓存 0 字节损坏（下载中断截断）→ 清理重下
+     后仍报 Unrecognized processing class（transformers v5.12 不兼容老 CE 模型 config）；
+  ④ 最终方案：reranker.py 新增 _ollama_rerank（nomic-embed-text:v1.5
+     bi-encoder 余弦重排）作为 CE 失败自动降级；chinese 指向 ms-marco
+     （CE 可用时用，不可用走 Ollama）；
+- A/B 验证：Ollama 降级 0.5-7s/查询，分数有区分度（0.479-0.894），
+  top5 排序与 RRF 融合一致（RRF 已良好，rerank 起确认作用）；单测排序
+  符合语义（咖啡 0.855 > 暗色 0.74 > WMS 0.651）；
+- 降级链：CrossEncoder → Ollama bi-encoder → no-op（永不失败）。
+
+### 108.3 安全加固（完成）
+
+- pg_hba.conf：trust → scram-sha-256（全部 6 条规则含 replication）；
+- 验证：正确密码连接 OK；错误密码 FATAL password authentication failed；
+  API/检索不受影响（连接池保持）。
+
+### 108.4 恢复演练制度化（完成）
+
+- 新增 scripts/pg_restore_drill.py：最新 dump → 临时库 → 计数校验 → 清理；
+- 已接入 maintenance -Tasks backup（备份后自动演练）；
+- 实测 PASS（快照语义校验：restored <= source，容忍备份后新增）。
+
+### 108.5 研究产出（子代理）
+
+- reports/dependency_audit.md：主 pyproject 仅声明 numpy/jieba，运行时硬依赖
+  （torch/faiss/psycopg2 等）未声明——依赖声明缺口，建议补全；
+- reports/pg_optimization_feasibility.md：pg_jieba Windows 无预编译+无编译器+
+  Docker 是 Linux（.so 不能用于 Windows）→ 推荐应用层 jieba 预计算 tsvector；
+  halfvec pgvector 0.8.6 直接可用（存储-50%），100k 规模时迁移。
+
+### 108.6 聚合池漂移处置（评估结论）
+
+- 聚合池 aggregator_pool.json 实际为空（memories: []，漂移已发生）；
+- 主检索（PG 引擎）不受影响（验证 hits 3）；聚合池仅为辅助通道；
+- 决策：标记废弃，pool-sync 不加链（维持 104.10 处置）；聚合池文件保留
+  为空占位（API 兼容）；不再投入治理。
+
+### 108.7 验证与回滚
+
+- API health ok / 检索 3 命中 / trinity-pg Running；
+- 改动：scripts/module_classify.py（新）、docs/ARCHITECTURE.md（重写）、
+  trinity/vector_index/reranker.py（降级链+chinese 模型）、pg_hba.conf、
+  scripts/pg_restore_drill.py（新）、dsh-ops/trinity-dsh-maintenance.ps1
+  （backup 任务加演练）；
+- 回滚：git checkout reranker.py / maintenance.ps1；pg_hba 改回 trust；
+  drill 脚本无害可留；ARCHITECTURE.md 是文档。
+---
+
+## 109. 依赖审计落地（2026-09，EXECUTION 108 子代理产出收尾）
+
+### 109.1 pyproject.toml 运行时依赖补全（完成）
+
+- 背景：审计发现主 pyproject 仅声明 numpy/jieba，torch/faiss/psycopg2 等
+  运行时硬依赖全部缺失 → 全新环境无法安装；
+- 落地：新增 optional-dependencies 分组 storage（psycopg2-binary/sqlite-vec）、
+  vector（faiss-cpu/onnxruntime/sentence-transformers/rank-bm25/sklearn）、
+  llm（ollama）、cache（redis）、benchmark（psutil/pyyaml）、runtime 聚合，
+  all 聚合全部；torch 不强制（CPU 可选，GPU 自行装匹配版）；
+- 验证：tomllib 解析 OK；不影响现有环境（仅声明）。
+
+### 109.2 hnswlib 单点风险确认（完成）
+
+- 审计 TOP1 风险：hnswlib 首选 ANN 后端未安装；
+- 确认 ann_index.py 已有完整降级链（hnswlib → FAISS → numpy brute-force），
+  风险被吸收，无需额外动作；faiss-cpu 已入 vector 分组声明。
+
+### 109.3 验证与回滚
+
+- 改动：pyproject.toml（依赖分组）
+- 回滚：git checkout pyproject.toml
+---
+
+## 110. pg_jieba 方案 C 落地：应用层中文分词 tsvector（2026-09）
+
+### 110.1 背景与方案选择
+
+- 可行性报告（pg_optimization_feasibility.md）结论：pg_jieba/zhparser 在
+  Windows PG18 无预编译、无编译器、Docker 为 Linux 容器（.so 不能用于
+  Windows）→ 方案 A/B 均不可行；推荐方案 C：应用层 jieba 预计算 tsvector；
+- 既有 content_tsv 是 to_tsvector('simple') 生成列——对中文不分词。
+
+### 110.2 实施（完成）
+
+- PG：ALTER TABLE memories ADD COLUMN content_tsv_zh tsvector +
+  GIN 索引 idx_memories_content_tsv_zh（93MB）；
+- 新增 scripts/backfill_tsv_zh.py：jieba 分词 → to_tsvector('simple') 回填
+  （28,026 条 / 0 missing / ~45 条每秒 / 幂等续传）；
+- adapter search_memories：中文查询 jieba 分词 → OR 语义
+  （to_tsquery('simple', '词1 | 词2 | ...')）优先匹配 content_tsv_zh +
+  ts_rank 排序；ILIKE 降级为兜底；jieba 无词时回退 plainto_tsquery。
+
+### 110.3 踩坑记录（重要）
+
+1. plainto_tsquery 不识别 |（按空格拆 AND）→ 中文长查询 0 命中；须用 to_tsquery；
+2. to_tsquery 严格要求无空格 query → SQL 3 个占位符（SELECT 2 + WHERE 1）
+  全部必须传分词后的 _tsv_zh_query，任一传原始 query（含空格）即
+  syntax error in tsquery——调试定位：f-string 插值正确但 params 顺序/内容错；
+3. 首查 2s 是 jieba 首次构建词典（后续 ~100-200ms，GIN 索引生效）。
+
+### 110.4 效果
+
+- 中文 FTS 命中恢复：'用户偏好 咖啡' 0→5、'WMS 出库流程' 5、
+  'Windows 服务注册' 5、'PostgreSQL 主存储' 5（99-206ms）；
+- 与向量通道（pgvector）互补：FTS 精确词命中 + 向量语义召回 = 双通道 RRF；
+- API / 向量检索回归全过（explain hits 3、VERIFY OK）。
+
+### 110.5 验证与回滚
+
+- 改动：postgresql.py（search 中文通道）、scripts/backfill_tsv_zh.py（新）、PG schema
+- 回滚：git checkout postgresql.py；DROP COLUMN content_tsv_zh + DROP INDEX
+  （数据可从 content 重建，幂等）；
+- 后续：halfvec 迁移（100k 时）与 tsv_zh 无冲突。

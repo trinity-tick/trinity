@@ -588,6 +588,22 @@ class _SearchMixin:
                     self._query_vec_cache.clear()
                 self._query_vec_cache[qhash] = query_vec
 
+            # 2026-09 (PG 融合): PG adapter 且已回填向量 → 直接 pgvector HNSW 直查
+            # （免全量拉取 + 免内存重建；未回填/失败自动回退下方内存 ANN 路径）
+            if self._adapter and type(self._adapter).__name__.lower().find("postgres") >= 0:
+                try:
+                    _pgv = self._adapter.vector_search(
+                        query_vec, top_k=top_k,
+                        agent_id=getattr(self, "_search_agent_id", None),
+                        persona_id=getattr(self, "_search_persona_id", None),
+                        tenant_id=getattr(self, "_search_tenant_id", None),
+                    )
+                    if _pgv:
+                        return _pgv
+                except Exception as _pgexc:  # noqa: BLE001 列/索引未就绪时回退内存路径
+                    logger = __import__("logging").getLogger("trinity.core.client")
+                    logger.warning("pgvector search failed, falling back to in-memory ANN: %s", _pgexc)
+
             # 用 adapter 中所有记忆构建向量索引（实时索引）
             if self._adapter:
                 dim = self._embedding_engine.embedding_dim()
@@ -933,6 +949,30 @@ class _SearchMixin:
 
             threading.Thread(target=_build, daemon=True,
                              name="bm25-prewarm").start()
+    def _rrf_merge(
+        self,
+        a: List[Dict[str, Any]],
+        b: List[Dict[str, Any]],
+        top_k: int,
+        k: int = 60,
+    ) -> List[Dict[str, Any]]:
+        """RRF 融合两路结果（2026-09，EXECUTION 104.9）：按 rank 加权合并。"""
+        scores: Dict[str, Dict[str, Any]] = {}
+        for rank, item in enumerate(a):
+            mid = item.get("memory_id") or item.get("id")
+            if not mid:
+                continue
+            entry = scores.setdefault(mid, {"item": item, "s": 0.0})
+            entry["s"] += 1.0 / (k + rank + 1)
+        for rank, item in enumerate(b):
+            mid = item.get("memory_id") or item.get("id")
+            if not mid:
+                continue
+            entry = scores.setdefault(mid, {"item": item, "s": 0.0})
+            entry["s"] += 1.0 / (k + rank + 1)
+        ranked = sorted(scores.values(), key=lambda x: -x["s"])
+        return [x["item"] for x in ranked[:top_k]]
+
     def search_hybrid(
         self,
         query: str,
@@ -973,11 +1013,53 @@ class _SearchMixin:
                 persona_id=persona_id or None,
                 tenant_id=tenant_id or None,
             )
+            # 2026-09（EXECUTION 104.9）：PG 主存储 light 路径补向量融合——
+            # tsvector simple 对中文分词无效（FTS 召回中文语义查询为空，
+            # 实测 "用户偏好 咖啡" FTS=0 / 向量=3），pgvector HNSW 直查 +
+            # RRF 融合恢复语义召回；失败静默回退纯 FTS（行为与之前一致）。
+            _pg = type(self._adapter).__name__.lower().find("postgres") >= 0
+            if _pg and hasattr(self._adapter, "vector_search"):
+                try:
+                    from trinity.core.client._helpers import _get_embedding_engine
+                    _eng = _get_embedding_engine()
+                    if _eng is not None:
+                        _qv = _eng.embed(query)
+                        _vec = self._adapter.vector_search(
+                            _qv, top_k=max(top_k * 2, 10),
+                            agent_id=agent_id or None,
+                            persona_id=persona_id or None,
+                            tenant_id=tenant_id or None,
+                        )
+                        if _vec:
+                            results = self._rrf_merge(results, _vec, top_k)
+                except Exception:
+                    pass
+            # 2026-09 (P1-1): CrossEncoder 两阶段 rerank——RRF 融合后对 top
+            # candidates 语义精排；模型不可用/加载失败自动降级 no-op（原行为）。
+            try:
+                from trinity.vector_index.reranker import CrossEncoderReranker
+                _rk = getattr(self, "_reranker", None)
+                if _rk is None:
+                    _rk = CrossEncoderReranker(model_name="chinese")
+                    self._reranker = _rk
+                if results:
+                    _rk_results = _rk.rerank(
+                        query=query,
+                        candidates=results,
+                        top_k=top_k,
+                        text_key="content",
+                        id_key="memory_id",
+                        score_key="rerank_score",
+                    )
+                    if _rk_results:
+                        results = _rk_results
+            except Exception:
+                pass
             result = {
                 "results": results,
                 "strategy": "light",
                 "query": query,
-                "breakdown": {"routing": "light", "channels": ["fts"]},
+                "breakdown": {"routing": "light", "channels": ["fts", "vector"] if _pg else ["fts"]},
             }
             if hasattr(self._adapter, "write_audit_log"):
                 try:

@@ -136,7 +136,9 @@ class _IngestionMixin:
             content: Memory text content.
             source_window: Source window identifier.
             role: user/assistant/system.
-            importance: Importance 0-1.
+            importance: Importance 0-1（2026-09 EXECUTION 105.9：默认值 0.5
+            时由 quick_value 规则启发式实时填充——写入瞬间即有价值信号，
+            零 LLM 依赖；深度五因素评估由每日 value-recalib 补标）。
             tags: List of tags.
             category: Memory category.
             metadata: Additional metadata dict.
@@ -152,6 +154,15 @@ class _IngestionMixin:
             Dict with memory_id, version_id, sha256_hash, timestamp, pushed_memories.
         """
         tags = tags or []
+        # 2026-09（EXECUTION 105.9）写入时实时价值编码：importance 为默认值
+        # 0.5 时用 quick_value 规则启发式填充（毫秒级、零 LLM 依赖、失败静默）
+        # ——写入瞬间即有价值信号；深度五因素 LLM 评估由每日 value-recalib 补标。
+        if importance == 0.5:
+            try:
+                from trinity.brain.value_encoder import quick_value
+                importance = quick_value(str(content or ""), str(category or ""))
+            except Exception:
+                pass
         # 2026-08-16(基建夯实):压测/锁测试写入隔离——已知测试 agent/category/
         # 标签/内容标记的写入强制 archived(仍落库可查、不占 active 检索面)。
         # 开关 TRINITY_ISOLATE_TEST_WRITES=off 可关闭。
@@ -207,6 +218,64 @@ class _IngestionMixin:
             )
 
         memory_id = result.get("memory_id", "")
+
+        # 2026-09（EXECUTION 105.11）：写入即深度价值评估（系统 2 即时化）——
+        # 仅当快速评估 >= 0.65（高显著候选）才异步 LLM 深度评估（成本控制：
+        # 低价值/普通内容不浪费 LLM）；更新 importance + metadata；失败静默
+        # （快速值已足够，写入不阻塞、不失败）。
+        if memory_id and importance >= 0.65 and self._adapter:
+            try:
+                import threading as _th
+                _content = str(content or "")
+                _mid = memory_id
+
+                def _deep_value() -> None:
+                    try:
+                        from trinity.brain.value_encoder import estimate_value
+                        ev = estimate_value(_content)
+                        if not ev or ev.get("value", 0.0) <= 0.5:
+                            return
+                        import psycopg2
+                        conn = psycopg2.connect(
+                            host="127.0.0.1", port=5432, dbname="trinity",
+                            user="trinity", password="trinity")
+                        conn.autocommit = True
+                        cur = conn.cursor()
+                        import json as _json
+                        meta = _json.dumps(
+                            {"value_model": ev["version"],
+                             "value_factors": ev["factors"],
+                             "value_reason": ev["reason"]},
+                            ensure_ascii=False)
+                        cur.execute("""
+                            UPDATE memories
+                            SET importance = %s,
+                                importance_score = %s,
+                                metadata = CASE
+                                    WHEN jsonb_typeof(metadata) = 'object' THEN metadata || %s::jsonb
+                                    ELSE '{}'::jsonb || %s::jsonb
+                                END,
+                                updated_at = NOW()
+                            WHERE memory_id = %s
+                        """, (ev["value"], ev["value"], meta, meta, _mid))
+                        conn.close()
+                    except Exception:
+                        pass
+
+                _th.Thread(target=_deep_value, daemon=True,
+                           name="ingest-deep-value").start()
+            except Exception:
+                pass
+
+        # 2026-09（EXECUTION 105.19）写入缓存失效：语义缓存无写入失效——
+        # 写入后同 query 300s 内返回旧结果（一致性缺陷，实测 gap_fill 场景
+        # 被缓存遮蔽）；写入后清空语义缓存（写入低频，命中损失可接受；
+        # TRINITY_CACHE_BACKEND=off 时 invalidate 为 no-op）。
+        try:
+            from trinity.core.cache import get_cache
+            get_cache().invalidate(pattern="*")
+        except Exception:
+            pass
 
         # 隔离写入:立即归档(不进入 active 检索面),并留审计痕迹
         if isolated_test_write and memory_id and self._adapter:

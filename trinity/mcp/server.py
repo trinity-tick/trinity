@@ -33,6 +33,7 @@ import argparse
 import logging
 import os
 import sys
+import threading
 from typing import Any, Optional
 
 from trinity.mcp.tools.memory_tools import register_memory_tools, set_session_recorder as tools_set_session_recorder
@@ -178,6 +179,22 @@ def run_server(mode: str = "stdio", port: int = 8000, host: str = "127.0.0.1"):
         ).strip().lower() in ("1", "on", "true", "yes")
 
     mcp = create_server(auth_enabled=auth_enabled)
+
+    # 2026-09（EXECUTION 104.10）：常驻 HTTP 模式启动后台预热嵌入引擎
+    # （向量通道冷启动 ~24s 移到启动期；stdio 每次会话拉起，不预热）。
+    # TRINITY_PREWARM_EMBED=0 可关闭；失败静默（惰性路径兜底）。
+    if mode != "stdio" and os.environ.get("TRINITY_PREWARM_EMBED", "1") == "1":
+        def _prewarm_embed() -> None:
+            try:
+                from trinity.core.client._helpers import _get_embedding_engine
+                eng = _get_embedding_engine()
+                if eng is not None:
+                    eng.embed("warmup")
+            except Exception:
+                pass
+
+        threading.Thread(target=_prewarm_embed, daemon=True,
+                         name="mcp-prewarm").start()
 
     if mode == "stdio":
         logger.info("Starting in stdio mode...")

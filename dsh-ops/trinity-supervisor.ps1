@@ -37,7 +37,7 @@ $StateFile = Join-Path $LogDir "dsh-supervisor-state.json"
 # ── 凭证注入：从 ~/.dsh/.credentials.yaml 注入敏感环境变量（未设置时），
 #    供 Start-Process 拉起的 api/mcp 子进程继承（继承当前进程环境）。
 . (Join-Path $PSScriptRoot "dsh-credentials.ps1")
-foreach ($cred in @("TRINITY_PG_HOST", "TRINITY_PG_PORT", "TRINITY_PG_DB", "TRINITY_PG_USER", "TRINITY_PG_PASSWORD", "TRINITY_API_KEY", "TRINITY_STORE", "TRINITY_STORAGE_BACKEND", "GATEWAY_API_KEY")) {  # 2026-08-17 安全加固：注入 gateway 鉴权 key
+foreach ($cred in @("TRINITY_PG_HOST", "TRINITY_PG_PORT", "TRINITY_PG_DB", "TRINITY_PG_USER", "TRINITY_PG_PASSWORD", "TRINITY_API_KEY", "TRINITY_STORE", "TRINITY_STORAGE_BACKEND", "GATEWAY_API_KEY", "TRINITY_EMBED_BACKEND", "TRINITY_ALERT_WEBHOOK")) {  # 2026-08-17 安全加固：注入 gateway 鉴权 key
     if (-not [Environment]::GetEnvironmentVariable($cred, "Process")) {
         $v = Get-DshCredential $cred
         if ($v) { [Environment]::SetEnvironmentVariable($cred, $v, "Process") }
@@ -76,6 +76,13 @@ if (-not [Environment]::GetEnvironmentVariable("TRINITY_AUTOMATION", "Process"))
 if (-not [Environment]::GetEnvironmentVariable("TRINITY_STORE", "Process")) {
     [Environment]::SetEnvironmentVariable("TRINITY_STORE", $TrinityStore, "Process")
     Write-Output "TRINITY_STORE -> $TrinityStore"
+}
+
+# 2026-09（EXECUTION 105）：HF 离线（if 块外，无条件执行）——reranker
+# （BGE-Reranker）懒加载会从 HuggingFace 下载（本机 HF 网络挂起无超时，
+# 首个查询卡死）；离线模式快速失败 → sticky no-op 降级。
+foreach ($_hf in @("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE")) {
+    if (-not [Environment]::GetEnvironmentVariable($_hf, "Process")) { [Environment]::SetEnvironmentVariable($_hf, "1", "Process") }
 }
 
 # ── 自进化采纳 env 应用（2026-08-25 缺口A 补全）：读取 evolve_env.json
@@ -292,26 +299,34 @@ if (Test-Path $SysPy) {
     Write-Log "collector check skipped (system python not found at $SysPy)" "WARN"
 }
 
-# ── 3.5. 维护库 PostgreSQL (docker trinity-db :5430) ─────────────────────
-# 2026-08-17（记忆周期优化 P0-2）：每日链 mirror/decay/tiers 依赖 PG :5430，
-# 8-16 每日链因 trinity-db 未启动而 mirror→decay→tiers→consolidate→dedup
-# 5 任务全挂。这里每轮探测 TCP :5430，失败且 docker 可用时拉起容器
-# （60s 重启间隔保护，避免反复 docker start 空转）。
-if (Test-Tcp -Port 5430) {
-    Write-Log "pg-maintenance OK (:5430 open)"
+# ── 3.5. 主存储 PostgreSQL（trinity-pg 服务 :5432）──────────────────────
+# 2026-08-29 PG 主存储正式切换；2026-09 服务化：原生 PG18（~/.trinity/pgdata）
+# 注册为 Windows 服务 trinity-pg（开机自启）。每日链 mirror/pg-sync/decay/tiers
+# 依赖 :5432。这里每轮探测 TCP :5432；关闭时优先 Start-Service trinity-pg，
+# 失败则 pg_ctl start 兜底（60s 重启间隔保护，避免反复拉起空转）。
+# docker trinity-db(:5430) 是 docker 栈自身库（compose 自管），不再由本守护拉起。
+if (Test-Tcp -Port 5432) {
+    Write-Log "pg-maintenance OK (:5432 trinity-pg service)"
 } else {
-    $dockerOk = $false
-    try { docker version *> $null; $dockerOk = ($LASTEXITCODE -eq 0) } catch { $dockerOk = $false }
-    if ($dockerOk) {
-        if (Should-Restart "pg-maintenance") {
-            Write-Log "pg-maintenance DOWN (:5430 closed) — docker start trinity-db" "WARN"
-            docker start trinity-db 2>&1 | Out-String | Write-Log
-            $state.restartedAt.'pg-maintenance' = $now.ToString("o")
-        } else {
-            Write-Log "pg-maintenance DOWN but within restart interval — skipped" "WARN"
+    if (Should-Restart "pg-maintenance") {
+        $pgStarted = $false
+        if (Get-Service trinity-pg -ErrorAction SilentlyContinue) {
+            Write-Log "pg-maintenance DOWN (:5432 closed) — Start-Service trinity-pg" "WARN"
+            try { Start-Service trinity-pg -ErrorAction Stop; $pgStarted = $true }
+            catch { Write-Log "pg-maintenance: Start-Service failed: $($_.Exception.Message)" "WARN" }
         }
+        if (-not $pgStarted) {
+            $pgCtl = "C:\Users\Administrator\Desktop\pgsql\bin\pg_ctl.exe"
+            if (Test-Path $pgCtl) {
+                Write-Log "pg-maintenance DOWN (:5432 closed) — pg_ctl start fallback" "WARN"
+                & $pgCtl start -D "C:\Users\Administrator\.trinity\pgdata" -l "C:\Users\Administrator\.trinity\pgdata\pg.log" 2>&1 | Out-String | Write-Log
+            } else {
+                Write-Log "pg-maintenance DOWN (:5432) — service missing & pg_ctl not found, manual intervention needed" "WARN"
+            }
+        }
+        $state.restartedAt.'pg-maintenance' = $now.ToString("o")
     } else {
-        Write-Log "pg-maintenance DOWN (:5430 closed) — docker unavailable, manual intervention needed" "WARN"
+        Write-Log "pg-maintenance DOWN but within restart interval — skipped" "WARN"
     }
 }
 

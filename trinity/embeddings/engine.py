@@ -20,6 +20,7 @@ import hashlib
 import json
 import math
 import os
+import threading
 import time
 from abc import ABC, abstractmethod
 from collections import OrderedDict
@@ -249,20 +250,31 @@ class OnnxEmbeddingEngine(EmbeddingEngine):
         self._tokenizer = None
         self._input_names = None
         self._total = 0
+        self._init_lock = threading.Lock()  # 2026-09: 预热线程与首请求并发安全
 
     def _lazy_init(self):
         if self._session is not None:
             return
-        import onnxruntime as ort
-        from transformers import AutoTokenizer
-        model_path = os.path.join(self._model_dir, "model_optimized.onnx")
-        if not os.path.exists(model_path):
-            raise RuntimeError(
-                f"bge-m3 ONNX 模型缺失: {self._model_dir} —— "
-                f"运行 python scripts/pull_bge_m3_onnx.py 下载")
-        self._session = ort.InferenceSession(model_path, providers=self._providers)
-        self._tokenizer = AutoTokenizer.from_pretrained(self._model_dir)
-        self._input_names = [i.name for i in self._session.get_inputs()]
+        with self._init_lock:
+            if self._session is not None:
+                return
+            import onnxruntime as ort
+            from transformers import AutoTokenizer
+            model_path = os.path.join(self._model_dir, "model_optimized.onnx")
+            if not os.path.exists(model_path):
+                raise RuntimeError(
+                    f"bge-m3 ONNX 模型缺失: {self._model_dir} —— "
+                    f"运行 python scripts/pull_bge_m3_onnx.py 下载")
+            # 2026-09（EXECUTION 104.7）：SessionOptions 调优——graph_optimization_level
+            # ALL + intra_op_num_threads=8 实测批量 29ms/条（-25%）、单条 94ms（-21%）；
+            # 线程数过高反而恶化（t56 实测 522ms/条）；TRINITY_ONNX_THREADS 可覆盖。
+            so = ort.SessionOptions()
+            so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+            _ths = os.environ.get("TRINITY_ONNX_THREADS", "8")
+            so.intra_op_num_threads = int(_ths) if _ths.isdigit() else 8
+            self._session = ort.InferenceSession(model_path, sess_options=so, providers=self._providers)
+            self._tokenizer = AutoTokenizer.from_pretrained(self._model_dir)
+            self._input_names = [i.name for i in self._session.get_inputs()]
 
     def _tokenize(self, text: str) -> dict:
         enc = self._tokenizer(
@@ -291,14 +303,47 @@ class OnnxEmbeddingEngine(EmbeddingEngine):
         return vec / norm if norm > 1e-8 else vec
 
     def embed_batch(self, texts: List[str]) -> List[np.ndarray]:
+        # 2026-09（EXECUTION 104.7）：真批量推理——单次 tokenize + 单次 session.run
+        # （原实现逐条 embed 串行；实测 20 条 batch 29ms/条 vs 串行 101ms/条）。
+        # 空输入/单条仍走原路径；失败条目以零向量兜底（与旧语义一致）。
+        if not texts:
+            return []
         self._lazy_init()
-        out = []
-        for t in texts:
+        if len(texts) == 1:
             try:
-                out.append(self.embed(t))
+                return [self.embed(texts[0])]
             except Exception:
-                out.append(np.zeros(1024, dtype=np.float32))
-        return out
+                return [np.zeros(1024, dtype=np.float32)]
+        try:
+            enc = self._tokenizer(
+                texts, max_length=self._max_length, truncation=True,
+                padding=True, return_tensors="np")
+            feeds = {}
+            for name in self._input_names:
+                lname = name.lower()
+                if "input_ids" in lname:
+                    feeds[name] = enc["input_ids"]
+                elif "attention" in lname or "mask" in lname:
+                    feeds[name] = enc["attention_mask"]
+                elif "token_type" in lname:
+                    feeds[name] = enc.get("token_type_ids", enc["input_ids"] * 0)
+            hidden = self._session.run(None, feeds)[0]  # (batch, seq, 1024)
+            out = []
+            for i in range(hidden.shape[0]):
+                v = np.asarray(hidden[i, 0], dtype=np.float32)  # CLS pooling
+                norm = np.linalg.norm(v)
+                out.append(v / norm if norm > 1e-8 else v)
+            self._total += len(out)
+            return out
+        except Exception:
+            # 兜底：逐条重试（与旧行为一致，单条失败零向量）
+            out = []
+            for t in texts:
+                try:
+                    out.append(self.embed(t))
+                except Exception:
+                    out.append(np.zeros(1024, dtype=np.float32))
+            return out
 
     def embedding_dim(self) -> int:
         return 1024
@@ -607,6 +652,30 @@ class FusionEmbeddingEngine(EmbeddingEngine):
 
 # ── Factory ────────────────────────────────────────────────────────────
 
+# 2026-09（EXECUTION 104.9）：auto 后端默认参数单例——防每次请求新建
+# ONNX 实例（/vector/search 等端点曾每次 create_engine → 每次加载 1.9GB
+# session + 24s，并发即内存爆炸，实测 13GB 卡死）。显式 backend/kwargs
+# 不缓存（行为不变）；进程内 env 固定，单例安全。
+_AUTO_SINGLETON: Optional[EmbeddingEngine] = None
+_AUTO_SINGLETON_LOCK = threading.Lock()
+_AUTO_SINGLETON_BUILDING = False
+
+
+def _get_auto_singleton(use_cache: bool) -> EmbeddingEngine:
+    """返回 auto 后端共享引擎（线程安全单例，仅默认参数）。"""
+    global _AUTO_SINGLETON, _AUTO_SINGLETON_BUILDING
+    if _AUTO_SINGLETON is not None:
+        return _AUTO_SINGLETON
+    with _AUTO_SINGLETON_LOCK:
+        if _AUTO_SINGLETON is None:
+            _AUTO_SINGLETON_BUILDING = True
+            try:
+                _AUTO_SINGLETON = create_engine(backend="auto", use_cache=use_cache)
+            finally:
+                _AUTO_SINGLETON_BUILDING = False
+    return _AUTO_SINGLETON
+
+
 def create_engine(
     backend: str = "auto",
     model: Optional[str] = None,
@@ -626,6 +695,9 @@ def create_engine(
     Returns:
         Configured EmbeddingEngine instance.
     """
+    # 2026-09（EXECUTION 104.9）：auto + 默认参数（无 kwargs）→ 共享单例
+    if backend == "auto" and use_cache and not kwargs and not _AUTO_SINGLETON_BUILDING:
+        return _get_auto_singleton(use_cache=use_cache)
     if backend == "hash":
         # Original Trinity behavior for comparison
         class HashEngine(EmbeddingEngine):
@@ -661,28 +733,38 @@ def create_engine(
         return engine  # early return to avoid double-wrapping below
 
     elif backend == "auto":
-        try:
-            import requests
-            # Quick health check
-            resp = requests.get(
-                f"{kwargs.get('base_url', DEFAULT_OLLAMA_BASE_URL)}/api/tags",
-                timeout=3,
-            )
-            if resp.status_code == 200:
-                engine = OllamaEmbeddingEngine(
-                    model=model or DEFAULT_EMBED_MODEL,
-                    **{k: v for k, v in kwargs.items() if k != 'base_url'},
+        # 2026-09（Ollama 解耦，dsh-ops/EXECUTION.md 记录）：TRINITY_EMBED_BACKEND=onnx
+        # 时直接走进程内 ONNX bge-m3（跳过 Ollama 探测，零外部依赖）；未设置时维持
+        # 原 auto 探测链（Ollama → ONNX → sklearn 降级）。
+        _forced = os.environ.get("TRINITY_EMBED_BACKEND", "").strip().lower()
+        if _forced in ("onnx", "bge-m3-onnx"):
+            engine = OnnxEmbeddingEngine(**{
+                k: v for k, v in kwargs.items()
+                if k in ("model_dir", "max_length", "providers")
+            })
+        else:
+            try:
+                import requests
+                # Quick health check
+                resp = requests.get(
+                    f"{kwargs.get('base_url', DEFAULT_OLLAMA_BASE_URL)}/api/tags",
+                    timeout=3,
                 )
-            else:
-                raise RuntimeError("Ollama not responding")
-        except Exception:
-            # 2026-08-25（内镶）：Ollama 不可用时优先 bge-m3 ONNX
-            # （进程内推理）；模型缺失才回退 sklearn（128d 降级）。
-            if os.path.exists(os.path.join(OnnxEmbeddingEngine.DEFAULT_DIR,
-                                           "model_optimized.onnx")):
-                engine = OnnxEmbeddingEngine(**kwargs)
-            else:
-                engine = SklearnEmbeddingEngine(**kwargs)
+                if resp.status_code == 200:
+                    engine = OllamaEmbeddingEngine(
+                        model=model or DEFAULT_EMBED_MODEL,
+                        **{k: v for k, v in kwargs.items() if k != 'base_url'},
+                    )
+                else:
+                    raise RuntimeError("Ollama not responding")
+            except Exception:
+                # 2026-08-25（内镶）：Ollama 不可用时优先 bge-m3 ONNX
+                # （进程内推理）；模型缺失才回退 sklearn（128d 降级）。
+                if os.path.exists(os.path.join(OnnxEmbeddingEngine.DEFAULT_DIR,
+                                               "model_optimized.onnx")):
+                    engine = OnnxEmbeddingEngine(**kwargs)
+                else:
+                    engine = SklearnEmbeddingEngine(**kwargs)
 
     else:
         raise ValueError(f"Unknown backend: {backend}. Choose from: auto, ollama, sklearn, hash")

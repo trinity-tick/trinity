@@ -1,4 +1,4 @@
-﻿# Trinity WAL 安全备份 + 保留策略 (基建夯实 2026-08-16)
+# Trinity WAL 安全备份 + 保留策略 (基建夯实 2026-08-16)
 param([int]$RetentionDays = 14)
 $ErrorActionPreference = "Stop"
 $src = Join-Path $env:USERPROFILE ".trinity\store\trinity_store.db"
@@ -24,3 +24,27 @@ Get-ChildItem $dir -Filter "trinity_store_*.db" | Where-Object { $_.LastWriteTim
 $mb = [math]::Round((Get-Item $dst).Length / 1MB, 1)
 $n = (Get-ChildItem $dir -Filter "trinity_store_*.db" | Measure-Object).Count
 Write-Output "backup -> $dst ($mb MB); retained backups: $n"
+
+# ── PG 主存储备份（2026-09 P0-1：PG 是主存储，必须有独立备份）──────────
+# pg_dump 自定义格式（-Fc，压缩 + 可选择性恢复），与 SQLite 备份同保留策略。
+$pgDump = "C:\Users\Administrator\Desktop\pgsql\bin\pg_dump.exe"
+if (Test-Path $pgDump) {
+    try {
+        $pgDst = Join-Path $dir ("trinity_pg_" + $stamp + ".dump")
+        $env:PGPASSWORD = "trinity"
+        & $pgDump -h 127.0.0.1 -p 5432 -U trinity -d trinity -Fc -f $pgDst 2>&1 | Out-String | Write-Output
+        Remove-Item Env:PGPASSWORD -ErrorAction SilentlyContinue
+        if (Test-Path $pgDst) {
+            $pgMb = [math]::Round((Get-Item $pgDst).Length / 1MB, 1)
+            Get-ChildItem $dir -Filter "trinity_pg_*.dump" | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-$RetentionDays) } | Remove-Item -ErrorAction SilentlyContinue
+            $pgN = (Get-ChildItem $dir -Filter "trinity_pg_*.dump" | Measure-Object).Count
+            Write-Output "pg backup -> $pgDst ($pgMb MB); retained pg backups: $pgN"
+        } else {
+            Write-Output "PG BACKUP FAILED (no output file)"
+        }
+    } catch {
+        Write-Output "PG BACKUP ERROR: $($_.Exception.Message)"
+    }
+} else {
+    Write-Output "pg_dump not found at $pgDump - PG backup skipped"
+}

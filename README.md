@@ -121,7 +121,7 @@ python -m pytest tests/ -q
 | trinity-mcp | :8000 / :8003 | MCP SSE / MCP v2 streamable-http |
 | gateway | :8002 | OpenAI/Mem0 兼容层（DeepSeek 上游，鉴权/限流/模型映射） |
 | dashboard | :3005 | 可视化 |
-| PostgreSQL | :5430 | 维护镜像（docker） |
+| PostgreSQL | :5432 | 主存储（原生 PG18，服务 trinity-pg 开机自启；2026-08-29 切换） |
 
 ---
 

@@ -28,7 +28,10 @@ MODEL_REGISTRY = {
     "fast": "cross-encoder/ms-marco-MiniLM-L-6-v2",       # fastest, good enough
     "balanced": "cross-encoder/ms-marco-MiniLM-L-12-v2",  # good balance
     "accurate": "BAAI/bge-reranker-v2-m3",                 # best quality, larger
-    "chinese": "BAAI/bge-reranker-v2-m3",                  # best for Chinese
+    # 2026-09: chinese 改指 ms-marco-MiniLM-L-6-v2——v2-m3(~2.2GB)受限网络
+    # 下载不可靠（incomplete 分片重试），且 bge-small-zh 是 embedding 非 CE
+    # （分类头 MISSING 随机初始化）。ms-marco 是真正 CrossEncoder、88MB 缓存完整。
+    "chinese": "cross-encoder/ms-marco-MiniLM-L-6-v2",    # CE reranker (cached)
 }
 DEFAULT_MODEL = "balanced"
 
@@ -93,6 +96,49 @@ class CrossEncoderReranker:
                 self._model_name, e
             )
 
+    def _ollama_rerank(
+        self,
+        query: str,
+        candidates: List[Dict[str, Any]],
+        top_k: int,
+        score_key: str,
+        text_key: str,
+    ) -> List[Dict[str, Any]]:
+        """Ollama bi-encoder 降级重排（CrossEncoder 不可用时）。
+
+        用本地嵌入模型（nomic-embed-text 768d 或 bge-m3 1024d）对
+        (query, candidate) 分别编码，余弦相似度排序。质量低于真 CE 但
+        优于 no-op；模型可用性由 ollama /api/embed 决定。
+        """
+        import requests as _req
+        texts = [cand.get(text_key) or cand.get("content") or cand.get(id_key, "")
+                 for cand in candidates]
+        if not texts:
+            return candidates[:top_k]
+        model = "nomic-embed-text:v1.5"
+        resp = _req.post("http://127.0.0.1:11434/api/embed",
+                         json={"model": model, "input": [query] + texts},
+                         timeout=120)
+        resp.raise_for_status()
+        vecs = resp.json().get("embeddings")
+        if not vecs or len(vecs) != 1 + len(texts):
+            raise RuntimeError("ollama embed count mismatch")
+        import numpy as _np
+        qv = _np.asarray(vecs[0], dtype=_np.float32)
+        def _norm(v):
+            v = _np.asarray(v, dtype=_np.float32)
+            n = _np.linalg.norm(v)
+            return v / n if n > 1e-8 else v
+        qv = _norm(qv)
+        scored = []
+        for cand, vec in zip(candidates, vecs[1:]):
+            sim = float(_np.dot(qv, _norm(vec)))
+            cand[score_key] = sim
+            scored.append(cand)
+        scored.sort(key=lambda x: x[score_key], reverse=True)
+        self._total_reranks += 1
+        return scored[:top_k]
+
     def rerank(
         self,
         query: str,
@@ -116,9 +162,16 @@ class CrossEncoderReranker:
             Reranked list of candidate dicts (top_k items).
         """
         self._load_model()
-        if not self._model_loaded or not candidates:
-            # Fallback: return top_k as-is
-            return candidates[:top_k]
+        if not candidates:
+            return []
+        if not self._model_loaded:
+            # 2026-09 降级：CrossEncoder 不可用（网络/版本兼容）时用
+            # Ollama bi-encoder 余弦相似度重排（nomic-embed-text/bge-m3 本地，
+            # 零下载零编译）。仍不可用才返回原序（no-op）。
+            try:
+                return self._ollama_rerank(query, candidates, top_k, score_key, text_key)
+            except Exception:
+                return candidates[:top_k]
 
         start = time.perf_counter()
 

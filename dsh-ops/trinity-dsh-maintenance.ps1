@@ -29,7 +29,7 @@ param(
 
 # 兼容 powershell -File 传参：命令行里的 "a,b,c" 会以单个字符串到达，
 # 这里统一按逗号拆分 + 校验。
-$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "usage", "rollout-audit", "audit-ps1", "forgetting", "produce", "federation-sync", "tune", "fulltest", "pg-sync", "evolve", "all")  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
+$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "usage", "rollout-audit", "audit-ps1", "forgetting", "produce", "federation-sync", "tune", "fulltest", "pg-sync", "evolve", "observe", "value-recalib", "replay", "extract-skills", "perception-bridge", "cognitive-eval", "event-extract", "reversible-compress", "memory-purify", "cognition-agent", "all")  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
 $normalized = @()
 foreach ($t in $Tasks) { $normalized += $t.Split(',') }
 $normalized = $normalized | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
@@ -60,6 +60,7 @@ $PgUser = if ($env:TRINITY_PG_USER) { $env:TRINITY_PG_USER } else { (Get-DshCred
 if (-not $PgUser) { $PgUser = "postgres" }
 $PgPass = if ($env:TRINITY_PG_PASSWORD) { $env:TRINITY_PG_PASSWORD } else { (Get-DshCredential "TRINITY_PG_PASSWORD") }
 if (-not $PgPass) { $PgPass = "postgres" }
+if (-not $env:TRINITY_EMBED_BACKEND) { $env:TRINITY_EMBED_BACKEND = Get-DshCredential "TRINITY_EMBED_BACKEND" }
 
 # 真实 LLM 压缩（生产默认 auto）：无 TRINITY_LLM_API_KEY 时用 DEEPSEEK_API_KEY 兜底（OpenAI 兼容）。
 # -DecayLLM auto（默认）= 有 key 走 real、无 key 回退 mock（脚本内解析），显式 mock/real 可覆盖。
@@ -80,6 +81,16 @@ function Get-DshCli {
     $fallback = "C:\Users\Administrator\AppData\Local\npm-cache\_npx\1e7f6d9597241db0\node_modules\.bin\dsh.ps1"
     if (Test-Path $fallback) { return $fallback }
     throw "dsh CLI not found on PATH"
+}
+
+# 2026-09（EXECUTION 105.20）：失败告警推送（TRINITY_ALERT_WEBHOOK 配置后，维护失败即时通知）
+function Send-Alert {
+    param([string]$Message, [string]$Level = "ERROR")
+    if (-not $env:TRINITY_ALERT_WEBHOOK) { return }
+    try {
+        $body = @{ level = $Level; message = $Message; ts = (Get-Date -Format "o"); source = "trinity-maintenance" } | ConvertTo-Json
+        Invoke-RestMethod -Uri $env:TRINITY_ALERT_WEBHOOK -Method Post -ContentType "application/json" -Body $body -TimeoutSec 5 -ErrorAction Stop | Out-Null
+    } catch { }
 }
 
 function Write-Log {
@@ -155,10 +166,79 @@ function Invoke-Task {
 # ── 任务定义 ──────────────────────────────────────────────────────────────
 
 # 健康检查（.github_token 缺失时自动降级为本地检查）
+# 2026-09 Ollama 解耦观察期检查（逻辑在 dsh-ops/trinity-embed-observe.py）
+$observeCmd = @"
+import runpy
+runpy.run_path(r"C:\Users\Administrator\trinity\dsh-ops\trinity-embed-observe.py", run_name="__main__")
+"@
+$observePrompt = "运行 Trinity 嵌入观察检查（/health + 3 查询抽样 + Ollama 连接计数），输出 JSON 报告。"
+
+# 2026-09（EXECUTION 105）：价值驱动编码批量补标（LLM 多因素评估 importance）
+$valueRecalibCmd = @"
+import runpy
+runpy.run_path(r"C:\Users\Administrator\trinity\scripts\value_recalibration.py", run_name="__main__")
+"@
+$valueRecalibPrompt = "运行 scripts/value_recalibration.py（LLM 五因素价值评估，写回 importance/importance_score/metadata.value_model），汇报 value 分布。"
+
+# 2026-09（EXECUTION 105 第 2 轮）：海马体重放巩固——高价值记忆重新激活+片段整合
+$replayCmd = @"
+import runpy
+runpy.run_path(r"C:\Users\Administrator\trinity\scripts\replay_consolidation.py", run_name="__main__")
+"@
+$replayPrompt = "运行 scripts/replay_consolidation.py（高价值记忆重放：replay_count+1、重新激活、相关片段 LLM 整合摘要），汇报重放统计。"
+# 2026-09（EXECUTION 105 第 2 轮）：程序性记忆提取——工具轨迹频繁模式固化为技能库
+$skillsCmd = @"
+import runpy
+runpy.run_path(r"C:\Users\Administrator\trinity\scripts\extract_skills.py", run_name="__main__")
+"@
+$skillsPrompt = "运行 scripts/extract_skills.py（从 dsh_events 工具轨迹提取频繁模式并固化到 PG skills 表），汇报技能列表。"
+
+# 2026-09（EXECUTION 105.8）：感知桥——DSH 结构事件流（工具错误/目标完成）自动 feed 感知通道
+$perceptionCmd = @"
+import runpy
+runpy.run_path(r"C:\Users\Administrator\trinity\scripts\perception_bridge.py", run_name="__main__")
+"@
+$perceptionPrompt = "运行 scripts/perception_bridge.py（扫描 dsh_events 高显著事件 feed /memory/perceive，习惯化门控），汇报编码统计。"
+
+# 2026-09（EXECUTION 105.12）：认知能力评估套件（recall/gap/wm/value 四维）
+$cognitiveEvalCmd = @"
+import runpy
+runpy.run_path(r"C:\Users\Administrator\trinity\scripts\cognitive_eval.py", run_name="__main__")
+"@
+$cognitiveEvalPrompt = "运行 scripts/cognitive_eval.py（认知能力四维评测：重建回忆一致性/元认知缺口精度/工作记忆命中/价值评估对齐），汇报指标与 PASS/FAIL。"
+
+# 2026-09（EXECUTION 105.13）：事件中心时态图谱提取（Graphiti 式）
+$eventExtractCmd = @"
+import runpy
+runpy.run_path(r"C:\Users\Administrator\trinity\scripts\event_extractor.py", run_name="__main__")
+"@
+$eventExtractPrompt = "运行 scripts/event_extractor.py（工具错误/目标完成/感知/决策事故 → 事件图谱事件节点，LLM 批量+规则兜底），汇报插入统计。"
+
+# 2026-09（EXECUTION 105.14）：可逆压缩-重构（R3Mem 式：摘要+重构提示存 metadata，原内容不动）
+$reversibleCompressCmd = @"
+import runpy
+runpy.run_path(r"C:\Users\Administrator\trinity\scripts\reversible_compress.py", run_name="__main__")
+"@
+$reversibleCompressPrompt = "运行 scripts/reversible_compress.py（长记忆可逆压缩：摘要+重构提示存 metadata，幂等），汇报压缩统计。"
+
+# 2026-09（EXECUTION 105.15）：主动遗忘净化闭环（重复归档/冲突消解/过期失效/污染复查）
+$purifyCmd = @"
+import runpy
+runpy.run_path(r"C:\Users\Administrator\trinity\scripts\memory_purification.py", run_name="__main__")
+"@
+$purifyPrompt = "运行 scripts/memory_purification.py（主动遗忘净化：重复记忆归档/冲突消解/过期失效，审计留痕），汇报净化统计。"
+
+# 2026-09（EXECUTION 105.22）：主动主体性循环（开放缺口/感知事件 → 主动思考 → 沉淀）
+$cognitionAgentCmd = @"
+import runpy
+runpy.run_path(r"C:\Users\Administrator\trinity\scripts\cognition_agent.py", run_name="__main__")
+"@
+$cognitionAgentPrompt = "运行 scripts/cognition_agent.py（主动主体：扫描开放缺口与感知事件，主动思考并沉淀记忆），汇报触发与落库统计。"
+
 $healthCmd = @"
 import subprocess, sys
 r = subprocess.run([sys.executable, r"$TrinityRoot\health_check.py"], cwd=r"$TrinityRoot",
-                   capture_output=True, text=True)
+                   capture_output=True, text=True, encoding="utf-8", errors="replace")  # 2026-09: 显式 utf-8 解码
 print(r.stdout[-3000:] if r.stdout else "")
 print(r.stderr[-1000:] if r.stderr else "")
 sys.exit(r.returncode)
@@ -342,7 +422,7 @@ $poolSyncPrompt = "运行 benchmark/sync_pool_from_db_v2.py（大库→聚合池
 $consistencyCmd = @"
 import sys, subprocess
 r = subprocess.run([sys.executable, r"$TrinityRoot\scripts\consistency_check.py", "--json",
-                    "--fail-threshold", "$ConsistencyThreshold"], cwd=r"$TrinityRoot", capture_output=True, text=True)
+                    "--fail-threshold", "$ConsistencyThreshold"], cwd=r"$TrinityRoot", capture_output=True, text=True, encoding="utf-8", errors="replace")  # 2026-09: 显式 utf-8 解码
 print((r.stdout or "").strip()[:4000])
 if r.stderr:
     print("STDERR:", r.stderr.strip()[-1000:])
@@ -356,13 +436,13 @@ $consistencyPrompt = "运行 scripts/consistency_check.py（聚合池 trinity/da
 $syncCmd = @"
 import sys, subprocess
 codes = []
-r1 = subprocess.run([sys.executable, r"$HermesSync"], capture_output=True, text=True)
+r1 = subprocess.run([sys.executable, r"$HermesSync"], capture_output=True, text=True, encoding="utf-8", errors="replace")  # 2026-09: 显式 utf-8 解码
 print("HERMES SYNC exit", r1.returncode)
 print(r1.stdout[-2000:] if r1.stdout else "")
 print(r1.stderr[-1000:] if r1.stderr else "")
 codes.append(r1.returncode)
 r2 = subprocess.run([sys.executable, "-m", "trinity.collector", "sync"], cwd=r"$TrinityRoot",
-                    capture_output=True, text=True)
+                    capture_output=True, text=True, encoding="utf-8", errors="replace")  # 2026-09: 显式 utf-8 解码
 print("MARVIS SYNC exit", r2.returncode)
 if r2.returncode != 0:
     print(r2.stdout[-2000:] if r2.stdout else "")
@@ -502,11 +582,12 @@ sys.exit(main())
 "@
 $activeHealthPrompt = "运行 scripts/active_set_health.py(active 集健康: total/active/archived 占比, 归档高价值记忆告警, 有告警提示 restore_high_value_memories.py),汇报指标。"
 
-# 备份（2026-08-27 巡检补全）：WAL 安全备份（14 天保留）
+# 备份（2026-08-27 巡检补全；2026-09 加恢复演练）：WAL 安全备份（14 天保留）+ PG 恢复演练
 $backupCmd = @"
 powershell -NoProfile -ExecutionPolicy Bypass -File '\$PSScriptRoot\trinity-backup.ps1'
+& '\$Py' '\$TrinityRoot\scripts\pg_restore_drill.py'
 "@
-$backupPrompt = "运行 trinity-backup.ps1（WAL 安全备份），汇报备份文件。"
+$backupPrompt = "运行 trinity-backup.ps1（WAL 安全备份）+ scripts/pg_restore_drill.py（恢复演练），汇报备份文件与演练 PASS/FAIL。"
 
 # 记忆操作（2026-08-27 巡检补全）
 $memoryOpsCmd = @"
@@ -697,6 +778,16 @@ foreach ($t in $Tasks) {
         "fulltest"  { Invoke-Task -Name "fulltest"  -LeaseJob "fulltest"  -DirectCommand $fulltestCmd  -DshPrompt $fulltestPrompt }  # 2026-08-28 全量门禁
         "pg-sync"  { Invoke-Task -Name "pg-sync"  -DirectCommand $pgSyncCmd  -DshPrompt $pgSyncPrompt }  # 2026-08-29 PG 镜像
         "evolve"  { Invoke-Task -Name "evolve"  -LeaseJob "evolve"  -DirectCommand $evolveCmd  -DshPrompt $evolvePrompt }  # 2026-08-29 每日自改
+        "observe" { Invoke-Task -Name "observe" -DirectCommand $observeCmd -DshPrompt $observePrompt }  # 2026-09 Ollama 解耦观察期检查
+        "value-recalib" { Invoke-Task -Name "value-recalib" -DirectCommand $valueRecalibCmd -DshPrompt $valueRecalibPrompt }  # 2026-09 价值驱动编码补标
+        "replay" { Invoke-Task -Name "replay" -DirectCommand $replayCmd -DshPrompt $replayPrompt }  # 2026-09 海马体重放巩固
+        "extract-skills" { Invoke-Task -Name "extract-skills" -DirectCommand $skillsCmd -DshPrompt $skillsPrompt }  # 2026-09 程序性记忆技能库
+        "perception-bridge" { Invoke-Task -Name "perception-bridge" -DirectCommand $perceptionCmd -DshPrompt $perceptionPrompt }  # 2026-09 感知桥
+        "cognitive-eval" { Invoke-Task -Name "cognitive-eval" -DirectCommand $cognitiveEvalCmd -DshPrompt $cognitiveEvalPrompt }  # 2026-09 认知能力评测
+        "event-extract" { Invoke-Task -Name "event-extract" -DirectCommand $eventExtractCmd -DshPrompt $eventExtractPrompt }  # 2026-09 事件图谱提取
+        "reversible-compress" { Invoke-Task -Name "reversible-compress" -DirectCommand $reversibleCompressCmd -DshPrompt $reversibleCompressPrompt }  # 2026-09 可逆压缩
+        "memory-purify" { Invoke-Task -Name "memory-purify" -DirectCommand $purifyCmd -DshPrompt $purifyPrompt }  # 2026-09 主动遗忘净化
+        "cognition-agent" { Invoke-Task -Name "cognition-agent" -DirectCommand $cognitionAgentCmd -DshPrompt $cognitionAgentPrompt }  # 2026-09 主动主体
         "backup"    { Write-Log "backup: WAL 安全备份到 ~/.trinity/backups (保留 14 天)"; & "$PSScriptRoot\trinity-backup.ps1" 2>&1 | ForEach-Object { Write-Log $_ } }
         "evolve-env" { Write-Log "evolve-env: 应用自进化采纳 env（evolve_env.json → 进程环境，白名单校验）"; & "$PSScriptRootpply_evolve_env.ps1" -Show 2>&1 | ForEach-Object { Write-Log $_ } }  # 2026-08-25 缺口A
         "consolidate-temporal" { $consArgs = @("--days", "1"); if ((Get-Date).DayOfWeek -eq "Sunday") { $consArgs = @("--days", "7", "--weekly") }; Write-Log "consolidate-temporal: 时间层级巩固（TiMem 式；daily 每日，Sunday 加 weekly）"; & "$Py" "$TrinityRoot\scripts\consolidate_temporal.py" @consArgs 2>&1 | ForEach-Object { Write-Log $_ } }  # 2026-08-25 TiMem 式
@@ -706,6 +797,7 @@ foreach ($t in $Tasks) {
 
 if ($Global:FAILED.Count -gt 0) {
     Write-Log "maintenance finished with FAILED tasks: $($Global:FAILED -join ',')" "WARN"
+    Send-Alert "Trinity 维护失败: $($Global:FAILED -join ',')" "ERROR"
     exit 1
 }
 Write-Log "maintenance finished OK"

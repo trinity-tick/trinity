@@ -246,6 +246,9 @@ from ._routers_explain import router as explain_router  # noqa: E402
 from ._routers_persona import router as persona_router  # noqa: E402
 from ._routers_audit_purge import router as audit_purge_router  # noqa: E402
 from ._routers_receipt import router as receipt_router  # noqa: E402  # 2026-08-24 P1-④ 可证明记忆回执
+from ._routers_recall import router as recall_router  # noqa: E402  # 2026-09 重建式回忆（EXECUTION 105）
+from ._routers_brain import router as brain_router  # noqa: E402  # 2026-09 工作记忆+元认知（EXECUTION 105.6）
+from ._routers_cognition import router as cognition_router  # noqa: E402  # 2026-09 认知主体层（EXECUTION 105.21）
 
 def _register_router_routes(router) -> None:
     """Register an APIRouter's routes directly on the app router (flattened).
@@ -278,6 +281,9 @@ _register_router_routes(marvis_router)
 _register_router_routes(compress_router)
 _register_router_routes(market_router)
 _register_router_routes(evolution_router)
+_register_router_routes(recall_router)
+_register_router_routes(brain_router)
+_register_router_routes(cognition_router)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # GraphQL（strawberry）— 此前 schema 存在但从未挂载，这里接入 FastAPI

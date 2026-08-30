@@ -17,6 +17,7 @@ as it did on the monolith module globals.
 """
 
 import logging
+import os
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -130,6 +131,18 @@ def _startup_prewarm() -> None:
                 time.sleep(0.2)
         except Exception:
             pass
+        # 2026-09（EXECUTION 104.9）：嵌入引擎预热——向量通道冷启动 ~24s
+        # （transformers import + tokenizer + ONNX session）移到启动期后台，
+        # 首个向量查询不再卡 24s。TRINITY_PREWARM_EMBED=0 可关闭；失败静默
+        # （惰性路径兜底，行为与预热前一致）。
+        if os.environ.get("TRINITY_PREWARM_EMBED", "1") == "1":
+            try:
+                from trinity.core.client._helpers import _get_embedding_engine
+                eng = _get_embedding_engine()
+                if eng is not None:
+                    eng.embed("warmup")
+            except Exception:
+                pass
 
     _th.Thread(target=_warm, daemon=True, name="api-startup-prewarm").start()
 

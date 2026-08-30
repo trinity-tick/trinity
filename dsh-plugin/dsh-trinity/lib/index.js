@@ -254,6 +254,28 @@ function registerTools(ctx, worker) {
 		tool("trinity_ping", "Ping the Trinity engine worker. Returns pong with timestamp.",
 			{}, jsonSchema, () => worker.call("ping", {})),
 
+		tool("trinity_chat", "Chat with the Trinity cognitive agent: memory-injected dialogue with metacognition (confidence/gaps). Uses the full memory loop as context. Requires trinity-api (:8001) online.",
+			{
+				message: { type: "string", required: true, description: "Your message to Trinity." },
+				session_id: { type: "string", description: "Optional session id (defaults to current DSH session)." }
+			},
+			jsonSchema,
+			async (a, exec) => {
+				// 105.22：认知对话走 API :8001（/cognition/chat 已验证 8-9s 稳定；
+				// worker 内直连 dialogue 依赖过重易卡，HTTP 是可靠路径）。
+				const ident = sessionIdentity(exec);
+				const res = await fetch("http://127.0.0.1:8001/cognition/chat", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						message: a.message,
+						session_id: a.session_id || (ident?.sessionId || "default")
+					})
+				});
+				if (!res.ok) return { error: "trinity-api chat failed: " + res.status };
+				return await res.json();
+			}),
+
 		tool("trinity_search", "Search Trinity memory (47-channel engine). Supports hybrid/semantic/graph/exact modes.",
 			{
 				query: { type: "string", required: true, description: "Search query string." },
