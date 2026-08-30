@@ -1,4 +1,5 @@
 """
+# status: reserve (2026-09 EXECUTION 163)
 P4-1: Gossip Knowledge Propagation Protocol (对标 HyphaeDB)
 ===========================================================
 

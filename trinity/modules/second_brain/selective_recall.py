@@ -1,4 +1,5 @@
 """
+# status: reserve (2026-09 EXECUTION 163)
 Trinity Second Brain — Selective Recall (Memory-as-a-Tool)
 ==========================================================
 Mem0 2026 Production Best Practice · P0-02

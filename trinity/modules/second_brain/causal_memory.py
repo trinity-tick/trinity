@@ -1,4 +1,5 @@
 """
+# status: reserve (2026-09 EXECUTION 163)
 P5-2: Causal Reasoning Memory Engine (对标 ActMem)
 =====================================================
 

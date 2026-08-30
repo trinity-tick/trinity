@@ -1,5 +1,5 @@
 """
-# status: orphan (2026-08-15 audit, not in runtime path)
+# status: active (2026-09 EXECUTION 163: 已接入运行时)
 SAGEGraphMemoryEngine — SAGE Self-Evolving Agentic Graph-Memory Engine
 =======================================================================
 arXiv 2605.12061 · P44-2

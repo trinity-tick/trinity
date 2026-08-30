@@ -1,5 +1,6 @@
 # engine_core_types — Enums and data classes extracted from engine_core.py
 # Auto-generated during engine_core.py split refactoring
+# status: frozen (2026-09 EXECUTION 163)
 
 from __future__ import annotations
 from dataclasses import dataclass, field

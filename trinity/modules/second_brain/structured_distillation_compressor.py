@@ -1,5 +1,5 @@
 """
-# status: orphan (2026-08-15 audit, not in runtime path)
+# status: reserve (2026-09 EXECUTION 163: 保留待激活)
 P22-4: Structured Distillation Compressor — 11x 蒸馏压缩 + 96% 召回 MRR
 
 对标论文: Structured Distillation (对话记忆结构化蒸馏, 2026.08)

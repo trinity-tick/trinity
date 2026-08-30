@@ -1,4 +1,5 @@
 """
+# status: frozen (2026-09 EXECUTION 163)
 P10-3: FlowSearcher Workflow Memory Synthesis (对标 ICLR2026)
 
 实现分层轨迹记忆、结构化工作流图、经验注入、成功/失败双轨记忆、

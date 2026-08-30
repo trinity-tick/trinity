@@ -1,4 +1,5 @@
 """
+# status: reserve (2026-09 EXECUTION 163)
 P4-4: Token Budget + Ebbinghaus Decay (对标 Mem0 May 2026)
 ============================================================
 

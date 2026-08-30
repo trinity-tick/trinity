@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """
+# status: reserve (2026-09 EXECUTION 163)
 Trinity Second Brain — Federated Memory Learning (P1-7).
 
 Privacy-preserving cross-node memory aggregation using federated

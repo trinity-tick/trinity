@@ -1,5 +1,5 @@
 """
-# status: experimental (2026-08-15 audit: loader pair built but NOT wired into
+# status: frozen (2026-09 EXECUTION 163: 冻结归档，不计维护面)
 #   runtime path; engine.py facade (P0 refactor) already solved the monolith by
 #   re-exporting 52 classes from split engine_* files, so lazy loading is
 #   optional future optimization, not current need)

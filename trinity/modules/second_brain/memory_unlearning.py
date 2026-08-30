@@ -1,4 +1,5 @@
 """
+# status: reserve (2026-09 EXECUTION 163)
 P4-5: Cross-Substrate Memory Unlearning / Erasure (对标 Zylos + GDPR)
 =========================================================================
 

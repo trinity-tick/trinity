@@ -1,4 +1,5 @@
 """
+# status: frozen (2026-09 EXECUTION 163)
 P4-3: Memory Lifecycle Manager (对标 Zylos Controlled Forgetting)
 ====================================================================
 

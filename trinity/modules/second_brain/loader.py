@@ -1,5 +1,5 @@
 """
-# status: experimental (2026-08-15 audit: lazy-loader for SecondBrain; pairs with
+# status: frozen (2026-09 EXECUTION 163: 冻结归档，不计维护面)
 #   registry.py, not wired into runtime path - engine facade is the active path)
 Optimized SecondBrain loader with lazy module loading.
 Replaces the monolithic SecondBrainV636 constructor.

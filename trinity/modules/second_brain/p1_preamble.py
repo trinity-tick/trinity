@@ -4,6 +4,7 @@ Trinity Second Brain — Preamble / Data Classes
 Enums, dataclasses, and value objects shared by all second_brain modules.
 Auto-extracted from engine.py for modularity.
 """
+# status: frozen (2026-09 EXECUTION 163)
 from __future__ import annotations
 
 # v6.32(119模块,47守护,44检定) → v6.34(121模块,49守护,46检定)

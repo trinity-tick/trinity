@@ -1,4 +1,5 @@
 """
+# status: frozen (2026-09 EXECUTION 163)
 Proactive Prefetcher — P1-1 主动预取模块
 
 基于会话上下文（用户、任务、历史话题）预测用户即将需要哪些记忆，

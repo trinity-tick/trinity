@@ -1,4 +1,5 @@
 """
+# status: reserve (2026-09 EXECUTION 163)
 P4-2: Episodic Memory RL Scoring Engine (对标 MemRL)
 ======================================================
 

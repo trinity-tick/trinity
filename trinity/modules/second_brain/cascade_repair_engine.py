@@ -1,4 +1,5 @@
 """
+# status: frozen (2026-09 EXECUTION 163)
 P25-3: Cascade Repair Engine (MEMOREPAIR)
 arXiv:2605.07242
 

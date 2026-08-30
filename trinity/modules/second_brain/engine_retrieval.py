@@ -1,5 +1,6 @@
 # engine_retrieval.py — Retrieval subsystem extracted from engine.py
 # BEAMLIGHT (P125 ICLR 2026) + ExabaseRetrieval (P126 Exabase M-1)
+# status: frozen (2026-09 EXECUTION 163)
 from __future__ import annotations
 import os, sys, time, math, random, uuid, json, hashlib, statistics, itertools, re
 import numpy as np

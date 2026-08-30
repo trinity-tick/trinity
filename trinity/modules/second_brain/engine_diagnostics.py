@@ -1,5 +1,6 @@
 # engine_diagnostics.py — Diagnostics / Ground Truth subsystem extracted from engine.py
 # GroundTruthEpisodes (P124 MemMachine)
+# status: frozen (2026-09 EXECUTION 163)
 from __future__ import annotations
 import os, sys, time, math, random, uuid, json, hashlib, statistics, itertools, re
 import numpy as np

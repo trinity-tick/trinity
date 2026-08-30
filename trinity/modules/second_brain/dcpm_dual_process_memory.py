@@ -1,6 +1,6 @@
 """P28: DCPM Dual Process Memory — arXiv 2606.09483.
 
-# status: orphan (2026-08-15 audit, not in runtime path)
+# status: active (2026-09 EXECUTION 163: 已接入运行时)
 System-1 (daytime fast writer) ↔ System-2 (nighttime slow inducer) with
 bidirectional belief revision chains, cross-domain schema induction, and
 collision detection. Core insight: dual-process architecture resolves the

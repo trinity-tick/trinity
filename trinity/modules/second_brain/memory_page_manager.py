@@ -1,4 +1,5 @@
 """
+# status: reserve (2026-09 EXECUTION 163)
 Memory Page Manager — P1-2 自主分页模块
 
 MemGPT 风格的 OS 虚拟内存分页，将上下文窗口视为物理内存页帧，

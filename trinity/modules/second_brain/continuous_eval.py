@@ -4,6 +4,7 @@
 # 当前问题:
 #   Trinity 有 BEAMLIGHT 离线评测，但缺少生产级线上自动评测能力。
 #   无法在每次检索后自动检测 faithfulness / answer_relevancy /
+# status: frozen (2026-09 EXECUTION 163)
 #   context_precision / context_recall 并做回归告警。
 #
 # 对标:

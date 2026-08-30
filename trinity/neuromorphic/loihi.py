@@ -1,4 +1,5 @@
 """
+# status: frozen (2026-09 EXECUTION 163: SNN 仿真冻结)
 P2-7a: Intel Loihi 2 Neuromorphic Adapter
 ===========================================
 

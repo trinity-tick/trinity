@@ -1,4 +1,5 @@
 """
+# status: frozen (2026-09 EXECUTION 163)
 Second Brain Retrieval Pipeline
 ================================
 Multi-stage retrieval: BM25 sparse → FAISS dense → Cross-Encoder reranking.

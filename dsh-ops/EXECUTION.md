@@ -10004,3 +10004,28 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - 被动：RSS 7 源（偏好/去重/正文/摘要）
 - 主动：Bing 搜索（兴趣词驱动/并发/摘要）
 - 完整闭环：获取 → 感知 → 记忆 → 夜间整合 → 影响兴趣 → 更准获取
+---
+
+## 163. 孤儿清理决策：48 模块全状态化（2026-09）
+
+### 163.1 盘点发现
+
+- second_brain 46 模块 + neuromorphic 2 = 48；其中 35+ 标记 orphan 或
+  无状态（~30k 行"半活不死"代码）；实际接入运行时仅 5 个。
+
+### 163.2 决策（完成）
+
+- **active 5**：已接入运行时（confidence/serendipity/intent/sage/dcpm）——
+  更新状态为 active；
+- **reserve 10**：有潜力未接入（personalization/structured_distillation/
+  selective_recall/memory_unlearning/causal_memory/memory_page_manager/
+  episodic_rl/token_budget/knowledge_gossip/federated_memory）——保留待激活；
+- **frozen 33**：其余（engine_* 系列/guardian/self_healing/prompt_ingestion/
+  神经形态等）——冻结归档，不计维护面；
+- 全部文件头补 # status 标记；语法验证全 OK。
+
+### 163.3 意义
+
+- **复杂度收敛**：维护认知负荷从 48 → 15（active+reserve）；
+- 后续决策清晰：reserve 逐个激活 or 转 frozen；frozen 不再触碰；
+- 测试 17 passed（标记不影响功能）。

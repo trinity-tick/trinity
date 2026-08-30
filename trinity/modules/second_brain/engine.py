@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 # Re-export from engine_core.py
+# status: frozen (2026-09 EXECUTION 163)
 from trinity.modules.second_brain.engine_core import (
     VERSION, PAPERS, SEP, SUB,
     GovernanceState,
