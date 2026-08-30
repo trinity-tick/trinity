@@ -65,6 +65,24 @@ def _interest_queries():
     return queries or ["Trinity memory system"]
 
 
+
+def _summarize(title, snippet):
+    """LLM 一句话摘要（EXECUTION 162）——搜索结果也可读懂。"""
+    if os.environ.get("TRINITY_WEB_SUMMARIZE", "1") != "1":
+        return None
+    try:
+        sys.path.insert(0, r"D:\trinity-code")
+        from trinity.brain.value_encoder import llm_chat
+        _mat = (str(snippet or "")[:250] or str(title))
+        _prompt = ("用一句话中文总结这条搜索结果（不超过30字）：" + str(title)[:100] + "。内容：" + _mat[:200])
+        _r = llm_chat(_prompt, max_tokens=60, timeout=30)
+        if _r and len(_r.strip()) > 5:
+            return _r.strip()[:80]
+        return None
+    except Exception:
+        return None
+
+
 def _load_state():
     try:
         with open(STATE_FILE, encoding="utf-8") as f:
@@ -111,9 +129,28 @@ def main():
     new_state = set(state)
     perceived = 0
     queries = [_query] if _query else _interest_queries()
+    # EXECUTION 162: 多查询并发（线程池）
+    import threading
+    _results_map = {}
+    _lock = threading.Lock()
+
+    def _search_one(q):
+        try:
+            _results_map[q] = _bing_search(q)
+        except Exception:
+            _results_map[q] = []
+
+    _threads = []
+    for q in queries[:3]:
+        _t = threading.Thread(target=_search_one, args=(q,), daemon=True)
+        _t.start()
+        _threads.append(_t)
+    for _t in _threads:
+        _t.join(timeout=20)
+
     for q in queries[:3]:
         try:
-            results = _bing_search(q)
+            results = _results_map.get(q) or []
             for title, link, snip in results:
                 sig = "s:" + hashlib.sha256((q + "|" + link).encode("utf-8")).hexdigest()[:20]
                 if sig in state:
@@ -121,6 +158,13 @@ def main():
                 signal = f"[websearch:{q[:20]}] {title[:120]} | {link[:90]}"
                 if snip:
                     signal += " | " + snip[:180]
+                # LLM 摘要（EXECUTION 162）
+                try:
+                    _sum = _summarize(title, snip)
+                    if _sum:
+                        signal = f"[ws-sum] {_sum} || " + signal[:220]
+                except Exception:
+                    pass
                 ok = _perceive(signal)
                 new_state.add(sig)
                 if ok:
