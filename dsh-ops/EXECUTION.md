@@ -9552,3 +9552,25 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 
 - 141 轮建设后系统完整健康：写入→检索→感知→整合→遗忘→强化全闭环；
 - 稳态 465ms 历史最佳；审计可证明；大脑化全运行时。
+---
+
+## 143. ROADMAP P0 处置：C 盘残留 store（2026-09）
+
+### 143.1 调查
+
+- C:\Users\Administrator\.trinity\store：642.6MB（trinity_store.db + WAL/SHM），
+  db 内容 = Trinity 旧副本（28,026 条 memories + 完整表结构）；
+- **被 DeepSeek Harness 本体进程锁定**（5 个 Harness 进程持有文件句柄）；
+- D 盘副本完整（787.6MB / 28,024 条）+ PG 主存储权威——Trinity 数据零风险。
+
+### 143.2 决策：保留（不可安全删除）
+
+- 删除会破坏 Harness 正在使用的数据库（可能含 Harness 自身数据）——
+  强行删除风险 > 收益（642MB vs C 盘 100GB 空闲）；
+- **ROADMAP P0 关闭**：标记为"保留（Harness 持有）"——D/PG 已覆盖；
+- 后续：若 Harness 迁移后可清理（删除前确认无句柄）。
+
+### 143.3 意义
+
+- P0 数据安全项**正确处置**（不冒险）：确认残留无害（非权威、有副本）；
+- ROADMAP 状态更新（P0 完成——以"保留"方式关闭）。
