@@ -9868,3 +9868,25 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 
 - 系统在 155 轮建设后完整健康：25+ 机制 + 双自检 + 全测试零回归；
 - 保活机制证明有效（卸载后自动恢复常驻）。
+---
+
+## 157. P0 两项：工作记忆持久化 + 认知告警（2026-09）
+
+### 157.1 工作记忆持久化（完成）
+
+- session_context 加 wm 列（JSONB）；context_save/load 扩展 wm 参数；
+- 查询后保存当前会话工作记忆项；_build_auto_situation 优先从持久化
+  上下文读（跨进程/重启保留），fallback 进程内——**工作记忆从唯一
+  进程内状态变为持久化**（连续状态 100%）；
+- 验证：PG wm 落库 + 跨进程情境含 wm 内容。
+
+### 157.2 认知评测失败告警（完成）
+
+- brain_cognition_eval 失败时写审计标记 cognition_check_failed
+  （含失败检查项）——运维可 /audit/query 追踪；
+- 验证：PASS 时 0 告警（不误报）。
+
+### 157.3 ROADMAP P0 更新
+
+- 工作记忆持久化 ✅ / 认知告警 ✅；剩余：LongMemEval 官方（gated）、
+  OmniMemEval 上榜（需数据）。

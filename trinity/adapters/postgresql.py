@@ -1849,22 +1849,24 @@ class PostgreSQLAdapter(StorageAdapter):
 
     # ── 2026-09 (EXECUTION 141): 持久会话状态 ─────────────
     def context_save(self, last_query: str, percepts: list, affect=None,
-                     session_id: str = "default") -> bool:
+                     session_id: str = "default", wm: list = None) -> bool:
         """持久化最近上下文（跨进程/重启保留；按会话隔离）。"""
         try:
             with self._get_conn() as conn:
                 with conn.cursor() as cur:
                     _aff = json.dumps(affect, ensure_ascii=False) if affect else None
                     _ctx_id = "ctx:" + str(session_id or "default")[:40]
+                    _wm = json.dumps(wm, ensure_ascii=False) if wm else None
                     cur.execute("""
-                        INSERT INTO session_context (id, last_query, percepts, affect)
-                        VALUES (%s, %s, %s, %s)
+                        INSERT INTO session_context (id, last_query, percepts, affect, wm)
+                        VALUES (%s, %s, %s, %s, %s)
                         ON CONFLICT (id) DO UPDATE SET
                             last_query = EXCLUDED.last_query,
                             percepts = EXCLUDED.percepts,
                             affect = EXCLUDED.affect,
+                            wm = EXCLUDED.wm,
                             updated_at = NOW()
-                    """, (_ctx_id, last_query, json.dumps(percepts, ensure_ascii=False), _aff))
+                    """, (_ctx_id, last_query, json.dumps(percepts, ensure_ascii=False), _aff, _wm))
                 conn.commit()
             return True
         except Exception:
@@ -1876,7 +1878,7 @@ class PostgreSQLAdapter(StorageAdapter):
             with self._get_conn() as conn:
                 with conn.cursor() as cur:
                     _ctx_id = "ctx:" + str(session_id or "default")[:40]
-                    cur.execute("SELECT last_query, percepts, affect FROM session_context WHERE id = %s", (_ctx_id,))
+                    cur.execute("SELECT last_query, percepts, affect, wm FROM session_context WHERE id = %s", (_ctx_id,))
                     row = cur.fetchone()
                     if not row:
                         return None
@@ -1888,7 +1890,12 @@ class PostgreSQLAdapter(StorageAdapter):
                     if isinstance(_a, str):
                         import json as _j2
                         _a = _j2.loads(_a)
-                    return {"last_query": row[0] or "", "percepts": _p or [], "affect": _a or None}
+                    _wm2 = row[3]
+                    if isinstance(_wm2, str):
+                        import json as _j3
+                        _wm2 = _j3.loads(_wm2)
+                    return {"last_query": row[0] or "", "percepts": _p or [],
+                            "affect": _a or None, "wm": _wm2 or []}
             return None
         except Exception:
             return None

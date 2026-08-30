@@ -108,6 +108,23 @@ def main():
     for k, v in report["checks"].items():
         if isinstance(v, dict) and v.get("ok") is False:
             report["ok"] = False
+    # EXECUTION 157: 失败告警——写审计标记（运维可 /audit/query 追踪）
+    if not report["ok"]:
+        try:
+            from trinity.adapters.postgresql import PostgreSQLAdapter
+            _a3 = PostgreSQLAdapter(auto_connect=True)
+            _a3.connect()
+            try:
+                _a3.write_audit_log(
+                    memory_id=None, action="cognition_check_failed",
+                    agent_id="cognition-check",
+                    details={"failed_checks": [k for k, v in report["checks"].items()
+                                                if isinstance(v, dict) and v.get("ok") is False]},
+                )
+            finally:
+                _a3.disconnect()
+        except Exception:
+            pass
     print(json.dumps(report, ensure_ascii=False))
     return 0 if report["ok"] else 1
 

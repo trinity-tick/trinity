@@ -475,13 +475,17 @@ class _SearchMixin:
                     pass
             for _p in _pc[:2]:
                 parts.append(str(_p)[:40])
-            # 2026-09 (EXECUTION 146): 工作记忆接入——当前会话注意项并入情境
-            # （工作记忆 = 更"当下"的上下文，注意门控后保留）
+            # 2026-09 (EXECUTION 146/157): 工作记忆接入——优先从持久化上下文读
+            # （跨进程/重启保留），fallback 进程内
             try:
-                from trinity.brain.working_memory import get_working_memory
-                _wm = get_working_memory()
-                _sid = getattr(self, "_last_session_id", None) or "default"
-                _wm_items = _wm.get(_sid, top_k=3)
+                _wm_items = []
+                if _pctx and _pctx.get("wm"):
+                    _wm_items = _pctx.get("wm", [])[:3]
+                else:
+                    from trinity.brain.working_memory import get_working_memory
+                    _wm = get_working_memory()
+                    _sid = getattr(self, "_last_session_id", None) or "default"
+                    _wm_items = _wm.get(_sid, top_k=3)
                 for _wi in _wm_items[:3]:
                     parts.append(str(_wi.get("content", ""))[:40])
             except Exception:
@@ -1440,8 +1444,19 @@ class _SearchMixin:
                             _aff = _upd(_prev, _ar)
                         except Exception:
                             pass
+                        # EXECUTION 157: 工作记忆持久化——随上下文保存
+                        _wm_items = []
+                        try:
+                            from trinity.brain.working_memory import get_working_memory
+                            _wms = get_working_memory().get(getattr(self, "_last_session_id", None) or "default", top_k=7)
+                            _wm_items = [{"content": str(i.get("content", ""))[:200],
+                                          "importance": float(i.get("importance") or 0.5)}
+                                         for i in _wms[:7]]
+                        except Exception:
+                            pass
                         self._adapter.context_save(str(query)[:100], _pp or [], affect=_aff,
-                                                     session_id=getattr(self, "_last_session_id", None) or "default")
+                                                     session_id=getattr(self, "_last_session_id", None) or "default",
+                                                     wm=_wm_items)
                 except Exception:
                     pass
                 # System1：高信心时持久化信念命中（PG，跨进程可见；不阻塞，失败静默）
