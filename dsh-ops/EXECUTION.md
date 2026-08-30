@@ -9379,3 +9379,32 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - 发现并根治**最严重运维隐患**：每日链核心任务（备份/衰减/同步）此前
   因租约假 SKIP 实际未执行——现全部真实运行；
 - 文档与代码同步；遗留集中可追踪。
+---
+
+## 136. 感知具身：环境感知流（2026-09）
+
+### 136.1 目标
+
+- 大脑对比结论的感知杠杆落地：perception 从"人工喂信号"升级为
+  "自动扫描环境日志告警→感知入记忆"（真实感官输入流）。
+
+### 136.2 实施（完成）
+
+- scripts/perception_scan.py：扫描 ~/.trinity/logs（24h 内 .log/.err.log）
+  告警模式（ERROR/WARN/FAILED/Traceback/失败等，过滤租约噪音）→
+  /memory/perceive 感知入记忆（error 通道高显著 + 习惯化）；
+- 幂等：指纹（file+line+内容 SHA256）存 state 文件，跳过已感知；
+- 维护链 perception-scan 任务（每轮维护自动扫描，--max=20 限速）。
+
+### 136.3 验证
+
+- 感知真实告警：session-auto FAILED / Jaeger 连接失败 / ModuleNotFoundError
+  auto_session_summary（发现真实问题！）；
+- perceived 24-29 / skipped 3177（幂等去重）；感知记忆 4,734+ 条落库；
+- 维护链任务 OK；发现 session-auto 模块缺失问题（待修）。
+
+### 136.4 意义（大脑化）
+
+- 感知具身第一步：Trinity 现在能"看见"自己的运行环境（日志=感官输入）；
+- 感知→记忆闭环完整：扫描→显著性筛选→感知→落库→可检索；
+- 大脑化机制：环境感知成为第 15 项运行时能力。
