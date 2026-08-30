@@ -9164,3 +9164,36 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 
 - 改动：perception.py（backfill 函数 + numpy 修复）、_routers_brain.py（调用）；
 - 回滚：git checkout 两文件；已回填数据保留（幂等）。
+---
+
+## 129. 大脑化 P2：预测编码接入（2026-09）
+
+### 129.1 目标
+
+- 预测编码（Predictive Coding）——大脑持续预测感知输入、误差驱动学习；
+  检索侧实现：检索前预测命中数 → 检索后误差计算 → 低命中补充修正。
+
+### 129.2 实施（完成）
+
+- search_hybrid light 路径：_predict_hits（查询长度特征 + 历史 EMA 基线）
+  检索前预测；检索后 _prediction_error = |pred-actual|/top_k；
+- 修正：实际 < 预测 70% 且 > 0 → 补充检索（top_k*2）一次（corrected 标记）；
+- EMA 校准：_update_prediction_ema（short/long 分段，α=0.3）；
+- result 暴露 prediction 字段（expected/actual/error/corrected）。
+
+### 129.3 验证
+
+- '数据库' → pred 4/actual 5/error 0.2；'Windows 服务' → pred 2/actual 5/error 0.6；
+- EMA 学习：short=5.0 / long=5.0（历史命中率收敛）；
+- 无结果查询 → 误差高（触发修正路径）；API health 200。
+
+### 129.4 意义（大脑化）
+
+- 预测-误差-修正 = 大脑皮层预测编码的检索侧实现（最小预测单元）；
+- 与元认知互补：元认知评估'信多少'，预测编码评估'猜中多少'；
+- 大脑化机制增至 13 项运行时。
+
+### 129.5 验证与回滚
+
+- 改动：_search.py（预测编码 + helpers + result 字段）；
+- 回滚：git checkout _search.py；预测逻辑失败静默（零行为影响）。

@@ -416,6 +416,40 @@ class _SearchMixin:
                 rec["verify_hint"] = "需复核（弱证据：低 importance 或无版本链）"
             enriched.append(rec)
         return enriched
+    # 2026-09 (EXECUTION 129): prediction coding helpers
+    def _predict_hits(self, query, top_k):
+        """Predict hit count before retrieval (query features + EMA baseline)."""
+        try:
+            _qlen = len(str(query).strip())
+            _base = int(top_k * 0.8) if _qlen <= 4 else int(top_k * 0.5)
+            _ema = getattr(self, "_pred_ema", None)
+            if _ema:
+                _bucket = "short" if _qlen <= 4 else "long"
+                _b = _ema.get(_bucket)
+                if _b:
+                    return int(_base * 0.6 + _b * 0.4)
+            return _base
+        except Exception:
+            return max(1, int(top_k * 0.5))
+
+    def _update_prediction_ema(self, query, actual):
+        """Update prediction EMA by query length bucket (alpha=0.3)."""
+        try:
+            _qlen = len(str(query).strip())
+            _bucket = "short" if _qlen <= 4 else "long"
+            _ema = getattr(self, "_pred_ema", None)
+            if _ema is None:
+                _ema = {"short": None, "long": None}
+                self._pred_ema = _ema
+            _prev = _ema.get(_bucket)
+            if _prev is None:
+                _ema[_bucket] = float(actual)
+            else:
+                _ema[_bucket] = _prev * 0.7 + float(actual) * 0.3
+        except Exception:
+            pass
+
+
     def _score_retrieval_confidence(self, item: dict, semantic_score: float):
         """EXECUTION 127: 单条检索结果的四维置信度（元认知层）。
 
@@ -1080,12 +1114,34 @@ class _SearchMixin:
 
         # ── light 路径：FTS 快通道（~3ms），天然支持过滤 ──────────
         if routing == "light" and self._adapter is not None:
+            # 2026-09 (EXECUTION 129): 预测编码（大脑预测-误差机制）——
+            # 检索前预测命中数（基于查询长度/词数 + 历史 EMA），检索后
+            # 计算误差并修正（低命中时补充检索一次）。误差反馈进 result。
+            _pred = self._predict_hits(query, top_k)
             results = self._adapter.search_memories(
                 query=query, top_k=top_k,
                 agent_id=agent_id or None,
                 persona_id=persona_id or None,
                 tenant_id=tenant_id or None,
             )
+            # 误差计算 + 修正：实际命中 < 预测 70% 且 > 0 → 补充检索
+            _actual = len(results)
+            _prediction_error = abs(_pred - _actual) / max(top_k, 1)
+            _corrected = False
+            if _actual > 0 and _actual < _pred * 0.7 and _pred > 0:
+                try:
+                    _extra = self._adapter.search_memories(
+                        query=query, top_k=top_k * 2,
+                        agent_id=agent_id or None,
+                        persona_id=persona_id or None,
+                        tenant_id=tenant_id or None,
+                    )
+                    if len(_extra) > _actual:
+                        results = _extra
+                        _corrected = True
+                except Exception:
+                    pass
+            self._update_prediction_ema(query, _actual)
             # 2026-09（EXECUTION 104.9）：PG 主存储 light 路径补向量融合——
             # tsvector simple 对中文分词无效（FTS 召回中文语义查询为空，
             # 实测 "用户偏好 咖啡" FTS=0 / 向量=3），pgvector HNSW 直查 +
@@ -1225,6 +1281,9 @@ class _SearchMixin:
                     "query": query,
                     "breakdown": {"routing": "light", "channels": ["fts", "vector"] if _pg else ["fts"]},
                     "metacognition": _conf,
+                    "prediction": {"expected": _pred, "actual": _actual,
+                                  "error": round(_prediction_error, 3),
+                                  "corrected": _corrected},
                 }
                 # System1：高信心时持久化信念命中（PG，跨进程可见；不阻塞，失败静默）
                 if _conf.get("level") in ("high", "medium") and results:
