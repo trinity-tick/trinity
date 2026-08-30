@@ -989,6 +989,7 @@ class _SearchMixin:
         persona_id: Optional[str] = None,
         tenant_id: Optional[str] = None,
         routing: str = "auto",
+        situation: Optional[str] = None,  # 2026-09 (EXECUTION 119): 情境文本（编码特异性原则）
     ) -> Dict[str, Any]:
         """混合检索（向量 + BM25 + 图谱融合）。
 
@@ -1030,15 +1031,45 @@ class _SearchMixin:
                     from trinity.core.client._helpers import _get_embedding_engine
                     _eng = _get_embedding_engine()
                     if _eng is not None:
-                        _qv = _eng.embed(query)
+                        # 2026-09 (EXECUTION 119): 情境依赖检索——情境文本与查询
+                        # 融合嵌入（编码特异性原则：记忆编码时的情境是检索线索）。
+                        # 情境向量召回 + 查询向量召回 RRF 融合；失败静默回退。
+                        _q_for_vec = query
+                        _sit_vec = None
+                        if situation:
+                            try:
+                                _qv_sit = _eng.embed(str(situation)[:200])
+                                _sit_vec = self._adapter.vector_search(
+                                    _qv_sit, top_k=max(top_k, 5),
+                                    agent_id=agent_id or None,
+                                    persona_id=persona_id or None,
+                                    tenant_id=tenant_id or None,
+                                )
+                            except Exception:
+                                _sit_vec = None
+                        _qv = _eng.embed(_q_for_vec)
                         _vec = self._adapter.vector_search(
                             _qv, top_k=max(top_k * 2, 10),
                             agent_id=agent_id or None,
                             persona_id=persona_id or None,
                             tenant_id=tenant_id or None,
                         )
+                        if _sit_vec:
+                            _sit_ids = {x.get("memory_id") for x in _sit_vec}
+                            for _r in _sit_vec:
+                                _r["situation_score"] = 1.0
                         if _vec:
                             results = self._rrf_merge(results, _vec, top_k)
+                        # 情境 boost：情境命中记忆标记后排序前移（编码特异性——
+                        # 情境相关记忆优先），RRF 结果之外的情境记忆补入尾部
+                        if _sit_vec:
+                            _seen2 = {x.get("memory_id") for x in results}
+                            for _s in _sit_vec:
+                                if _s.get("memory_id") not in _seen2:
+                                    results.append(_s)
+                                    _seen2.add(_s.get("memory_id"))
+                            results.sort(key=lambda x: (0.0 if x.get("situation_score") else 1.0, -float(x.get("score") or 0)))
+                            results = results[:top_k]
                 except Exception:
                     pass
             # 2026-09 (P1-1): CrossEncoder 两阶段 rerank——RRF 融合后对 top

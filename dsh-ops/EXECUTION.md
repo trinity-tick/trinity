@@ -8821,3 +8821,38 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - 改动：trinity/core/client/_search.py（Layer 2 突触衰减）
 - 回滚：git checkout _search.py；
 - 后续：K1/K2 参数化后做 500q A/B 校准（当前默认值保守）。
+---
+
+## 119. 大脑化第四步：情境依赖检索（2026-09）
+
+### 119.1 目标
+
+- 按大脑化路线图 P1：编码特异性原则（Tulving）——记忆编码时的情境
+  是检索线索；同一查询在不同情境下召回不同记忆。
+
+### 119.2 实施（完成）
+
+- search_hybrid 新增 situation 参数（情境文本）；
+- light 路径：情境向量检索（embed(situation) → vector_search）+ 查询向量
+  RRF 融合后，情境命中记忆标记 situation_score=1.0 并排序前移；
+- 失败静默回退纯查询（不影响现有行为）；API 已重启生效。
+
+### 119.3 A/B 验证
+
+- 查询 '数据库'：
+  无情境 → 数据资产地图/README/WMS 报告（泛结果）；
+  情境'数据库迁移到新机器 D 盘部署' → 部署/迁移记忆全部前移
+  （K8s 部署/多机同步方案/Go 交叉编译，sit:1.0）；
+- 编码特异性生效：同查询、异情境、异召回。
+
+### 119.4 意义（大脑化）
+
+- 情境依赖 = 大脑记忆的"上下文线索"机制（tip-of-the-tongue 的另一面：
+  情境对了记忆就回来）；
+- 与 session/persona 过滤（隔离）互补：过滤是硬隔离，情境是软调制。
+
+### 119.5 验证与回滚
+
+- 改动：trinity/core/client/_search.py（situation 参数 + 情境 boost）
+- 回滚：git checkout _search.py；
+- 后续：API 层暴露 situation 参数（/memory/search?situation=...）。
