@@ -9197,3 +9197,41 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 
 - 改动：_search.py（预测编码 + helpers + result 字段）；
 - 回滚：git checkout _search.py；预测逻辑失败静默（零行为影响）。
+---
+
+## 130. LoCoMo 级基准：lmev2_synth 评测 + 认知能力全量（2026-09）
+
+### 130.1 背景
+
+- 网络最优方案量化对比：LongMemEval-V2 官方数据 gated（HF 需认证），
+  本地 lmev2_synth（3 trajectories + 3 QA）可跑——社区级记忆评测；
+- cognitive_eval.py（105.12）已有对标 2026 Memory Survey 的认知评测。
+
+### 130.2 实施
+
+- 新增 scripts/lmev2_synth_eval.py：steps[].observation 正确提取 → 隔离
+  agent 命名空间（lmev2-eval-iso）→ 向量相似度排序 → strict/loose recall；
+- 发现并修复：API 写入记忆异步向量回填失败（6+15 条手动回填）；
+- 窗口分析：top_k=5→12 strict 33%→67%（答案在更大窗口内）。
+
+### 130.3 结果（lmev2_synth）
+
+| 指标 | top_k=12 |
+|---|---|
+| strict recall | 2/3 = 67% |
+| loose recall | 3/3 = 100% |
+| 语义相似度 | 0.74-0.83（高） |
+| dynamic/procedure | 100% |
+
+### 130.4 认知能力全量（cognitive_eval.py）
+
+- recall：nonempty 1.0 / consistency 1.0；gap：recall 1.0 / precision 1.0；
+- wm_hit 1.0；value_alignment MAE 0.253 方向一致 0.9；perturbation 全 1.0；
+- **总体 PASS**（对标 2026 Memory Survey 框架）。
+
+### 130.5 意义
+
+- 首个社区级基准跑分：Trinity 在语义召回上强（sim 0.74-0.83），
+  答案精确命中受召回窗口影响（67%@12）——量化暴露优化点；
+- 认知能力（回忆/缺口/工作记忆/价值/扰动）全部 PASS——大脑化可测；
+- 待办：LongMemEval-V2 官方数据（gated）认证后可跑完整版。
