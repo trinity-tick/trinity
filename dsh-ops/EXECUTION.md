@@ -9324,3 +9324,30 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 ### 133.3 意义
 
 - 数据完整性长期自愈：每日巡检 + 缺失向量自动回填；131 修复不回归。
+---
+
+## 134. 根治：夜间整合任务真正运行（2026-09）
+
+### 134.1 问题
+
+- 维护链租约 SKIP(reason=error) 已知问题（123/125/133 轮记录）导致所有
+  带 LeaseJob 的任务**从未执行**——dcpm-consolidate（117 轮接入）和
+  replay-consolidate（120 轮接入）自接入起就没在每日链真正跑过！
+
+### 134.2 修复
+
+- 移除 dcpm/replay 任务的 LeaseJob（无并发风险任务跳过租约机制——
+  与 integrity-monitor 133 轮同策略）；
+- 保留 with_lease.py 本身（手动/其他调用仍可用）。
+
+### 134.3 验证
+
+- dcpm-consolidate：81 信念 → 1 schema + 1 core → 2 schema 记忆落库，OK；
+- replay-consolidate：80 情节 → 150 查询对/三元组 → 泛化记忆落库，OK；
+- **大脑化夜间闭环（System2 归纳 + 重放泛化）现在每日真实运行**。
+
+### 134.4 意义
+
+- 此前每日链的 dcpm/replay 是"假 OK"（SKIP 算 OK）——本轮让夜间整合
+  真正生效，大脑化闭环从"代码存在"变为"每日运行"；
+- 修复链：117 接入 → 120 接入 → 133 发现 SKIP → 134 根治。

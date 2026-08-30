@@ -836,8 +836,8 @@ foreach ($t in $Tasks) {
         "reversible-compress" { Invoke-Task -Name "reversible-compress" -DirectCommand $reversibleCompressCmd -DshPrompt $reversibleCompressPrompt }  # 2026-09 可逆压缩
         "memory-purify" { Invoke-Task -Name "memory-purify" -DirectCommand $purifyCmd -DshPrompt $purifyPrompt }  # 2026-09 主动遗忘净化
 
-    "dcpm-consolidate" { Invoke-Task -Name "dcpm-consolidate" -LeaseJob "dcpm-consolidate" -DirectCommand $dcpmConsolidateCmd -DshPrompt $dcpmConsolidatePrompt }
-    "replay-consolidate" { Invoke-Task -Name "replay-consolidate" -LeaseJob "replay-consolidate" -DirectCommand $replayConsolidateCmd -DshPrompt $replayConsolidatePrompt }
+    "dcpm-consolidate" { Invoke-Task -Name "dcpm-consolidate" -DirectCommand $dcpmConsolidateCmd -DshPrompt $dcpmConsolidatePrompt }
+    "replay-consolidate" { Invoke-Task -Name "replay-consolidate" -DirectCommand $replayConsolidateCmd -DshPrompt $replayConsolidatePrompt }
         "integrity-monitor" { Invoke-Task -Name "integrity-monitor" -DirectCommand $integrityMonitorCmd -DshPrompt $integrityMonitorPrompt }
     "cognition-agent" { Invoke-Task -Name "cognition-agent" -DirectCommand $cognitionAgentCmd -DshPrompt $cognitionAgentPrompt }  # 2026-09 主动主体
         "backup"    { Write-Log "backup: WAL 安全备份到 ~/.trinity/backups (保留 14 天)"; & "$PSScriptRoot\trinity-backup.ps1" 2>&1 | ForEach-Object { Write-Log $_ } }
