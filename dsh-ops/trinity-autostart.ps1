@@ -31,7 +31,7 @@ if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Forc
 
 # 存储统一（EXECUTION 31，双库修复双保险）：显式锚定权威大库路径，
 # 由 Invoke-Script 拉起的维护脚本子进程继承，杜绝 cwd 兜底产生小库。
-$env:TRINITY_STORE = Join-Path $env:USERPROFILE ".trinity\store"
+$env:TRINITY_STORE = "D:	rinity-data\store"  # 2026-09 迁移 D 盘后权威库
 
 function Write-Log {
     param([string]$Message, [string]$Level = "INFO")

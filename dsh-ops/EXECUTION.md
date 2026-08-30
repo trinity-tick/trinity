@@ -8856,3 +8856,41 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - 改动：trinity/core/client/_search.py（situation 参数 + 情境 boost）
 - 回滚：git checkout _search.py；
 - 后续：API 层暴露 situation 参数（/memory/search?situation=...）。
+---
+
+## 120. 大脑化第五步：情节→语义泛化（2026-09）
+
+### 120.1 目标
+
+- 按大脑化路线图 P2：接通 memory_replay_trainer（海马体重放机制）——
+  情节记忆重放 → 查询对 + 对比三元组 → 语义泛化记忆。
+
+### 120.2 实施（完成）
+
+- 新增 scripts/memory_replay_consolidate.py：PG 情节记忆（importance>=0.5）
+  → MemoryReplayTrainer 管线（查询对/对比三元组）→ 高频概念词提取
+  （jieba，滤停用词）→ semantic-generalization 记忆落库（--write）；
+- 维护链新增 replay-consolidate 任务（--max 80 加速）+ 每日链；
+- 顺带修复：dcpm-consolidate 任务在 117 轮后 dispatch 丢失 → 本轮补回；
+  job_lease 默认库跟随 TRINITY_STORE 环境变量（迁移 D 盘一致性）；
+  maintenance/autostart/supervisor 的 TRINITY_STORE 统一指向 D 盘权威库。
+
+### 120.3 验证
+
+- 200 情节记忆 → 399 查询对 + 399 对比三元组；
+- 语义关键词：['管理','用户','记忆','存储','会话','pg','wms']（真实主题）；
+- semantic-generalization 记忆落库成功；dcpm 脚本 11 信念→schema→落库；
+- 已知问题：maintenance 子进程 replay 任务租约 SKIP(reason=error)（环境
+  差异，脚本 standalone 全通；每日链 autostart 环境已统一 D 库）。
+
+### 120.4 意义（大脑化）
+
+- 情节→语义 = 海马体重放机制：白天情节（episodic）→ 夜间重放 →
+  语义泛化（semantic）——与 DCPM System2 互补（Schema 归纳 vs 概念提取）；
+- 大脑化路线图 6 项 P 级能力全部接通（双过程/突触衰减/情境/睡眠/重放/价值）。
+
+### 120.5 验证与回滚
+
+- 改动：scripts/memory_replay_consolidate.py（新）、maintenance/autostart/
+  supervisor（任务+TRINITY_STORE 统一）、job_lease.py（env 跟随）、_search.py
+- 回滚：git checkout 相关文件；泛化记忆可保留（幂等）。

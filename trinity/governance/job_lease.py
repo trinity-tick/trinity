@@ -58,7 +58,15 @@ import time
 import uuid
 from typing import Any, Dict, List, Optional
 
-DEFAULT_DB = os.path.expanduser("~/.trinity/store/trinity_store.db")
+# 2026-09 (EXECUTION 120): 租约库与运行时一致——优先 TRINITY_STORE 环境变量
+# （迁移 D 盘后 ~/.trinity/store 为 C 盘残留，lease 与权威库不一致导致 SKIP 残留）
+def _default_db():
+    _env = os.environ.get("TRINITY_STORE", "")
+    if _env:
+        return os.path.join(_env, "trinity_store.db")
+    return os.path.expanduser("~/.trinity/store/trinity_store.db")
+
+DEFAULT_DB = _default_db()
 DEFAULT_LEASE_SECONDS = 3600  # 对齐 codex 1h 租约
 
 _SCHEMA = """

@@ -66,7 +66,7 @@ foreach ($cache in @("TRINITY_CACHE_BACKEND", "TRINITY_REDIS_URL", "TRINITY_CACH
 }
 # 存储统一（EXECUTION 31，双库修复双保险）：显式锚定权威大库路径，
 # 子进程（api/mcp）继承后不再依赖 _find_trinity_store() 的 cwd 兜底。
-$TrinityStore = Join-Path $env:USERPROFILE ".trinity\store"
+$TrinityStore = "D:	rinity-data\store"  # 2026-09 迁移 D 盘后权威库
 
 # 2026-08-27 (伙伴系列): API 常驻启用 automation (knowledge.stale 告警等)
 if (-not [Environment]::GetEnvironmentVariable("TRINITY_AUTOMATION", "Process")) {

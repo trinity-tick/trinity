@@ -29,8 +29,34 @@ param(
 
 # 兼容 powershell -File 传参：命令行里的 "a,b,c" 会以单个字符串到达，
 # 这里统一按逗号拆分 + 校验。
-$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "usage", "rollout-audit", "audit-ps1", "forgetting", "produce", "federation-sync", "tune", "fulltest", "pg-sync", "evolve", "observe", "value-recalib", "replay", "extract-skills", "perception-bridge", "cognitive-eval", "event-extract", "reversible-compress", "memory-purify", "cognition-agent", "dcpm-consolidate", "all")  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
+$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "usage", "rollout-audit", "audit-ps1", "forgetting", "produce", "federation-sync", "tune", "fulltest", "pg-sync", "evolve", "observe", "value-recalib", "replay", "extract-skills", "perception-bridge", "cognitive-eval", "event-extract", "reversible-compress", "memory-purify", "cognition-agent", "dcpm-consolidate", "replay-consolidate", "all")  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
 $normalized = @()
+# DCPM System2 夜间整合（2026-09 EXECUTION 117）：信念→schema→记忆落库
+$dcpmConsolidateCmd = @"
+import sys, os
+sys.path.insert(0, r"D:\trinity-code")
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+os.environ.setdefault("TRINITY_STORAGE_BACKEND", "postgresql")
+import runpy
+sys.argv = ["dcpm_consolidate", "--write"]
+runpy.run_path(r"D:\trinity-code\scripts\dcpm_consolidate.py", run_name="__main__")
+"@
+$dcpmConsolidatePrompt = "运行 scripts/dcpm_consolidate.py --write（DCPM System2 夜间整合：PG 信念→schema 归纳→记忆落库），汇报信念/schema/落库数。"
+
+# 情节→语义泛化（2026-09 EXECUTION 120）：重放管线 → 语义泛化记忆落库
+$replayConsolidateCmd = @"
+import sys, os
+sys.path.insert(0, r"D:\trinity-code")
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+os.environ.setdefault("TRINITY_STORAGE_BACKEND", "postgresql")
+import runpy
+sys.argv = ["memory_replay_consolidate", "--write", "--max", "80"]
+runpy.run_path(r"D:\trinity-code\scripts\memory_replay_consolidate.py", run_name="__main__")
+"@
+$replayConsolidatePrompt = "运行 scripts/memory_replay_consolidate.py --write（情节→语义泛化：PG 情节记忆重放→对比三元组→语义泛化记忆落库），汇报记忆/查询对/关键词数。"
+
 foreach ($t in $Tasks) { $normalized += $t.Split(',') }
 $normalized = $normalized | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" }
 $bad = $normalized | Where-Object { $_ -notin $allowed }
@@ -41,6 +67,8 @@ if ($bad) {
 $Tasks = $normalized
 
 $ErrorActionPreference = "Continue"
+# 2026-09 (EXECUTION 120): 存储统一——租约/维护与运行时一致（D 盘权威库）
+if (-not $env:TRINITY_STORE) { $env:TRINITY_STORE = "D:	rinity-data\store" }  # 2026-09 迁移 D 盘后权威库
 $TrinityRoot = Split-Path -Parent $PSScriptRoot
 # 维护任务统一使用系统 Python（trinity 完整安装：含 fastapi/mcp/yaml/psycopg2 等；
 # 项目 .venv 仅含基础依赖 numpy/jieba，跑不动 decay/tiers/sync）。
@@ -148,7 +176,7 @@ function Invoke-Task {
         }
         if ($LeaseJob) {
             # P0-1 租约守卫：并发重复任务直接 SKIP，不在 SQLite 写锁上排队
-            $out = & $Py "$TrinityRoot\scripts\with_lease.py" --job $LeaseJob -- $Py $tmpPy 2>&1
+            $out = & $Py "$TrinityRoot\scripts\with_lease.py" --job $LeaseJob --db "$env:TRINITY_STORE	rinity_store.db" -- $Py $tmpPy 2>&1
         } else {
             $out = & $Py $tmpPy 2>&1
         }
@@ -795,6 +823,9 @@ foreach ($t in $Tasks) {
         "event-extract" { Invoke-Task -Name "event-extract" -DirectCommand $eventExtractCmd -DshPrompt $eventExtractPrompt }  # 2026-09 事件图谱提取
         "reversible-compress" { Invoke-Task -Name "reversible-compress" -DirectCommand $reversibleCompressCmd -DshPrompt $reversibleCompressPrompt }  # 2026-09 可逆压缩
         "memory-purify" { Invoke-Task -Name "memory-purify" -DirectCommand $purifyCmd -DshPrompt $purifyPrompt }  # 2026-09 主动遗忘净化
+
+    "dcpm-consolidate" { Invoke-Task -Name "dcpm-consolidate" -LeaseJob "dcpm-consolidate" -DirectCommand $dcpmConsolidateCmd -DshPrompt $dcpmConsolidatePrompt }
+    "replay-consolidate" { Invoke-Task -Name "replay-consolidate" -LeaseJob "replay-consolidate" -DirectCommand $replayConsolidateCmd -DshPrompt $replayConsolidatePrompt }
         "cognition-agent" { Invoke-Task -Name "cognition-agent" -DirectCommand $cognitionAgentCmd -DshPrompt $cognitionAgentPrompt }  # 2026-09 主动主体
         "backup"    { Write-Log "backup: WAL 安全备份到 ~/.trinity/backups (保留 14 天)"; & "$PSScriptRoot\trinity-backup.ps1" 2>&1 | ForEach-Object { Write-Log $_ } }
         "evolve-env" { Write-Log "evolve-env: 应用自进化采纳 env（evolve_env.json → 进程环境，白名单校验）"; & "$PSScriptRootpply_evolve_env.ps1" -Show 2>&1 | ForEach-Object { Write-Log $_ } }  # 2026-08-25 缺口A
