@@ -9746,3 +9746,24 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - 自我反思：从"会话身份"到"自省"——Trinity 能评估自己的状态并
   沉淀为可检索的自我记忆；
 - 大脑化机制 23 项运行时。
+---
+
+## 151. 自省入每日链：周期自我反思（2026-09）
+
+### 151.1 实施（完成）
+
+- scripts/self_reflect_daily.py：遍历 session_context 全部会话 →
+  reflect_to_memory（自省写入 self-reflection 记忆）；
+- 维护链 self-reflect 任务 + 每日链（autostart）——每日自动反思；
+- 反思记忆与感知记忆/夜间整合同环（可检索、可进化输入）。
+
+### 151.2 验证
+
+- 维护链：sessions 7 / reflected 6，OK；每日链已加入；
+- self-reflection 记忆可检索（150 轮验证内容格式）。
+
+### 151.3 意义（大脑化）
+
+- 自我反思成为**每日周期行为**（与睡眠整合同节奏）——大脑化闭环：
+  白天使用（感知/检索/情绪）→ 夜间反思+整合+重放（自省/重放/对比训练）；
+- 自省记忆可作 auto-evolve 输入（自我观察→自我改进的原料）。

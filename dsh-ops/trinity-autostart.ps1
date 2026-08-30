@@ -97,7 +97,7 @@ while ($true) {
     # ── 每日 03:00-03:10：decay + tiers + sync（需 PG）──────────
     $today = $now.ToString("yyyyMMdd")
     if ((Test-Path $Maintenance) -and $now.Hour -eq 3 -and $now.Minute -lt 10 -and $lastDaily -ne $today) {
-        Invoke-Script -Path $Maintenance -ArgsList @("-Tasks", "mirror,decay,tiers,consolidate,dedup,sync,compact,agent-ttl,active-health,backup,observe,value-recalib,perception-bridge,dcpm-consolidate,integrity-monitor") -Label "maintenance(decay,tiers,sync)" -TimeoutSec 2400
+        Invoke-Script -Path $Maintenance -ArgsList @("-Tasks", "mirror,decay,tiers,consolidate,dedup,sync,compact,agent-ttl,active-health,backup,observe,value-recalib,perception-bridge,dcpm-consolidate,integrity-monitor,self-reflect") -Label "maintenance(decay,tiers,sync)" -TimeoutSec 2400
         $lastDaily = $today
     }
 
