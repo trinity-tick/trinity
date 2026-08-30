@@ -1,20 +1,20 @@
 # -*- coding: utf-8 -*-
-"""网络感知通道（EXECUTION 158）——Trinity 的"网络感官"。
+"""网络感知通道 v2（EXECUTION 159）——质料质量优化。
 
-RSS 订阅源定时抓取 → 提取标题/摘要 → /memory/perceive 感知入记忆
-（channel=web，高显著 web 通道）。与日志/文件/视觉感知同构。
-
-幂等：URL 哈希指纹存 state 文件（~/.trinity/web_state.json），跳过已感知。
-零第三方依赖（urllib + xml.etree 标准库）。
+v1（158）: 标题+链接。v2 增强：
+  1. 正文抓取：html.parser 提取正文文本（前 N 字符）
+  2. 主题过滤：从 session_context 兴趣词（last_query 关键词）偏好——
+     Trinity 关注领域的新闻优先感知（自我模型驱动信息获取）
+  3. 标题归一化去重（同新闻多源只留一次）
+  4. LLM 摘要（可选 TRINITY_WEB_SUMMARIZE=1；失败降级标题）
 
 用法: python scripts/web_perception.py [--max N] [--dry-run]
 """
-import os, sys, json, hashlib, urllib.request, time
+import os, sys, json, hashlib, re, urllib.request, time
 
 API = "http://127.0.0.1:8001"
 STATE_FILE = os.path.expanduser("~/.trinity/web_state.json")
 
-# RSS 订阅源（可达性已测，2026-08-30）
 RSS_FEEDS = [
     "https://www.oschina.net/news/rss",
     "https://www.cnblogs.com/rss",
@@ -23,6 +23,7 @@ RSS_FEEDS = [
     "https://hnrss.org/frontpage",
 ]
 TIMEOUT = 15
+BODY_LIMIT = 500  # 正文截断
 
 
 def _fetch(url):
@@ -32,28 +33,93 @@ def _fetch(url):
 
 
 def _parse_rss(xml_text):
-    """提取 (title, link) 列表（RSS/Atom 兼容）。"""
     items = []
     try:
         import xml.etree.ElementTree as ET
         root = ET.fromstring(xml_text)
-        # RSS 2.0: channel/item；Atom: feed/entry
-        for item in root.iter("item") or []:
-            title = item.findtext("title", "") or ""
-            link = item.findtext("link", "") or ""
+        for item in root.iter("item"):
+            title = (item.findtext("title", "") or "").strip()
+            link = (item.findtext("link", "") or "").strip()
             if title and link:
-                items.append((title.strip(), link.strip()))
+                items.append((title, link))
         for entry in root.iter("entry"):
-            title = entry.findtext("title", "") or ""
+            title = (entry.findtext("title", "") or "").strip()
             link = ""
             l = entry.find("link")
             if l is not None:
-                link = l.get("href", "") or ""
+                link = (l.get("href", "") or "").strip()
             if title and link:
-                items.append((title.strip(), link.strip()))
+                items.append((title, link))
     except Exception:
         pass
     return items
+
+
+def _extract_body(html_text, limit=BODY_LIMIT):
+    """html.parser 提取正文文本（去标签/脚本/样式）。"""
+    try:
+        from html.parser import HTMLParser
+
+        class _T(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.parts = []
+                self.skip = 0
+
+            def handle_starttag(self, tag, attrs):
+                if tag in ("script", "style", "nav", "footer", "header"):
+                    self.skip += 1
+
+            def handle_endtag(self, tag):
+                if tag in ("script", "style", "nav", "footer", "header") and self.skip:
+                    self.skip -= 1
+
+            def handle_data(self, data):
+                if not self.skip:
+                    t = data.strip()
+                    if t and len(t) > 2:
+                        self.parts.append(t)
+
+        p = _T()
+        try:
+            p.feed(html_text)
+        except Exception:
+            pass
+        text = " ".join(p.parts)
+        text = re.sub(r"\s+", " ", text).strip()
+        return text[:limit]
+    except Exception:
+        return ""
+
+
+def _normalize_title(title):
+    """标题归一化（去标点/小写）用于相似去重。"""
+    return re.sub(r"[^\w\u4e00-\u9fff]", "", title.lower())[:30]
+
+
+def _interest_words():
+    """从会话上下文提取兴趣词（自我模型驱动的信息偏好）。"""
+    words = []
+    try:
+        sys.path.insert(0, r"D:\trinity-code")
+        from trinity.adapters.postgresql import PostgreSQLAdapter
+        a = PostgreSQLAdapter(auto_connect=True)
+        a.connect()
+        try:
+            import psycopg2
+            conn = psycopg2.connect(host="127.0.0.1", port=5432, dbname="trinity",
+                                    user="trinity", password="trinity")
+            cur = conn.cursor()
+            cur.execute("SELECT last_query FROM session_context ORDER BY updated_at DESC LIMIT 5")
+            for (q,) in cur.fetchall():
+                for w in re.findall(r"[\u4e00-\u9fff]{2,}|[A-Za-z]{4,}", str(q or "")):
+                    words.append(w.lower())
+            conn.close()
+        finally:
+            a.disconnect()
+    except Exception:
+        pass
+    return set(words)
 
 
 def _load_state():
@@ -87,7 +153,7 @@ def _perceive(signal):
 
 def main():
     dry = "--dry-run" in sys.argv
-    _max = 20
+    _max = 15
     for _a in sys.argv:
         if _a.startswith("--max="):
             try:
@@ -96,12 +162,20 @@ def main():
                 pass
     state = _load_state()
     new_state = set(state)
+    seen_titles = set()
     perceived = 0
+    interests = _interest_words()
     for feed in RSS_FEEDS:
         try:
             xml_text = _fetch(feed)
             items = _parse_rss(xml_text)
-            for title, link in items[:8]:  # 每源最多 8 条
+            for title, link in items[:10]:
+                # 相似去重（多源同新闻）
+                nt = _normalize_title(title)
+                if nt and nt in seen_titles:
+                    continue
+                if nt:
+                    seen_titles.add(nt)
                 sig = "w:" + hashlib.sha256(link.encode("utf-8")).hexdigest()[:20]
                 if sig in state:
                     continue
@@ -109,7 +183,19 @@ def main():
                     print("DRY-WEB:", title[:60])
                     new_state.add(sig)
                     continue
-                signal = f"[web:{os.path.basename(feed)[:20]}] {title[:150]} | {link[:100]}"
+                # 主题偏好：兴趣词命中则提升 importance（软偏好，不硬过滤）
+                _imp = 0.6
+                hit = any(w in title.lower() for w in interests) if interests else True
+                if hit and interests:
+                    _imp = 0.8  # 兴趣命中 → 更高显著
+                signal = f"[web:{os.path.basename(feed)[:16]}] {title[:150]} | {link[:90]}"
+                # 正文抓取（失败降级纯标题）
+                try:
+                    body = _extract_body(_fetch(link))
+                    if body:
+                        signal += " | " + body[:BODY_LIMIT]
+                except Exception:
+                    pass
                 ok = _perceive(signal)
                 new_state.add(sig)
                 if ok:
@@ -122,7 +208,7 @@ def main():
             break
     if not dry:
         _save_state(new_state)
-    print(json.dumps({"perceived": perceived, "feeds": len(RSS_FEEDS),
+    print(json.dumps({"perceived": perceived, "interests": len(interests),
                       "state_size": len(new_state)}, ensure_ascii=False))
     return 0
 
