@@ -10029,3 +10029,21 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - **复杂度收敛**：维护认知负荷从 48 → 15（active+reserve）；
 - 后续决策清晰：reserve 逐个激活 or 转 frozen；frozen 不再触碰；
 - 测试 17 passed（标记不影响功能）。
+---
+
+## 164. 租约根治：显式 --db 修复（2026-09）
+
+### 164.1 根因（终于看到）
+- with_lease 加 detail 打印 → unable to open database file
+- 根因：with_lease 子进程从环境变量读 TRINITY_STORE 时路径传递异常
+  （maintenance 环境 vs 手动测试差异）
+- 修复：maintenance 调用加显式 --db 绝对路径（绕过 env 传递）
+
+### 164.2 验证
+- integrity-monitor：with_lease: claimed + OK（此前恒 SKIP）
+- decay：OK（租约机制恢复）
+- 显式 --db 确保未来加回 LeaseJob 也能用
+
+### 164.3 意义
+- 135 轮绕行 → 164 轮修复（根因定位 + 解决）
+- 并发安全机制恢复可用；with_lease 保留 detail 打印（故障可见）
