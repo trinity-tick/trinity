@@ -346,4 +346,9 @@ if (Test-Path $SysPy) {
 }
 
 Save-State $state
+# 2026-09 (EXECUTION 144): embed 保活——每 5 分钟 ping bge-m3 保持常驻
+    try {
+        $ka = & $Py "D:\trinity-code\scripts\embed_keepalive.py" 2>&1
+        if ($LASTEXITCODE -ne 0) { Write-Log "embed keepalive warn: $ka" "WARN" }
+    } catch {}
 Write-Log "supervisor pass complete"

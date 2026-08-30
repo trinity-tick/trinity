@@ -9574,3 +9574,26 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 
 - P0 数据安全项**正确处置**（不冒险）：确认残留无害（非权威、有副本）；
 - ROADMAP 状态更新（P0 完成——以"保留"方式关闭）。
+---
+
+## 144. 冷启动优化：embed 保活（2026-09）
+
+### 144.1 实施（完成）
+
+- scripts/embed_keepalive.py：ping bge-m3（Ollama embed API）；
+- supervisor 接入：每 5 分钟保活（模型永不卸载，消除 30m 窗口重载 6s）；
+- 内存评估：31.9GB 总/4.9GB 空闲——保活不增内存（模型已加载），
+  优于永久常驻（OLLAMA_KEEP_ALIVE=-1 占 1-2GB 风险）。
+
+### 144.2 验证
+
+- supervisor pass complete + bge-m3 until 18:21（保活重置成功）；
+- 稳态检索 339-380ms（历史最佳区间）；
+- 重启首查 6.5s = 预热窗口（jieba/reranker 与首查竞争）非模型卸载——
+  30m 卸载类冷载已消除。
+
+### 144.3 ROADMAP P1 更新
+
+- 冷启动窗口：模型卸载类已消除（144）；重启预热窗口保留（每重启 1 次）；
+- 短进程异步回填：131 已知（脚本场景显式回填）；
+- 租约 SKIP：135 已绕行（全任务移除 LeaseJob）。
