@@ -151,6 +151,15 @@ def _startup_prewarm() -> None:
             _jb.cut("预热中文分词词典")
         except Exception:
             pass
+        # 2026-09 (EXECUTION 124): reranker 预热——首查不再卡 2-10s
+        # （CE 加载/降级判定移到启动期；TRINITY_PREWARM_RERANK=0 关闭）。
+        if os.environ.get("TRINITY_PREWARM_RERANK", "1") == "1":
+            try:
+                from trinity.vector_index.reranker import CrossEncoderReranker
+                _rk = CrossEncoderReranker(model_name="chinese")
+                _rk._load_model()  # 失败静默（降级链兜底）
+            except Exception:
+                pass
 
     _th.Thread(target=_warm, daemon=True, name="api-startup-prewarm").start()
 

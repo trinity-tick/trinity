@@ -8997,3 +8997,35 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - 改动：_deps.py（jieba 预热）、value_encoder.py（本地 LLM 降级）、Ollama 配置；
 - 回滚：git checkout 两文件；keep_alive 恢复默认；
 - 后续：TRINITY_PREWARM 扩展覆盖 reranker/BM25；稳态 1s → 500ms 目标。
+---
+
+## 124. 性能收官：OLLAMA_KEEP_ALIVE 常驻 + 冷启动优化（2026-09）
+
+### 124.1 根因与修复
+
+- 反复出现"稳态 1s 但偶发 6-30s"：bge-m3 模型**每次查询后被卸载**，
+  下次查询重新加载 6s；
+- 尝试 embed API keep_alive=-1 → **Ollama 0.33.2 返回 400**（不支持）；
+- **正确方案**：OLLAMA_KEEP_ALIVE=30m 环境变量（用户级持久，重启生效）
+  + 从 engine.py 移除无效 keep_alive 参数；
+- 验证：bge-m3 常驻（until 16:16），embed 6,975ms→172ms。
+
+### 124.2 冷启动优化
+
+- API 启动预热扩展：jieba（123 轮）+ **reranker**（本轮，TRINITY_PREWARM_RERANK）；
+- 冷启动 33s（BM25+reranker+jieba 后台与首请求竞争）→ 预热完成即稳态；
+- 后续可调 TRINITY_PREWARM_* 或预热顺序优化。
+
+### 124.3 性能结果
+
+- embed：6,975ms → **172ms**（常驻后）；
+- 稳态检索：**755-779ms**（search5/6，多次稳定）；
+- 偶发 6-13s：Ollama 模型到期重载窗口（30m 内应无）；
+- 回归：audit integrity True / situation 3 hits / health 200。
+
+### 124.4 验证与回滚
+
+- 改动：engine.py（移除无效 keep_alive）、_deps.py（reranker 预热）、
+  OLLAMA_KEEP_ALIVE 环境变量；
+- 回滚：git checkout 两文件 + 移除环境变量；
+- 遗留：冷启动窗口（可预热顺序优化）；稳态 780ms → 500ms（rerank 缓存）。
