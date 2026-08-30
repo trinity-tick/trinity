@@ -1170,7 +1170,10 @@ class _SearchMixin:
         tenant_id: Optional[str] = None,
         routing: str = "auto",
         situation: Optional[str] = None,  # 2026-09 (EXECUTION 119): 情境文本（编码特异性原则）
+        session_id: Optional[str] = None,  # 2026-09 (EXECUTION 148): 会话隔离贯穿（工作记忆+上下文）
     ) -> Dict[str, Any]:
+        if session_id is not None:
+            self._last_session_id = session_id
         """混合检索（向量 + BM25 + 图谱融合）。
 
         ②自适应预算路由（2026-08-15，对齐 Query-Aware Budget-Tier Routing）：
