@@ -439,6 +439,18 @@ class MetaEvolution:
                     self.state.active_preferences.get(key, 0) + 0.3, 1.0
                 )
 
+        # 2026-09 (EXECUTION 178): 自省驱动进化——消费 self_state 观察
+        # （152 轮只加了观察钩子，analyze 未消费 → 自省从未驱动改进）
+        # 谨慎状态累积 → 保守策略偏好（影响未来检索/决策）
+        self_states = [o for o in observations if o.get("type") == "self_state"]
+        cautious = sum(1 for o in self_states if o.get("signal") == "cautious")
+        if cautious >= 1:
+            self.state.active_preferences["self:cautious_mode"] = min(
+                self.state.active_preferences.get("self:cautious_mode", 0) + 0.3 * cautious, 1.0
+            )
+            if cautious >= 2:
+                self.state.active_preferences["self:cautious_mode"] = 1.0
+
         return {
             "corrections_found": len(corrections),
             "patterns_detected": len(pattern_counts),
