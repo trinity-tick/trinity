@@ -9408,3 +9408,25 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - 感知具身第一步：Trinity 现在能"看见"自己的运行环境（日志=感官输入）；
 - 感知→记忆闭环完整：扫描→显著性筛选→感知→落库→可检索；
 - 大脑化机制：环境感知成为第 15 项运行时能力。
+---
+
+## 137. 感知发现验证：session-auto/Jaeger 均正常（2026-09）
+
+### 137.1 背景
+
+- 136 轮感知扫描发现的 3 个告警（session-auto FAILED / Jaeger 失败 /
+  ModuleNotFoundError auto_session_summary）——需确认当前状态。
+
+### 137.2 验证（均正常）
+
+- session-auto：candidates=240 done=0 skipped=240（OK）——13:26 的
+  ModuleNotFoundError 是租约时代旧日志（135 移除租约后已真实运行）；
+- Jaeger：docker 容器 Up 4h + 端口 4317/4318/16686 全监听（正常）——
+  13:26 失败是当时 docker 服务恢复期的历史日志；
+- C junction 路径与 D 路径均存在、模块 import OK（无路径问题）。
+
+### 137.3 结论
+
+- 感知扫描发现的告警均为**历史旧日志**（135 轮修复前）；当前系统健康；
+- 感知扫描的价值确认：环境感知能发现真实问题（即使最终确认已修复）；
+- 感知记忆保留（历史告警=教训记录，有长期价值）。
