@@ -8601,3 +8601,44 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
   可删）；C:\.trinity\store（646MB 锁，D 有副本）；
 - 回滚：删 junction → 目录移回 C 盘即可（数据未动）；
 - 后续：重启 DSH Harness 后清理残留，C 盘可再释放 ~660MB。
+---
+
+## 113. 迁移后自启链路修复（2026-09，重启恢复保障）
+
+### 113.1 问题
+
+- Trinity 迁移 D 盘后，登录自启入口仍指向 C 盘残留目录：
+  ① trinity-dsh-autostart.vbs → C:\...\trinity\dsh-ops（残留，无脚本）；
+  ② dsh-web-autostart.vbs → 同上；
+  ③ 计划任务 Trinity-DshAntiLoopMonitor → C 路径；
+  ④ C 盘残留 data/dist 被 Harness sessions.db 锁（无法删除建 junction）。
+
+### 113.2 修复（完成）
+
+- dsh-web-autostart.vbs：直接改指 D:\trinity-code\dsh-ops\start-dsh-web.ps1；
+- trinity-dsh-autostart.vbs：改指 D:\trinity-code\dsh-ops\trinity-autostart.ps1；
+- C 残留目录创建 3 个**转发垫片**（UTF-8 BOM+CRLF，坑 2/3 遵守）：
+  dsh_anti_loop_monitor.ps1 / trinity-autostart.ps1 / trinity-supervisor.ps1
+  → 全部转发到 D:\trinity-code\dsh-ops\对应脚本；
+- 计划任务路径不变（C 垫片已存在 → 任务无需改）。
+
+### 113.3 验证
+
+- supervisor 垫片：exit 0（转发 D 执行，pass complete / goals 71/71）；
+- autostart 垫片：成功启动循环（转发 D）后测试停止；
+- anti-loop 垫片：成功启动监控（dsh 空转监控启动）；
+- 服务全在线（5432/8000-8003/8010）、health 200、磁盘 C 101.8GB。
+
+### 113.4 重启恢复链（确认）
+
+```
+登录 → trinity-dsh-autostart.vbs → C 垫片 → D:\trinity-code 真脚本（autostart 循环）
+登录 → dsh-web-autostart.vbs → D:\trinity-code 直接
+计划任务 → C 垫片 dsh_anti_loop_monitor.ps1 → D 盘
+服务 → trinity-pg（Windows 服务，junction 指向 D 盘 pgdata）
+```
+
+### 113.5 回滚
+
+- VBS 改回 C 路径；删垫片；残留清理（重启 Harness 后 data/dist 可删，
+  届时 C:\trinity 可整体 junction 化）。
