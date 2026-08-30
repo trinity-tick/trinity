@@ -700,6 +700,26 @@ class _SearchMixin:
             _imp_score = float(item.get("importance_score") or item.get("importance") or 0.5)
             _value_k = float(getattr(self, "value_boost_k", 0.30))
             value_weight = 1.0 + _value_k * (_imp_score - 0.5)
+            # 2026-09 (EXECUTION 150): 情绪驱动行为——会话情绪偏置接入排序
+            try:
+                _ebias = getattr(self, "_emo_bias", None)
+                if _ebias is None:
+                    from trinity.brain.affect_state import retrieval_bias as _rb
+                    _sidb = getattr(self, "_last_session_id", None) or "default"
+                    _pctxb = None
+                    if self._adapter is not None and hasattr(self._adapter, "context_load"):
+                        _pctxb = self._adapter.context_load(_sidb)
+                    _ebias = _rb((_pctxb or {}).get("affect") if _pctxb else None)
+                    self._emo_bias = _ebias
+                if _ebias:
+                    _boost = float(_ebias.get("value_boost") or 0.0)
+                    if _boost > 0:
+                        value_weight *= (1.0 + _boost)
+                    _hint = _ebias.get("category_hint")
+                    if _hint and str(item.get("category") or "").lower() == _hint:
+                        value_weight *= 1.15
+            except Exception:
+                pass
 
             # 2026-09 (EXECUTION 127): 置信度评分（元认知层）——
             # 来源权威（category→SourceType 映射）+ 新鲜度 + 语义相似度

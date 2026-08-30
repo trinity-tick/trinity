@@ -49,3 +49,53 @@ def extract_domain(queries) -> str:
         return " ".join(top)[:40] if top else ""
     except Exception:
         return ""
+
+def reflect(last_query: str, affect, percepts=None) -> str:
+    """会话自省（EXECUTION 150）：从当前状态生成"我"的反思描述。
+
+    自省 = 元认知的自我维度：不仅知道关注什么，还评估"我学到了什么/
+    状态如何"。返回反思文本（可入记忆/情境）。
+    """
+    try:
+        lines = []
+        lq = str(last_query or "").strip()
+        if lq:
+            lines.append(f"我在关注：{lq[:40]}")
+        if affect:
+            pol = affect.get("polarity")
+            aro = float(affect.get("arousal") or 0.0)
+            if pol == "neg":
+                lines.append("我的状态：谨慎（近期经历偏消极）")
+            elif pol == "pos":
+                lines.append("我的状态：积极")
+            elif aro > 0.6:
+                lines.append("我的状态：紧迫")
+            else:
+                lines.append("我的状态：平稳")
+        if percepts:
+            n = len(percepts or [])
+            if n:
+                lines.append(f"我感知到 {n} 个近期事件信号")
+        lines.append("我的学习：检索到的记忆正在塑造我的权重（Hebbian）")
+        return " | ".join(lines)
+    except Exception:
+        return ""
+
+
+def reflect_to_memory(adapter, session_id: str) -> bool:
+    """把会话自省写入记忆（category=self-reflection，可检索）。"""
+    try:
+        _ctx = adapter.context_load(session_id) if adapter and hasattr(adapter, "context_load") else None
+        if not _ctx:
+            return False
+        _txt = reflect(_ctx.get("last_query", ""), _ctx.get("affect"), _ctx.get("percepts"))
+        if _txt and hasattr(adapter, "store_memory"):
+            adapter.store_memory(
+                content="[self-reflection] " + _txt,
+                category="self-reflection",
+                tags=["self", "reflection"], importance=0.5,
+            )
+            return True
+        return False
+    except Exception:
+        return False
