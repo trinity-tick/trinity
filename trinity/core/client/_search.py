@@ -1558,6 +1558,18 @@ class _SearchMixin:
                     )
                 except Exception:
                     pass
+            # 2026-09 (EXECUTION 193): 联想补充检索（激活扩散）——TRINITY_ASSOCIATIVE=1 启用
+            if os.environ.get(chr(84)+chr(82)+chr(73)+chr(78)+chr(73)+chr(84)+chr(89)+chr(95)+chr(65)+chr(83)+chr(83)+chr(79)+chr(67)+chr(73)+chr(65)+chr(84)+chr(73)+chr(86)+chr(69), '0') == '1':
+                try:
+                    from trinity.brain.associative_memory import associative_jump
+                    if results:
+                        _src = str(results[0].get('memory_id') or '')
+                        _aj = associative_jump(_src, top_k=2) if _src else {}
+                        _assoc = _aj.get('associations', []) if _aj.get('jumped') else []
+                        if _assoc:
+                            result['associations'] = _assoc
+                except Exception:
+                    pass
             return result
 
         hr = self.hybrid_retriever
