@@ -10158,3 +10158,31 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - 心电图：brain-health 检测模型/服务/任务心跳（48h 窗口）
 - 双自检：integrity-monitor + cognition-check 每日
 - 性能基准：稳态 541-696ms（此前 338ms 最佳，波动受模型冷载影响属预期）
+
+---
+
+## 170. 全部执行：reserve 决策 + 擦除 + 市场信誉 + 编排开关（2026-09）
+
+### A. reserve 模块决策（完成）
+- **激活**：memory_unlearning（GDPR 可验证擦除 + proof）、token_budget（预留）
+- **转 frozen**：8 个（personalization/structured_distillation/selective_recall/
+  causal_memory/memory_page_manager/episodic_rl/knowledge_gossip/federated_memory）
+- 最终状态：active 7 / reserve 2 / frozen 39——维护面进一步收敛
+
+### B. 记忆擦除（memory_unlearning 激活）
+- adapter.erase_memory：删除 + 审计（memory_erased）+ 擦除证明（指纹）
+- 验证：erase True + proof + 已删除（GDPR 被遗忘权落地）
+
+### C. 市场信誉深化
+- endorse（背书）+ report（举报）流程验证：
+  agent-C 背书 → score 0.30→0.49；agent-D 举报 → reports 1
+- 信誉 = 交易 + 背书 + 举报综合——完整社会信誉系统
+
+### D. 编排层行为化
+- TRINITY_COGNITION_STAGES 环境变量可开关认知阶段（子集启用）
+
+### E. 基准数据
+- OmniMemEval README 可达但数据不可获取（外部依赖，标记待办）
+
+### 测试
+- 25 passed（脑测试）+ erase 验证通过

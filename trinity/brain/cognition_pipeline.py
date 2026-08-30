@@ -14,6 +14,7 @@
 
 search_hybrid 调用 run_pipeline 生成观测报告（零行为影响）。
 """
+import os
 import time
 
 
@@ -25,7 +26,14 @@ def run_pipeline(client, query: str, results: list, stage_flags: dict) -> dict:
 
     client: Trinity 客户端（用于读取状态）
     stage_flags: {stage: bool}——该阶段是否在本次检索中生效
+    TRINITY_COGNITION_STAGES=context,affect 可指定启用子集（行为化开关）。
     """
+    _enabled = os.environ.get("TRINITY_COGNITION_STAGES", "").strip()
+    if _enabled:
+        _set = {s.strip() for s in _enabled.split(",") if s.strip()}
+        for _s in STAGES:
+            if _s not in _set:
+                stage_flags[_s] = False
     report = {"stages": {}, "active": 0}
     t0 = time.time()
     for stage in STAGES:

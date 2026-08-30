@@ -1900,6 +1900,37 @@ class PostgreSQLAdapter(StorageAdapter):
         except Exception:
             return None
 
+    # ── 2026-09 (EXECUTION 170): 记忆擦除（memory_unlearning 激活）──
+    def erase_memory(self, memory_id: str, reason: str = "manual") -> dict:
+        """可验证擦除：删除记忆 + 审计记录 + 返回擦除证明。
+
+        GDPR Article 17 被遗忘权——擦除后外部可验证（审计链记录）。
+        """
+        try:
+            with self._get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT content FROM memories WHERE memory_id = %s", (memory_id,))
+                    row = cur.fetchone()
+                    if not row:
+                        return {"erased": False, "error": "not found"}
+                    content = row[0]
+                    cur.execute("DELETE FROM memories WHERE memory_id = %s", (memory_id,))
+                    # 审计记录
+                    _proof = {
+                        "memory_id": memory_id,
+                        "reason": reason,
+                        "fingerprint": hashlib.sha256(str(content).encode()).hexdigest()[:16],
+                    }
+                    self.write_audit_log(
+                        memory_id=None, action="memory_erased",
+                        agent_id="memory-unlearning",
+                        details=_proof,
+                    )
+                conn.commit()
+            return {"erased": True, "proof": _proof}
+        except Exception:
+            return {"erased": False, "error": "erase failed"}
+
     def dcpm_store_belief(self, belief_id, subject, predicate, obj, superseded_by=None):
         """持久化 System1 信念（跨进程可见，供夜间整合读取）。"""
         try:
