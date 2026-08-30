@@ -9305,3 +9305,22 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - 改动：affect.py（新）、_ingestion.py（标记）、_search.py（匹配+排序）、
   postgresql.py（metadata 字段）
 - 回滚：git checkout 4 文件；情感标记可保留（幂等）。
+---
+
+## 133. 数据完整性巡检接入维护链（2026-09）
+
+### 133.1 实施（完成）
+
+- 新增 scripts/pg_integrity_monitor.py：embedding/tsv 覆盖率 + 审计链 +
+  DCPM/图谱存在性 + 缺失向量自愈回填（幂等），输出 JSON 报告；
+- 维护链 integrity-monitor 任务（无 LeaseJob——无并发风险任务跳过租约，
+  规避维护链租约 SKIP 已知问题）+ 每日链（autostart）。
+
+### 133.2 验证
+
+- 维护链：integrity-monitor OK——embedding 100%（11,169/11,169）、tsv 99.98%、
+  audit true（556）、dcpm 81、sage 1、self_heal 0；每日链已加入。
+
+### 133.3 意义
+
+- 数据完整性长期自愈：每日巡检 + 缺失向量自动回填；131 修复不回归。

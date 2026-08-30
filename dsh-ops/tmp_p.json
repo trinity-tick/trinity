@@ -1,0 +1,1 @@
+{"old":"    \"cognition-agent\" { Invoke-Task","new":"    \"integrity-monitor\" { Invoke-Task -Name \"integrity-monitor\" -LeaseJob \"integrity-monitor\" -DirectCommand $integrityMonitorCmd -DshPrompt $integrityMonitorPrompt }\n    \"cognition-agent\" { Invoke-Task"}

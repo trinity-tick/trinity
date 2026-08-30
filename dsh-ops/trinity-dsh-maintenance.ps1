@@ -29,8 +29,20 @@ param(
 
 # 兼容 powershell -File 传参：命令行里的 "a,b,c" 会以单个字符串到达，
 # 这里统一按逗号拆分 + 校验。
-$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "usage", "rollout-audit", "audit-ps1", "forgetting", "produce", "federation-sync", "tune", "fulltest", "pg-sync", "evolve", "observe", "value-recalib", "replay", "extract-skills", "perception-bridge", "cognitive-eval", "event-extract", "reversible-compress", "memory-purify", "cognition-agent", "dcpm-consolidate", "replay-consolidate", "all")  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
+$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "usage", "rollout-audit", "audit-ps1", "forgetting", "produce", "federation-sync", "tune", "fulltest", "pg-sync", "evolve", "observe", "value-recalib", "replay", "extract-skills", "perception-bridge", "cognitive-eval", "event-extract", "reversible-compress", "memory-purify", "cognition-agent", "dcpm-consolidate", "replay-consolidate", "integrity-monitor", "all")  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
 $normalized = @()
+# 数据完整性巡检（2026-09 EXECUTION 133）：embedding/tsv 覆盖率 + 审计链 + 自愈
+$integrityMonitorCmd = @"
+import sys, os
+sys.path.insert(0, r"D:\\trinity-code")
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+import runpy
+sys.argv = ["pg_integrity_monitor"]
+runpy.run_path(r"D:\\trinity-code\\scripts\\pg_integrity_monitor.py", run_name="__main__")
+"@
+$integrityMonitorPrompt = "运行 scripts/pg_integrity_monitor.py（数据完整性巡检），输出 JSON 报告。"
+
 # DCPM System2 夜间整合（2026-09 EXECUTION 117）：信念→schema→记忆落库
 $dcpmConsolidateCmd = @"
 import sys, os
@@ -176,7 +188,7 @@ function Invoke-Task {
         }
         if ($LeaseJob) {
             # P0-1 租约守卫：并发重复任务直接 SKIP，不在 SQLite 写锁上排队
-            $out = & $Py "$TrinityRoot\scripts\with_lease.py" --job $LeaseJob --db "$env:TRINITY_STORE	rinity_store.db" -- $Py $tmpPy 2>&1
+            $out = & $Py "$TrinityRoot\scripts\with_lease.py" --job $LeaseJob -- $Py $tmpPy 2>&1
         } else {
             $out = & $Py $tmpPy 2>&1
         }
@@ -826,7 +838,8 @@ foreach ($t in $Tasks) {
 
     "dcpm-consolidate" { Invoke-Task -Name "dcpm-consolidate" -LeaseJob "dcpm-consolidate" -DirectCommand $dcpmConsolidateCmd -DshPrompt $dcpmConsolidatePrompt }
     "replay-consolidate" { Invoke-Task -Name "replay-consolidate" -LeaseJob "replay-consolidate" -DirectCommand $replayConsolidateCmd -DshPrompt $replayConsolidatePrompt }
-        "cognition-agent" { Invoke-Task -Name "cognition-agent" -DirectCommand $cognitionAgentCmd -DshPrompt $cognitionAgentPrompt }  # 2026-09 主动主体
+        "integrity-monitor" { Invoke-Task -Name "integrity-monitor" -DirectCommand $integrityMonitorCmd -DshPrompt $integrityMonitorPrompt }
+    "cognition-agent" { Invoke-Task -Name "cognition-agent" -DirectCommand $cognitionAgentCmd -DshPrompt $cognitionAgentPrompt }  # 2026-09 主动主体
         "backup"    { Write-Log "backup: WAL 安全备份到 ~/.trinity/backups (保留 14 天)"; & "$PSScriptRoot\trinity-backup.ps1" 2>&1 | ForEach-Object { Write-Log $_ } }
         "evolve-env" { Write-Log "evolve-env: 应用自进化采纳 env（evolve_env.json → 进程环境，白名单校验）"; & "$PSScriptRootpply_evolve_env.ps1" -Show 2>&1 | ForEach-Object { Write-Log $_ } }  # 2026-08-25 缺口A
         "consolidate-temporal" { $consArgs = @("--days", "1"); if ((Get-Date).DayOfWeek -eq "Sunday") { $consArgs = @("--days", "7", "--weekly") }; Write-Log "consolidate-temporal: 时间层级巩固（TiMem 式；daily 每日，Sunday 加 weekly）"; & "$Py" "$TrinityRoot\scripts\consolidate_temporal.py" @consArgs 2>&1 | ForEach-Object { Write-Log $_ } }  # 2026-08-25 TiMem 式
