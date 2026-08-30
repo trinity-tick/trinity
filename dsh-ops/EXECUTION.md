@@ -8554,3 +8554,50 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 - 回滚：archive_wal.py 还原（git 无跟踪——备份原逻辑在 EXECUTION 106）；
   maintenance.ps1 git checkout；
 - 监控：pg_wal_archive 应稳定在 <=1500 文件 / ~24GB 内。
+---
+
+## 112. Trinity 整体迁移到 D 盘（2026-09，junction 方案）
+
+### 112.1 方案与目标
+
+- 需求：Trinity 整体搬到 D 盘（数据 36GB 占 C 盘）；
+- 方案：**整体移动 + junction（目录联接）**——数据/代码/二进制移到 D 盘，
+  原路径建 junction，所有配置/服务/脚本路径零改动、程序透明。
+
+### 112.2 迁移内容（完成）
+
+| 项 | C 盘原路径 | D 盘目标 | 大小 |
+|---|---|---|---|
+| PG 数据 | ~/.trinity/pgdata 等 20 子目录 | D:\trinity-data\* | 32.6GB |
+| 代码 | ~/trinity | D:\trinity-code | 320MB |
+| PG 二进制 | ~/Desktop/pgsql | D:\pgsql | 0.85GB |
+
+- junction 21 个：Desktop\pgsql + .trinity 下 20 个子目录（pgdata/pg_wal_archive/
+  backups/models/logs/store 副本等）→ 全部指向 D 盘；
+- 效果：C 盘真实占用 ~0（除被锁的 store 残留 646MB）；C 盘空闲 65.6→101.9GB；
+
+### 112.3 踩坑记录
+
+1. **store\trinity_store.db 被 Harness worker 锁定**（sessions 库）→ 无法删除/
+   重命名 .trinity 整目录 → 改为**子目录级 junction**（20 个），store 留 C 盘
+   （D 盘已有完整副本，PG 为主存储不受影响）；
+2. **代码目录重命名失败**（data\sessions.db 被锁）→ 残留 data/dist 在 C 盘
+   （16MB，非 Trinity 必需，重启后可清理）；
+3. **API 首次启动卡 HF 网络重试**（reranker 加载 ms-marco 连 hf-mirror 超时）
+   → 启动注入 HF_HUB_OFFLINE=1 快速失败走 Ollama 降级（108 轮降级链生效）；
+4. **supervisor 硬编码 C 路径**（sync_dsh_goals.py）→ 改为 $TrinityRoot 相对路径；
+
+### 112.4 验证
+
+- PG 服务从 D 盘数据启动：28,036 记忆 / 28,023 向量 / 1.78GB ✓；
+- 全部服务在线：5432/8000/8001/8002/8003/8010 ✓；
+- API health ok（engine healthy）；搜索 3 命中（中文+向量）；
+- supervisor pass complete（dsh-goals 71/71）；collector 由守护拉起；
+- 磁盘：C 101.8GB / D 470.9GB 空闲。
+
+### 112.5 遗留与回滚
+
+- 遗留：C:\trinity 残留 data/dist（16MB，sessions.db 被 Harness 锁，重启后
+  可删）；C:\.trinity\store（646MB 锁，D 有副本）；
+- 回滚：删 junction → 目录移回 C 盘即可（数据未动）；
+- 后续：重启 DSH Harness 后清理残留，C 盘可再释放 ~660MB。
