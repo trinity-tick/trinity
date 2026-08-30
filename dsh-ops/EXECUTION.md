@@ -8709,3 +8709,39 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - 改动：trinity/adapters/postgresql.py（write_audit_log timestamp）、audit_log 数据
 - 回滚：git checkout postgresql.py（新记录回 NULL，需再重算链）；
 - 数据修复幂等（可重跑重建脚本）。
+---
+
+## 116. 大脑化第一步：DCPM 双过程接入检索运行时（2026-09）
+
+### 116.1 目标
+
+- 按大脑化路线图 P0 接通 reserve 的 DCPM 双过程记忆（System1 快写/System2 慢归纳）
+  到检索主路径——实现"检索即信念验证"的双过程闭环。
+
+### 116.2 现状侦察
+
+- core/client/_advanced.py 已有 dcpm property + dcpm_record_belief（惰性、非主路径）；
+- brain/metacognition.py（105.6 落地）已有 assess_confidence + detect_gap（运行时）；
+- 两者都未接入 search 主路径。
+
+### 116.3 实施（完成）
+
+- search_hybrid light 路径返回前插入 DCPM 钩子：
+  ① assess_confidence 计算检索置信度 → 注入 result.metacognition 字段；
+  ② 置信 high/medium 时 System1 记录信念命中（query→retrieved→top1 内容，
+     双向修订链）；失败静默（不影响检索）；
+- 验证：'用户偏好 咖啡' → meta {confidence: 0.797, level: high} + beliefs: 1；
+  API 重启后 health ok / 检索 3 命中；
+- 依赖：HF_HUB_OFFLINE=1 跳过 CE 网络重试（reranker 降级链保持）。
+
+### 116.4 意义
+
+- 大脑化从"储备"到"运行时"第一步：检索现在带元认知置信（知道自己知道），
+  System1 信念链随检索积累——为后续 System2 夜间 schema 归纳提供真实输入；
+- 双过程闭环：检索（验证）→ 信念（记录）→ 整合（归纳）→ 更准检索。
+
+### 116.5 验证与回滚
+
+- 改动：trinity/core/client/_search.py（DCPM 钩子）
+- 回滚：git checkout _search.py（钩子失败静默，无数据影响）；
+- 后续：System2 接入维护链夜间任务（dcpm_consolidate → schema 落库）。
