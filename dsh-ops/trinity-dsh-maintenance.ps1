@@ -29,7 +29,7 @@ param(
 
 # 兼容 powershell -File 传参：命令行里的 "a,b,c" 会以单个字符串到达，
 # 这里统一按逗号拆分 + 校验。
-$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "usage", "rollout-audit", "audit-ps1", "forgetting", "produce", "federation-sync", "tune", "fulltest", "pg-sync", "evolve", "observe", "value-recalib", "replay", "extract-skills", "perception-bridge", "cognitive-eval", "event-extract", "reversible-compress", "memory-purify", "cognition-agent", "dcpm-consolidate", "replay-consolidate", "integrity-monitor", "perception-scan", "self-reflect", "cognition-check", "web-perception", "all")  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
+$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "usage", "rollout-audit", "audit-ps1", "forgetting", "produce", "federation-sync", "tune", "fulltest", "pg-sync", "evolve", "observe", "value-recalib", "replay", "extract-skills", "perception-bridge", "cognitive-eval", "event-extract", "reversible-compress", "memory-purify", "cognition-agent", "dcpm-consolidate", "replay-consolidate", "integrity-monitor", "perception-scan", "self-reflect", "cognition-check", "web-perception", "web-search", "all")  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
 $normalized = @()
 # 环境感知流（2026-09 EXECUTION 136）：日志告警自动感知入记忆
 $perceptionScanCmd = @"
@@ -55,6 +55,18 @@ sys.argv = ["brain_cognition_eval"]
 runpy.run_path(r"D:\\trinity-code\\scripts\\brain_cognition_eval.py", run_name="__main__")
 "@
 $cognitionCheckPrompt = "运行 scripts/brain_cognition_eval.py（认知自检：情绪 EMA/极性/偏置 + 反思 retain/recall/quality），输出 JSON。"
+
+# 网络搜索（2026-09 EXECUTION 161）：Bing 真实搜索（兴趣词驱动）
+$webSearchCmd = @"
+import sys, os
+sys.path.insert(0, r"D:\\trinity-code")
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+import runpy
+sys.argv = ["web_search", "--auto", "--max=15"]
+runpy.run_path(r"D:\\trinity-code\\scripts\\web_search.py", run_name="__main__")
+"@
+$webSearchPrompt = "运行 scripts/web_search.py --auto（网络搜索：Bing 兴趣词搜索→感知入记忆），输出 perceived 数。"
 
 # 网络感知（2026-09 EXECUTION 158）：RSS 订阅实时抓取入记忆
 $webPerceptionCmd = @"
@@ -887,7 +899,8 @@ foreach ($t in $Tasks) {
 
     "dcpm-consolidate" { Invoke-Task -Name "dcpm-consolidate" -DirectCommand $dcpmConsolidateCmd -DshPrompt $dcpmConsolidatePrompt }
     "replay-consolidate" { Invoke-Task -Name "replay-consolidate" -DirectCommand $replayConsolidateCmd -DshPrompt $replayConsolidatePrompt }
-        "web-perception" { Invoke-Task -Name "web-perception" -DirectCommand $webPerceptionCmd -DshPrompt $webPerceptionPrompt }
+        "web-search" { Invoke-Task -Name "web-search" -DirectCommand $webSearchCmd -DshPrompt $webSearchPrompt }
+    "web-perception" { Invoke-Task -Name "web-perception" -DirectCommand $webPerceptionCmd -DshPrompt $webPerceptionPrompt }
     "cognition-check" { Invoke-Task -Name "cognition-check" -DirectCommand $cognitionCheckCmd -DshPrompt $cognitionCheckPrompt }
     "self-reflect" { Invoke-Task -Name "self-reflect" -DirectCommand $selfReflectCmd -DshPrompt $selfReflectPrompt }
     "perception-scan" { Invoke-Task -Name "perception-scan" -DirectCommand $perceptionScanCmd -DshPrompt $perceptionScanPrompt }
