@@ -667,6 +667,23 @@ class PostgreSQLAdapter(StorageAdapter):
                     })
                 return results
 
+    def get_embedding(self, memory_id: str):
+        """读取单条记忆的 embedding（Hebbian 强化用）。"""
+        try:
+            with self._get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT embedding FROM memories WHERE memory_id = %s", (memory_id,))
+                    row = cur.fetchone()
+                    if row and row[0] is not None:
+                        _raw = row[0]
+                        if isinstance(_raw, str):
+                            import ast as _ast
+                            _raw = _ast.literal_eval(_raw)
+                        return [float(x) for x in _raw]
+            return None
+        except Exception:
+            return None
+
     def set_embedding(self, memory_id: str, query_vec: Any) -> bool:
         """写入单条记忆的 pgvector embedding（回填/增量用）。"""
         import psycopg2.extras

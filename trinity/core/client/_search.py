@@ -1340,6 +1340,16 @@ class _SearchMixin:
             try:
                 from trinity.brain.metacognition import assess_confidence
                 _conf = assess_confidence(results, channels=["fts", "vector"] if _pg else ["fts"])
+                # 2026-09 (EXECUTION 140): 权重级记忆——Hebbian 检索强化（高置信命中时 top1 微调）
+                try:
+                    if _conf.get("level") in ("high", "medium") and results and _pg:
+                        _h_top = results[0]
+                        _h_acc = int(_h_top.get("access_count") or 0)
+                        if _h_top.get("memory_id") and _h_acc >= 5:
+                            from trinity.brain.hebbian import consolidate as _hb
+                            _hb(self._adapter, _h_top.get("memory_id"), _eng.embed(str(query)[:200]))
+                except Exception:
+                    pass
                 result = {
                     "results": results,
                     "strategy": "light",

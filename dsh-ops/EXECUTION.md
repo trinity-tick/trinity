@@ -9477,3 +9477,28 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - 与情境检索（119）互补：显式 situation=任务情境，自动 situation=
   状态延续（工作记忆的检索侧实现）；
 - 大脑化机制 16 项运行时（连续状态）。
+---
+
+## 140. 权重级记忆：Hebbian 检索强化（2026-09）
+
+### 140.1 实施（完成）
+
+- 新增 trinity/brain/hebbian.py：consolidate(adapter, memory_id, query_vec)——
+  embedding 向查询方向微调 + 归一化（alpha 默认 0.005）；
+- adapter 加 get_embedding（修复：pgvector 读出是 str，需 ast 解析）；
+- _search.py：高置信（high/medium）且 top1 access_count>=5 时触发
+  Hebbian 强化（失败静默）；
+- 认知：用进废退的**权重级**实现（真实修改 embedding，非规则模拟）。
+
+### 140.2 验证
+
+- consolidate: True | sim 0.5236 → 0.5603（+0.0366，alpha=0.05 测试值）——
+  记忆被强化后与查询相似度真实上升；
+- 幂等安全（alpha 极小 + 失败静默）；API health 200。
+
+### 140.3 意义（大脑化）
+
+- **权重级记忆**：记忆=连接强度（embedding 位置）——被反复想起的记忆
+  物理性靠近查询（突触强化）；与规则衰减（118）互补：衰减管遗忘，
+  Hebbian 管强化——大脑的可塑性双机制；
+- 大脑化机制 17 项运行时；三杠杆（感知/连续/权重）全部落地。
