@@ -1904,6 +1904,61 @@ class PostgreSQLAdapter(StorageAdapter):
             return None
 
     # ── 2026-09 (EXECUTION 170): 记忆擦除（memory_unlearning 激活）──
+    # ── 2026-09 (EXECUTION 183): 主动遗忘（大脑遗忘机制）──
+    def forget_candidates(self, limit: int = 50, min_age_days: float = 14) -> list:
+        """遗忘候选：低价值 + 长时间未访问 + 访问少。
+
+        大脑对应：突触修剪——不被使用的弱连接被清除。
+        评分 = importance 低(0-0.3) + created_at 久(>min_age_days) + access_count 少(<3)。
+        """
+        try:
+            with self._get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT memory_id, content, importance, access_count, created_at
+                        FROM memories
+                        WHERE status = 'active'
+                          AND (importance IS NULL OR importance < 0.3)
+                          AND (created_at::timestamp < NOW() - make_interval(days => %s)
+                               OR created_at IS NULL)
+                          AND (access_count IS NULL OR access_count < 3)
+                          AND category NOT IN ('perception', 'self-reflection', 'self-identity',
+                                               'self-observation', 'action-experience', 'dcpm-core')
+                        ORDER BY created_at
+                        LIMIT %s
+                    """, (min_age_days, limit))
+                    return [dict(zip(["memory_id", "content", "importance", "access_count", "created_at"], r))
+                            for r in cur.fetchall()]
+        except Exception:
+            return []
+
+    def apply_forgetting(self, candidates: list, dry_run: bool = True) -> dict:
+        """应用遗忘：标记 status='forgotten'（保留审计，不物理删除）。"""
+        n = 0
+        try:
+            with self._get_conn() as conn:
+                with conn.cursor() as cur:
+                    for c in candidates:
+                        mid = c.get("memory_id")
+                        if not mid:
+                            continue
+                        if dry_run:
+                            n += 1
+                            continue
+                        cur.execute("UPDATE memories SET status='forgotten' WHERE memory_id=%s AND status='active'",
+                                   (mid,))
+                        if cur.rowcount:
+                            n += 1
+                            self.write_audit_log(
+                                memory_id=None, action="memory_forgotten",
+                                agent_id="forgetting",
+                                details={"memory_id": mid, "reason": "low_value_unused"},
+                            )
+                conn.commit()
+        except Exception:
+            pass
+        return {"forgotten": n, "dry_run": dry_run}
+
     def erase_memory(self, memory_id: str, reason: str = "manual") -> dict:
         """可验证擦除：删除记忆 + 审计记录 + 返回擦除证明。
 
