@@ -236,6 +236,12 @@ def mirror_to_pg(rows, pg_cfg, dry_run=False) -> dict:
     conn.autocommit = False
     cur = conn.cursor()
     ensure_pg_schema(cur)
+    # tags 列类型探测（原生 PG 为 jsonb，docker 库为 text[]）——按类型适配参数，
+    # 避免 "column is of type jsonb but expression is of type text[]"。
+    cur.execute("SELECT data_type FROM information_schema.columns "
+                "WHERE table_name='memories' AND column_name='tags'")
+    row = cur.fetchone()
+    tags_is_jsonb = bool(row and row[0] == "jsonb")
     refs = seed_referenced_rows(cur, rows)
 
     cur.execute("SELECT sha256_hash FROM memories WHERE sha256_hash IS NOT NULL")
@@ -282,7 +288,7 @@ def mirror_to_pg(rows, pg_cfg, dry_run=False) -> dict:
                      mem.get("content", ""),
                      mem.get("role") or "user",
                      float(mem.get("importance") or 0.5),
-                     tags,
+                     (psycopg2.extras.Json(tags) if tags_is_jsonb else tags),
                      mem.get("category") or "general",
                      h or None,
                      mem.get("created_at") or None,

@@ -1320,7 +1320,7 @@ class _SearchMixin:
                                     agent_id=agent_id or None,
                                     persona_id=persona_id or None,
                                     tenant_id=tenant_id or None,
-                                    exclude_categories=["perception"],  # 176: 感知不占语义候选
+                                    exclude_categories=["perception", "self-reflection"],  # 176: 感知不占语义候选
                                 )
                             except Exception:
                                 _sit_vec = None
@@ -1330,12 +1330,28 @@ class _SearchMixin:
                             agent_id=agent_id or None,
                             persona_id=persona_id or None,
                             tenant_id=tenant_id or None,
-                            exclude_categories=["perception"],  # 176: 感知不占语义候选
+                            exclude_categories=["perception", "self-reflection"],  # 176: 感知不占语义候选
                         )
                         # 2026-09 (EXECUTION 154): 感知记忆降权——环境噪音类不主导语义检索
                         _r_perc = [x for x in results if str(x.get('category') or '') == 'perception']
                         if _r_perc and len(_r_perc) > len(results) // 2:
                             results = [x for x in results if str(x.get('category') or '') != 'perception']
+                        # 2026-09 (EXECUTION 195): 自我类限流——自省/观察/评估/叙事
+                        # 是"内部独白"非语义知识，最多保留 1 条（自我参照提示）
+                        _SELF_CATS = {'self-reflection', 'self-observation', 'self-assessment', 'self-narrative'}
+                        _selfs = [x for x in results if str(x.get('category') or '') in _SELF_CATS]
+                        if len(_selfs) > 1:
+                            _keep = set()
+                            kept = 0
+                            out = []
+                            for x in results:
+                                cat = str(x.get('category') or '')
+                                if cat in _SELF_CATS:
+                                    if kept == 0:
+                                        out.append(x); kept += 1
+                                else:
+                                    out.append(x)
+                            results = out
                         if _sit_vec:
                             _sit_ids = {x.get("memory_id") for x in _sit_vec}
                             for _r in _sit_vec:
