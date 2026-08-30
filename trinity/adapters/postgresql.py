@@ -1847,6 +1847,43 @@ class PostgreSQLAdapter(StorageAdapter):
         except Exception:
             return None
 
+    # ── 2026-09 (EXECUTION 141): 持久会话状态 ─────────────
+    def context_save(self, last_query: str, percepts: list) -> bool:
+        """持久化最近上下文（跨进程/重启保留）。"""
+        try:
+            with self._get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO session_context (id, last_query, percepts)
+                        VALUES ('ctx', %s, %s)
+                        ON CONFLICT (id) DO UPDATE SET
+                            last_query = EXCLUDED.last_query,
+                            percepts = EXCLUDED.percepts,
+                            updated_at = NOW()
+                    """, (last_query, json.dumps(percepts, ensure_ascii=False)))
+                conn.commit()
+            return True
+        except Exception:
+            return False
+
+    def context_load(self):
+        """读取持久化上下文（无则 None）。"""
+        try:
+            with self._get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT last_query, percepts FROM session_context WHERE id = 'ctx'")
+                    row = cur.fetchone()
+                    if not row:
+                        return None
+                    _p = row[1]
+                    if isinstance(_p, str):
+                        import json as _j
+                        _p = _j.loads(_p)
+                    return {"last_query": row[0] or "", "percepts": _p or []}
+            return None
+        except Exception:
+            return None
+
     def dcpm_store_belief(self, belief_id, subject, predicate, obj, superseded_by=None):
         """持久化 System1 信念（跨进程可见，供夜间整合读取）。"""
         try:

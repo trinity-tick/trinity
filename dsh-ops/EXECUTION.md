@@ -9502,3 +9502,26 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
   物理性靠近查询（突触强化）；与规则衰减（118）互补：衰减管遗忘，
   Hebbian 管强化——大脑的可塑性双机制；
 - 大脑化机制 17 项运行时；三杠杆（感知/连续/权重）全部落地。
+---
+
+## 141. 持久会话状态（2026-09）
+
+### 141.1 实施（完成）
+
+- PG session_context 表 + adapter context_save/context_load；
+- _build_auto_situation 优先从 PG 读（跨进程）；search/search_hybrid
+  查询后写回（context_save）；
+- 修复：写回插入位置（result dict 内 try 非法→闭合后）。
+
+### 141.2 验证
+
+- 进程 A search_hybrid('PostgreSQL 主存储优化') → PG last_query 落库；
+- 进程 B（全新实例）_build_auto_situation = 'PostgreSQL 主存储优化
+  [filesystem]...'——跨进程延续完整；
+- API health 200。
+
+### 141.3 意义（大脑化）
+
+- 连续状态持久化：Trinity 的"当下"跨进程/重启保留（从进程内缓存升级）；
+- 会话延续完整：上次查询 + 最近感知事件持续影响检索情境；
+- 大脑化机制 17 项运行时（连续状态含持久化）。

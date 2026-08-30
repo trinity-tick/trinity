@@ -428,6 +428,16 @@ class _SearchMixin:
         try:
             parts = []
             _lq = getattr(self, "_last_query", "")
+            # EXECUTION 141: persistent context load
+            _pctx = None
+            if self._adapter is not None and hasattr(self._adapter, "context_load"):
+                try:
+                    _pctx = self._adapter.context_load()
+                except Exception:
+                    _pctx = None
+            if _pctx and _pctx.get("last_query"):
+                _lq = _pctx.get("last_query")
+                self._last_query = _lq
             if _lq:
                 parts.append(str(_lq)[:60])
             # 最近感知事件（process 内缓存，避免每次查库）
@@ -1360,6 +1370,13 @@ class _SearchMixin:
                                   "error": round(_prediction_error, 3),
                                   "corrected": _corrected},
                 }
+                # 2026-09 (EXECUTION 141): persistent session context
+                try:
+                    if self._adapter is not None and hasattr(self._adapter, 'context_save'):
+                        _pp = getattr(self, '_recent_percepts', None)
+                        self._adapter.context_save(str(query)[:100], _pp or [])
+                except Exception:
+                    pass
                 # System1：高信心时持久化信念命中（PG，跨进程可见；不阻塞，失败静默）
                 if _conf.get("level") in ("high", "medium") and results:
                     _top = results[0].get("content", "")[:200]
