@@ -9939,3 +9939,25 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - 已完成：主题偏好（自我模型驱动）/去重/正文尽力；
 - 剩余可选：LLM 摘要（TRINITY_WEB_SUMMARIZE=1 已预留）、更多源分类、
   频率提升（当前每日链）。
+---
+
+## 160. 网络质料：LLM 智能摘要 + 源扩充（2026-09）
+
+### 160.1 实施（完成）
+
+- web_perception v3：LLM 摘要（llm_chat：DeepSeek→本地降级链）对全部
+  质料生成一句话中文摘要（[web-sum] 前缀），失败降级标题；
+- 源扩充：+ithome/36kr（7 源）；
+- TRINITY_WEB_SUMMARIZE=0 可关闭（成本控制）。
+
+### 160.2 验证
+
+- 摘要质量：'MsgTrans 2.0 Beta 1发布，传输性能升级为可证明的高性能可靠'
+  / 'Neton 1.0.0-beta1发布，开启Kotlin/Native服务端时代'——准确简明；
+- 兴趣词 6 个参与偏好；perceived 8。
+
+### 160.3 意义
+
+- 质料全链路：抓取（7 源）→ 主题偏好（自我模型）→ 去重 → 正文尽力 →
+  **LLM 摘要（读懂）** → 感知入记忆 → 夜间整合；
+- Trinity 的网络感官从"会看"升级为"能读懂"。

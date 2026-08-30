@@ -21,6 +21,8 @@ RSS_FEEDS = [
     "https://blog.jetbrains.com/feed/",
     "https://www.infoq.cn/feed",
     "https://hnrss.org/frontpage",
+    "https://www.ithome.com/rss/",
+    "https://www.36kr.com/feed",
 ]
 TIMEOUT = 15
 BODY_LIMIT = 500  # 正文截断
@@ -122,6 +124,27 @@ def _interest_words():
     return set(words)
 
 
+def _summarize(title, body):
+    """LLM 一句话摘要（EXECUTION 160）——高价值质料智能摘要。
+
+    用 llm_chat（DeepSeek API，本地降级链）；失败返回 None（调用方
+    降级用原标题）。TRINITY_WEB_SUMMARIZE=0 关闭。
+    """
+    if os.environ.get("TRINITY_WEB_SUMMARIZE", "1") != "1":
+        return None
+    try:
+        sys.path.insert(0, r"D:\\trinity-code")
+        from trinity.brain.value_encoder import llm_chat
+        _mat = (str(body or "")[:300] or str(title))
+        _prompt = ("用一句话中文总结这条技术新闻（不超过30字）：" + str(title)[:100] + "。内容：" + _mat[:250])
+        _r = llm_chat(_prompt, max_tokens=60, timeout=30)
+        if _r and len(_r.strip()) > 5:
+            return _r.strip()[:80]
+        return None
+    except Exception:
+        return None
+
+
 def _load_state():
     try:
         with open(STATE_FILE, encoding="utf-8") as f:
@@ -190,12 +213,22 @@ def main():
                     _imp = 0.8  # 兴趣命中 → 更高显著
                 signal = f"[web:{os.path.basename(feed)[:16]}] {title[:150]} | {link[:90]}"
                 # 正文抓取（失败降级纯标题）
+                _body_txt = ""
                 try:
                     body = _extract_body(_fetch(link))
                     if body:
-                        signal += " | " + body[:BODY_LIMIT]
+                        _body_txt = body[:BODY_LIMIT]
+                        signal += " | " + _body_txt
                 except Exception:
                     pass
+                # LLM 摘要（全部质料——成本可控；失败降级）
+                if True:
+                    try:
+                        _sum = _summarize(title, _body_txt)
+                        if _sum:
+                            signal = f"[web-sum] {_sum} || " + signal[:200]
+                    except Exception:
+                        pass
                 ok = _perceive(signal)
                 new_state.add(sig)
                 if ok:
