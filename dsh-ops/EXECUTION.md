@@ -8642,3 +8642,36 @@ temporal 0.986/0.215、KU 0.976/0.424、**SS-P 0.81/0.095**（偏好类检索+�
 
 - VBS 改回 C 路径；删垫片；残留清理（重启 Harness 后 data/dist 可删，
   届时 C:\trinity 可整体 junction 化）。
+---
+
+## 114. 迁移彻底收尾：C:\trinity 整体 junction 化（2026-09）
+
+### 114.1 完成内容
+
+- 锁释放后清理 C:\trinity 残留：data（先删）、dist（后删）、dsh-ops 垫片（移出）；
+- **C:\Users\Administrator\trinity → D:\trinity-code junction 创建成功**；
+- 验证：trinity pkg / supervisor / autostart / anti-loop / maintenance 5 个关键
+  脚本全部经 C junction 路径解析到 D 盘；supervisor 经 C 路径运行正常；
+- 垫片目录已删除（不再需要——junction 使原路径直接解析）；
+- VBS/计划任务无需再改（C 路径自动指向 D）。
+
+### 114.2 最终布局
+
+```
+C:\Users\Administrator\trinity        → junction → D:\trinity-code（代码）
+C:\Users\Administrator\Desktop\pgsql  → junction → D:\pgsql（PG 二进制）
+C:\Users\Administrator\.trinity\*     → 20 个 junction → D:\trinity-data\*
+C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 主存储）
+```
+
+### 114.3 验证
+
+- 服务全在线（5432/8000/8001/8002/8003/8010）；health ok；搜索 3 命中；
+- PG 28,036 条（D 盘）；git HEAD 5eee2aa（D 盘）；
+- C 盘空闲 101.8GB（迁移前 65.6GB，净释放 36GB+）。
+
+### 114.4 遗留
+
+- C:\.trinity\store 646MB 被锁（D 有副本，PG 主存储不受影响）；
+  Harness 重启后可删；
+- 重启电脑恢复链：VBS → C junction → D 真脚本（已闭环）。
