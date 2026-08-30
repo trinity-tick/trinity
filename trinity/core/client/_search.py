@@ -1440,6 +1440,33 @@ class _SearchMixin:
                     result["cognition"] = _cp(self, query, results, _stages)
                 except Exception:
                     pass
+                # 2026-09 (EXECUTION 171): token_budget 激活——检索成本报告
+                # + TRINITY_TOKEN_BUDGET 硬截断（对标 Mem0 token budgeting）
+                try:
+                    from trinity.modules.second_brain.token_budget import (
+                        TokenBudgetManager, estimate_tokens,
+                    )
+                    _budget = int(os.environ.get("TRINITY_TOKEN_BUDGET", "0") or 0)
+                    _tb = TokenBudgetManager(limit=_budget) if _budget else None
+                    _budget_report = {
+                        "estimated_tokens": sum(estimate_tokens(str(r.get("content", ""))[:200]) for r in results),
+                        "results": len(results),
+                    }
+                    if _tb:
+                        _tb.register([
+                            (str(r.get("memory_id")), str(r.get("content", ""))[:200],
+                             float(r.get("importance") or 0.5)) for r in results
+                        ])
+                        _ctx = _tb.build_context([str(r.get("memory_id")) for r in results])
+                        _budget_report["budget_limit"] = _budget
+                        _budget_report["included"] = len(_ctx.get("memories_included", []))
+                        _budget_report["dropped"] = len(_ctx.get("memories_dropped", []))
+                        if _ctx.get("memories_dropped"):
+                            _drop = set(_ctx.get("memories_dropped", []))
+                            results = [r for r in results if str(r.get("memory_id")) not in _drop]
+                    result["budget"] = _budget_report
+                except Exception:
+                    pass
                 # 2026-09 (EXECUTION 141): persistent session context
                 try:
                     if self._adapter is not None and hasattr(self._adapter, 'context_save'):

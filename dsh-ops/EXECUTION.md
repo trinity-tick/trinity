@@ -10186,3 +10186,20 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 
 ### 测试
 - 25 passed（脑测试）+ erase 验证通过
+
+---
+
+## 171. token_budget 激活 + 编排开关验证（2026-09）
+
+### 171.1 token_budget（对标 Mem0 May 2026）
+- search_hybrid 接入 TokenBudgetManager：检索结果带 budget 报告
+  （estimated_tokens/results；TRINITY_TOKEN_BUDGET 启用硬截断+艾宾浩斯过滤）
+- 验证：estimated_tokens 219 / results 5（成本可观测）
+
+### 171.2 编排层行为化验证
+- TRINITY_COGNITION_STAGES 开关生效：仅 context+affect 时其他阶段 bypass
+- 默认 3 阶段 active（context/confidence/prediction）——管线可观测可控制
+
+### 171.3 意义
+- 检索成本可预测（token 预算）——与成本优化闭环
+- 认知管线可裁剪（阶段开关）——A/B 测各阶段贡献的前置能力
