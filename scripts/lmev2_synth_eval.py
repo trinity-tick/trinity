@@ -56,7 +56,7 @@ for q in qs:
         SELECT content, 1-(embedding <=> %s::vector) as sim
         FROM memories
         WHERE agent_id = 'lmev2-eval-iso' AND embedding IS NOT NULL
-        ORDER BY embedding <=> %s::vector LIMIT 5
+        ORDER BY embedding <=> %s::vector LIMIT 12
     """, (vec_str, vec_str))
     rows = cur.fetchall()
     recall_text = " ".join((r[0] or "") for r in rows).lower()
