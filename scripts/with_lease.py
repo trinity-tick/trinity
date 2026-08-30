@@ -70,6 +70,7 @@ def main() -> int:
         print("with_lease: empty command", file=sys.stderr)
         return 2
 
+    print(f"with_lease: db_path={args.db!r} env={os.environ.get(chr(84)+chr(82)+chr(73)+chr(78)+chr(73)+chr(84)+chr(89)+chr(95)+chr(83)+chr(84)+chr(79)+chr(82)+chr(69), chr(45))}", file=sys.stderr)
     lease = acquire(
         args.job,
         job_key=args.key,
@@ -85,6 +86,7 @@ def main() -> int:
             f"with_lease: SKIP {args.job}/{args.key} (reason={reason}"
             + (f", held_by={held_by}" if held_by else "")
             + (f", held_until={held_until:.0f}" if held_until else "")
+            + (f", detail={lease.get(chr(100)+chr(101)+chr(116)+chr(97)+chr(105)+chr(108))}" if lease.get(chr(100)+chr(101)+chr(116)+chr(97)+chr(105)+chr(108)) else "")
             + ")"
         )
         return 0

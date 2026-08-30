@@ -249,7 +249,7 @@ function Invoke-Task {
         }
         if ($LeaseJob) {
             # P0-1 租约守卫：并发重复任务直接 SKIP，不在 SQLite 写锁上排队
-            $out = & $Py "$TrinityRoot\scripts\with_lease.py" --job $LeaseJob -- $Py $tmpPy 2>&1
+            $out = & $Py "$TrinityRoot\scripts\with_lease.py" --job $LeaseJob --db "D:\trinity-data\store\trinity_store.db" -- $Py $tmpPy 2>&1
         } else {
             $out = & $Py $tmpPy 2>&1
         }
@@ -904,7 +904,7 @@ foreach ($t in $Tasks) {
     "cognition-check" { Invoke-Task -Name "cognition-check" -DirectCommand $cognitionCheckCmd -DshPrompt $cognitionCheckPrompt }
     "self-reflect" { Invoke-Task -Name "self-reflect" -DirectCommand $selfReflectCmd -DshPrompt $selfReflectPrompt }
     "perception-scan" { Invoke-Task -Name "perception-scan" -DirectCommand $perceptionScanCmd -DshPrompt $perceptionScanPrompt }
-    "integrity-monitor" { Invoke-Task -Name "integrity-monitor" -DirectCommand $integrityMonitorCmd -DshPrompt $integrityMonitorPrompt }
+    "integrity-monitor" { Invoke-Task -Name "integrity-monitor" -LeaseJob "integrity-monitor" -DirectCommand $integrityMonitorCmd -DshPrompt $integrityMonitorPrompt }
     "cognition-agent" { Invoke-Task -Name "cognition-agent" -DirectCommand $cognitionAgentCmd -DshPrompt $cognitionAgentPrompt }  # 2026-09 主动主体
         "backup"    { Write-Log "backup: WAL 安全备份到 ~/.trinity/backups (保留 14 天)"; & "$PSScriptRoot\trinity-backup.ps1" 2>&1 | ForEach-Object { Write-Log $_ } }
         "evolve-env" { Write-Log "evolve-env: 应用自进化采纳 env（evolve_env.json → 进程环境，白名单校验）"; & "$PSScriptRootpply_evolve_env.ps1" -Show 2>&1 | ForEach-Object { Write-Log $_ } }  # 2026-08-25 缺口A
