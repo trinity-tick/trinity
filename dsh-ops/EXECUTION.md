@@ -9029,3 +9029,38 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
   OLLAMA_KEEP_ALIVE 环境变量；
 - 回滚：git checkout 两文件 + 移除环境变量；
 - 遗留：冷启动窗口（可预热顺序优化）；稳态 780ms → 500ms（rerank 缓存）。
+---
+
+## 125. 大脑化延伸：SAGE 图谱记忆接通（2026-09）
+
+### 125.1 目标
+
+- 按上轮分析：接通 reserve 的 SAGE 图谱（追平 Zep/Graphiti 图谱能力）；
+  图记忆作为检索附加通道（实体/关系标记 + boost）。
+
+### 125.2 实施（完成）
+
+- 持久化：PG sage_graph 表（JSONB 快照）+ adapter save/load 方法；
+- 引擎：_persist（ingest 后落库）+ restore_snapshot（启动恢复）；
+- 检索：search_hybrid 加 SAGE 钩子——sage_query 实体命中 → graph_score=1.0
+  标记 + 排序前移；失败静默；
+- 修复：sage property 的 _sage 未初始化（AttributeError 吞掉→空引擎重建）
+  + 新建引擎自动 restore_snapshot（跨进程图记忆）。
+
+### 125.3 验证
+
+- ingest 3 turns → 2 实体（Trinity/Ollama）持久化；快照恢复 restored=2；
+- search 'Trinity 记忆系统' → graph_score 1.0 标记 + last_graph 暴露；
+- API health 200 / 检索正常。
+
+### 125.4 意义
+
+- 图谱召回 = Zep/Graphiti 同级能力（实体/关系语义通道，与向量/FTS 互补）；
+- 大脑化新增第 7 项运行时机制（图记忆）；图谱持续 ingest 生长。
+
+### 125.5 验证与回滚
+
+- 改动：postgresql.py（sage 持久化）、sage_graph_memory_engine.py（persist/restore）、
+  _search.py（图谱钩子）、_advanced.py（property 修复）
+- 回滚：git checkout 4 文件 + DROP TABLE sage_graph；
+- 后续：图谱 ingest 接写入路径（每次记忆写入自动建图）。

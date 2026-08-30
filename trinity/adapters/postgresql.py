@@ -1800,6 +1800,34 @@ class PostgreSQLAdapter(StorageAdapter):
             return []
 
     # ── 2026-09 (EXECUTION 117): DCPM System1 信念持久化 ─────────────
+    # ── 2026-09 (EXECUTION 125): SAGE 图记忆持久化 ─────────────
+    def sage_save_snapshot(self, snapshot: dict) -> bool:
+        """保存 SAGE 图快照（JSONB 单行，幂等 upsert）。"""
+        try:
+            with self._get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO sage_graph (id, snapshot) VALUES ('graph', %s)
+                        ON CONFLICT (id) DO UPDATE SET snapshot = EXCLUDED.snapshot, updated_at = NOW()
+                    """, (json.dumps(snapshot, ensure_ascii=False, default=str),))
+                conn.commit()
+            return True
+        except Exception:
+            return False
+
+    def sage_load_snapshot(self):
+        """读取 SAGE 图快照（无则 None）。"""
+        try:
+            with self._get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT snapshot FROM sage_graph WHERE id = 'graph'")
+                    row = cur.fetchone()
+                    if row and row[0]:
+                        return row[0] if isinstance(row[0], dict) else json.loads(row[0])
+            return None
+        except Exception:
+            return None
+
     def dcpm_store_belief(self, belief_id, subject, predicate, obj, superseded_by=None):
         """持久化 System1 信念（跨进程可见，供夜间整合读取）。"""
         try:

@@ -213,12 +213,18 @@ class _AdvancedMixin:
             return False
     @property
     def sage(self):
-        if self._sage is None:
+        if not hasattr(self, "_sage") or self._sage is None:
             try:
                 from trinity.modules.second_brain.sage_graph_memory_engine import (
                     SAGEGraphMemoryEngine,
                 )
-                self._sage = SAGEGraphMemoryEngine()
+                eng = SAGEGraphMemoryEngine()
+                # 2026-09 (EXECUTION 125): 从 PG 快照恢复（跨进程图记忆）
+                try:
+                    eng.restore_snapshot()
+                except Exception:
+                    pass
+                self._sage = eng
             except Exception:
                 self._sage = None
         return self._sage

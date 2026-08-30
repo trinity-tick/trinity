@@ -1081,6 +1081,26 @@ class _SearchMixin:
                             results = results[:top_k]
                 except Exception:
                     pass
+            # 2026-09 (EXECUTION 125): SAGE 图谱召回通道——图记忆实体/关系
+            # 注入检索结果（graph_score 标记 + 实体名 boost）；失败静默。
+            try:
+                _sage = getattr(self, "sage", None)
+                if _sage is not None:
+                    _gq = self.sage_query(query) if hasattr(self, "sage_query") else _sage.query(query)
+                    if _gq.get("sage") and _gq.get("entities"):
+                        _gnames = [e.get("name", "") for e in _gq["entities"]]
+                        for _r in results:
+                            _rc = str(_r.get("content", ""))
+                            if any(_n and _n.lower() in _rc.lower() for _n in _gnames):
+                                _r["graph_score"] = 1.0
+                        results.sort(key=lambda x: (0.0 if x.get("graph_score") else 1.0, -float(x.get("score") or 0)))
+                        results = results[:top_k]
+                        _sg = getattr(self, "_last_graph", None) or {}
+                        _sg["entities"] = _gnames[:5]
+                        self._last_graph = _sg
+            except Exception:
+                pass
+
             # 2026-09 (P1-1): CrossEncoder 两阶段 rerank——RRF 融合后对 top
             # candidates 语义精排；模型不可用/加载失败自动降级 no-op（原行为）。
             try:

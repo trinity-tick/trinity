@@ -405,6 +405,88 @@ class SAGEGraphMemoryEngine:
 
         logger.info("SAGEGraphMemoryEngine initialized [fb_thresh=%.2f]", feedback_threshold)
 
+    def _persist(self) -> None:
+        """EXECUTION 125: snapshot to PG (cross-process)."""
+        try:
+            import sys, os
+            root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            if root not in sys.path:
+                sys.path.insert(0, root)
+            from trinity.adapters.postgresql import PostgreSQLAdapter
+            a = PostgreSQLAdapter(auto_connect=True)
+            a.connect()
+            try:
+                snap = {
+                    "entities": [{"entity_id": e.entity_id, "name": e.name,
+                                  "entity_type": e.entity_type,
+                                  "attributes": getattr(e, "attributes", {})}
+                                 for e in self.graph_memory_store._entities.values()],
+                    "relations": [{"relation_id": r.relation_id,
+                                   "source_entity_id": r.source_entity_id,
+                                   "target_entity_id": r.target_entity_id,
+                                   "relation_type": r.relation_type,
+                                   "weight": r.weight}
+                                  for r in self.graph_memory_store._relations.values()],
+                    "turn_count": self._turn_count,
+                }
+                a.sage_save_snapshot(snap)
+            finally:
+                a.disconnect()
+        except Exception:
+            pass
+
+    def restore_snapshot(self, snap=None) -> int:
+        """EXECUTION 125: restore graph from PG snapshot."""
+        if snap is None:
+            try:
+                import sys, os
+                root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                if root not in sys.path:
+                    sys.path.insert(0, root)
+                from trinity.adapters.postgresql import PostgreSQLAdapter
+                a = PostgreSQLAdapter(auto_connect=True)
+                a.connect()
+                try:
+                    snap = a.sage_load_snapshot()
+                finally:
+                    a.disconnect()
+            except Exception:
+                return 0
+        if not snap:
+            return 0
+        n = 0
+        try:
+            for ed in snap.get("entities", []):
+                ent = StructuredEntity(
+                    entity_id=ed.get("entity_id") or ("e%d" % n),
+                    name=ed.get("name", ""),
+                    entity_type=ed.get("entity_type", "entity"),
+                )
+                if ed.get("attributes"):
+                    try:
+                        ent.attributes = dict(ed["attributes"])
+                    except Exception:
+                        pass
+                self.graph_memory_store.add_entity(ent)
+                n += 1
+            for rd in snap.get("relations", []):
+                rel = StructuredRelation(
+                    relation_id=rd.get("relation_id") or ("r%d" % n),
+                    source_entity_id=rd.get("source_entity_id", ""),
+                    target_entity_id=rd.get("target_entity_id", ""),
+                    relation_type=rd.get("relation_type", "related_to"),
+                )
+                try:
+                    rel.weight = float(rd.get("weight") or 1.0)
+                except Exception:
+                    pass
+                self.graph_memory_store.add_relation(rel)
+                n += 1
+            self._turn_count = int(snap.get("turn_count") or 0)
+        except Exception:
+            pass
+        return n
+
     def ingest_turn(self, content: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """摄入一轮交互并写入图记忆。"""
         self._turn_count += 1
@@ -415,6 +497,7 @@ class SAGEGraphMemoryEngine:
         }
         entities, relations = self.memory_writer.write_from_turn(self.graph_memory_store, turn)
 
+        self._persist()  # EXECUTION 125
         return {
             "turn_id": turn["id"],
             "entities_written": len(entities),
