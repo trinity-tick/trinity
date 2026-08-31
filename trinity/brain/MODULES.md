@@ -54,3 +54,20 @@
 - action_loop.py（行动回路）
 - dopamine_reward.py（多巴胺奖赏）
 - habit_formation.py（习惯形成）
+
+## 新机制（2026-09 EXECUTION 219-239，43 个网络方案机制）
+- self_talk（内心独白）/ spatiotemporal_memory（时空）/ executive_function（执行）
+- emotion_space（情绪空间）/ episodic_semantic（情景-语义）/ sleep_stages（睡眠分阶段）
+- episodic_reasoning（情景推理）/ spaced_repetition（间隔重复）/ regret_learning（后悔）
+- behavioral_contagion（行为传染）/ divergent_thinking（发散）/ multi_agent_coordination（协调）
+- reasoning_bank（策略库）/ prospective_memory（前瞻）/ surprise_encoding（意外编码）
+- reflection_loop（反思循环）/ stale_revocation（过期撤销）
+- metamemory（元记忆）/ cognitive_flexibility（灵活）/ habit_formation（习惯）
+- dopamine_reward（奖赏）/ proactive_initiative（主动）/ emotion_regulation（调节）
+- resource_adaptation（资源）/ observational_learning（观察）/ mental_simulation（模拟）
+- theory_of_mind（ToM）/ attention_control（注意）/ unknown_awareness（未知）
+- memory_manager（管理）/ reconstructive_memory（重构）/ associative_memory（联想）
+- consciousness_blueprint（蓝图）/ self_prediction（自我预测）/ emotion_axioms（情绪公理）
+- self_axioms（自我公理）/ curiosity（好奇）/ predictive_loop（预测环）
+- sensory_integration（统觉）/ social_memory（社会）/ self_assessment（评估）
+- autobiographical（叙事）/ emotion_regulation（调节）

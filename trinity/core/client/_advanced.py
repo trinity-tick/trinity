@@ -296,6 +296,24 @@ class _AdvancedMixin:
             ("metamemory", "trinity.brain.metamemory"),
             ("cognitive_flexibility", "trinity.brain.cognitive_flexibility"),
             ("habit_formation", "trinity.brain.habit_formation"),
+            # 2026-09 (EXECUTION 240): 219-239 轮机制
+            ("self_talk", "trinity.brain.self_talk"),
+            ("spatiotemporal_memory", "trinity.brain.spatiotemporal_memory"),
+            ("executive_function", "trinity.brain.executive_function"),
+            ("emotion_space", "trinity.brain.emotion_space"),
+            ("episodic_semantic", "trinity.brain.episodic_semantic"),
+            ("sleep_stages", "trinity.brain.sleep_stages"),
+            ("episodic_reasoning", "trinity.brain.episodic_reasoning"),
+            ("spaced_repetition", "trinity.brain.spaced_repetition"),
+            ("regret_learning", "trinity.brain.regret_learning"),
+            ("behavioral_contagion", "trinity.brain.behavioral_contagion"),
+            ("divergent_thinking", "trinity.brain.divergent_thinking"),
+            ("multi_agent_coordination", "trinity.brain.multi_agent_coordination"),
+            ("reasoning_bank", "trinity.brain.reasoning_bank"),
+            ("prospective_memory", "trinity.brain.prospective_memory"),
+            ("surprise_encoding", "trinity.brain.surprise_encoding"),
+            ("reflection_loop", "trinity.brain.reflection_loop"),
+            ("stale_revocation", "trinity.brain.stale_revocation"),
         ]:
             try:
                 __import__(mod)
