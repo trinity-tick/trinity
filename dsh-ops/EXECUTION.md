@@ -13717,3 +13717,18 @@ Cognitive Flexibility/Habit Formation/记忆重构
 ### 377.3 意义
 - 人格量化：四维资格（生命实体判定）
 - 与身份锚点互补：锚点=不变根基；本模块=人格资格
+
+---
+
+## 378. 历史感知（2026-09，借鉴 History-Dependent Perception）
+
+### 378.1 实施（完成）
+- history_perception.py：perceive_with_history（历史经验→感知重组）
+- 大脑对应：**历史依赖感知**（同一世界不同呈现）
+
+### 378.2 验证
+- 历史相关（数据库）→ 感知强化（history_biased）；无关 → 中性
+
+### 378.3 意义
+- 感知个性化：历史影响感知（不同 Agent 看到不同）
+- 与统觉互补：统觉=融合；本模块=历史影响
