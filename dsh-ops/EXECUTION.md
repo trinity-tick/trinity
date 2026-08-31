@@ -13909,3 +13909,16 @@ Cognitive Flexibility/Habit Formation/记忆重构
 ### 388.4 意义
 - 全库升华：perception + kb/general/video/web 全部处理
 - 生成知识占比：0.6% → 明显提升（语义 80 条）
+
+---
+
+## 389. WMS 知识调研（2026-09，用户要求"网络搜集 WMS 知识提炼入 Trinity"）
+
+### 389.1 执行
+- 网络搜索 4 轮（定义/架构/功能/波次/集成/趋势/选型/对比/实施/ROI）
+- 提炼 10 主题 → 写入 Trinity 9 条（wms_knowledge 类别——去重）
+- 汇总文档：docs/wms_knowledge.md（10 章节）
+
+### 389.2 成果
+- Trinity 知识库新增 WMS 专业知识（可检索/推理）
+- 文档完整：定义→架构→功能→波次→集成→趋势→选型→对比→实施→ROI
