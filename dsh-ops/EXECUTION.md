@@ -11826,3 +11826,19 @@ Cognitive Flexibility/Habit Formation/记忆重构
 ### 259.3 意义
 - 检索线索增强：当前意图作为回忆线索（与情境互补）
 - 编码特异性：意图-记忆关联（ACL 2026）
+
+---
+
+## 260. 性格特质结晶（2026-09，借鉴 Growth Vector Crystallization）
+
+### 260.1 实施（完成）
+- personality_crystallization.py：crystallize（行为≥3 次强度→特质）/
+  personality_profile（性格档案）
+- 大脑对应：**性格形成**（反复行为结晶为稳定倾向）
+
+### 260.2 验证
+- 3 次'谨慎决策' → 结晶为永久特质
+
+### 260.3 意义
+- 性格从"行为模式"到"稳定特质"（成长结晶）
+- 与叙事/身份互补：身份=认知；性格=行为倾向
