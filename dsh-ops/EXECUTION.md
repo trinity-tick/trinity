@@ -12599,3 +12599,18 @@ Cognitive Flexibility/Habit Formation/记忆重构
 ### 306.3 意义
 - 知识自动形成：经验→规律（无人干预）
 - 与 DCPM 互补：DCPM=信念系统；本模块=知识提取
+
+---
+
+## 307. 新颖门（2026-09，借鉴 SAGE Novelty Gate）
+
+### 307.1 实施（完成）
+- novelty_gate.py：gate_fact（覆盖度→ADD/SKIP/ambiguous）+ gate_batch
+- 大脑对应：**新颖性路由**（写入前判定——只写值得写的）
+
+### 307.2 验证
+- 新事实 → ADD；常见 → SKIP（省写入成本）
+
+### 307.3 意义
+- 写入成本优化：冗余跳过（SAGE：3.4× 便宜/2.5× 快）
+- 与写入门控互补：门控=质量；本模块=新颖路由
