@@ -11727,3 +11727,20 @@ Cognitive Flexibility/Habit Formation/记忆重构
 ### 253.3 意义
 - 选择性写入：过滤低质/重复（记忆库质量维护）
 - 与 surprise 互补：编码=提升；门控=过滤
+
+---
+
+## 254. 自适应塑性（2026-09，借鉴 FADE / Homeostatic Plasticity）
+
+### 254.1 实施（完成）
+- adaptive_plasticity.py：learning_rate（覆盖低→快学/高→稳定）/
+  plasticity_status
+- 大脑对应：**稳态可塑性**（新领域快学/熟悉稳定——学习率自适应）
+
+### 254.2 验证
+- 新领域（火星殖民）→ 0.4 consolidating；熟悉（数据库）→ 0.2 stable
+- 新领域学习率 > 熟悉（自适应正确）
+
+### 254.3 意义
+- 学习资源分配：新知识快吸收/旧知识稳保持（FADE）
+- 塑性平衡：过度可塑=不稳定；过稳=不学习（稳态调节）
