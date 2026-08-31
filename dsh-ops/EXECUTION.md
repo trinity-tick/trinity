@@ -12072,3 +12072,19 @@ Cognitive Flexibility/Habit Formation/记忆重构
 ### 274.4 意义
 - 反思时机：负载低→深度自省（大脑空闲时默认网络活跃）
 - 与反思循环互补：循环=持续；空闲=深度
+
+---
+
+## 275. 确定性冲突解决（2026-09，借鉴 Deterministic Conflict Resolution）
+
+### 275.1 实施（完成）
+- conflict_resolution.py：resolve（新鲜×可信×价值规则判定——replace/keep）+
+  resolve_batch
+- 大脑对应：**确定性冲突判定**（不靠 LLM——规则配方）
+
+### 275.2 验证
+- 新经验 vs 旧网络 → replace（可信高）；新传闻 vs 旧经验 → keep
+
+### 275.3 意义
+- 冲突决策确定化：规则判定新旧（可预测可解释）
+- 与撤销互补：撤销=标记；解决=决策判定
