@@ -156,6 +156,12 @@ class ActionLoop:
                 "severity": severity,
                 "result": result,
             }
+            # 2026-09 (EXECUTION 214): 多巴胺奖赏——行动结果→奖赏信号
+            try:
+                from trinity.brain.dopamine_reward import reward
+                reward(action_name, bool(result.get("done")), severity)
+            except Exception:
+                pass
             self.history.append(log_entry)
             self._save()
             results.append(log_entry)
