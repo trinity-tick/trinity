@@ -92,10 +92,19 @@ def _new_mechanisms_alive() -> dict:
         conn = psycopg2.connect(host="127.0.0.1", port=5432, dbname="trinity",
                                 user="trinity", password="trinity")
         cur = conn.cursor()
-        for cat in ("self-narrative", "sensory-integration", "self-assessment", "action-experience"):
+        for cat in ("self-narrative", "sensory-integration", "self-assessment", "action-experience",
+                    "social-memory", "multi-modal", "reconstructive", "dream-recombine",
+                    "promoted", "unknown-gap", "observational-learning"):
             cur.execute("SELECT count(*) FROM memories WHERE category=%s", (cat,))
             alive[cat] = cur.fetchone()[0] > 0
         conn.close()
+        # 状态文件类机制（EXECUTION 220 扩展）
+        import os as _o2
+        for f, name in (("dopamine_state.json", "dopamine"), ("habits_state.json", "habits"),
+                        ("metamemory_state.json", "metamemory"),
+                        ("flexibility_state.json", "flexibility"),
+                        ("self_prediction.json", "self_prediction")):
+            alive[name] = _o2.path.exists(_o2.path.join(_o2.path.expanduser("~"), ".trinity", f))
     except Exception:
         pass
     n_ok = sum(1 for v in alive.values() if v)
