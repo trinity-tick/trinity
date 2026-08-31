@@ -14567,3 +14567,15 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 
 ### 425.3 零测试包收敛
 - 59 → 55（+oms/billing）——wave/stocktake/oms/billing 核心域全覆盖
+
+---
+
+## 426. eventbus 补充测试（2026-09，继续）
+
+### 426.1 落地（oms 6 测试全 PASS）
+- GetHistory limit 语义（limit=2 最近 2 条/limit<=0 全量/顺序正确）
+- EventBusFactory 默认订阅（3 事件类型发布不 panic + 历史 3 条）
+- 修复: PublishOrderMerge 参数顺序（orderIDs []string, mergedID string）
+
+### 426.2 验证
+- go build ./... RC 0；提交 SmartCos
