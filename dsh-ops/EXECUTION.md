@@ -14579,3 +14579,18 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 
 ### 426.2 验证
 - go build ./... RC 0；提交 SmartCos
+
+---
+
+## 427. oms_rule 校验链测试（2026-09，继续）
+
+### 427.1 落地（5 测试全 PASS——OMS 推送守卫全覆盖）
+- 库存不足→reject（BlockedRules 含"库存不足"）
+- 库存偏低→warn（Allowed 保持 true）
+- 省份黑名单→reject（"禁发省份"）
+- 无物流退货→reject（"无物流单号"）
+- 全通过（无规则→Allowed）
+- mock: RuleRepository（按类型脚本）+ InventoryCheckRepository
+
+### 427.2 验证
+- build 0 + oms_rule 测试 ok；提交 SmartCos
