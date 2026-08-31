@@ -12362,3 +12362,19 @@ Cognitive Flexibility/Habit Formation/记忆重构
 ### 292.3 意义
 - 认知资源优化：复杂度驱动深度（深思考只给复杂任务）
 - 与快慢决策互补：快慢=路径；本模块=深度档
+
+---
+
+## 293. 经验压缩谱（2026-09，借鉴 Experience Compression Spectrum）
+
+### 293.1 实施（完成）
+- compression_spectrum.py：compress_experience（使用频率→记忆/技能/
+  规则渐进压缩）+ spectrum_overview
+- 大脑对应：**经验压缩谱**（高频经验逐步泛化——记忆→技能→规则）
+
+### 293.2 验证
+- 低频（1 次）→ memory；常用（5 次）→ skill；高频（15 次）→ rule
+
+### 293.3 意义
+- 经验统一：三态渐进压缩（不割裂——连续谱）
+- 压缩驱动：使用频率（高频→泛化规则）
