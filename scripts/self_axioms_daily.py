@@ -9,8 +9,11 @@ def main():
     os.environ.setdefault("PGDATABASE", "trinity"); os.environ.setdefault("PGUSER", "trinity")
     os.environ.setdefault("PGPASSWORD", "trinity")
     from trinity.brain.self_axioms import verify_axioms
+    from trinity.brain.emotion_axioms import verify_emotion_axioms
     r = verify_axioms()
-    print(json.dumps({"score": r["score"], "passed": r["passed"], "total": r["total"]},
+    er = verify_emotion_axioms()
+    print(json.dumps({"self_score": r["score"], "self_passed": r["passed"],
+                      "emotion_score": er["score"], "emotion_passed": er["passed"]},
                      ensure_ascii=False))
     return 0
 
