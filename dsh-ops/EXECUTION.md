@@ -11626,3 +11626,20 @@ Cognitive Flexibility/Habit Formation/记忆重构
 ### 247.3 意义
 - 记忆组织化：索引让记忆可高效访问（不扫全库）
 - 推理容量扩展：好索引 = 好推理（Library Theorem）
+
+---
+
+## 248. 快慢决策（2026-09，借鉴 DSADF Thinking Fast and Slow）
+
+### 248.1 实施（完成）
+- fast_slow_decision.py：decide（风险×熟悉度→System1 快/System2 慢/
+  校验）+ decision_report
+- 大脑对应：**双系统决策**（卡尼曼快慢思考——决策自适应）
+
+### 248.2 验证
+- 低风险（0.2/0.9）→ system1_fast；高风险（0.9/0.3）→ system2_deep（3 步）
+- 分布：2 快/2 慢/1 校验（自适应）
+
+### 248.3 意义
+- 决策效率×质量平衡：小事快、大事慢（认知资源合理分配）
+- 深思考整合：慢路径 = 内心独白+排练+推理（全链路）
