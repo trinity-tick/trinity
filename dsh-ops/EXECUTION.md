@@ -10886,3 +10886,20 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - 长短期统一管理：重要短期→长期（升级），高频长期→巩固
 - 记忆分层：工作记忆（当下）/promoted（重要）/长期（稳固）
 - Agentic Memory（ACL 2026）理念落地
+
+---
+
+## 206. 未知感知（2026-09，借鉴 MUSE Neural Networks）
+
+### 206.1 实施（完成）
+- unknown_awareness.py：detect_unknown（无结果/不足/低置信→未知）/
+  unknown_strategy（探索搜索+标记 unknown-gap 记忆）/ unknown_report
+- 大脑对应：**MUSE**——元认知识别未知并选择策略
+
+### 206.2 验证
+- 已知（3 结果+0.8 置信）→ unknown False；未知（0 结果）→ True
+- 策略：explore + marked True（探索+标记"我不确定"）
+
+### 206.3 意义
+- 元认知闭环：知道"我不知道"→ 决定怎么办（探索/标记）
+- 与好奇心互补：好奇=主动求知；未知感知=承认不知道+策略
