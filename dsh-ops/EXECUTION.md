@@ -14594,3 +14594,21 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 
 ### 427.2 验证
 - build 0 + oms_rule 测试 ok；提交 SmartCos
+
+---
+
+## 428. 零测试包批量收敛（2026-09，"全部执行继续的优化"）
+
+### 428.1 落地（+2 包 4 测试全 PASS）
+- coldchain: CalculateTemperatureStats（min/max/avg 含 1 位舍入约定）——域6 冷链场景
+- accounting: InboundReceived/OutboundShipped 单据工厂（Source/Event/Amounts/Extra）
+- 发现并适配: 实现 avg 含 1 位舍入约定（测试与实现对齐）
+- 全仓 build 0；提交 SmartCos
+
+### 428.2 零测试包进度
+- 59 → 53（本轮 -2: coldchain/accounting）
+- 累计: 6 包新增测试（wave/stocktake/oms/billing/coldchain/accounting）
+
+### 428.3 剩余
+- 53 个零测试包（多为 repository/handler 薄层——按需补）
+- outbound flow_service（全 DB 依赖——需 sqlmock 引入）
