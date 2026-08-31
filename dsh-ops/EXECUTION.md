@@ -10851,3 +10851,20 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - 元认知检索：不只检索，还评估"检索得好不好"
 - 改进信号：expand_topk/rerank 建议（未来可自动执行）
 - Hindsight 三环节（retain/recall/reflect）在 Trinity 完整落地
+
+---
+
+## 204. 记忆重构（2026-09，借鉴 affective-episodic reconstructive 维度）
+
+### 204.1 实施（完成）
+- reconstructive_memory.py：reconstruct（检索结果→连贯回忆摘要，
+  LLM 优先/结构化降级）+ 接入检索（TRINITY_RECONSTRUCTIVE=1 → result.recall）
+- 大脑对应：**重构记忆（Bartlett）**——回忆不是精确回放而是按情境再创
+
+### 204.2 验证
+- 结构化：'关于数据库性能的回忆：查询优化经验；索引调优；PG 存储'（3 来源）
+- 检索重构：TRINITY_RECONSTRUCTIVE=1 → recall 字段有值
+
+### 204.3 意义
+- 检索升级：取回（recall）→ 重构（reconstruct）——情境化连贯回忆
+- 与精确检索互补：取回=档案；重构=回忆（每次略变——符合大脑）

@@ -1637,6 +1637,16 @@ class _SearchMixin:
                     result["reflection"] = _reflection
                 except Exception:
                     pass
+            # 2026-09 (EXECUTION 204): 记忆重构（reconstructive）
+            # TRINITY_RECONSTRUCTIVE=1：检索结果→连贯回忆摘要（LLM 优先）
+            if os.environ.get(chr(84)+chr(82)+chr(73)+chr(78)+chr(73)+chr(84)+chr(89)+chr(95)+chr(82)+chr(69)+chr(67)+chr(79)+chr(78)+chr(83)+chr(84)+chr(82)+chr(85)+chr(67)+chr(84)+chr(73)+chr(86)+chr(69), '0') == '1':
+                try:
+                    from trinity.brain.reconstructive_memory import reconstruct as _rec
+                    _rr = _rec(str(query)[:40], results)
+                    if _rr.get("reconstructed"):
+                        result["recall"] = _rr.get("recall")
+                except Exception:
+                    pass
             return result
 
         hr = self.hybrid_retriever
