@@ -1616,6 +1616,27 @@ class _SearchMixin:
                     result["thinking_trace"] = _trace
                 except Exception:
                     pass
+            # 2026-09 (EXECUTION 203): 反思驱动检索（Hindsight 借鉴）
+            # TRINITY_REFLECTIVE=1：检索后反思质量 → 改进信号
+            if os.environ.get(chr(84)+chr(82)+chr(73)+chr(78)+chr(73)+chr(84)+chr(89)+chr(95)+chr(82)+chr(69)+chr(70)+chr(76)+chr(69)+chr(67)+chr(84)+chr(73)+chr(86)+chr(69), '0') == '1':
+                try:
+                    _n = len(results)
+                    _conf = float(results[0].get("confidence") or 0) if results else 0
+                    _reflection = {
+                        "retrieved": _n,
+                        "top_confidence": _conf,
+                        "quality": "good" if (_n >= 3 and _conf >= 0.5) else "low",
+                        "improvement": None,
+                    }
+                    if _n < 3:
+                        _reflection["improvement"] = "expand_topk"
+                    elif _conf < 0.5:
+                        _reflection["improvement"] = "rerank"
+                    else:
+                        _reflection["improvement"] = "none"
+                    result["reflection"] = _reflection
+                except Exception:
+                    pass
             return result
 
         hr = self.hybrid_retriever

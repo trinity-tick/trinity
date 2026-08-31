@@ -10834,3 +10834,20 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - 感知从"关联检测"（统觉）到"融合存储"（多模态记忆）
 - 一条融合记忆 = 多通道视角（"网络+日志+文件同时提到 X"）
 - 感知 75% → 78%
+
+---
+
+## 203. 反思驱动检索（2026-09，借鉴 Hindsight ACL 2026）
+
+### 203.1 实施（完成）
+- TRINITY_REFLECTIVE=1：检索后反思（结果数/置信度→质量评估→改进建议）
+- 大脑对应：**Hindsight（retain/recall/reflect）**——reflect 环节入检索
+
+### 203.2 验证
+- 反思: {retrieved 3, confidence 0.0, quality low, improvement rerank}
+- Trinity 发现"本次检索置信度低 → 建议 rerank"——自我评估检索
+
+### 203.3 意义
+- 元认知检索：不只检索，还评估"检索得好不好"
+- 改进信号：expand_topk/rerank 建议（未来可自动执行）
+- Hindsight 三环节（retain/recall/reflect）在 Trinity 完整落地
