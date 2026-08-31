@@ -275,6 +275,27 @@ class _AdvancedMixin:
             ("self_assessment", "trinity.brain.self_assessment"),
             ("cognition_pipeline", "trinity.brain.cognition_pipeline"),
             ("social_memory", "trinity.brain.social_memory"),
+            # 2026-09 (EXECUTION 219): 网络方案机制（197-218 轮）
+            ("self_axioms", "trinity.brain.self_axioms"),
+            ("emotion_axioms", "trinity.brain.emotion_axioms"),
+            ("self_prediction", "trinity.brain.self_prediction"),
+            ("consciousness_blueprint", "trinity.brain.consciousness_blueprint"),
+            ("sensory_integration", "trinity.brain.sensory_integration"),
+            ("associative_memory", "trinity.brain.associative_memory"),
+            ("reconstructive_memory", "trinity.brain.reconstructive_memory"),
+            ("memory_manager", "trinity.brain.memory_manager"),
+            ("unknown_awareness", "trinity.brain.unknown_awareness"),
+            ("attention_control", "trinity.brain.attention_control"),
+            ("theory_of_mind", "trinity.brain.theory_of_mind"),
+            ("mental_simulation", "trinity.brain.mental_simulation"),
+            ("resource_adaptation", "trinity.brain.resource_adaptation"),
+            ("emotion_regulation", "trinity.brain.emotion_regulation"),
+            ("proactive_initiative", "trinity.brain.proactive_initiative"),
+            ("dopamine_reward", "trinity.brain.dopamine_reward"),
+            ("observational_learning", "trinity.brain.observational_learning"),
+            ("metamemory", "trinity.brain.metamemory"),
+            ("cognitive_flexibility", "trinity.brain.cognitive_flexibility"),
+            ("habit_formation", "trinity.brain.habit_formation"),
         ]:
             try:
                 __import__(mod)
