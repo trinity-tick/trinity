@@ -751,6 +751,19 @@ class _SearchMixin:
                         value_weight *= 1.15
             except Exception:
                 pass
+            # 2026-09 (EXECUTION 201): 情绪一致性检索（mood-congruent）
+            # affective-episodic 借鉴：情绪状态匹配记忆内容情绪 → 加权
+            if os.environ.get(chr(84)+chr(82)+chr(73)+chr(78)+chr(73)+chr(84)+chr(89)+chr(95)+chr(77)+chr(79)+chr(79)+chr(68)+chr(95)+chr(67)+chr(79)+chr(78)+chr(83)+chr(73)+chr(83)+chr(84)+chr(69)+chr(78)+chr(84), '0') == '1':
+                try:
+                    _cur_emo = getattr(self, "_emo_bias", None)
+                    if _cur_emo and _cur_emo.get("category_hint") == "incident":
+                        # 当前消极 → 检查该记忆内容情绪（快速启发：否定词/事故词）
+                        _ct = str(item.get("content") or "")[:150]
+                        _neg_hit = any(w in _ct for w in ("失败", "错误", "崩溃", "丢失", "故障", "事故", "损失"))
+                        if _neg_hit:
+                            value_weight *= 1.12  # 消极状态偏好消极经验（一致性）
+                except Exception:
+                    pass
 
             # 2026-09 (EXECUTION 127): 置信度评分（元认知层）——
             # 来源权威（category→SourceType 映射）+ 新鲜度 + 语义相似度
