@@ -11890,3 +11890,22 @@ Cognitive Flexibility/Habit Formation/记忆重构
 ### 263.3 意义
 - 学习可靠性：经验需证据支持（防自我确认陷阱）
 - 与策略库互补：策略=提炼；EDV=验证门
+
+---
+
+## 264. Agent 治理（2026-09，借鉴 Agent Governance for Self-Evolving AI）
+
+### 264.1 实施（完成）
+- agent_governance.py：check_change（核心保护/风险分级→允许/拒绝/审查）+
+  governance_rules（安全边界）
+- 大脑对应：**安全自主**（自进化受治理约束）
+
+### 264.2 修复
+- 保护词中英文（身份/公理/审计/治理/存储）
+
+### 264.3 验证
+- 核心（身份）→ reject；低风险策略 → allow；高风险 → review
+
+### 264.4 意义
+- 自进化安全：核心不可改/局部可改/高风险审查
+- 治理与进化平衡：自由探索 + 安全边界
