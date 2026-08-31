@@ -10868,3 +10868,21 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 ### 204.3 意义
 - 检索升级：取回（recall）→ 重构（reconstruct）——情境化连贯回忆
 - 与精确检索互补：取回=档案；重构=回忆（每次略变——符合大脑）
+
+---
+
+## 205. 记忆管理器（2026-09，借鉴 Agentic Memory ACL 2026）
+
+### 205.1 实施（完成）
+- memory_manager.py：promote（工作记忆高重要项→长期 promoted）/
+  stabilize（高频访问提升重要性巩固）/ memory_report（长短比例）
+- 大脑对应：**工作记忆→海马巩固→长期皮层**（统一长短期管理）
+
+### 205.2 验证
+- 升级 1 条（wm 高重要→长期）；stabilize 10 条；比例 0.01%
+- memory-manager 维护链任务 OK（28 个任务）
+
+### 205.3 意义
+- 长短期统一管理：重要短期→长期（升级），高频长期→巩固
+- 记忆分层：工作记忆（当下）/promoted（重要）/长期（稳固）
+- Agentic Memory（ACL 2026）理念落地
