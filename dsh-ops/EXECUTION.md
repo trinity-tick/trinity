@@ -11810,3 +11810,19 @@ Cognitive Flexibility/Habit Formation/记忆重构
 ### 258.3 意义
 - 自我进化升级：不止改进行为，还改进"改进方法"
 - 改进效率：有效方法加权/无效退役（Meta HyperAgents）
+
+---
+
+## 259. 意图锚定（2026-09，借鉴 Grounding Memory in Contextual Intent）
+
+### 259.1 实施（完成）
+- intent_grounding.py：ground_query（意图+上下文→增强检索线索）/
+  intent_retrieval（意图匹配检索）
+- 大脑对应：**意图锚定**（什么意图下记得什么——编码特异性）
+
+### 259.2 验证
+- 锚定：'[intent:数据库优化] 索引调优经验'（意图注入线索）
+
+### 259.3 意义
+- 检索线索增强：当前意图作为回忆线索（与情境互补）
+- 编码特异性：意图-记忆关联（ACL 2026）
