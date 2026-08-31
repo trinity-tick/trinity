@@ -13837,3 +13837,21 @@ Cognitive Flexibility/Habit Formation/记忆重构
 ### 384.3 后续
 - 建议维护链加入（每日/每周批量升华）
 - 目标：生成知识占比 0.6% → 5%+
+
+---
+
+## 385. 知识升华闭环（2026-09，用户要求"执行知识升华闭环"）
+
+### 385.1 实施（完成）
+- 维护链接入升华任务："sublimate"（scripts/knowledge_sublimation.py）
+- 任务数：7 → 8（health/evolution/mirror/decay/compress/tiers/
+  consolidate/sublimate）
+- 闭环：感知输入 → sublimate 任务 → 语义知识（定期自动）
+
+### 385.2 验证
+- sublimate 在链中 True（8 任务）
+- 升华脚本已验证（384 轮：200 样本 → 9 条语义知识）
+
+### 385.3 闭环意义
+- 知识升华自动化：维护链定期运行（不再手动）
+- "记忆 → 知识"升华闭环完整：感知 → 提炼 → 语义知识 → 检索/推理

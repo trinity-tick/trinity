@@ -29,7 +29,7 @@ param(
 
 # 兼容 powershell -File 传参：命令行里的 "a,b,c" 会以单个字符串到达，
 # 这里统一按逗号拆分 + 校验。
-$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "usage", "rollout-audit", "audit-ps1", "forgetting", "produce", "federation-sync", "tune", "fulltest", "pg-sync", "evolve", "observe", "value-recalib", "replay", "extract-skills", "perception-bridge", "cognitive-eval", "event-extract", "reversible-compress", "memory-purify", "cognition-agent", "dcpm-consolidate", "replay-consolidate", "integrity-monitor", "perception-scan", "self-reflect", "cognition-check", "web-perception", "web-search", "drift-check", "brain-health", "identity-refresh", "loop-audit", "brainification-guard", "capability-check", "action-loop", "forgetting", "dream-replay", "curiosity", "self-assess", "predictive-loop", "sensory-integration", "emotional-consolidation", "narrative", "associative", "self-axioms", "memory-manager", "proactive", "all")  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
+$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "sublimate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "usage", "rollout-audit", "audit-ps1", "forgetting", "produce", "federation-sync", "tune", "fulltest", "pg-sync", "evolve", "observe", "value-recalib", "replay", "extract-skills", "perception-bridge", "cognitive-eval", "event-extract", "reversible-compress", "memory-purify", "cognition-agent", "dcpm-consolidate", "replay-consolidate", "integrity-monitor", "perception-scan", "self-reflect", "cognition-check", "web-perception", "web-search", "drift-check", "brain-health", "identity-refresh", "loop-audit", "brainification-guard", "capability-check", "action-loop", "forgetting", "dream-replay", "curiosity", "self-assess", "predictive-loop", "sensory-integration", "emotional-consolidation", "narrative", "associative", "self-axioms", "memory-manager", "proactive", "all")  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
 $normalized = @()
 # 环境感知流（2026-09 EXECUTION 136）：日志告警自动感知入记忆
 $perceptionScanCmd = @"
@@ -116,6 +116,18 @@ sys.argv = ["dcpm_consolidate", "--write"]
 runpy.run_path(r"D:\trinity-code\scripts\dcpm_consolidate.py", run_name="__main__")
 "@
 $dcpmConsolidatePrompt = "运行 scripts/dcpm_consolidate.py --write（DCPM System2 夜间整合：PG 信念→schema 归纳→记忆落库），汇报信念/schema/落库数。"
+
+$subCmd = @"
+import sys, os
+sys.path.insert(0, r"D:\trinity-code")
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("PGHOST", "127.0.0.1"); os.environ.setdefault("PGPORT", "5432")
+os.environ.setdefault("PGDATABASE", "trinity"); os.environ.setdefault("PGUSER", "trinity")
+os.environ.setdefault("PGPASSWORD", "trinity")
+runpy.run_path(r"D:\trinity-code\scripts\knowledge_sublimation.py", run_name="__main__")
+"@
+$subPrompt = "运行 scripts/knowledge_sublimation.py（知识升华：感知输入批量提炼语义知识）"
+
 
 # 情节→语义泛化（2026-09 EXECUTION 120）：重放管线 → 语义泛化记忆落库
 $replayConsolidateCmd = @"
@@ -909,6 +921,7 @@ foreach ($t in $Tasks) {
         "memory-purify" { Invoke-Task -Name "memory-purify" -DirectCommand $purifyCmd -DshPrompt $purifyPrompt }  # 2026-09 主动遗忘净化
 
     "dcpm-consolidate" { Invoke-Task -Name "dcpm-consolidate" -DirectCommand $dcpmConsolidateCmd -DshPrompt $dcpmConsolidatePrompt }
+"sublimate" { Invoke-Task -Name "sublimate" -DirectCommand $subCmd -PromptText $subPrompt }
     "replay-consolidate" { Invoke-Task -Name "replay-consolidate" -DirectCommand $replayConsolidateCmd -DshPrompt $replayConsolidatePrompt }
     "drift-check" { Invoke-Task -Name "drift-check" -DirectCommand $driftCheckCmd -DshPrompt $driftCheckPrompt }
     "brain-health" { Invoke-Task -Name "brain-health" -DirectCommand $brainHealthCmd -DshPrompt $brainHealthPrompt }
