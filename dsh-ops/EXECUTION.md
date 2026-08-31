@@ -14441,3 +14441,21 @@ Cognitive Flexibility/Habit Formation/记忆重构
 ### 418.3 意义
 - Trinity 首次对外系统执行"扫描→发现→优化"闭环
 - 203 能力对外赋能（记忆大脑→工程自优化）
+
+---
+
+## 419. 自优化清单执行（2026-09，用户要求"根据建议执行"）
+
+### 419.1 落地（SmartCos 提交 06253f6）
+- **metrics 接线 gateway**（清单#3）: Handler.registry 字段（惰性）+
+  metrics_wire.go（registryRender/ReportMetric/ObserveMetric API）+
+  Metrics handler 追加业务指标渲染段——gateway 测试 ok
+- **wave 领域函数+测试**（清单#2 首包）: RecalculateProgress（钳制+零除）
+  + JSON shape——wave 首次有测试
+- **oms 清理**（清单#4 部分）: 3 个 .bak 删除
+
+### 419.2 诚实遗留
+- gateway 拆分（清单#1 8624 行）: 需专项（本轮验证同包拆文件模式——
+  metrics_wire.go 先例）——留下轮按域分批拆
+- billing/stocktake/oms 补测试继续
+- errcheck 门禁已有（.golangci.yml）——843 忽略错误分批清理
