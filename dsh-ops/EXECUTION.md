@@ -13095,3 +13095,19 @@ Cognitive Flexibility/Habit Formation/记忆重构
 ### 338.3 意义
 - 推理增强：迭代进化（每轮更好——用户中心）
 - 训练免费：运行时进化（无需额外训练）
+
+---
+
+## 339. 批评学习（2026-09，借鉴 Critique-Learning）
+
+### 339.1 实施（完成）
+- critique_learning.py：learn_from_critique（批评→问题→修正→增强）+
+  critique_report（问题分布）
+- 大脑对应：**批评驱动学习**（批评者反馈→记忆增强）
+
+### 339.2 验证
+- 批评"不准确且不完整" → accuracy+completeness → 修正（改进 1）
+
+### 339.3 意义
+- 学习增强：批评内容驱动（不只数值反馈）
+- 问题分类：准确/完整/清晰（针对性修正）
