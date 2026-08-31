@@ -58,6 +58,14 @@ def verify_axioms() -> dict:
     pf = os.path.join(os.path.expanduser("~"), ".trinity", "predictive_state.json")
     results["5_prediction"] = os.path.exists(pf)
 
+    # 6) 自我预测（EXECUTION 199）：自我预测模块存在
+    try:
+        from trinity.brain.self_prediction import predict_self
+        _p = predict_self()
+        results["6_self_prediction"] = bool(_p.get("predicted_focus"))
+    except Exception:
+        results["6_self_prediction"] = False
+
     # 综合分数（每条 20 分）
     score = sum(20 for v in results.values() if v)
     conn.close()
