@@ -12692,3 +12692,19 @@ Cognitive Flexibility/Habit Formation/记忆重构
 ### 312.3 意义
 - 进化系统化：研究（结构化）vs 自发（随机好奇）
 - 记忆架构随研究进化（EvolveMem AutoResearch）
+
+---
+
+## 313. 工具图记忆（2026-09，借鉴 SEARL）
+
+### 313.1 实施（完成）
+- tool_graph_memory.py：tool_experience（工具效果+组合记录）+
+  tool_graph（排序+组合推荐）
+- 大脑对应：**工具经验图谱**（哪些工具组合有效——联合优化）
+
+### 313.2 验证
+- search(0.58)/rerank(0.56) 排序；组合推荐 search→rerank
+
+### 313.3 意义
+- 工具智能：经验驱动组合（高效完成任务）
+- 联合优化：策略×工具图（SEARL）
