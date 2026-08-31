@@ -11331,3 +11331,20 @@ Cognitive Flexibility/Habit Formation/记忆重构
 ### 230.3 意义
 - 复习调度：按遗忘曲线定时（不随机不遗漏）
 - 与梦境互补：梦境=随机复习；间隔重复=按曲线精准复习
+
+---
+
+## 231. 后悔学习（2026-09，借鉴 Psychological Regret Model）
+
+### 231.1 实施（完成）
+- regret_learning.py：evaluate_regret（实际 vs 反事实结果比较）/
+  learn_from_regret（后悔→决策调整）/ regret_report
+- 大脑对应：**后悔信号（前额叶）**——反事实反馈驱动决策改进
+
+### 231.2 验证
+- 选A(0.3) vs 替代(0.9) → regret（差距 0.6）→ '避免再次选择选A方案'
+- 报告：improving True
+
+### 231.3 意义
+- 决策学习闭环：决策→结果→反事实比较→后悔→调整（避免重复错误）
+- 与反事实（设想）互补：反事实=想象；后悔=评估并改进
