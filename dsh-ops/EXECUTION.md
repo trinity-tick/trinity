@@ -14311,3 +14311,22 @@ Cognitive Flexibility/Habit Formation/记忆重构
 - 性能: 响应<50ms/效率+50%/10 万单稳定
 - 准确: 零超卖/零差异/错发<0.01%
 - 智能: 建议≥85%/人效+20%/50% 零人工
+
+---
+
+## 412. SmartCos WMS 完美蓝图重构启动（2026-09，D:smartcos-wms 恢复后执行）
+
+### 412.1 重大进展
+- 主项目恢复：git 裸仓库（wms-git-backups）→ clone 到
+  D:\smartcos-wms（Go 572 文件/106 internal 服务）+ D:\smartcos-frontend
+- 发现真实防超卖漏洞：ReserveVirtualStock check-then-act 竞态
+
+### 412.2 蓝图重构落地（7 域中 4 域代码就绪）
+- 域2 核心引擎: ①防超卖 CAS（100 并发抢 30→恰 30/零超卖 edab5ea）
+  ②波次 7 因素自动分组（3 测试 PASS 866d9e0）
+- 域3 AI: 补货公式 SS/ROP/EOQ（2 测试 PASS 5871b2e）
+- 域4 数据: ERP 对账四步闭环（2 测试 PASS c55d356）
+
+### 412.3 待续
+- 域1 前端优化 / 域5 基础设施质量门 / 域6 场景预案 / 域7 流程验证
+- goal: goal-9921cce7（蓝图完成管理）
