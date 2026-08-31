@@ -1586,6 +1586,23 @@ class _SearchMixin:
                             result['associations'] = _assoc
                 except Exception:
                     pass
+            # 2026-09 (EXECUTION 198): 心智工作空间——思考痕迹（Mental Workspace 借鉴）
+            # TRINITY_THINKING=1 时记录检索决策轨迹（情境/调制/联想）——可追溯
+            if os.environ.get(chr(84)+chr(82)+chr(73)+chr(78)+chr(73)+chr(84)+chr(89)+chr(95)+chr(84)+chr(72)+chr(73)+chr(78)+chr(75)+chr(73)+chr(78)+chr(71), '0') == '1':
+                try:
+                    _trace = {
+                        "query": str(query)[:80],
+                        "situation": str(situation or "")[:120],
+                        "self": getattr(self, "_last_session_id", None) or "default",
+                        "stages": {k: v.get("status") for k, v in result.get("cognition", {}).get("stages", {}).items()},
+                        "modulation": {
+                            "cautious": bool(getattr(self, "_emo_bias", None)) or "emotion",
+                        },
+                        "top1": (results[0].get("content") or "")[:60] if results else "",
+                    }
+                    result["thinking_trace"] = _trace
+                except Exception:
+                    pass
             return result
 
         hr = self.hybrid_retriever

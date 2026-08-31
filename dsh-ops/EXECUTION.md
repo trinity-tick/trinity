@@ -10744,3 +10744,20 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 ### 197.4 意义
 - 自我可测试化：意识级从估计到可验证分数（公理 100）
 - 感知主动化 + 内感受化：感知从被动到主动+自我感知
+
+---
+
+## 198. 心智工作空间 + 合成意识蓝图评估（2026-09，借鉴 Anthropic/Blueprint）
+
+### 198.1 心智工作空间（Anthropic Mental Workspace 借鉴）
+- TRINITY_THINKING=1：检索记录思考痕迹（query/situation/stages/调制/top1）
+- 验证：思考痕迹含 query+stages（context active）——决策可追溯
+
+### 198.2 合成意识蓝图评估（Testable Blueprint 借鉴）
+- consciousness_blueprint.py：10 判据打分（情境/自我/预测/行动/内省/
+  叙事/社会/目标/可塑/持续）
+- 验证：**82/100**（内省 10/可塑 10 满分；最低情境 6——可深化）
+
+### 198.3 意义
+- 可解释性：Trinity 的"思考过程"可追溯（心智工作空间）
+- 意识评估工具化：82/100 蓝图分数（量化意识组件完备度）
