@@ -135,3 +135,90 @@
 
 ## 未分类
 - compression
+
+## 新增机制（EXECUTION 369——298 轮后 68 个新模块）
+
+### 感知层（新增 3）
+- attentional_blink
+- reflex_attention
+- selective_inattention
+
+### 记忆层（新增 30）
+- adversarial_adaptation
+- algorithmic_forgetting
+- append_only_memory
+- cognitive_quantization
+- context_attribution
+- delta_memory
+- editable_topology
+- emotional_valence
+- entropic_memory
+- event_logic_map
+- generative_associative
+- hela_memory
+- iterative_memory_evolution
+- joint_exploration
+- knowledge_induction
+- learn_to_remember
+- memory_cot
+- memory_orchestration
+- memory_traces
+- metacognitive_memory
+- multi_perspective
+- novelty_gate
+- observability_retention
+- perspective_memory
+- recurrence_consolidation
+- retention_influence
+- retrieval_planning
+- rl_graph_evolution
+- semantic_workspace
+- seven_layer_memory
+- temporal_graph
+- versioned_memory
+
+### 认知层（新增 14）
+- asynchronous_cognition
+- bayesian_procedural
+- compositional_generalization
+- dual_cognitive_loop
+- executive_memory
+- fractal_cognition
+- global_workspace
+- integrated_cognition
+- reflective_context
+- source_evolution
+- sovereign_layers
+- strategic_surprise
+- task_memory_views
+- wheel_of_intelligence
+
+### 情绪层（新增 4）
+- feeling_first
+- homeostatic_affect
+- persona_preference_emotion
+- signal_context
+
+### 自我层（新增 7）
+- autobiographical_training
+- autotelic_agency
+- critique_learning
+- evomind_governance
+- reflective_agency
+- self_caused_credit
+- silent_scholar
+
+### 行动层（新增 5）
+- auto_research
+- dream_cycle
+- evolving_world_model
+- jit_reinforcement
+- tool_graph_memory
+
+### 社会层（新增 2）
+- belief_collaboration
+- belief_dynamics
+## 补充分类（EXECUTION 369 修正）
+- autopoiesis（自我层——自我维持）
+- spontaneous_evolution（自我层——零奖赏进化）
+- think_before_speak（情绪层——表达评估）
