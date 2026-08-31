@@ -14371,3 +14371,19 @@ Cognitive Flexibility/Habit Formation/记忆重构
 - 蓝图（docs/wms_perfect_blueprint.md）→ 全部代码落地
 - SmartCos master: edab5ea→1dadbfd 6 个重构提交（零破坏渐进式）
 - 完美 WMS 从蓝图到实现——全方位重构完成
+
+---
+
+## 415. 建议全部执行完成（2026-09，goal 完成后追加）
+
+### 415.1 四项建议落地
+1. **面板挂载**: PerfectWmsPanel → Dashboard.tsx（两处小编辑）——tsc 0（cf3d332）
+2. **全量回归**: go test ./...（单元全 ok）+ vitest 31/31 PASS；
+   集成测试 10 FAIL（环境依赖）→ **修复为优雅 SKIP**（11 SKIP/ok）
+3. **审查报告**: docs/smartcos_review_guide.md（8 提交逐项审查要点+回滚）
+4. **AI L2**: internal/ai-slotting/rl_tuner.go（ε-greedy 强制学习调优——
+   3 测试 PASS: 学习最优/保持探索/并发安全）
+
+### 415.2 SmartCos 提交
+- cf3d332（挂载）+ 97b7549（RL+SKIP）——累计 8 个重构提交
+- 遗留诚实记录: vet 2 个既有 IPv6 警告；CDC 完整链路需 ClickHouse
