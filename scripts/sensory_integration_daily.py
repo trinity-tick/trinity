@@ -8,12 +8,16 @@ def main():
     os.environ.setdefault("PGHOST", "127.0.0.1"); os.environ.setdefault("PGPORT", "5432")
     os.environ.setdefault("PGDATABASE", "trinity"); os.environ.setdefault("PGUSER", "trinity")
     os.environ.setdefault("PGPASSWORD", "trinity")
-    from trinity.brain.sensory_integration import integrate_senses, integrate_to_memory
+    from trinity.brain.sensory_integration import (
+        integrate_senses, integrate_to_memory, fuse_signals, fuse_to_memory)
     r = integrate_senses()
     ok = integrate_to_memory()
+    fr = fuse_signals()
+    fok = fuse_to_memory() if fr.get("fusion_possible") else False
     print(json.dumps({"active": r["active_channels"],
                       "correlations": len(r["correlations"]),
-                      "memory": ok}, ensure_ascii=False))
+                      "memory": ok, "fusion": fok,
+                      "fused_topics": fr.get("fused_topics", [])}, ensure_ascii=False))
     return 0
 
 if __name__ == "__main__":
