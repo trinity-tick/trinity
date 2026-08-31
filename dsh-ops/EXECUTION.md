@@ -14423,3 +14423,21 @@ Cognitive Flexibility/Habit Formation/记忆重构
 ### 417.3 蓝图完成度
 - L1-L5 全部落地 ✅（公式/RL/自动化/对话/孪生）
 - 域1-7 全覆盖；SmartCos 累计 10 个重构提交
+
+---
+
+## 418. Trinity 自优化扫描 SmartCos（2026-09，用户要求"扫描+自优化"）
+
+### 418.1 扫描发现
+- 110 包/50 测试/59 零测试 · gateway 8624 行热点
+- 54 TODO/843 忽略错误/7 panic
+- 接线缺口: metrics/twinsim 0 引用
+
+### 418.2 自优化执行
+- twinsim→promotionplan（容量评估仿真化）✅
+- RLTuner→ai-slotting（拣选事件回流调优）✅
+- 提交 SmartCos master + docs/smartcos_selfopt_report.md
+
+### 418.3 意义
+- Trinity 首次对外系统执行"扫描→发现→优化"闭环
+- 203 能力对外赋能（记忆大脑→工程自优化）
