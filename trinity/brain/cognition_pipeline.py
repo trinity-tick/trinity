@@ -18,7 +18,8 @@ import os
 import time
 
 
-STAGES = ["context", "affect", "graph", "confidence", "prediction", "hebbian"]
+STAGES = ["context", "affect", "attention", "associative", "graph", "confidence",
+          "unknown", "metamemory", "prediction", "hebbian", "reconstructive"]  # EXECUTION 222: 扩展
 
 
 def run_pipeline(client, query: str, results: list, stage_flags: dict) -> dict:
