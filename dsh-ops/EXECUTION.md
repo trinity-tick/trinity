@@ -14243,3 +14243,19 @@ Cognitive Flexibility/Habit Formation/记忆重构
 ### 407.3 后续
 - P1: AI 补货 + 大促预案；P2: 计费/LMS/对账/性能
 - 组件可直接集成（指南含 API 设计/验证清单）
+
+---
+
+## 408. SmartCos 全量优化执行（2026-09，用户要求"根据建议全部执行"）
+
+### 408.1 交付
+- scripts/wms_optimization_full.py：10 优化点全部组件化
+- docs/smartcos_integration.md：全量集成指南更新
+
+### 408.2 验证（10/10 通过）
+- 防超卖/波次/补货公式（SS 29/ROP 179/EOQ 45）/ABC 分类
+- 大促容量/计费/LMS 排班/多仓就近/对账差异/权限审计
+
+### 408.3 意义
+- 10 优化点 → 10 可集成组件（全部可测）
+- SmartCos 优化从"建议"到"代码就绪"（P0+P1+P2 全覆盖）

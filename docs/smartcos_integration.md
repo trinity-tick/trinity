@@ -60,3 +60,31 @@ path = wp.s_path(["A","B","C"], {"A":1,"C":2})  # S 型拣货路径
 ---
 
 *组件已测试通过（EXECUTION 407）· 完整优化路径见 docs/smartcos_optimization.md*
+
+---
+
+## 全量组件（EXECUTION 408——10 优化点全部可集成）
+
+| # | 组件 | 功能 | 验证 |
+|---|---|---|---|
+| 1 | AntiOversell | 库存防超卖（原子扣减+CAS） | ✅ 拦截超卖 |
+| 2 | WavePlanner | 波次 7 因素 + S 型路径 | ✅ 聚合+省走 |
+| 3 | ReplenishOptimizer | AI 补货（SS/ROP/EOQ 公式） | ✅ SS=29 ROP=179 |
+| 4 | DynamicLocation | 动态库位（ABC 分类+分区） | ✅ 按频分类 |
+| 5 | PromotionPlan | 大促预案（容量/错峰） | ✅ 20 万单→扩容 |
+| 6 | BillingEngine | 计费引擎（多策略） | ✅ 5.0 元 |
+| 7 | LMSOptimizer | 劳动力 AI 排班 | ✅ 20 人预测 |
+| 8 | MultiWarehouse | 多仓协同（就近履约） | ✅ WH1 就近 |
+| 9 | Reconciliation | ERP 对账闭环（四步） | ✅ 差异检测 |
+| 10 | SecurityAudit | 安全审计（分层权限+日志） | ✅ 权限+审计 |
+
+## 集成说明
+- 文件：scripts/wms_optimization_full.py（独立无依赖）
+- 每个组件类可独立 import——对应 SmartCos 微服务
+- 内存模拟 → 生产替换：Redis（库存/缓存）/ PG（库存/审计）
+
+## 全量验证结果（EXECUTION 408）
+- 补货公式：SS=1.65×10×√3=29 ROP=179 EOQ=45 ✅
+- 大促：20 万单/5000 时 → 40h → 需扩容 ✅
+- 多仓：WH1（距离 5）就近履约 ✅
+- 对账：WMS 10 vs ERP 8 → qty_diff 检测 ✅
