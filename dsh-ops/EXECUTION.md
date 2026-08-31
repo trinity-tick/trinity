@@ -14612,3 +14612,17 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 ### 428.3 剩余
 - 53 个零测试包（多为 repository/handler 薄层——按需补）
 - outbound flow_service（全 DB 依赖——需 sqlmock 引入）
+
+---
+
+## 429. sqlmock 基建 + flow_service 测试（2026-09，继续）
+
+### 429.1 落地（3 测试 PASS——repository 薄层测试基建打通）
+- go-sqlmock 依赖引入（goproxy.cn）
+- outbound/flow_service_test.go: CreateWave（SQL+ID 前缀）/GetWave
+  （行扫描）/UpdateWaveStatus（SQL 断言）
+- outbound 包测试: 16+ 全 PASS（headless 系列原有 + 新 3）
+
+### 429.2 基建意义
+- sqlmock 打开 repository 层测试通道（53 零测试包中 repo/handler
+  薄层可批量复制此模式）
