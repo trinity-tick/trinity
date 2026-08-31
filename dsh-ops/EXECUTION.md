@@ -14479,3 +14479,22 @@ Cognitive Flexibility/Habit Formation/记忆重构
 - #1 gateway 拆分 ✅（本轮）· #2 补测试 wave ✅（419）
 - #3 metrics 接线 ✅（419）· #4 oms bak 清理 ✅（419）
 - 剩余: billing/stocktake/oms 补测试 + 843 忽略错误分批（后续持续）
+
+---
+
+## 421. 自优化持续：阶梯定价实现 + 忽略错误分布（2026-09）
+
+### 421.1 真实功能补全（发现 stub→实现）
+- billing/applyTieredPricing: 原 stub return qty → **分段累进阶梯定价**
+  （upTo/price JSON 阶梯 + 封顶档 + fallback 语义保留）
+- 3 测试 PASS（qty=150→210 / 600→720 精确值验证）
+- 提交: 2e796c8
+
+### 421.2 忽略错误分布（843 处/175 文件）
+Top: handler_mock 115 / handler_ai 103 / handler_gap_fill 31 /
+verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
+→ gateway 域集中（~290）——与拆分后分批清理策略对齐
+
+### 421.3 下一批
+- verification/bi/inventory_repo 忽略错误逐文件修（每文件验证）
+- 零测试包继续（stocktake service CRUD 需 mock repo——下轮）
