@@ -11210,3 +11210,20 @@ Cognitive Flexibility/Habit Formation/记忆重构
 ### 223.3 意义
 - 决策升级：直接行动 → 内心对话后行动（更深思）
 - "AI learns better when it talks to itself"（OIST）落地
+
+---
+
+## 224. 时空情景记忆（2026-09，借鉴 ARTEM AAAI）
+
+### 224.1 实施（完成）
+- spatiotemporal_memory.py：episode（时间窗口+来源过滤检索）/
+  timeline_with_sources（带来源时间线）
+- 大脑对应：**情景记忆时空维度**——"何时何地发生了什么"
+
+### 224.2 验证
+- 时空检索：web/7 天 → 5 条
+- 时间线：10 条带来源（自我/网络/未知——空间+时间）
+
+### 224.3 意义
+- 记忆组织：内容（是什么）+ 时间（何时）+ 来源（何处）
+- 时空检索：按窗口+来源精准回溯（情景记忆的时空索引）
