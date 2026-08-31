@@ -232,3 +232,29 @@ class ActionLoop:
             return True
         except Exception:
             return False
+
+
+    # ── 2026-09 (EXECUTION 197): 内感受注意（Interoceptive Attention 借鉴）──
+    # 健康异常时感知注意力转向内部（优先内部检查而非外部感知）
+    def interoceptive_check(self) -> dict:
+        """内感受：健康异常 → 返回内部优先信号（驱动内部检查动作）。"""
+        internal_signals = {}
+        try:
+            import psycopg2
+            conn = psycopg2.connect(host="127.0.0.1", port=5432, dbname="trinity",
+                                    user="trinity", password="trinity")
+            cur = conn.cursor()
+            # 缺失向量（内部状态）
+            cur.execute("SELECT count(*) FROM memories WHERE embedding IS NULL AND status='active'")
+            missing = cur.fetchone()[0]
+            # 审计 24h 活跃（内部健康）
+            cur.execute("SELECT count(*) FROM audit_log WHERE timestamp > NOW() - interval '24 hours'")
+            audit_24h = cur.fetchone()[0]
+            conn.close()
+            if missing > 20:
+                internal_signals["internal_missing_vectors"] = missing
+            if audit_24h == 0:
+                internal_signals["internal_audit_silent"] = True
+        except Exception:
+            pass
+        return {"internal_priority": bool(internal_signals), "signals": internal_signals}

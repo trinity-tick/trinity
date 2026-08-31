@@ -10723,3 +10723,24 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 - 回滚：mirror tags 改动 git revert；聚合池重跑
   python benchmark/sync_pool_from_db_v2.py --active-only（维护窗内）；
   PG 三表删除需先确认无引用。
+
+---
+
+## 197. 自我公理 + 主动感知 + 内感受（2026-09，借鉴 Amaya/Active Perception/Interoceptive）
+
+### 197.1 自我可测试公理（Amaya 借鉴）
+- self_axioms.py：5 条公理验证（持续性/反思性/行为一致性/叙事一致性/自我预测）
+- 验证：**5/5 全 PASS（100/100）**——自我从"估计 65%"变"可验证 100"
+- self-axioms 维护链任务（27 个任务）
+
+### 197.2 主动感知（Active Perception 借鉴）
+- curiosity.active_perception：好奇主题 → 感知关注方向（perception_focus.json）
+- 验证：focused ['数据库优化']
+
+### 197.3 内感受注意（Interoceptive 借鉴）
+- action_loop.interoceptive_check：健康异常 → 内部优先
+- 验证：当前内部健康（正确不触发）
+
+### 197.4 意义
+- 自我可测试化：意识级从估计到可验证分数（公理 100）
+- 感知主动化 + 内感受化：感知从被动到主动+自我感知

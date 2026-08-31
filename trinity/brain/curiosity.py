@@ -66,3 +66,17 @@ def curiosity_drive(topics: list, max_search: int = 2) -> dict:
         except Exception as e:
             results["failed"].append({"topic": t["topic"], "error": str(e)[:60]})
     return results
+
+
+def active_perception(topics: list) -> dict:
+    """主动感知（Active Perception 借鉴，EXECUTION 197）：好奇主题 →
+    感知关注方向（记录感知偏好状态——未来感知扫描优先相关源）。"""
+    try:
+        st = os.path.expanduser("~/.trinity/perception_focus.json")
+        data = {"focus_topics": [t["topic"] for t in topics[:3]],
+                "ts": __import__("time").time()}
+        with open(st, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+        return {"focused": data["focus_topics"]}
+    except Exception:
+        return {"focused": []}
