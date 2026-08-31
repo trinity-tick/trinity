@@ -11873,3 +11873,20 @@ Cognitive Flexibility/Habit Formation/记忆重构
 ### 262.3 意义
 - 前瞻行动：今天做影响未来的事（See Tomorrow, Act Today）
 - 与世界排练互补：排练=行动预演；预见=未来规划
+
+---
+
+## 263. 执行-蒸馏-验证（2026-09，借鉴 Execute-Distill-Verify）
+
+### 263.1 实施（完成）
+- execute_distill_verify.py：execute（执行）/ distill（蒸馏候选）/
+  verify（有证据才采纳——防自我确认）
+- 大脑对应：**经验验证**（只学验证过的——防"我以为有效"）
+
+### 263.2 验证
+- 无证据（0 源）→ rejected；有证据（2 源/0.8）→ verified
+- 采纳率 50%（选择性学习）
+
+### 263.3 意义
+- 学习可靠性：经验需证据支持（防自我确认陷阱）
+- 与策略库互补：策略=提炼；EDV=验证门
