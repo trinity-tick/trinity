@@ -14551,3 +14551,19 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 
 ### 424.3 零测试包收敛进度
 - 59 → 56（wave/billing/oms/stocktake 已有测试——累计 4 包新增）
+
+---
+
+## 425. billing CalculateFee 全场景测试（2026-09，继续）
+
+### 425.1 落地（8 测试全 PASS——billing 域测试成型）
+- CalculateFee 5 场景: per_order 忽略 qty / per_item 乘法 / **阶梯定价集成**
+  / MinCharge 下限+MaxCharge 上限 / 禁用·过期·缺失规则拒绝
+- + 阶梯定价 3 测试（421 轮）= billing 域 8 测试
+- mock BillingRepository 14 方法（接口已就绪——零重构）
+
+### 425.2 验证
+- go build ./... RC 0（全仓）；提交 b69a411
+
+### 425.3 零测试包收敛
+- 59 → 55（+oms/billing）——wave/stocktake/oms/billing 核心域全覆盖
