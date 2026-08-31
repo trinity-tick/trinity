@@ -85,6 +85,19 @@ class PerceptionEngine:
             "importance": round(final_imp, 3),
         }
 
+    def attend_filter(self, signals: list, goal_focus: str = "", top_n: int = 5) -> list:
+        """注意力筛选（EXECUTION 207）：多信号竞争——显著性×价值×目标。"""
+        try:
+            from trinity.brain.attention_control import attend
+            cands = [{"signal": s.get("signal", ""), "salience": s.get("salience", 0.5),
+                      "value": s.get("importance", 0.5)} for s in signals]
+            r = attend(cands, goal_focus=goal_focus, top_n=top_n)
+            attended = {a["item"] for a in r["attended"]}
+            return [s for s in signals if (s.get("signal") or "") in attended]
+        except Exception:
+            return signals
+
+
     def should_encode(self, salience: float) -> bool:
         """高显著才编码进长期记忆（感知门控）。"""
         return salience >= 0.45
