@@ -11398,3 +11398,20 @@ Cognitive Flexibility/Habit Formation/记忆重构
 ### 234.3 意义
 - 社会认知最后一块：理解（ToM）→ 学习（观察/传染）→ **协作（执行）**
 - 集体智慧：任务按特长分配 + 冲突按信誉仲裁
+
+---
+
+## 235. 推理策略库（2026-09，借鉴 ReasoningBank ICLR 2026/Google）
+
+### 235.1 实施（完成）
+- reasoning_bank.py：extract_strategy（成功→effective/失败→avoid）/
+  recall_strategy（主题匹配检索）/ bank_report
+- 大脑对应：**推理策略学习**（从经验提炼——自我进化）
+
+### 235.2 验证
+- 提炼：'采用：先备份再升级数据库'/'避免：直接升级不备份'
+- 检索：'数据库升级' → 2 条策略（有效+避免）
+
+### 235.3 意义
+- 自我进化：经验 → 策略 → 指导未来推理（ReasoningBank）
+- 推理有"经验沉淀"：不重复犯错（avoid）+ 复用成功（effective）
