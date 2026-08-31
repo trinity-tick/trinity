@@ -25,6 +25,13 @@ def main():
     os.environ.setdefault("TRINITY_STORAGE_BACKEND", "postgresql")
 
     from trinity.adapters.postgresql import PostgreSQLAdapter
+    # EXECUTION 212: 跨域重组梦境（Discovery by Dreaming）
+    _recombine = {}
+    try:
+        from dream_replay import dream_recombine
+        _recombine = dream_recombine(3)
+    except Exception:
+        pass
     a = PostgreSQLAdapter(auto_connect=True)
     a.connect()
     try:
@@ -61,6 +68,7 @@ def main():
                     strengthened += 1
                 conn.commit()
         print(json.dumps({"dreamed": len(sampled), "strengthened": strengthened,
+                          "recombined": _recombine.get("combos", 0),
                           "write": args.write}, ensure_ascii=False))
         return 0
     finally:
@@ -68,3 +76,46 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+def dream_recombine(max_combos: int = 3) -> dict:
+    """跨域重组梦境（EXECUTION 212，Discovery by Dreaming 借鉴）：
+    随机抽不同主题记忆 → 组合生成新连接（REM 创造性梦境）。"""
+    import psycopg2
+    conn = psycopg2.connect(host="127.0.0.1", port=5432, dbname="trinity",
+                            user="trinity", password="trinity")
+    cur = conn.cursor()
+    # 抽不同类别的记忆（跨域）
+    cur.execute("""
+        SELECT category, left(content, 60), memory_id FROM memories
+        WHERE status='active' AND category NOT IN ('perception', 'self-identity', 'dcpm-core')
+        ORDER BY RANDOM() LIMIT %s
+    """, (max_combos * 2,))
+    rows = cur.fetchall()
+    conn.close()
+    combos = []
+    for i in range(0, len(rows) - 1, 2):
+        if i + 1 >= len(rows):
+            break
+        c1, t1, id1 = rows[i]
+        c2, t2, id2 = rows[i + 1]
+        if c1 == c2:
+            continue
+        combos.append({
+            "dream": f"梦境连接：『{t1}』({c1}) × 『{t2}』({c2})",
+            "from": id1[:10], "to": id2[:10],
+            "cross_domain": True,
+        })
+    # 写入梦境记忆（组合记录）
+    if combos:
+        try:
+            import json as _j
+            from trinity import Trinity
+            m = Trinity(adapter="postgresql")
+            for cb in combos[:2]:
+                m.ingest("[dream-recombine] " + cb["dream"][:250],
+                         category="dream-recombine", tags=["dream", "recombine"],
+                         importance=0.6, wait_backfill=True)
+        except Exception:
+            pass
+    return {"combos": len(combos), "dreams": [c["dream"] for c in combos[:3]]}
