@@ -14387,3 +14387,20 @@ Cognitive Flexibility/Habit Formation/记忆重构
 ### 415.2 SmartCos 提交
 - cf3d332（挂载）+ 97b7549（RL+SKIP）——累计 8 个重构提交
 - 遗留诚实记录: vet 2 个既有 IPv6 警告；CDC 完整链路需 ClickHouse
+
+---
+
+## 416. 蓝图深化：L3 自动化 + L4 对话 + 调度均衡（2026-09，用户要求"继续"）
+
+### 416.1 新增（4 模块 + 10 测试全 PASS）
+- L3 自动补货下单链: model/auto_order.go（ROP 触发→EOQ/缺口→草稿状态机）
+- L3 自动波次释放: picking/auto_release.go（阈值/抢占/超时/等待四路径）
+- L4 NL 意图解析: llm/nl_query.go（中文→库存/订单/补货/波次意图+实体提取）
+- 调度负载均衡: scheduler/assigner.go（技能过滤+最小负载+就近+批量均衡）
+
+### 416.2 修复
+- NL qty 提取误吃 SKU 数字（先剥离 SKU 串再匹配）
+
+### 416.3 蓝图进度
+- L1 公式 ✅ / L2 RL ✅ / L3 自动化 ✅ / L4 对话入口 ✅ / L5 孪生（长期）
+- SmartCos 累计 9 个重构提交
