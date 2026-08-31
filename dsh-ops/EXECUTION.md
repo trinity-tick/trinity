@@ -11611,3 +11611,18 @@ Cognitive Flexibility/Habit Formation/记忆重构
 ### 246.3 意义
 - 时间盲修复（chronos）：Trinity 知道"现在"与"节律"
 - 节律健康检查：自省/整合/感知按时（大脑昼夜节律）
+
+---
+
+## 247. 记忆索引（2026-09，借鉴 The Library Theorem）
+
+### 247.1 实施（完成）
+- memory_index.py：build_index（类别+主题索引构建）/ index_lookup（快速定位）
+- 大脑对应：**索引化记忆**（图书馆定理——外部组织扩展推理容量）
+
+### 247.2 验证
+- 索引：15 类别 + 12 主题；查找 'self' → self-reflection
+
+### 247.3 意义
+- 记忆组织化：索引让记忆可高效访问（不扫全库）
+- 推理容量扩展：好索引 = 好推理（Library Theorem）
