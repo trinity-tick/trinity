@@ -14459,3 +14459,23 @@ Cognitive Flexibility/Habit Formation/记忆重构
   metrics_wire.go 先例）——留下轮按域分批拆
 - billing/stocktake/oms 补测试继续
 - errcheck 门禁已有（.golangci.yml）——843 忽略错误分批清理
+
+---
+
+## 420. gateway 巨型文件拆分完成（2026-09，自优化清单#1 落地）
+
+### 420.1 拆分结果
+- handler.go: **8627 → 2021 行**（-77%）
+- 新增 4 个域文件: handler_ai.go（19 函数）/handler_openapi.go（2）/
+  handler_auth.go（5）/handler_helpers.go（4）——同 package 机械移动
+- unused import 自动清理: 90+ 行（编译器引导 12 轮迭代）
+
+### 420.2 验证
+- go build ./internal/gateway/ RC: 0
+- go test ./internal/... **FAIL_COUNT: 0**（110 包全绿）
+- 提交: 44db086
+
+### 420.3 自优化清单状态
+- #1 gateway 拆分 ✅（本轮）· #2 补测试 wave ✅（419）
+- #3 metrics 接线 ✅（419）· #4 oms bak 清理 ✅（419）
+- 剩余: billing/stocktake/oms 补测试 + 843 忽略错误分批（后续持续）
