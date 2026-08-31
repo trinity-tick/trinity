@@ -14515,3 +14515,21 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 
 ### 422.3 剩余 5 处写忽略（ai-carrier/ai-dws/bi/tms/warehouse3d）
 - 均为辅助写（计数/布局缓存）——建议加日志（后续分批）
+
+---
+
+## 423. 写忽略清单清零（2026-09，自优化持续）
+
+### 423.1 落地
+- ai-carrier/tms: 容量确保 INSERT 失败→log（容量计数丢失可观测）
+- ai-dws: 容差规则种子 INSERT 失败→log（功能静默缺失可观测）
+- warehouse3d seed / 读容错: 保持（分寸——seed 失败只影响 demo 布局）
+- 验证: 3 包 build 0 + 测试 ok；提交 SmartCos
+
+### 423.2 写忽略清单状态
+7 处全部处理完毕（2 处一致性修复 422 + 3 处日志 423 + 2 处合理保持）
+= 843 忽略错误的"真实风险"维度清零
+
+### 423.3 后续
+- 零测试包收敛（stocktake/oms 需 mock 重构——记录在案）
+- gateway_test 的测试二进制 unused import（若有——随测试补齐自然解决）
