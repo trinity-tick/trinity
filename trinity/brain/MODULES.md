@@ -222,3 +222,28 @@
 - autopoiesis（自我层——自我维持）
 - spontaneous_evolution（自我层——零奖赏进化）
 - think_before_speak（情绪层——表达评估）
+
+## 新增机制（EXECUTION 382——369-380 轮 11 个新模块）
+
+### 感知层（+1）
+- history_perception
+- proxy_attention
+
+### 记忆层（+2）
+- information_isolation
+- latent_mixture
+
+### 认知层（+3）
+- episodic_rl
+- flow_optimization
+- hindsight_relabel
+
+### 情绪层（+1）
+- emotion_aware_social
+
+### 自我层（+3）
+- algorithmic_individuation
+- personhood
+- social_world_model
+
+### 社会层（+1）
