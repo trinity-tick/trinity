@@ -11047,3 +11047,20 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 ### 214.3 意义
 - 学习升级：条件反射（成功率）→ 奖赏信号（多巴胺）——情绪化学习
 - 奖赏水平 → 行为倾向（乐观探索/悲观谨慎）——奖赏塑造行为
+
+---
+
+## 215. 观察学习（2026-09，借鉴 social/observational learning）
+
+### 215.1 实施（完成）
+- observational_learning.py：observe_agent（活动/分享/交易/信誉→行为模式）/
+  learn_from（有效模式→学习记忆）
+- 大脑对应：**观察学习/模仿**——从他人行为学习（文化传播基础）
+
+### 215.2 验证
+- 观察：default 高频活动 create（79 次）
+- 学习：'default 高频活动是 create（79次）'写入 observational-learning
+
+### 215.3 意义
+- 社会学习闭环：知识传播（共享）→ ToM（理解）→ **观察学习（模仿）**
+- 从他人经验中学习（不只是自己的经验）——社会智能完整
