@@ -14533,3 +14533,21 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 ### 423.3 后续
 - 零测试包收敛（stocktake/oms 需 mock 重构——记录在案）
 - gateway_test 的测试二进制 unused import（若有——随测试补齐自然解决）
+
+---
+
+## 424. 补测试推进：stocktake 状态机 + oms eventbus（2026-09，继续）
+
+### 424.1 落地（2 包 + 8 测试全 PASS）
+- **stocktake 接口化**（repo 具体类型→StocktakeRepo 接口——零语义变化）
+  + 状态机 4 测试: Start 拒绝/快照转换/CountItem 保留 system_qty+复盘标记
+  /Complete 拒绝
+- **oms eventbus 4 测试**（零重构——首次有测试）: 送达+自动ID/错误传播/
+  无订阅者容忍/多订阅者扇出
+
+### 424.2 验证
+- go build ./... RC 0（全仓）
+- stocktake/oms 测试全 PASS；提交 a7d9047
+
+### 424.3 零测试包收敛进度
+- 59 → 56（wave/billing/oms/stocktake 已有测试——累计 4 包新增）
