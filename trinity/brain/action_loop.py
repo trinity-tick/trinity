@@ -162,6 +162,12 @@ class ActionLoop:
                 reward(action_name, bool(result.get("done")), severity)
             except Exception:
                 pass
+            # 2026-09 (EXECUTION 218): 习惯形成——重复成功→自动化
+            try:
+                from trinity.brain.habit_formation import track
+                track(action_name, bool(result.get("done")))
+            except Exception:
+                pass
             self.history.append(log_entry)
             self._save()
             results.append(log_entry)
