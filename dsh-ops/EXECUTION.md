@@ -11578,3 +11578,20 @@ Cognitive Flexibility/Habit Formation/记忆重构
 ### 244.3 意义
 - 记忆蒸馏：多细节 → 核心要点（语义概括）
 - 与 DCPM（信念）互补：DCPM=归纳信念；gist=内容蒸馏
+
+---
+
+## 245. 社会情感学习（2026-09，借鉴 SEL Scientific Reports 2026）
+
+### 245.1 实施（完成）
+- social_emotional_learning.py：learn_from_social（观察他人信誉/分享→
+  学习调节策略）/ sel_status
+- 大脑对应：**社会情感学习**（从社会互动中学情绪——SEL）
+
+### 245.2 验证
+- 学习：'default 信誉偏低——学会：需要改进行为'
+- 状态：策略积累中
+
+### 245.3 意义
+- 社会×情绪整合：从社会评价学习情绪调节（不只是内部）
+- 与传染互补：传染=被动传递；SEL=主动学习
