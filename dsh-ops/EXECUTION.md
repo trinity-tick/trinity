@@ -12940,3 +12940,19 @@ Cognitive Flexibility/Habit Formation/记忆重构
 ### 328.3 意义
 - 行为真实性：理性与冲动平衡（社会模拟）
 - 与快慢决策互补：快慢=路径；本模块=回路激励
+
+---
+
+## 329. 信念协作（2026-09，借鉴 WWW 2026 Belief-Driven Collaboration）
+
+### 329.1 实施（完成）
+- belief_collaboration.py：collaborate（信念→投入策略）+ belief_update
+  （贝叶斯更新）
+- 大脑对应：**信念驱动协作**（按伙伴信念调协作——贝叶斯均衡）
+
+### 329.2 验证
+- 高信念 → deep_collab；低信念 → guarded；更新 +0.06
+
+### 329.3 意义
+- 协作智能：信念驱动投入（不盲目不保守）
+- 与协调互补：分派=角色；本模块=信念驱动
