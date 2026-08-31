@@ -314,6 +314,23 @@ class _AdvancedMixin:
             ("surprise_encoding", "trinity.brain.surprise_encoding"),
             ("reflection_loop", "trinity.brain.reflection_loop"),
             ("stale_revocation", "trinity.brain.stale_revocation"),
+            # 2026-09 (EXECUTION 297): 281-296 轮机制
+            ("context_recovery", "trinity.brain.context_recovery"),
+            ("step_confidence", "trinity.brain.step_confidence"),
+            ("scheduled_forgetting", "trinity.brain.scheduled_forgetting"),
+            ("introspective_reward", "trinity.brain.introspective_reward"),
+            ("multifactor_value", "trinity.brain.multifactor_value"),
+            ("rate_distortion", "trinity.brain.rate_distortion"),
+            ("autobiographical_training", "trinity.brain.autobiographical_training"),
+            ("feeling_first", "trinity.brain.feeling_first"),
+            ("consciousness_index", "trinity.brain.consciousness_index"),
+            ("narrative_memory", "trinity.brain.narrative_memory"),
+            ("hybrid_memory", "trinity.brain.hybrid_memory"),
+            ("thought_depth", "trinity.brain.thought_depth"),
+            ("compression_spectrum", "trinity.brain.compression_spectrum"),
+            ("evidence_plasticity", "trinity.brain.evidence_plasticity"),
+            ("persistence_loop", "trinity.brain.persistence_loop"),
+            ("opponent_awareness", "trinity.brain.opponent_awareness"),
         ]:
             try:
                 __import__(mod)
