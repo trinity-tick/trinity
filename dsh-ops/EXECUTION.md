@@ -10955,3 +10955,21 @@ C:\Users\Administrator\.trinity\store → 残留（646MB 锁，D 有副本，PG 
 ### 209.3 意义
 - 认知从"过去"到"未来"：回忆→模拟（预测性认知）
 - 创造性：假设空间推演（反事实思考）
+
+---
+
+## 210. 资源自适应（2026-09，借鉴 SAA）
+
+### 210.1 实施（完成）
+- resource_adaptation.py：assess_resources（记忆量/缺失/性能/预算）/
+  adapt_strategy（饱和→遗忘增强；缺失→自愈优先；慢→简化检索）
+- 大脑对应：**资源自适应**（压力下降级处理）
+
+### 210.2 验证
+- 当前：16123 记忆/9 缺失/72ms → normal+normal（资源充足正确）
+- 模拟饱和：25000/50/3500ms → forgetting strengthen + self_heal urgent
+  + retrieval simplify（紧张自适应正确）
+
+### 210.3 意义
+- 系统级自适应：资源状态驱动策略（饱和/缓慢/缺失→对应调整）
+- 自组织：不是固定配置，而是按资源状态自我调节
