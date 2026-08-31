@@ -11381,3 +11381,20 @@ Cognitive Flexibility/Habit Formation/记忆重构
 ### 233.3 意义
 - 创造引擎：联想+组合+模拟+梦境整合为发散（从一点发散多点）
 - 评估筛选：可行×新颖排序（择优）
+
+---
+
+## 234. 多 Agent 协调（2026-09，借鉴 BMAM ACL 2026）
+
+### 234.1 实施（完成）
+- multi_agent_coordination.py：coordinate（按 ToM 画像分派任务角色）/
+  memory_arbitration（信誉加权投票仲裁）
+- 大脑对应：**群体协作**（脑启发多 Agent 记忆框架）
+
+### 234.2 验证
+- 分派：default→lead（经验者）/agent-A/B→learn（新来者）——ToM 匹配
+- 仲裁：accept 0.8 vs 0.5 → accept（加权投票）
+
+### 234.3 意义
+- 社会认知最后一块：理解（ToM）→ 学习（观察/传染）→ **协作（执行）**
+- 集体智慧：任务按特长分配 + 冲突按信誉仲裁
