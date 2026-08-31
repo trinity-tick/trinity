@@ -14498,3 +14498,20 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 ### 421.3 下一批
 - verification/bi/inventory_repo 忽略错误逐文件修（每文件验证）
 - 零测试包继续（stocktake service CRUD 需 mock repo——下轮）
+
+---
+
+## 422. 忽略错误分类修复（2026-09，自优化持续）
+
+### 422.1 分类结论（843 忽略错误重新定性）
+- 读忽略 65 处 = 统计容错（合理设计——不修）
+- 写忽略 7 处 = 真实风险 → 逐个审查
+- 其余 ~770 = 局部变量忽略（多数无害——lint 分批）
+
+### 422.2 真实风险修复（outbound 2 处数据一致性 bug）
+- 事务内行状态更新失败被忽略→部分提交不一致 → 修复: 失败中止回滚
+- 拣货行 UpdateLine 失败被忽略 → 行状态脱节 → 修复: 返回错误
+- 验证: build 0 + outbound 测试 ok；提交 SmartCos
+
+### 422.3 剩余 5 处写忽略（ai-carrier/ai-dws/bi/tms/warehouse3d）
+- 均为辅助写（计数/布局缓存）——建议加日志（后续分批）
