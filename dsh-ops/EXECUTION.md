@@ -14924,3 +14924,21 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 ### 446.3 最终状态
 - 全仓 build 0 · internal 67 包 ok / FAIL 0
 - 自优化测试矩阵: 40+ 新测试（9 包）· 真实 bug 修复 4 个
+
+---
+
+## 447. AST 迁移工具尝试 + 分寸止损（2026-09，诚实记录）
+
+### 447.1 过程
+- Go AST 工具（go/parser+ast）写成——运行 TOTAL: 0（调试未完成——
+  Inspect/tag 匹配链路某环节静默跳过）
+- 决策: 调试成本超预期 → 工具留档（dsh-ops/fix_dbtags2.go）→ 止损
+
+### 447.2 现场确认
+- 仓库干净（无残留修改）
+- build 0 · internal 67 包 ok · FAIL_COUNT 0（全绿保持）
+
+### 447.3 技术债最终状态
+- 1034 字段缺 db tags——技术债文档已完整（含 AST 工具半成品留档）
+- SplitRule 生产修复保留（444 轮）
+- 后续: 专项调试 AST 工具（工具主体已就绪——Inspect 链路待查）或人工分批
