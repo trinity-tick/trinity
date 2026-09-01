@@ -14739,3 +14739,16 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 
 ### 433.4 教训
 - 未提交的工作区文件 = 零保护——**重要文件先 commit 再改**
+
+---
+
+## 434. stocktake handler 测试（2026-09，强化纪律后首批）
+
+### 434.1 落地（3 测试 PASS——零冲突验证后写入）
+- List 分页回显（page=2/page_size=5/total 透传）
+- GetStocktake 未找到 → 404
+- Create payload 绑定（mock 捕获 created）
+- write 前先 glob 确认无既有测试文件（433 教训落实）
+
+### 434.2 验证
+- handler 包 ok + 全仓 build 0；提交 SmartCos
