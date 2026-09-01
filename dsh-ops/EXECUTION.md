@@ -14958,3 +14958,17 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 
 ### 448.3 工具资产
 - dsh-ops/fix_dbtags2.go（AST 迁移工具——可复用于任何 Go 项目）
+
+---
+
+## 449. 工具盲区发现与修复（2026-09，db tags 补完）
+
+### 449.1 发现
+- oms_rule SplitRule 的 5 个纯 json 字段（无 gorm）被 448 工具跳过
+  （工具条件要求含 gorm）——sqlx Scan 仍失败（max_weight）
+- 修复: 手补 5 字段 db tags → scan 测试 PASS
+
+### 449.2 意义
+- 工具盲区确认: "纯 json 无 gorm"字段需要 db 时工具覆盖不到
+- 技术债文档需再更新（第二批: 纯 json 字段扫描）
+- 全量 FAIL_COUNT 0 保持；提交 SmartCos
