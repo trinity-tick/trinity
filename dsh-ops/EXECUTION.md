@@ -14972,3 +14972,17 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 - 工具盲区确认: "纯 json 无 gorm"字段需要 db 时工具覆盖不到
 - 技术债文档需再更新（第二批: 纯 json 字段扫描）
 - 全量 FAIL_COUNT 0 保持；提交 SmartCos
+
+---
+
+## 450. 纯 json 字段分析与分寸决策（2026-09，继续）
+
+### 450.1 扫描与分析
+- 纯 json 字段 4373 个——**大部分是 API DTO（无需 db tag）**
+- 需要的: 混合使用 struct（gorm 写+sqlx 读）——只能测试暴露
+- 文档: docs/smartcos_techdebt_purejson.md（策略固化）
+
+### 450.2 决策（分寸）
+- 不做 4373 盲改（大量误伤）
+- 测试驱动模式: 每覆盖一个 repo → 暴露 → 修复（已验证 4 个 bug）
+- 全绿保持: BUILD 0 + FAIL_COUNT 0
