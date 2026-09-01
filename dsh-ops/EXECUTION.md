@@ -14871,3 +14871,20 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 ### 443.2 门禁状态
 - BUILD 0 · VET 1（既有 IPv6 警告×2——记录）· TEST 0
 - 前端 typecheck 未跑（本次跳过——脚本含条件分支）
+
+---
+
+## 444. SplitRule db tags 修复（2026-09，第三个测试发现的生产 bug）
+
+### 444.1 发现与修复
+- oms ListSplitRules 测试暴露: SplitRule struct 只有 gorm tag 无 db tag
+  → sqlx SelectContext 报 missing destination name owner_id
+  → **生产 ListSplitRules 接口必然失败**（真实 bug！）
+- 修复: 12 字段补 db tags；测试 PASS（filters+pagination+scan）
+
+### 444.2 修正 441 轮误判
+- oms "双 package" 实为测试文件 package 名写错（非既有问题）——更正记录
+
+### 444.3 测试发现的生产 bug 累计
+- 防超卖 CAS 竞态（441 前轮）· outbound 一致性（422）· confidence 语义（439）
+- **SplitRule db tags（本轮）= 4 个**
