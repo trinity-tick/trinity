@@ -15052,3 +15052,17 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 
 ### 453.2 sqlmock 端点测试模式成熟
 - handler 层 sqlmock（repo 注入）+ mock svc（业务层）双模式就绪
+
+---
+
+## 454. AuditRule db tags 修复（2026-09，第 6 个测试发现的真实 bug）
+
+### 454.1 发现与修复
+- AuditRule struct 缺 created_at/updated_at db tags
+  → ListAuditRules 生产接口失败（同 SplitRule 模式）
+- 双定义注意: oms/model.go 与 oms_rule/model.go 各有 AuditRule——两处都修
+- 验证: 端点测试 PASS + 全量 FAIL_COUNT 0；提交 SmartCos
+
+### 454.2 教训
+- 双定义模型（同 struct 多处定义）——修复需覆盖所有副本
+- 测试驱动暴露持续有效

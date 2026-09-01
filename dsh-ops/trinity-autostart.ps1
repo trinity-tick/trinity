@@ -66,6 +66,7 @@ function Invoke-Script {
 
 $lastMaint = (Get-Date).AddHours(-25)
 $lastDaily = ""
+$lastWeekly = ""  # 2026-09-01: 每周质量门禁
 
 Write-Log "autostart loop started (supervisor=${SupervisorIntervalSec}s, maint=${MaintIntervalSec}s)"
 
@@ -99,6 +100,12 @@ while ($true) {
     if ((Test-Path $Maintenance) -and $now.Hour -eq 3 -and $now.Minute -lt 10 -and $lastDaily -ne $today) {
         Invoke-Script -Path $Maintenance -ArgsList @("-Tasks", "mirror,pg-backfill,decay,tiers,consolidate,dedup,sync,compact,agent-ttl,active-health,backup,observe,value-recalib,perception-bridge,dcpm-consolidate,integrity-monitor,self-reflect,reconcile") -Label "maintenance(decay,tiers,sync)" -TimeoutSec 2400  # 2026-09-01: +pg-backfill 反向同步 +reconcile 对账
         $lastDaily = $today
+    }
+
+    # ── 每周一 03:10-03:30：质量门禁（500q R@5 基线 0.916，2026-09-01）────────
+    if ((Test-Path $Maintenance) -and $now.DayOfWeek -eq 'Monday' -and $now.Hour -eq 3 -and $now.Minute -ge 10 -and $now.Minute -lt 30 -and $lastWeekly -ne $today) {
+        Invoke-Script -Path $Maintenance -ArgsList @("-Tasks", "quality-gate") -Label "maintenance(quality-gate)" -TimeoutSec 1200
+        $lastWeekly = $today
     }
 
     Start-Sleep -Seconds $SupervisorIntervalSec
