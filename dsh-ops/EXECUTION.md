@@ -14807,3 +14807,16 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 ### 438.2 发现（诚实记录）
 - 实现小缺陷: confidence 的 count 无条件累加——空数据置信度虚高
 - 今日行日期边界——不同时段运行 forecast7d[0] 可能不同（flaky 源）
+
+---
+
+## 439. confidence 缺陷修复（2026-09，测试驱动）
+
+### 439.1 修复（438 轮测试发现的实现缺陷）
+- GetDemandForecast count: 无条件 7 → **非零天数计数**
+- 效果: 空数据置信度 0.85 → 0.5 降级（不再虚高）
+- 测试断言对齐修复后语义（3 测试 PASS）
+
+### 439.2 意义
+- 测试驱动开发闭环: 测试发现缺陷 → 确认业务语义 → 修复 → 断言锁定
+- 提交 SmartCos

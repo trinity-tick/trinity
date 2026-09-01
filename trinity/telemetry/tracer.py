@@ -53,7 +53,10 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 # ── Configuration ────────────────────────────────────────────────────────
 
-_TELEMETRY_ENABLED = os.environ.get("TRINITY_TELEMETRY_ENABLED", "1") == "1"
+# 2026-09-01 (P6 修复): 遥测导出默认关闭——本地无 Jaeger/OTLP 端点时，每个进程的
+# 后台 flush 线程都会周期性刷 "Failed to flush spans to Jaeger"（WinError 10061）噪音。
+# 需要追踪时显式设 TRINITY_TELEMETRY_ENABLED=1（并可配 OTEL_EXPORTER_OTLP_ENDPOINT）。
+_TELEMETRY_ENABLED = os.environ.get("TRINITY_TELEMETRY_ENABLED", "0") == "1"
 _DEFAULT_SERVICE = os.environ.get("OTEL_SERVICE_NAME", "trinity")
 _OTLP_ENDPOINT = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318")
 _BATCH_SIZE = int(os.environ.get("OTEL_BSP_MAX_EXPORT_BATCH_SIZE", "512"))
