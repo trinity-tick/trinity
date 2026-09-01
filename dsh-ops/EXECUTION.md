@@ -14656,3 +14656,50 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 
 ### 431.3 sqlmock 复制进度
 - outbound/flow(3) + stocktake/repo(4) + inventory/repo(3) = 10 个 repo 测试
+
+---
+
+## 432. 昨晚运行检查 + 每日链任务修复（2026-09-01 晨，运维）
+
+> 检查 8/30 晚闭环修复后的运行结果，发现并修复 3 个每日链失败任务。
+
+### 432.1 昨晚修复验证（全部生效）
+- **mirror 连续 2 日 OK**（8/31 03:03、9/1 03:01）——PG 缺表根除生效
+- **聚合池保持 32MB**（11,569 条，8/30 23:56 写入后未被覆盖）；/agents/memory/search 正常返回
+- 服务全在线：8000/8001/8002/8003/8010/5432；API 当前实例稳定运行 19.7h
+- 进化/认知链持续运转：health+evolution+session-auto 每 4-6h 全 OK；self-axioms/
+  sensory-integration/memory-manager/dream-replay/proactive 等 8/31 全天 10+ 次 OK
+
+### 432.2 发现的问题
+1. **8/31 两次意外重启**（Event 41 @10:39、13:15，均非正常关机）——重启后全服务由
+   supervisor/autostart 自愈拉起；13:15 后稳定至今。原因未明（无蓝屏记录）。
+2. **sync 连续 2 日 FAILED**：~/.trinity/sync_hermes_trinity.py 不存在（本机未部署
+   Hermes 双向同步）；Marvis 输出含替换符时 GBK 打印 UnicodeEncodeError。
+3. **backup 连续 2 日 FAILED**：$backupCmd 是 shell 语法直接写入 python 临时脚本
+   （-File '\D:\trinity-code\...' 前导反斜杠 + 非法 python），SyntaxError；
+   实际备份仍成功（Direct 分支）。
+4. **integrity-monitor 9/1 FAILED**：tsv_zh 覆盖率 98.74%（216 条缺失）。
+5. **TRINITY_STORE 行含 TAB 字节**：maintenance 156 行 "D:<TAB>rinity-data\store"
+   （写入时 \t 被转义）→ env 无效路径。
+6. **C/D 双库并存**：C:\Users\Administrator\.trinity\store（mirror 读取，28,031 条）
+   vs D:\trinity-data\store（维护租约库，28,024 条，差 7 条）。迁移 D 盘意图下
+   未完全统一（memories 数据当前无消费者分叉，建议后续统一）。
+7. embed keepalive 间歇超时（8/31 全天每 5-10min）——无害警告，观察。
+
+### 432.3 修复（dsh-ops/trinity-dsh-maintenance.ps1）
+1. TRINITY_STORE 行 TAB → "D:\trinity-data\store"（正确路径）。
+2. sync 任务：Hermes 脚本缺失时 SKIP（exit 0）+ 补 import os + UTF-8 reconfigure。
+3. backup 任务：$backupCmd 改为合法 python（subprocess 数组 + raw 路径）+
+   pg_restore_drill 恢复演练。
+4. integrity-monitor：跑 scripts/backfill_tsv_zh.py 回填 216 条 → OK。
+
+### 432.4 验证
+- sync : OK（HERMES SKIP + MARVIS exit 0）✓
+- backup : OK（RESTORE DRILL PASS：memories 33,186/33,186 恢复）✓
+- integrity-monitor : OK（tsv_zh 1.0 / audit OK / lease completed）✓
+- 维护脚本 PARSE OK，编码保持 UTF-8 BOM + LF
+
+### 432.5 遗留建议
+- 统一 C/D 双库（C 拷贝到 D 或镜像路径改 D，维护窗执行）；
+- 8/31 两次意外重启排查电源/硬件（Event 41）；
+- evolve-auto/evolve-env 任务存在同类 shell-语法 bug（不在 daily 链，择机修）。
