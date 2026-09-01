@@ -15014,3 +15014,16 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 ### 450c.2 测试发现的真实 bug 累计（5 个）
 - 防超卖 CAS 竞态 · outbound 一致性 · confidence 语义 · SplitRule db tags
 - **picking Wave Notes（本轮）**
+
+---
+
+## 451. oms handler 端点测试补充（2026-09，继续）
+
+### 451.1 落地（3 测试 PASS——oms 9+3=12 测试）
+- MatchGift 端点（matched_gifts 回显）
+- ApplyGift 端点（成功+服务错误 500 路径）
+- read-tail append 模式（避免覆盖——433 教训的规范应用）
+
+### 451.2 纪律执行记录
+- read 尾部确认后 append（非覆盖）✓
+- 测试文件现状先查 ✓
