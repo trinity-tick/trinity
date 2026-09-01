@@ -346,9 +346,13 @@ if (Test-Path $SysPy) {
 }
 
 Save-State $state
-# 2026-09 (EXECUTION 144): embed 保活——每 5 分钟 ping bge-m3 保持常驻
-    try {
-        $ka = & $Py "D:\trinity-code\scripts\embed_keepalive.py" 2>&1
-        if ($LASTEXITCODE -ne 0) { Write-Log "embed keepalive warn: $ka" "WARN" }
-    } catch {}
+# 2026-09-01 (P2 修复): 移除 embed keepalive 僵尸探针——Ollama 解耦（EXECUTION 104.6）后
+# trinity 不再依赖 Ollama 常驻（observe: ollama_established_pids=[] 且向量检索正常），
+# 该探针每轮超时只产生噪音 WARN（2026-09-01 单日 9 次）。如需保活语义，跑 observe 任务即可。
+# 2026-09-01 (P1b): 结构事件水位告警——dsh_events 超过 24h 无新事件 = 插件 structure_sync
+# 断流（2026-08-24 起曾静默冻结 8 天无人发现），立即 WARN 提醒排查插件同步链路。
+if (Test-Path $SysPy) {
+    $wm = & $SysPy "$TrinityRoot\scripts\structure_watermark_check.py" 2>&1 | Out-String
+    if ($wm -match "STALE") { Write-Log ("structure watermark STALE: " + $wm.Trim()) "WARN" }
+}
 Write-Log "supervisor pass complete"

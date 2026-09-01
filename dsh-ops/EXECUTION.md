@@ -14794,3 +14794,16 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 
 ### 437.3 sqlmock 复制进度
 - 6 repo / 18 测试（+dashboard 4）
+
+---
+
+## 438. 需求预测测试（2026-09，继续）
+
+### 438.1 落地（3 测试 PASS）
+- rising/falling 趋势判定（firstHalf vs lastHalf ±5 阈值）
+- empty → stable（置信度 0.85——记录实现缺陷: count 无条件 7）
+- forecast7d[0] 对齐现实（今日行 Since/24 取整边界）
+
+### 438.2 发现（诚实记录）
+- 实现小缺陷: confidence 的 count 无条件累加——空数据置信度虚高
+- 今日行日期边界——不同时段运行 forecast7d[0] 可能不同（flaky 源）

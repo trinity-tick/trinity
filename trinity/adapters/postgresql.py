@@ -405,12 +405,21 @@ class PostgreSQLAdapter(StorageAdapter):
         try:
             with self._get_conn() as conn:
                 with conn.cursor() as cur:
-                    # Split and execute each statement
-                    for statement in init_sql.split(";"):
-                        stmt = statement.strip()
-                        if stmt:
-                            cur.execute(stmt)
-                    conn.commit()
+                    # 2026-09-01 (P4 修复): 初始化全程持 pg_advisory_lock（会话级，
+                    # 连接断开自动释放）——多进程同时首次建表时，末尾的
+                    # INSERT ... WHERE NOT EXISTS 会互相等 RowExclusiveLock 触发
+                    # deadlock（每日链 self-reflect 段每天出现，被容错吞掉但刷屏）。
+                    # advisory lock 把各进程的初始化串行化，幂等无害。
+                    cur.execute("SELECT pg_advisory_lock(72744721)")
+                    try:
+                        # Split and execute each statement
+                        for statement in init_sql.split(";"):
+                            stmt = statement.strip()
+                            if stmt:
+                                cur.execute(stmt)
+                        conn.commit()
+                    finally:
+                        cur.execute("SELECT pg_advisory_unlock(72744721)")
             logger.info("PostgreSQL schema created/verified")
         except Exception as e:
             logger.warning("Schema creation issue (may already exist): %s", e)

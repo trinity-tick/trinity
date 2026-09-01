@@ -27,10 +27,32 @@ def main():
     report["checks"]["embedding"] = {"total": total, "covered": with_vec,
                                      "coverage": round(with_vec / total, 4) if total else 1.0}
 
-    # 2) tsv_zh coverage
+    # 2) tsv_zh coverage（2026-09-01 P3 修复：自愈前置——先回填缺失的 content_tsv_zh
+    #    再算覆盖率，消除"新写入未回填 → 覆盖率跌破 0.99 → 误报 FAILED"的阈值竞态
+    #    （2026-09-01 03:15 实测 missing=205 误报，09:07 自愈到 56 才 OK）。
+    #    回填上限 500 行/次，幂等，与 scripts/backfill_tsv_zh.py 同语义）
+    tsv_healed = 0
+    try:
+        import jieba
+        jieba.setLogLevel(60)  # quiet
+        cur.execute("SELECT memory_id, content FROM memories WHERE status='active' AND content_tsv_zh IS NULL LIMIT 500")
+        for _mid, _content in cur.fetchall():
+            if not _content:
+                cur.execute("UPDATE memories SET content_tsv_zh = ''::tsvector WHERE memory_id = %s", (_mid,))
+            else:
+                _words = [w.strip() for w in jieba.cut(str(_content)) if w.strip() and len(w.strip()) <= 40]
+                if not _words:
+                    cur.execute("UPDATE memories SET content_tsv_zh = ''::tsvector WHERE memory_id = %s", (_mid,))
+                else:
+                    cur.execute(
+                        "UPDATE memories SET content_tsv_zh = to_tsvector('simple', %s) WHERE memory_id = %s",
+                        (" ".join(_words), _mid))
+            tsv_healed += 1
+    except Exception:
+        pass
     cur.execute("SELECT count(*) FROM memories WHERE status='active' AND content_tsv_zh IS NULL")
     missing_tsv = cur.fetchone()[0]
-    report["checks"]["tsv_zh"] = {"missing": missing_tsv,
+    report["checks"]["tsv_zh"] = {"missing": missing_tsv, "healed": tsv_healed,
                                   "coverage": round((total - missing_tsv) / total, 4) if total else 1.0}
 
     # 3) audit integrity (via API)
@@ -72,6 +94,19 @@ def main():
         except Exception:
             pass
     report["checks"]["self_heal"] = {"embedding_backfilled": healed}
+
+    # 2026-09-01 P3: 判定前重查覆盖率（两个自愈都跑完后），避免用修复前的旧值判 FAIL
+    try:
+        cur.execute("SELECT count(*), count(embedding) FROM memories WHERE status='active'")
+        _t2, _v2 = cur.fetchone()
+        report["checks"]["embedding"] = {"total": _t2, "covered": _v2,
+                                         "coverage": round(_v2 / _t2, 4) if _t2 else 1.0}
+        cur.execute("SELECT count(*) FROM memories WHERE status='active' AND content_tsv_zh IS NULL")
+        _m2 = cur.fetchone()[0]
+        report["checks"]["tsv_zh"]["missing"] = _m2
+        report["checks"]["tsv_zh"]["coverage"] = round((_t2 - _m2) / _t2, 4) if _t2 else 1.0
+    except Exception:
+        pass
 
     ok = True
     for k, v in report["checks"].items():

@@ -213,8 +213,12 @@ class MemoryCompressor:
         )
         start = time.time()
 
-        if len(memories) < 2:
-            result.error_message = "Batch too small (need at least 2 memories)"
+        # 2026-09-01 (P5 修复): 允许单条记忆压缩——此前 len<2 直接 SKIP，
+        # 而 create_compression_batches 会把某类型仅剩 1 条的 pending 也成批，
+        # 导致孤条 pending 永远悬置（2026-08-31 实测 Pending=2 恒 Failures=2）。
+        # 单条压缩语义安全：对 1 条记忆生成浓缩摘要并归档原条目（original_count=1）。
+        if len(memories) < 1:
+            result.error_message = "Batch empty"
             result.elapsed_seconds = time.time() - start
             return result
 
