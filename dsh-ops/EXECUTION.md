@@ -14905,3 +14905,22 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 - 1034 字段批量自动改风险不可控（部分写入/格式破坏）
 - 后续: 专项重写迁移脚本（含逐包验证）或人工分批
 - 本轮守住: SplitRule 修复保留 + 全绿不破坏
+
+---
+
+## 446. 批量迁移方案诚实放弃 + 全绿确认（2026-09）
+
+### 446.1 两次尝试失败
+- Python 批量 db tags 迁移：行尾粘连 bug（splitlines 无行尾+eol 逻辑）
+  两次修复尝试仍产生 package 行粘连 → **git checkout 恢复现场**
+- 恢复验证: build 0 + internal 测试 67 ok / FAIL_COUNT 0（全绿保持）
+
+### 446.2 决策（分寸）
+- db tags 批量迁移 = **需要 AST 级工具**（go/parser——Python 文本处理
+  在多行 tag/行尾变体下不可靠）——记入技术债文档为"专项前提"
+- 1034 字段技术债保留文档（smartcos_techdebt_dbtags.md）
+- SplitRule（生产实证 bug）已修复保留 ✓
+
+### 446.3 最终状态
+- 全仓 build 0 · internal 67 包 ok / FAIL 0
+- 自优化测试矩阵: 40+ 新测试（9 包）· 真实 bug 修复 4 个

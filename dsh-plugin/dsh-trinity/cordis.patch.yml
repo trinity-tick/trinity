@@ -1,0 +1,18 @@
+# Trinity 原生直连插件层（@deepseek-ai/dsh-trinity bundle 自带 patch，rc.7 bundle 模型）
+# spawn trinity_engine_worker.py（stdio NDJSON），注册 trinity_* 原生工具，
+# 并订阅 session/* 事件同步 DSH 结构层到 Trinity（dsh_sessions/dsh_events/dsh_goals/...）。
+# 2026-09-01: rc.7 起插件包需自带 dsh.bundle.patch 才会作为 profile layer 激活；
+# 此前该条目只存在于 profile 级 cordis.patch.yml —— headless CLI(rc.7) 不再读取、
+# web 虽读取但 scope 包名条目被丢弃 → 结构同步自 2026-08-24 冻结 8 天（自查 P1 根因）。
+- insert:
+    - id: trinity-native
+      name: '@deepseek-ai/dsh-trinity'
+      config:
+        workerPath: 'C:\Users\Administrator\trinity\trinity\engine_worker.py'
+        pythonPath: 'C:\Users\Administrator\AppData\Local\Programs\Python\Python314\python.exe'
+        toolCallTimeoutMs: 60000
+        reconnect:
+          enabled: true
+          initialDelayMs: 500
+          maxDelayMs: 30000
+          maxAttempts: 10
