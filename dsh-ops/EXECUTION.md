@@ -14820,3 +14820,16 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 ### 439.2 意义
 - 测试驱动开发闭环: 测试发现缺陷 → 确认业务语义 → 修复 → 断言锁定
 - 提交 SmartCos
+
+---
+
+## 440. ai-carrier 日运力测试（2026-09，继续）
+
+### 440.1 落地（3 测试 PASS）
+- GetTodayCapacity 命中扫描（容量 1000/已分配 300）
+- GetTodayCapacity 无行 → (nil, nil) 语义（非 error——上游可判断新建）
+- IncrementAllocated 两阶段（ensure 幂等 + 递增——423 日志路径的正面场景）
+- 修复: 包名 aicarrier（非 carrier）
+
+### 440.2 sqlmock 复制进度
+- 7 repo / 17 测试
