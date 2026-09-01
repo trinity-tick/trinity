@@ -14857,3 +14857,17 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 ### 442.2 教训（自优化分寸）
 - 写测试前先跑 `go test 包` 确认现状（bi 案例：已有测试未识别）
 - demo/seed 逻辑不强行测（warehouse3d 案例）
+
+---
+
+## 443. 质量门禁实战 + V6 集成测试 skip 化补全（2026-09）
+
+### 443.1 质量门禁首次实战
+- quality_gate.ps1 运行暴露: V6 集成健康检查 3 FAIL（bms 服务在线
+  → SKIP 条件不满足 → 未部署服务连接拒绝）
+- 修复: 服务不可达 → Skipf（与 critical_apis skip 化一致）
+- 验证: integration ok + 全量 FAIL_COUNT 0 + 提交 af52fa3
+
+### 443.2 门禁状态
+- BUILD 0 · VET 1（既有 IPv6 警告×2——记录）· TEST 0
+- 前端 typecheck 未跑（本次跳过——脚本含条件分支）
