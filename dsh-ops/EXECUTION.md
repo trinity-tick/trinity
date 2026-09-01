@@ -15039,3 +15039,16 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 ### 452.2 测试矩阵
 - stocktake handler 7 测试（List/Get/404/Create/Start/Count/Complete/Cancel）
 - 累计: 50+ 测试全 PASS · build 0
+
+---
+
+## 453. oms SplitRule CRUD 端点测试（2026-09，继续）
+
+### 453.1 落地（3 测试 PASS——oms 15 测试）
+- ListSplitRules 端点（COUNT+SELECT 两查询——sqlmock 按序）
+- CreateSplitRule 端点（INSERT → 201）
+- DeleteSplitRule 端点（DELETE → deleted）
+- handler_test import 补 sqlmock/sqlx/time
+
+### 453.2 sqlmock 端点测试模式成熟
+- handler 层 sqlmock（repo 注入）+ mock svc（业务层）双模式就绪

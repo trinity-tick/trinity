@@ -29,7 +29,7 @@ param(
 
 # 兼容 powershell -File 传参：命令行里的 "a,b,c" 会以单个字符串到达，
 # 这里统一按逗号拆分 + 校验。
-$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "sublimate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "usage", "rollout-audit", "audit-ps1", "forgetting", "produce", "federation-sync", "tune", "fulltest", "pg-sync", "evolve", "observe", "value-recalib", "replay", "extract-skills", "perception-bridge", "cognitive-eval", "event-extract", "reversible-compress", "memory-purify", "cognition-agent", "dcpm-consolidate", "replay-consolidate", "integrity-monitor", "perception-scan", "self-reflect", "cognition-check", "web-perception", "web-search", "drift-check", "brain-health", "identity-refresh", "loop-audit", "brainification-guard", "capability-check", "action-loop", "forgetting", "dream-replay", "curiosity", "self-assess", "predictive-loop", "sensory-integration", "emotional-consolidation", "narrative", "associative", "self-axioms", "memory-manager", "proactive", "reconcile", "pg-backfill", "all")  # 2026-09-01 对账 + PG→SQLite 反向同步  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
+$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "sublimate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "usage", "rollout-audit", "audit-ps1", "forgetting", "produce", "federation-sync", "tune", "fulltest", "pg-sync", "evolve", "observe", "value-recalib", "replay", "extract-skills", "perception-bridge", "cognitive-eval", "event-extract", "reversible-compress", "memory-purify", "cognition-agent", "dcpm-consolidate", "replay-consolidate", "integrity-monitor", "perception-scan", "self-reflect", "cognition-check", "web-perception", "web-search", "drift-check", "brain-health", "identity-refresh", "loop-audit", "brainification-guard", "capability-check", "action-loop", "forgetting", "dream-replay", "curiosity", "self-assess", "predictive-loop", "sensory-integration", "emotional-consolidation", "narrative", "associative", "self-axioms", "memory-manager", "proactive", "reconcile", "pg-backfill", "quality-gate", "all")  # 2026-09-01 对账 + PG→SQLite 反向同步  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
 $normalized = @()
 # 环境感知流（2026-09 EXECUTION 136）：日志告警自动感知入记忆
 $perceptionScanCmd = @"
@@ -872,7 +872,7 @@ import sys
 sys.path.insert(0, r"$TrinityRoot")
 import runpy
 sys.argv = ["backfill_sqlite_from_pg"]
-runpy.run_path(r"$TrinityRootscriptsackfill_sqlite_from_pg.py", run_name="__main__")
+runpy.run_path(r"$TrinityRoot/scripts/backfill_sqlite_from_pg.py", run_name="__main__")
 "@
 $pgBackfillPrompt = "运行 PG → SQLite active 反向回填（把 PG 主存储中 SQLite 缺失的 active 记忆按原 id 镜像回来，走加密/FTS/审计，幂等），汇报回填条数。"
 
@@ -882,9 +882,20 @@ import sys
 sys.path.insert(0, r"$TrinityRoot")
 import runpy
 sys.argv = ["reconcile_pg_sqlite"]
-runpy.run_path(r"$TrinityRootscriptseconcile_pg_sqlite.py", run_name="__main__")
+runpy.run_path(r"$TrinityRoot/scripts/reconcile_pg_sqlite.py", run_name="__main__")
 "@
 $reconcilePrompt = "运行 PG vs SQLite 只读对账，汇报 total / pg_only / sq_only / active 集合差 / 哈希不一致数。"
+
+# 质量门禁（2026-09-01 短板 #1）：500q 检索 R@5（keyword/hybrid 逐类目）+ 延迟 + 对账，
+# 输出 ~/.trinity/bench-results/quality-gate-*.json；阈值不过 exit 1。显式调用，不进日链。
+$qualityGateCmd = @"
+import sys
+sys.path.insert(0, r"$TrinityRoot")
+import runpy
+sys.argv = ["quality_gate"]
+runpy.run_path(r"$TrinityRoot/scripts/quality_gate.py", run_name="__main__")
+"@
+$qualityGatePrompt = "运行 500q 检索质量门禁（R@5 keyword/hybrid 逐类目 + p50/p95 延迟 + 对账摘要），按阈值判 PASS/FAIL。"
 
 # 每日 auto-evolve（2026-08-29 递归闭环真实使用）：无人值守补丁（门禁+回滚）
 $evolveCmd = @"
@@ -960,6 +971,7 @@ foreach ($t in $Tasks) {
         "pg-sync"  { Invoke-Task -Name "pg-sync"  -DirectCommand $pgSyncCmd  -DshPrompt $pgSyncPrompt }  # 2026-08-29 PG 镜像
         "pg-backfill" { Invoke-Task -Name "pg-backfill" -DirectCommand $pgBackfillCmd -DshPrompt $pgBackfillPrompt }  # 2026-09-01 PG→SQLite 反向同步
         "reconcile" { Invoke-Task -Name "reconcile" -DirectCommand $reconcileCmd -DshPrompt $reconcilePrompt }  # 2026-09-01 双库对账（只读）
+        "quality-gate" { Invoke-Task -Name "quality-gate" -DirectCommand $qualityGateCmd -DshPrompt $qualityGatePrompt }  # 2026-09-01 检索质量门禁
         "evolve"  { Invoke-Task -Name "evolve"   -DirectCommand $evolveCmd  -DshPrompt $evolvePrompt }  # 2026-08-29 每日自改
         "observe" { Invoke-Task -Name "observe" -DirectCommand $observeCmd -DshPrompt $observePrompt }  # 2026-09 Ollama 解耦观察期检查
         "value-recalib" { Invoke-Task -Name "value-recalib" -DirectCommand $valueRecalibCmd -DshPrompt $valueRecalibPrompt }  # 2026-09 价值驱动编码补标

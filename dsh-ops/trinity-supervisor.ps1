@@ -223,6 +223,15 @@ if (-not (Test-ApiHealth)) {
         Write-Log "api DOWN (health probe failed) — restarting" "WARN"
         Start-WithLogs -Name "api" -Exe $ApiPy -ArgList @("-m", "trinity.api.server", "--port", "8001", "--host", "127.0.0.1")  # 2026-08-17 安全加固：仅本机
         $state.restartedAt.api = $now.ToString("o")
+        # 2026-09-01（短板 #5 修复）：重启后预热——冷启动首查 9-28s，预热后 1s 内。
+        # 异步打一发混合检索（不阻塞监督轮；失败仅记 WARN，下一轮 observe 兜底）。
+        Start-Sleep -Seconds 12
+        try {
+            $w = Invoke-WebRequest -Uri "http://127.0.0.1:8001/memory/search/hybrid" -Method Post -ContentType "application/json" -Body '{"query":"warmup","top_k":3,"strategy":"rrf"}' -TimeoutSec 90 -UseBasicParsing
+            Write-Log "api warmup ok (HTTP $($w.StatusCode))"
+        } catch {
+            Write-Log "api warmup failed: $($_.Exception.Message)" "WARN"
+        }
     } else {
         Write-Log "api DOWN but within restart interval — skipped" "WARN"
     }
