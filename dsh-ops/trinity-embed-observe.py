@@ -27,7 +27,7 @@ def post(url, payload):
         url, data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"})
     t0 = time.time()
-    with urllib.request.urlopen(req, timeout=60) as resp:
+    with urllib.request.urlopen(req, timeout=90) as resp:
         return json.loads(resp.read().decode("utf-8")), time.time() - t0
 
 
@@ -52,6 +52,15 @@ try:
 except Exception as e:  # noqa: BLE001
     report["health"] = {"error": str(e)}
     ok = False
+
+# 2.5) warmup（2026-09-01 修复：冷启动首查曾 >60s 超时导致 observe FAILED——
+#      先打一发预热查询，不计入 samples、失败也不影响退出码，只记录延迟）
+try:
+    _, _warm_dt = post(BASE + "/memory/search/hybrid",
+                       {"query": QUERIES[0], "top_k": 5, "strategy": "rrf"})
+    report["warmup"] = {"latency_s": round(_warm_dt, 2)}
+except Exception as _we:  # noqa: BLE001
+    report["warmup"] = {"error": str(_we)}
 
 # 2) sample queries
 samples = []

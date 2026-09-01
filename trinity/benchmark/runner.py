@@ -68,7 +68,7 @@ def _run_longmemeval(config: Dict[str, Any]) -> Dict[str, Any]:
             cmd += ["--skip-qa"]
 
         proc = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=300,
+            cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300,
         )
         return {
             "benchmark": "LongMemEval",
@@ -93,7 +93,7 @@ def _run_memsyco(config: Dict[str, Any]) -> Dict[str, Any]:
     try:
         proc = subprocess.run(
             [sys.executable, str(script)],
-            capture_output=True, text=True, timeout=120,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
         )
         return {
             "benchmark": "MemSyco",
@@ -114,7 +114,7 @@ def _run_latency(config: Dict[str, Any]) -> Dict[str, Any]:
         iterations = config.get("iterations", 100)
         proc = subprocess.run(
             [sys.executable, str(script), "--iterations", str(iterations)],
-            capture_output=True, text=True, timeout=120,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
         )
         return {
             "benchmark": "Latency Profile",

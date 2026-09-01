@@ -355,12 +355,12 @@ def default_metrics() -> Dict[str, Any]:
         # a) ps1 三件套
         _ra = _sp.run([_sys.executable, "-X", "utf8",
                        os.path.join(_root, "scripts", "audit_maintenance_ps1.py")],
-                      capture_output=True, text=True, timeout=30)
+                      capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
         _pts.append(1.0 if "ALL OK" in _ra.stdout else 0.0)
         # b) WAL / integrity
         _rb = _sp.run([_sys.executable, "-X", "utf8",
                        os.path.join(_root, "scripts", "db_health.py")],
-                      capture_output=True, text=True, timeout=60)
+                      capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
         _pts.append(1.0 if ("log=0" in _rb.stdout and "integrity=ok" in _rb.stdout) else 0.0)
         # c) 备份新鲜（<24h）
         _bf = _gl.glob(os.path.join(os.path.expanduser("~/.trinity/backups"), "trinity_store_*.db"))
@@ -392,14 +392,14 @@ def default_metrics() -> Dict[str, Any]:
         # a) eval 12 项（全量断言，~10s）
         _re = _sp2.run([_sys2.executable, "-X", "utf8",
                         os.path.join(_root2, "scripts", "run_evals.py"), "--all"],
-                       capture_output=True, text=True, timeout=180)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
         _cpts.append(1.0 if "12/12 passed" in _re.stdout else 0.0)
         # b) 快速专项测试（goals/automation/eval）
         _rt = _sp2.run([_sys2.executable, "-m", "pytest", "-q",
                         os.path.join(_root2, "tests", "test_goals.py"),
                         os.path.join(_root2, "tests", "test_automation.py"),
                         os.path.join(_root2, "tests", "test_eval.py")],
-                       capture_output=True, text=True, timeout=180)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
         _ok = "failed" not in _rt.stdout and "passed" in _rt.stdout
         _cpts.append(1.0 if _ok else 0.0)
         metrics["code_health"] = round(sum(_cpts) / len(_cpts), 3)

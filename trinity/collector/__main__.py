@@ -61,7 +61,7 @@ def _is_process_alive(pid: int) -> bool:
             # 回退：使用 tasklist 检查进程是否存在
             result = subprocess.run(
                 ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
             )
             return f"{pid}" in result.stdout and "python" in result.stdout.lower()
         except Exception:

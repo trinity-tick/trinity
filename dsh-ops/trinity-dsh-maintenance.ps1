@@ -152,6 +152,16 @@ if ($bad) {
 $Tasks = $normalized
 
 $ErrorActionPreference = "Continue"
+# 2026-09-01: 统一 UTF-8——wrapper(py) 已把 stdout reconfigure 为 UTF-8，
+# PS 侧必须同样按 UTF-8 解码子进程输出，否则 GBK 控制台把 em-dash 等读成乱码。
+# 无控制台场景（计划任务/服务）下 OutputEncoding setter 可能抛错，忽略即可。
+try {
+    [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+    $OutputEncoding = [System.Text.UTF8Encoding]::new()
+} catch { }
+# 2026-09-01: python 子进程统一按 UTF-8 写 stdout/stderr（与 PS 侧 UTF-8 解码配套，
+# 覆盖未 reconfigure 的任务如 observe/runpy 型 wrapper，根治双向 GBK 乱码）
+$env:PYTHONIOENCODING = "utf-8"
 # 2026-09 (EXECUTION 120): 存储统一——租约/维护与运行时一致（D 盘权威库）
 if (-not $env:TRINITY_STORE) { $env:TRINITY_STORE = "D:\trinity-data\store" }  # 2026-09 迁移 D 盘后权威库
 $TrinityRoot = Split-Path -Parent $PSScriptRoot
@@ -610,7 +620,7 @@ if blocked and url.startswith("http"):
 # 允许：指向远端服务器时执行一轮
 import subprocess
 r = subprocess.run([sys.executable, r"$TrinityRoot\dsh-ops\trinity-sync-agent.py", "--one", "--config", str(cfg_file)],
-                   capture_output=True, text=True, timeout=300)
+                   capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)  # 2026-09-01: 显式 utf-8 解码
 print("AGENT-SYNC exit", r.returncode)
 print((r.stdout or "")[-2000:])
 print((r.stderr or "")[-1000:])
@@ -649,7 +659,7 @@ print("SMOKE diagnostics ALL_PASS OK (modules=%s)" % _e.get("total_modules"))
 # 模块审计：孤儿/实验标注一致性（2026-08-15, P3 CI 集成）
 import subprocess
 _aud = subprocess.run([sys.executable, r"$TrinityRoot\scripts\audit_modules.py", "--json-only"],
-                      capture_output=True, text=True, timeout=120)
+                      capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)  # 2026-09-01: 显式 utf-8 解码
 assert _aud.returncode == 0, "audit_modules failed: %s" % _aud.stderr[-300:]
 print("SMOKE module audit OK")
 import runpy

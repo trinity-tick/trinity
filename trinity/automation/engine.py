@@ -607,7 +607,7 @@ class AutomationEngine:
             env = dict(os.environ)
             env["TRINITY_AUTOMATION_ACTION"] = "1"
             proc = subprocess.run(
-                resolved, capture_output=True, text=True, timeout=120,
+                resolved, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
                 env=env,
             )

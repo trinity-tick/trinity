@@ -14752,3 +14752,15 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 
 ### 434.2 验证
 - handler 包 ok + 全仓 build 0；提交 SmartCos
+
+---
+
+## 435. oms Service 接口化 + handler 测试（2026-09，继续）
+
+### 435.1 落地
+- HandlerService 接口（7 方法——handler 消费方定义）+ struct 字段/构造参数改接口
+- handler 测试 3 端点: EvaluateSplit（成功+400）/EvaluateMerge
+- 验证: oms 包全 PASS（eventbus 6+handler 3）+ 全仓 build 0
+
+### 435.2 零测试包进度
+- oms 已有测试（之前零测试）→ 52 → 51
