@@ -14703,3 +14703,16 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 - 统一 C/D 双库（C 拷贝到 D 或镜像路径改 D，维护窗执行）；
 - 8/31 两次意外重启排查电源/硬件（Event 41）；
 - evolve-auto/evolve-env 任务存在同类 shell-语法 bug（不在 daily 链，择机修）。
+
+---
+
+## 432. replenishment repository 测试（2026-09，继续）
+
+### 432.1 落地（2 测试 PASS）
+- CreateReplenishmentPlan 默认值（pending/medium/uuid——11 参数断言）
+- ListPlans 名称填充容错（sku/supplier Get 失败→名称留空不阻塞——
+  读容错设计回归验证）
+- 技巧: 同包直构 struct（绕过构造函数 DDL ensure——sqlmock 免建表期望）
+
+### 432.2 验证
+- build 0 + replenishment/repository ok；提交 SmartCos
