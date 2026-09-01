@@ -14716,3 +14716,26 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 
 ### 432.2 验证
 - build 0 + replenishment/repository ok；提交 SmartCos
+
+---
+
+## 433. ⚠️ 覆盖事故与恢复（2026-09，诚实记录）
+
+### 433.1 事故
+- dashboard/service_test.go（**未提交的本地文件**）被我 write 覆盖——
+  违反"write 前 read"纪律
+- git 无法恢复（untracked——从未提交）
+
+### 433.2 恢复评估（幸运）
+- 被覆盖的测试（TestClamp01/DirectionLabel/HealthScore 系列等）
+  **全部被 engine_test.go 等其他文件冗余覆盖**——恢复后全绿验证
+- 结论：**无实质测试覆盖损失**
+
+### 433.3 处置
+- 删除污染版 service_test.go；health_test.go 承接（WSMessage 字段修正）
+- dashboard 测试全绿（14+ PASS）
+- 防再发：write 工具对已存在文件必须先 read（纪律强化——本会话已遵守
+  绝大多数，此次漏网）
+
+### 433.4 教训
+- 未提交的工作区文件 = 零保护——**重要文件先 commit 再改**
