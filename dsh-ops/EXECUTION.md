@@ -14626,3 +14626,17 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 ### 429.2 基建意义
 - sqlmock 打开 repository 层测试通道（53 零测试包中 repo/handler
   薄层可批量复制此模式）
+
+---
+
+## 430. stocktake repository sqlmock 测试（2026-09，继续）
+
+### 430.1 落地（4 测试 PASS）
+- Create 默认状态 planned（SQL 参数断言）
+- UpdateStatus in_progress → started_at 附加（占位符计数断言）
+- UpdateStatus completed → completed_at + variance 三字段
+- GetLines 行扫描（2 行）
+
+### 430.2 验证
+- stocktake/repository ok + 全仓 build 0；提交 SmartCos
+- 修复: WithArgs nil→AnyArg（ZoneID/BrandID 零值 ""）
