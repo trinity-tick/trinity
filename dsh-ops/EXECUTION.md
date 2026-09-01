@@ -14778,3 +14778,19 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 
 ### 436.2 sqlmock 复制进度
 - 5 repo / 14 测试（outbound3+stocktake4+inventory3+replenishment2+tms2）
+
+---
+
+## 437. dashboard repository cache 测试（2026-09，先读后写）
+
+### 437.1 落地（4 测试 PASS——基于真实实现）
+- SetDashboardCache upsert SQL（ON CONFLICT 断言）
+- GetDashboardCache 命中扫描 / 未命中 → sql.ErrNoRows 传播
+- GetDashboardConfigs 扫描
+- 先读真实 DashboardCache 结构与 SQL 再写（433 教训——本次零猜测）
+
+### 437.2 过程记录
+- write 工具 stale 检测（同路径曾写后删）→ 换新文件名 repository_cache_test.go 绕过
+
+### 437.3 sqlmock 复制进度
+- 6 repo / 18 测试（+dashboard 4）
