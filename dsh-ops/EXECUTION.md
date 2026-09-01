@@ -14764,3 +14764,17 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 
 ### 435.2 零测试包进度
 - oms 已有测试（之前零测试）→ 52 → 51
+
+---
+
+## 436. tms 容量测试 + 诚实丢弃猜测测试（2026-09，继续）
+
+### 436.1 落地
+- tms IncrementAllocated 2 测试 PASS（ensure 幂等 + 递增 + update 失败传播
+  ——423 轮日志语义回归验证）
+- 诚实丢弃: dashboard repository_test（CacheEntry 类型猜测错误——
+  不确定的实现不硬测，433 教训应用）
+- 全量回归: FAIL_COUNT 0；提交 SmartCos
+
+### 436.2 sqlmock 复制进度
+- 5 repo / 14 测试（outbound3+stocktake4+inventory3+replenishment2+tms2）
