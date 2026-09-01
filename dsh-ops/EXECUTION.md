@@ -15000,3 +15000,17 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 ### 450b.2 教训强化（433 同类）
 - 写测试前必须先跑 `go test 包` 与 glob *_test.go——**两次违反**
   （dashboard service_test/outbound split_cancel_test）——已两次付出代价
+
+---
+
+## 450c. 第 5 个测试发现的真实 bug 修复（2026-09，继续）
+
+### 450c.1 发现与修复
+- picking Wave struct 缺 Notes 字段——SELECT * 返回 notes 列
+  → 生产 GetWaveByID 必然失败（missing destination name notes）
+- 修复: Wave 补 Notes 字段（db:"notes"）
+- +picking repo 3 测试（CreateWave/GetWaveByID/UpdateWaveStatus）
+
+### 450c.2 测试发现的真实 bug 累计（5 个）
+- 防超卖 CAS 竞态 · outbound 一致性 · confidence 语义 · SplitRule db tags
+- **picking Wave Notes（本轮）**
