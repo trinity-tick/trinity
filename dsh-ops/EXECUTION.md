@@ -15027,3 +15027,15 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 ### 451.2 纪律执行记录
 - read 尾部确认后 append（非覆盖）✓
 - 测试文件现状先查 ✓
+
+---
+
+## 452. stocktake handler 端点全覆盖（2026-09，继续）
+
+### 452.1 落地（+4 测试——stocktake handler 7 测试）
+- Start/CountItem/Complete/Cancel 端点（read-tail append 模式）
+- mock 补 st 字段（Complete 返回快照）
+
+### 452.2 测试矩阵
+- stocktake handler 7 测试（List/Get/404/Create/Start/Count/Complete/Cancel）
+- 累计: 50+ 测试全 PASS · build 0
