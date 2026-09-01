@@ -14843,3 +14843,17 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 - GetTodayCapacity 无行 → nil,nil
 - 发现: oms 包同目录双 package（oms+repository——既有结构问题——记录）
 - 全量回归 FAIL_COUNT 0；提交 SmartCos
+
+---
+
+## 442. 分寸决策：移除低价值测试尝试（2026-09）
+
+### 442.1 决策
+- bi/repository_test: 移除——**bi 包既有测试已覆盖 templates**（7 个 PASS
+  ——TestEnsureDefaultTemplates 系列浮出，此前扫描漏判）
+- warehouse3d/seed_test: 移除——demo seed 调试成本超测试价值
+- 验证: 两包 ok + 全仓 build 0；提交
+
+### 442.2 教训（自优化分寸）
+- 写测试前先跑 `go test 包` 确认现状（bi 案例：已有测试未识别）
+- demo/seed 逻辑不强行测（warehouse3d 案例）
