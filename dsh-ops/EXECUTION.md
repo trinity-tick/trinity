@@ -14888,3 +14888,20 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 ### 444.3 测试发现的生产 bug 累计
 - 防超卖 CAS 竞态（441 前轮）· outbound 一致性（422）· confidence 语义（439）
 - **SplitRule db tags（本轮）= 4 个**
+
+---
+
+## 445. db tags 系统性发现 + 现场恢复（2026-09，诚实记录）
+
+### 445.1 系统性发现
+- 全库扫描: 98 struct/1034 字段缺 db tags（11 高风险包）
+- docs/smartcos_techdebt_dbtags.md 文档化（技术债清单+迁移建议）
+
+### 445.2 自动修复尝试失败与恢复
+- Python 批量脚本转义/部分写入问题 → **git checkout 恢复现场**
+- 验证: build 0 + FAIL_COUNT 0（回到 444 修复后的干净状态）
+
+### 445.3 判断（分寸）
+- 1034 字段批量自动改风险不可控（部分写入/格式破坏）
+- 后续: 专项重写迁移脚本（含逐包验证）或人工分批
+- 本轮守住: SplitRule 修复保留 + 全绿不破坏
