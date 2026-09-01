@@ -153,7 +153,7 @@ $Tasks = $normalized
 
 $ErrorActionPreference = "Continue"
 # 2026-09 (EXECUTION 120): 存储统一——租约/维护与运行时一致（D 盘权威库）
-if (-not $env:TRINITY_STORE) { $env:TRINITY_STORE = "D:	rinity-data\store" }  # 2026-09 迁移 D 盘后权威库
+if (-not $env:TRINITY_STORE) { $env:TRINITY_STORE = "D:\trinity-data\store" }  # 2026-09 迁移 D 盘后权威库
 $TrinityRoot = Split-Path -Parent $PSScriptRoot
 # 维护任务统一使用系统 Python（trinity 完整安装：含 fastapi/mcp/yaml/psycopg2 等；
 # 项目 .venv 仅含基础依赖 numpy/jieba，跑不动 decay/tiers/sync）。
@@ -555,13 +555,24 @@ $consistencyPrompt = "运行 scripts/consistency_check.py（聚合池 trinity/da
 # 2026-08-21 外部依赖容错：HERMES（本地）失败 → 任务 FAILED；MARVIS（推 docker
 # 栈 :8005）失败 → 降级 WARN 不 FAILED（docker 停机时属预期，hermes 同步不受影响）。
 $syncCmd = @"
-import sys, subprocess
+import sys, subprocess, os
+os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
 codes = []
-r1 = subprocess.run([sys.executable, r"$HermesSync"], capture_output=True, text=True, encoding="utf-8", errors="replace")  # 2026-09: 显式 utf-8 解码
-print("HERMES SYNC exit", r1.returncode)
-print(r1.stdout[-2000:] if r1.stdout else "")
-print(r1.stderr[-1000:] if r1.stderr else "")
-codes.append(r1.returncode)
+hermes = r"$HermesSync"
+if os.path.exists(hermes):
+    r1 = subprocess.run([sys.executable, hermes], capture_output=True, text=True, encoding="utf-8", errors="replace")  # 2026-09: 显式 utf-8 解码
+    print("HERMES SYNC exit", r1.returncode)
+    print(r1.stdout[-2000:] if r1.stdout else "")
+    print(r1.stderr[-1000:] if r1.stderr else "")
+    codes.append(r1.returncode)
+else:
+    print("HERMES SYNC SKIP: %s not found (本机未部署 Hermes 双向同步)" % hermes)
+    codes.append(0)
 r2 = subprocess.run([sys.executable, "-m", "trinity.collector", "sync"], cwd=r"$TrinityRoot",
                     capture_output=True, text=True, encoding="utf-8", errors="replace")  # 2026-09: 显式 utf-8 解码
 print("MARVIS SYNC exit", r2.returncode)
@@ -705,8 +716,14 @@ $activeHealthPrompt = "运行 scripts/active_set_health.py(active 集健康: tot
 
 # 备份（2026-08-27 巡检补全；2026-09 加恢复演练）：WAL 安全备份（14 天保留）+ PG 恢复演练
 $backupCmd = @"
-powershell -NoProfile -ExecutionPolicy Bypass -File '\$PSScriptRoot\trinity-backup.ps1'
-& '\$Py' '\$TrinityRoot\scripts\pg_restore_drill.py'
+import subprocess, sys
+r = subprocess.run(["powershell","-NoProfile","-ExecutionPolicy","Bypass","-File", r"$PSScriptRoot\trinity-backup.ps1"], capture_output=True, text=True, encoding="utf-8", errors="replace")
+print(r.stdout[-2000:] if r.stdout else "")
+print(r.stderr[-1000:] if r.stderr else "")
+r2 = subprocess.run([sys.executable, r"$TrinityRoot\scripts\pg_restore_drill.py"], capture_output=True, text=True, encoding="utf-8", errors="replace")
+print("PG RESTORE DRILL exit", r2.returncode)
+print(r2.stdout[-1500:] if r2.stdout else "")
+sys.exit(0 if r.returncode == 0 and r2.returncode == 0 else 1)
 "@
 $backupPrompt = "运行 trinity-backup.ps1（WAL 安全备份）+ scripts/pg_restore_drill.py（恢复演练），汇报备份文件与演练 PASS/FAIL。"
 

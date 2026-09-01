@@ -14640,3 +14640,19 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 ### 430.2 验证
 - stocktake/repository ok + 全仓 build 0；提交 SmartCos
 - 修复: WithArgs nil→AnyArg（ZoneID/BrandID 零值 ""）
+
+---
+
+## 431. inventory repository sqlmock 测试（2026-09，继续）
+
+### 431.1 落地（3 测试 PASS）
+- **GetDashboard 读容错回归验证**：8 统计查询全部失败 → 不报错+
+  字段零值+ByWarehouse 空切片（EXECUTION 422 定性的合理设计——回归锁定）
+- **MoveToLocation 成功**：FOR UPDATE → 扣减 → UPSERT → 流水 → Commit
+- **MoveToLocation 不足**：available 5 < qty 10 → insufficient + Rollback
+
+### 431.2 验证
+- 全 internal FAIL_COUNT 0（含新增）；全仓 build 0；提交 SmartCos
+
+### 431.3 sqlmock 复制进度
+- outbound/flow(3) + stocktake/repo(4) + inventory/repo(3) = 10 个 repo 测试
