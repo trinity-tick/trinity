@@ -14986,3 +14986,17 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 - 不做 4373 盲改（大量误伤）
 - 测试驱动模式: 每覆盖一个 repo → 暴露 → 修复（已验证 4 个 bug）
 - 全绿保持: BUILD 0 + FAIL_COUNT 0
+
+---
+
+## 450b. outbound 接口化 + 重复测试移除（2026-09，继续补充）
+
+### 450b.1 决策
+- OutboundRepo 接口化保留（可测性——与 stocktake/oms 模式一致）
+- split_cancel_test 移除——**outbound service 原有 4 个 cancel/split
+  测试已覆盖同场景**（TestCancelOrder_Rejects* 等——写作前未确认现状）
+- 验证: service ok + build 0；提交 80fef70
+
+### 450b.2 教训强化（433 同类）
+- 写测试前必须先跑 `go test 包` 与 glob *_test.go——**两次违反**
+  （dashboard service_test/outbound split_cancel_test）——已两次付出代价

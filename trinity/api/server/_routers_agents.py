@@ -6,6 +6,8 @@ Trinity REST API Server — agent gateway / dashboard / coze bridge routes.
 import time
 from typing import Any, Dict, List, Optional
 
+from trinity.version import __version__ as TRINITY_VERSION  # 2026-09-01: 版本单一源
+
 from fastapi import APIRouter, Body, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
@@ -372,7 +374,7 @@ async def trinity_dashboard():
         obs = aggr._observability if hasattr(aggr, '_observability') else None
         dash = obs.dashboard() if obs else {}
         dash.update({
-            "version": "7.1.0",
+            "version": TRINITY_VERSION,  # 2026-09-01: 去硬编码（原 7.1.0）
             "retrieval_channels": aggr.statistics().get("retrieval_channels", {}),
             "pool_size": len(aggr._pool),
             "degradation": aggr._degradation.statistics() if hasattr(aggr, '_degradation') else {},

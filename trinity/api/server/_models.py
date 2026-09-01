@@ -11,6 +11,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+from trinity.version import __version__ as TRINITY_VERSION  # 2026-09-01: 版本单一源
+
 class RegisterRequest(BaseModel):
     agent_id: str = Field(..., min_length=1, max_length=128, description="Unique agent identifier")
     agent_name: str = Field(..., min_length=1, max_length=256, description="Agent display name")
@@ -157,7 +159,7 @@ class MemorySearchResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str = "ok"
-    version: str = "8.2.0"
+    version: str = TRINITY_VERSION  # 2026-09-01: 去硬编码，跟随 trinity/version.py
     uptime_seconds: float = 0.0
     components: Dict[str, str] = {}
 
