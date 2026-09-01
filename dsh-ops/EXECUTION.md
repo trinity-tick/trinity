@@ -14833,3 +14833,13 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 
 ### 440.2 sqlmock 复制进度
 - 7 repo / 17 测试
+
+---
+
+## 441. tms capacity 测试（2026-09，继续）
+
+### 441.1 落地（2 测试 PASS）
+- GetTodayCapacity 命中（tms 同源验证——ai-carrier 模式复制）
+- GetTodayCapacity 无行 → nil,nil
+- 发现: oms 包同目录双 package（oms+repository——既有结构问题——记录）
+- 全量回归 FAIL_COUNT 0；提交 SmartCos
