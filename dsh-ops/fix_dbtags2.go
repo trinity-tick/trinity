@@ -45,6 +45,9 @@ func processFile(path string) (int, error) {
 	}
 	srcLines := strings.Split(string(src), "\n")
 	var edits []edit
+	if debug {
+		fmt.Println("PROC", path)
+	}
 	ast.Inspect(f, func(n ast.Node) bool {
 		st, ok := n.(*ast.StructType)
 		if !ok {
@@ -55,7 +58,10 @@ func processFile(path string) (int, error) {
 				continue
 			}
 			tagLit := field.Tag.Value
-			if strings.Contains(tagLit, BQ+"db:") || !strings.Contains(tagLit, BQ+"gorm:") {
+			if debug {
+				fmt.Println("  FIELD", fieldName0(field), "TAG", tagLit)
+			}
+			if strings.Contains(tagLit, BQ+"db:") || !strings.Contains(tagLit, "gorm:") {
 				continue
 			}
 			if len(field.Names) == 0 {
@@ -88,6 +94,9 @@ func processFile(path string) (int, error) {
 		}
 		return true
 	})
+	if debug {
+		fmt.Println("  EDITS COLLECTED:", len(edits))
+	}
 	applied := map[int]bool{}
 	count := 0
 	for i := len(edits) - 1; i >= 0; i-- {
@@ -107,10 +116,27 @@ func processFile(path string) (int, error) {
 
 var QT = string(rune(34))
 var totalFixed int
+var debug = len(os.Getenv("DBTAG_DEBUG")) > 0
+
+func fieldName0(f *ast.Field) string {
+	if len(f.Names) > 0 {
+		return f.Names[0].Name
+	}
+	return "?"
+}
+
+var PKGS = []string{
+	"billing", "device", "inventory", "location", "oms", "oms_rule",
+	"outbound", "picking", "stocktake", "transaction", "transfer",
+}
 
 func main() {
-	for _, dir := range os.Args[1:] {
-		files, _ := filepath.Glob(filepath.Join(dir, "*.go"))
+	base := "internal"
+	if len(os.Args) > 1 {
+		base = os.Args[1]
+	}
+	for _, pkg := range PKGS {
+		files, _ := filepath.Glob(filepath.Join(base, pkg, "*.go"))
 		for _, f := range files {
 			if strings.HasSuffix(f, "_test.go") {
 				continue

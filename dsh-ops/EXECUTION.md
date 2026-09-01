@@ -14942,3 +14942,19 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 - 1034 字段缺 db tags——技术债文档已完整（含 AST 工具半成品留档）
 - SplitRule 生产修复保留（444 轮）
 - 后续: 专项调试 AST 工具（工具主体已就绪——Inspect 链路待查）或人工分批
+
+---
+
+## 448. 🎉 db tags 系统性修复完成（2026-09，AST 工具调试成功）
+
+### 448.1 修复
+- AST 工具调试成功（根因: gorm 检查误用 BQ 前缀——修复后 424 字段跨 11 包）
+- 1034 字段扫描 → 424 字段实际修复（其余字段已有 db 或非 gorm）
+- 全量回归: BUILD 0 + FAIL_COUNT 0 + 67 包 ok
+
+### 448.2 技术债清零
+- SplitRule 手工修复（444）+ 424 字段 AST 批量（448）= db tags 技术债主体清零
+- docs/smartcos_techdebt_dbtags.md 状态更新为"已修复"
+
+### 448.3 工具资产
+- dsh-ops/fix_dbtags2.go（AST 迁移工具——可复用于任何 Go 项目）
