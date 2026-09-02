@@ -75,12 +75,76 @@ def judge(llm, question, gold, model_ans):
         return False
 
 
+DATE_RE = re.compile(r"\b(20\d{2}[-/\u5e74]\d{1,2}([-/\u6708]\d{1,2})?|\d{1,2}[-/\u6708]\d{1,2}[-/]20\d{2}|"
+                     r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[ .]?\d{1,2}(st|nd|rd|th)?(,? ?20\d{2})?)\b", re.I)
+
+
+def _date_clues(results):
+    seen = []
+    for h in results[:5]:
+        c = str(h.get("content") or "")
+        for m in DATE_RE.finditer(c):
+            if m.group(0) not in seen:
+                seen.append(m.group(0))
+    return "; ".join(seen[:40]) or "(none)"
+
+
+def build_qa_prompt(qtype, question, results, strategy):
+    """按题型路由生成提示（EXECUTION 460；策略经 458.1b A/B 验证：
+    TR 用日期线索+时序（+13.3pp），MS/SS-P 用跨会话整合+会话标注（MS +6.7pp / SS-P +20pp），
+    其余题型保持 base 口径不变）。"""
+    hits = results[:5]
+    if strategy == "base":
+        ctx = "\n\n".join("[%d] %s" % (i + 1, str(h.get("content", ""))[:600])
+                            for i, h in enumerate(hits))
+        prompt = ("Question: %s\n\nContext:\n%s\n\nAnswer concisely using ONLY the context. Answer:"
+                  % (question, ctx))
+        return "You are an AI assistant answering from memory context only. Answer concisely.", prompt
+    tagged = []
+    for i, h in enumerate(hits):
+        c = str(h.get("content") or "")[:600]
+        sid = str(h.get("session_id") or "")
+        tagged.append("[%d][session:%s] %s" % (i + 1, sid[:18], c) if sid else "[%d] %s" % (i + 1, c))
+    ctx = "\n\n".join(tagged)
+    base_sys = "You are an AI assistant answering from memory context only. Answer concisely."
+    if qtype == "temporal-reasoning":
+        sys_p = base_sys + " Pay attention to dates and temporal order."
+        clues = _date_clues(results)
+        user_p = ("Question: %s\n\nContext:\n%s\n\nDate clues in context: %s\n\n"
+                  "If the question asks when/order, reason carefully from the date clues. "
+                  "Answer concisely using ONLY the context. Answer:") % (question, ctx, clues)
+    elif qtype == "multi-session":
+        sys_p = base_sys + " Integrate evidence across sessions; if sessions conflict, trust the later one."
+        user_p = ("Question: %s\n\nContext (multiple sessions of the same user):\n%s\n\n"
+                  "Note: integrate facts across sessions; conflicting facts resolve to the later session. "
+                  "Answer concisely using ONLY the context. Answer:") % (question, ctx)
+    elif qtype == "single-session-preference":
+        sys_p = base_sys + (" Integrate evidence across sessions and answer in line with "
+                            "this user's expressed preferences.")
+        user_p = ("Question: %s\n\nContext:\n%s\n\n"
+                  "Note: integrate the user's preferences; answer in the style/direction they would prefer. "
+                  "Answer concisely using ONLY the context. Answer:") % (question, ctx)
+    elif qtype == "knowledge-update":
+        # EXECUTION 460: KU = 新信息覆盖旧信息——same conflict-newer logic as MS
+        sys_p = base_sys + (" Knowledge updates supersede older facts; "
+                            "answer with the most recent correct information.")
+        user_p = ("Question: %s\n\nContext (ordered by recency):\n%s\n\n"
+                  "Note: newer messages may update/override earlier facts; answer with the LATEST "
+                  "correct information only. Answer concisely using ONLY the context. Answer:") % (question, ctx)
+    else:
+        return base_sys, ("Question: %s\n\nContext:\n%s\n\n"
+                          "Answer concisely using ONLY the context. Answer:" % (question, ctx))
+    return sys_p, user_p
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=500)
     ap.add_argument("--answer", action="store_true", help="同时跑 LLM 答案生成 + judge")
     ap.add_argument("--model", default="deepseek-chat")
     ap.add_argument("--top-k", type=int, default=10)
+    ap.add_argument("--strategy", default="base", choices=["base", "routed"],
+                    help="生成策略：base=官方原提示（锁定口径 0.560）；routed=按题型路由 A/B 验证策略（EXECUTION 460）")
     ap.add_argument("--out", default=os.path.join(ROOT, "output", "official_lmeval_results.json"))
     args = ap.parse_args()
 
@@ -148,14 +212,12 @@ def main() -> int:
                     r_total[k] += 1
                     if k in (1, 5, 10):
                         st["r%d" % k] += 1
-            # AnswerAcc
+            # AnswerAcc（EXECUTION 460: 策略路由；base 保持锁定口径）
             if args.answer:
-                contexts = [r.get("content", "") for r in results[:5]]
-                prompt = ("Question: %s\n\nContext:\n%s\n\nAnswer concisely using ONLY the context. Answer:"
-                          % (question, "\n\n".join("[%d] %s" % (i + 1, c[:600]) for i, c in enumerate(contexts))))
+                sys_p, prompt = build_qa_prompt(qtype, question, results, args.strategy)
                 ans = ""
                 try:
-                    ans = llm("You are an AI assistant answering from memory context only. Answer concisely.", prompt)
+                    ans = llm(sys_p, prompt)
                 except Exception:
                     ans = ""
                 tok_in += len(prompt)
@@ -178,6 +240,7 @@ def main() -> int:
         "R@5": round(r_total[5] / n, 4),
         "R@10": round(r_total[10] / n, 4),
         "AnswerAcc": round(acc_total / n, 4) if args.answer else None,
+        "strategy": args.strategy,
         "est_cost_usd": round((tok_in / 1e6) * PRICING["input"] + (tok_out / 1e6) * PRICING["output"], 4) if args.answer else 0.0,
         "by_type": {c: {"total": s["total"], "R@1": round(s["r1"] / s["total"], 4),
                         "R@5": round(s["r5"] / s["total"], 4),

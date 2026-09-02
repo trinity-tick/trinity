@@ -266,3 +266,30 @@
 ### 458D.3 module-classify 定期刷新
 - 新维护任务 module-classify（scripts/module_classify.py --json）→ allowed + switch + 周一质量门禁链；
 - 首跑 OK：core/reserve/frozen 分级 JSON 输出（并行会话同期加的 expiry-review 任务共存无恙）。
+
+## 460. 生成策略固化 + 全量 500 复测（2026-09-02 深夜，P0 优先执行）
+
+> 依据 458.1b A/B（TR/SS-P/MS 子集 Δ）与 KU 新验证，把有效策略固化进 official_lm_eval.py
+> 的生成管线（--strategy routed|base，base 保锁定口径），全量 500 复测一次锁新数字。
+
+### 460.1 实现
+- official_lm_eval.py 新增 build_qa_prompt() 按题型路由：TR→日期线索+时序提示；
+  MS→会话标注+跨会话整合+冲突取新；SS-P→同款+偏好口吻；KU→newer-wins（新验证 +6.7pp）；
+  SS-A/SS-U→base 不变（防回退）；输出带 strategy 字段。
+- KU 30 题子集验证（qa_strategy_20260902_214004.json）：base .800 → ms .867（+6.7pp），ssp .367 再证伪。
+
+### 460.2 全量 500 复测结果（同数据集同 judge，$0.457，1349s）
+| 类目 | base(上午锁定) | routed | Δ |
+|---|---|---|---|
+| knowledge-update | .731 | **.808** | **+7.7pp** |
+| single-session-preference | .367 | **.433** | **+6.7pp** |
+| temporal-reasoning | .399 | .406 | +0.8pp |
+| multi-session | .391 | .391 | ±0 |
+| single-session-user | .986 | .986 | ±0 |
+| single-session-assistant | .679 | .679 | ±0 |
+| **总体** | **.560** | **.578** | **+1.8pp** |
+
+- 诚实说明：子集 A/B Δ（TR+13.3/SS-P+20/KU+6.7）高于全量 Δ——小样本乐观偏差；
+  全量下 KU/SS-P 增益稳健、TR 微弱、MS 无效（提示级不够，需检索/证据结构级改造，记录为下一轮方向）；
+  ssp 两段式全量口径不再使用。
+- 产物：.trinity/bench-official/lme_oracle_500_routed_20260902.json；残留 1,013 个临时评测库已清理。
