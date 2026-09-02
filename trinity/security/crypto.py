@@ -136,3 +136,7 @@ def decrypt_content(content: Any) -> Any:
         return cipher.decrypt(content)
     except Exception:
         return content
+
+
+def is_encrypted(content) -> bool:
+    return isinstance(content, str) and content.startswith("enc:v1:")
