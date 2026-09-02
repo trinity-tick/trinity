@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """好奇心驱动每日（EXECUTION 185）——好奇主题→主动搜索。"""
+# NOTICE(EXECUTION 458C): 通用好奇历史入口（任务 curiosity）——分工见 docs/RUNNER_MAP.md §2。
 import sys, os, json
 
 def main():

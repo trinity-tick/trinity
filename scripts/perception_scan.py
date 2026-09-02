@@ -9,6 +9,7 @@
 
 用法: python scripts/perception_scan.py [--dry-run]
 """
+# NOTICE(EXECUTION 458C): 日志告警感知（任务 perception-scan/bridge）——感知分工见 docs/RUNNER_MAP.md §3。
 import os, sys, json, hashlib, urllib.request, time
 
 LOGS_DIR = os.path.expanduser("~/.trinity/logs")

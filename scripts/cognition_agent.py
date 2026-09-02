@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """cognition_agent.py — 主动主体性循环（2026-09，EXECUTION 105.22）
+# NOTICE(EXECUTION 458C): 通用主动主体（任务 cognition-agent）——分工见 docs/RUNNER_MAP.md §2。
 
 Trinity 从"响应式"到"主动式"：每轮扫描——
   1. 开放知识缺口（gaps open）→ 主动思考（检索相关记忆 + 生成建议）

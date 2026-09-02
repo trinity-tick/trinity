@@ -10,6 +10,7 @@ Pipeline per question:
   5. QA accuracy (optional)  : DeepSeek generates answer from retrieved context,
      judged by (a) exact/substring match vs expected answer, (b) optional LLM judge
 """
+# NOTICE(EXECUTION 458C): cleaned-S ingest 实验入口——锁定数字以 official_lm_eval.py 为准，分工见 docs/RUNNER_MAP.md。
 import json, os, sys, time, argparse, random
 sys.path.insert(0, r"C:\Users\Administrator\trinity")
 

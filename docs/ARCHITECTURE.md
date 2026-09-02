@@ -100,7 +100,7 @@ benchmark_scripts、tests（独立测试）、migrations、cluster、**neuromorp
 ---
 ---
 
-# 大脑化全景（2026-09，EXECUTION 116-456 更新；457 轮情境流/语义视觉落地）
+# 大脑化全景（2026-09，EXECUTION 116-459 更新；458C 复核——模块数以目录实测为准，机制数 59（240 轮））
 
 > Trinity 的认知机制（全部运行时生效）。59 项注册能力（EXECUTION 240 全验证）；
 > 大脑模块索引 110 个/7 层（brain/MODULES.md，EXECUTION 298）。

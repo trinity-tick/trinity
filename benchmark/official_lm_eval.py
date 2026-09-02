@@ -13,6 +13,7 @@
   python benchmark/official_lm_eval.py --limit 500          # R@k 全量（无 LLM, 快）
   python benchmark/official_lm_eval.py --limit 100 --answer # R@k + AnswerAcc 子集
 """
+# NOTICE(EXECUTION 458C): 官方 LongMemEval 锁定数字入口（正式）——分工见 docs/RUNNER_MAP.md。
 import argparse
 import collections
 import json

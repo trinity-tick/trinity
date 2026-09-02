@@ -15645,3 +15645,30 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
   PG 生产库只读冒烟：search 结果带 provenance_role/untrusted 字段无回归。
 - 全量 pytest 后台（pytest-post-fable459.log）。
 - 提交：工作树 → main → push origin → D: worktree fetch+reset 同步。
+
+## 458C. Trinity 梳理包全量执行（2026-09-02 晚，用户批准"根据建议执行"）
+
+### 458C.1 P0-1 数据清理（lme 基准垃圾 21,773 条）
+- 导出归档：全部解密为 JSONL → ~/.trinity/archive/lme_purge_20260902_212901.jsonl（21,773 条 / 141.2MB，解密失败 0）；
+- 删除：memories 41,327 → 19,554（-21,773 lme archived）；孤儿 memory_versions -8,056（剩 142）、memory_links -17（剩 11,538）；
+- 审计链保留（audit_log 引用不删）；entities/relations 未动（3,218 / 17,845）。
+
+### 458C.2 P0-2 执行器收敛（标注不删除）
+- docs/RUNNER_MAP.md：基准 runner / 自治四件 / 感知四件分工矩阵；
+- NOTICE docstring ×5：official_lm_eval.py（正式入口）、longmemeval_official_runner.py（实验入口）、curiosity_daily.py、cognition_agent.py、perception_scan.py。
+
+### 458C.3 P0-3 同仓协作纪律（事故教训固化）
+- RUNBOOKS.md 新增"同仓多会话协作纪律"：禁 hard-reset、先 fetch 后 rebase、顺序编号、推送失败本地兜底。
+
+### 458C.4 P1 文档与口径
+- MODULES.md 头部：EXECUTION 298（110）→ **458C 复核（目录实测 191 模块）**；
+- ARCHITECTURE.md 全景头标注最后同步轮（116-459）；
+- docs/TESTING.md：fast=168（默认）/ full=根 tests 122 文件口径说明 + 历史"815/1261"口径澄清；
+- dsh-ops/EXECUTION_TOC.md：563 个轮次标题行号索引（自动生成，可再跑 gen 脚本更新）。
+
+### 458C.5 P2 顺带
+- 4 份 08-15 快照文档 git mv → docs/archive/（TRINITY_STATUS_20260815_V2 / TRINITY_SUMMARY_20260815 / FEATURE_OVERVIEW_20260815 / FUNCTION_SUMMARY_20260814）。
+
+### 458C.6 验证
+- 全部为文档/数据操作；改动的 5 个 py 仅 docstring（compile OK）；后续 fast 168 回归在提交前跑；
+- 提交前 git fetch 防并行漂移；禁 hard-reset。

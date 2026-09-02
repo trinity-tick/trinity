@@ -1,4 +1,4 @@
-# Trinity 大脑模块索引（EXECUTION 298——110 模块全量分类）
+# Trinity 大脑模块索引（EXECUTION 458C 复核——目录实测 191 模块；分层细表以 scripts/module_classify.py 输出为准）
 
 > 物理结构：全部模块平铺于 trinity/brain/（安全方案——不做物理移动）
 > 逻辑结构：按 7 层 + 机制分类（本文档为权威索引）

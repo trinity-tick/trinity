@@ -83,3 +83,9 @@ UAC ConsentPromptBehaviorAdmin=0）→ 直连 Start-Service → pg_ctl fallback�
 - 用量观察: AGENTS.md 注入（2026-09-01 20:0x 起）后的调用增长 = 阶段 A 观察窗口
 - 注意: PG audit_log.timestamp 为 text，24h 过滤须 ::timestamptz 显式 cast
 
+
+## 同仓多会话协作纪律（EXECUTION 458C，2026-09-02 事故教训）
+- 共享仓库 C:/D: 上**禁止 git reset --hard origin/main**（会静默丢弃他人已提交的本地 commit——458b 曾被误删，靠 cherry-pick 救回）；
+- 提交前先 git fetch origin && git status 确认无漂移；落后时用 rebase/merge 而非 reset；
+- 并行会话共用 EXECUTION.md：新增轮次用顺序编号（457/458/459…），落笔前先看文件尾；
+- 推送失败（网络抖动）时：本地 commit 保留 + D: 用 git fetch C:/ 本地同步兜底，勿删本地历史。
