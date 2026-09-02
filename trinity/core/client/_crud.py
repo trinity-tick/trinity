@@ -1,4 +1,4 @@
-"""Trinity client - memory lifecycle CRUD mixin (split from client.py, 2026-08-17).
+﻿"""Trinity client - memory lifecycle CRUD mixin (split from client.py, 2026-08-17).
 
 Part of the Trinity client package decomposition. Behavior identical to
 the pre-split single-file implementation.
@@ -74,6 +74,42 @@ class _CrudMixin:
                     pass
             return result
         return True
+    def purge_memory(
+        self, memory_id: str, confirm: bool = False, reason: str = "",
+        agent_id: str = "requested", persona_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """GDPR 硬擦除（2026-09-02, Fable 对照审计 P2-⑤⑦）。不可逆操作门禁。"""
+        if not confirm:
+            return {
+                "memory_id": memory_id, "purged": False,
+                "error": "confirm_required",
+                "hint": "irreversible: pass confirm=True to permanently erase content",
+            }
+        if not self._adapter or not hasattr(self._adapter, "purge_memory"):
+            return {"memory_id": memory_id, "purged": False, "error": "unsupported"}
+        result = self._adapter.purge_memory(memory_id, reason=reason)
+        if result.get("purged"):
+            if self.use_ann:
+                import threading as _th
+                _th.Thread(target=self._ann_incremental_remove,
+                           args=(memory_id,), daemon=True).start()
+            try:
+                from trinity.core.cache import get_cache
+                get_cache().invalidate(pattern="*")
+            except Exception:
+                pass
+            if hasattr(self._adapter, "write_audit_log"):
+                try:
+                    self._adapter.write_audit_log(
+                        memory_id=memory_id, action="HARD_PURGE",
+                        agent_id=agent_id, persona_id=persona_id,
+                        details={"reason": (reason or "")[:200],
+                                 "prior_sha256": result.get("prior_sha256"),
+                                 "status": result.get("status")},
+                    )
+                except Exception:
+                    pass
+        return result
     def update_memory(
         self,
         memory_id: str,

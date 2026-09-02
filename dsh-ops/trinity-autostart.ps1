@@ -99,7 +99,7 @@ while ($true) {
     # ── 每日 03:00-03:10：decay + tiers + sync（需 PG）──────────
     $today = $now.ToString("yyyyMMdd")
     if ((Test-Path $Maintenance) -and $now.Hour -eq 3 -and $now.Minute -lt 10 -and $lastDaily -ne $today) {
-        Invoke-Script -Path $Maintenance -ArgsList @("-Tasks", "pg-backfill,mirror,decay,tiers,consolidate,dedup,pg-sync,sync,compact,agent-ttl,active-health,backup,observe,value-recalib,perception-bridge,dcpm-consolidate,integrity-monitor,self-reflect,reconcile,snapshot,market-list,replay,curiosity,proactive,cognition-agent,situation,opsbot-cycle,perception-continuous") -Label "maintenance(decay,tiers,sync)"  # 2026-09-01: +market-list -TimeoutSec 2400  # 2026-09-01: pg-backfill 前置；decay/tiers 走 PG；snapshot=AGENTS.md 快照刷新
+        Invoke-Script -Path $Maintenance -ArgsList @("-Tasks", "pg-backfill,mirror,decay,tiers,consolidate,dedup,pg-sync,sync,compact,agent-ttl,active-health,backup,observe,value-recalib,perception-bridge,dcpm-consolidate,integrity-monitor,self-reflect,reconcile,snapshot,market-list,replay,curiosity,proactive,cognition-agent,situation,opsbot-cycle,perception-continuous,expiry-review") -Label "maintenance(decay,tiers,sync)"  # 2026-09-01: +market-list -TimeoutSec 2400  # 2026-09-01: pg-backfill 前置；decay/tiers 走 PG；snapshot=AGENTS.md 快照刷新
         $lastDaily = $today
     }
 

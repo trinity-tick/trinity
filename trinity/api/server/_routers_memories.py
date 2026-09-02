@@ -424,9 +424,39 @@ async def get_memory_by_id(memory_id: str):
 
 
 @router.delete("/memories/{memory_id}")
-async def delete_memory(memory_id: str):
-    """Soft-delete a memory."""
+async def delete_memory(memory_id: str, hard: bool = False, confirm: str = ""):
+    """Delete a memory. Default = soft-delete（可恢复，审计保留）。
+
+    2026-09-02（Fable 对照审计 P2-⑤⑦）：?hard=true&confirm=yes 走 GDPR
+    硬擦除通道——覆写销毁内容明文/密文（含版本链）+ status=gdpr_deleted，
+    行保留使 SHA-256 receipts 审计链并存；无 confirm=yes 直接 400 拒绝
+    （不可逆操作二次确认门禁）。
+    """
     mem = get_memory()
+    if hard:
+        if confirm != "yes":
+            raise HTTPException(
+                status_code=400,
+                detail="hard purge requires confirm=yes (irreversible)",
+            )
+        result = {"purged": False, "memory_id": memory_id, "error": "unsupported"}
+        if hasattr(mem, 'purge_memory'):
+            result = mem.purge_memory(memory_id, confirm=True,
+                                      reason="api hard-delete",
+                                      agent_id="api")
+        try:
+            aggr = get_aggregator()
+            if hasattr(aggr, "_remove_from_pool"):
+                aggr._remove_from_pool(memory_id)
+        except Exception:
+            pass
+        try:
+            hr = getattr(mem, "_hybrid_retriever", None)
+            if hr is not None and getattr(hr, "_bm25", None) is not None:
+                hr._bm25.remove_document(memory_id)
+        except Exception:
+            pass
+        return result
     deleted = False
     if hasattr(mem, 'delete_memory'):
         deleted = mem.delete_memory(memory_id)

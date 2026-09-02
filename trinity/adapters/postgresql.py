@@ -1,4 +1,4 @@
-"""PostgreSQL storage adapter — production multi-tenant backend with connection pooling."""
+﻿"""PostgreSQL storage adapter — production multi-tenant backend with connection pooling."""
 
 from __future__ import annotations
 
@@ -645,6 +645,10 @@ class PostgreSQLAdapter(StorageAdapter):
                             WHERE memory_id = ANY(%s)
                         """, (now, now, memory_ids))
                     conn.commit()
+        # 2026-09-02（Fable 对照审计 P2-⑥）：读侧 untrusted 标注
+        from trinity.security.readside import annotate_readside
+        for _d in results:
+            annotate_readside(_d)
 
         return results
 
@@ -716,6 +720,9 @@ class PostgreSQLAdapter(StorageAdapter):
                         "metadata": row["metadata"] if "metadata" in row.keys() else None,
                         "score": float(row["score"]) if row["score"] is not None else 0.0,
                     })
+                from trinity.security.readside import annotate_readside
+                for _d in results:
+                    annotate_readside(_d)
                 return results
 
     def get_embedding(self, memory_id: str):
@@ -836,6 +843,49 @@ class PostgreSQLAdapter(StorageAdapter):
                 )
                 conn.commit()
                 return cur.rowcount > 0
+
+    def purge_memory(self, memory_id: str, reason: str = "") -> Dict[str, Any]:
+        """GDPR 硬擦除（2026-09-02, Fable 对照审计 P2-⑤⑦）。覆写销毁+行保留。"""
+        with self._get_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                cur.execute(
+                    "SELECT memory_id, persona_id, sha256_hash, status"
+                    " FROM memories WHERE memory_id::text = %s",
+                    (str(memory_id),),
+                )
+                row = cur.fetchone()
+                if not row:
+                    return {"memory_id": memory_id, "purged": False, "error": "not_found"}
+                prior_hash = row["sha256_hash"]
+                persona_id = row["persona_id"]
+                now = datetime.now(timezone.utc).isoformat()
+                sentinel = "[HARD_PURGED %s] %s" % (now, memory_id)
+                meta = json.dumps({"hard_purged": True, "purged_at": now,
+                                   "reason": (reason or "")[:200]}, ensure_ascii=False)
+                sent_hash = self._compute_sha256(sentinel)
+                cur.execute(
+                    "UPDATE memories SET content = %s, status = 'gdpr_deleted',"
+                    " sha256_hash = %s, embedding = NULL, importance = 0,"
+                    " metadata = metadata || %s::jsonb, updated_at = NOW()"
+                    " WHERE memory_id::text = %s",
+                    (sentinel, sent_hash, meta, str(memory_id)),
+                )
+                cur.execute(
+                    "UPDATE memory_versions SET content = %s WHERE memory_id::text = %s",
+                    (sentinel, str(memory_id)),
+                )
+                try:
+                    cur.execute(
+                        "DELETE FROM memory_links WHERE memory_id::text = %s"
+                        " OR from_memory_id::text = %s OR to_memory_id::text = %s",
+                        (str(memory_id), str(memory_id), str(memory_id)),
+                    )
+                except Exception:
+                    pass
+                conn.commit()
+            return {"memory_id": str(memory_id), "purged": True,
+                    "prior_sha256": prior_hash, "status": "gdpr_deleted",
+                    "persona_id": persona_id}
 
     def update_memory(
         self,

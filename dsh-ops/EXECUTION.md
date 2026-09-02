@@ -15572,3 +15572,76 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 | single-session-preference | .267 | .267 | **.467 (+20pp)** | .200 (-6.7pp) | ms(带会话标注+冲突取新)意外最强；ssp 两段式证伪 |
 - 子集口径与全量类别基线不同（同题对照 Δ 才是证据）；ssp 两段式二次生成引入噪音，弃用；
 - 产物：.trinity/bench-official/qa_strategy_20260902_205414.json（elapsed 1138s）。
+### 459.3 P1-③ 答案评测 citation-coverage 归因指标（闭环 CH-1 残留）
+- 新模块 benchmark/citation_coverage.py（独立文件，不触碰其他会话在改的
+  answer_eval_strategies.py main()）：LongMemEval-S 官方 500q 同款数据/同款
+  sqlite temp 隔离（显式 TRINITY_STORAGE_BACKEND=sqlite，吸取 458 P0-1 教训）/
+  同款 DeepSeek 接线；确定性归因判定为默认（与 AnswerAcc_strict_substring
+  哲学一致），--judge-llm 可选宽松判分（JUDGE_SYSTEM 同款）。
+- 指标（per-category + totals）：citation_coverage = 带有效 [n] 引用（且该
+  引用证据确实支持该论断）的事实数/GT 事实总数；answer_coverage（论断被
+  覆盖）；citation_rate（已覆盖论断中带有效引用比例）；evidence_coverage
+  （GT 事实在检索证据中比例，召回侧参照）。答案提示强制"每论断必须带
+  支持它的 [n] 标记"（provenance 随证据走，对齐 Fable 泄露教训）。
+- 产物 ~/.trinity/bench-official/citation_coverage_<ts>.json。
+- 验证：单测 12 passed（tests/test_citation_coverage.py：分句/标记解析/
+  正误索引/zh 引用/汇总数学/空输入）；端到端冒烟 --limit 1：
+  answer_cov=1.000 citation_cov=1.000 citation_rate=1.000 evidence_cov=1.000。
+
+### 459.4 P1-④ 条目级 expires_at + 过期复核队列（接入 maintenance 日链）
+- ingest（core/client/_ingestion.py）：metadata["expires_at"] 归一（datetime→
+  ISO）；"写入即到期"（过去时刻）→ 落库后立即归档 + 链式审计
+  action=EXPIRED_AT（details 含 expires_at/source=ingest/reason）。
+- 新脚本 scripts/run_expiry_review.py：扫 PG（默认）/SQLite 的 active 记忆
+  中 metadata expires_at 非空项 → 复核队列报告（~/.trinity/state/
+  expiry_review_<ts>.json：expired=已到期、due=临期 --horizon-days 7、
+  broken=解析失败，条目含 memory_id/content_preview/expires_at/
+  importance/category）；默认 dry-run 只出队列；--apply-expired 把已到期
+  记忆置 status='expired' 并写链式审计 EXPIRED_AT（source=expiry-review）；
+  --db/--out-dir 供测试隔离。--dry-run 兼容参数。
+- maintenance 注册任务 expiry-review（$allowed + 命令块 + switch），
+  autostart 每日 03:00 链追加 expiry-review；ps1 保持 UTF-8 BOM+CRLF 编辑，
+  双文件 Parser 解析 0 错误。
+- 实测：maintenance -Tasks expiry-review → OK（store=pg expired=0 due=0
+  broken=0，队列文件落盘）；单测 4 passed（tests/test_expiry_review.py：
+  写入即到期归档+审计、未来到期保持 active、due/horizon 边界与队列落盘、
+  apply-expired 置 expired+审计）。
+
+### 459.5 P2-⑤⑦ GDPR 硬擦除通道 + 不可逆操作 confirm 门禁
+- adapter.purge_memory（SQLite _crud.py 与 PG postgresql.py 同接口）：
+  content（密文）/tokenized_content（明文）/memory_versions 历史内容
+  覆写为哨兵 [HARD_PURGED <ts> <id>]、图谱链接清理、importance=0、
+  status='gdpr_deleted'（PG 另置 embedding=NULL、metadata 记 hard_purged）——
+  内容明文/密文销毁而**行保留**，SHA-256 receipts/版本链/审计链不被破坏
+  （合规日志与 receipts 并存；规避了既有 PG erase_memory 的 FK 失败缺陷）。
+- client.purge_memory(confirm=True 门禁)：无 confirm → confirm_required
+  拒绝（P2-⑤）；确认后执行 + HARD_PURGE 链式审计（details 含 reason/
+  prior_sha256/status）+ ANN/缓存清理。
+- API DELETE /memories/{memory_id}?hard=true&confirm=yes：缺 confirm=yes
+  直接 400（不可逆二次确认）；走 purge + 聚合池/BM25 移除。
+- 验证：单测 7 passed（tests/test_purge_readside.py：覆写匿名化（主行+
+  版本链均无原文）、not_found、confirm 门禁两态、HARD_PURGE 审计含
+  prior_sha256）。
+
+### 459.6 P2-⑥ 读侧 untrusted 内容标注
+- 新模块 trinity/security/readside.py：只读标注（不改存储不阻断）——
+  命中注入/指令覆盖/角色仿冒/外泄模式 → result["untrusted"]=True +
+  untrusted_reason="injection:<severity>:<patterns>"；否则 False；
+  TRINITY_READSIDE_SCAN=off 关闭（默认 on，扫描限内容前 2000 字符）。
+- 接线：sqlite _search.py（FTS+LIKE 两 builder）与 PG postgresql.py
+  （search_memories + vector_search）结果组装处——写路径已有
+  injection/sensitive 过滤，读路径此前无 trust 区分（Fable 教训：
+  检索内容里不可信指令要能识别）。
+- 验证：注入指令内容 → untrusted=True+reason；良性 → False；off → 无键。
+
+### 459.7 P2-⑤ 批量 decay confirm 标志
+- scripts/run_decay_compress.py：--confirm 参数 +
+  TRINITY_DECAY_REQUIRE_CONFIRM=on（显式要求确认）时缺 --confirm 直接
+  SystemExit 拒绝；无人值守维护链默认不设 env、行为不变。
+
+### 459.8 验证与提交
+- 定向：4 个新测试文件 36 passed（sensitive_policy 13 / expiry_review 4 /
+  citation_coverage 12 / purge_readside 7，39s）；模块/接线语法全过；
+  PG 生产库只读冒烟：search 结果带 provenance_role/untrusted 字段无回归。
+- 全量 pytest 后台（pytest-post-fable459.log）。
+- 提交：工作树 → main → push origin → D: worktree fetch+reset 同步。

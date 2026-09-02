@@ -29,7 +29,7 @@ param(
 
 # 兼容 powershell -File 传参：命令行里的 "a,b,c" 会以单个字符串到达，
 # 这里统一按逗号拆分 + 校验。
-$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "sublimate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "usage", "rollout-audit", "audit-ps1", "forgetting", "produce", "federation-sync", "tune", "fulltest", "pg-sync", "evolve", "observe", "value-recalib", "replay", "extract-skills", "perception-bridge", "cognitive-eval", "event-extract", "reversible-compress", "memory-purify", "cognition-agent", "dcpm-consolidate", "replay-consolidate", "integrity-monitor", "perception-scan", "self-reflect", "cognition-check", "web-perception", "web-search", "drift-check", "brain-health", "identity-refresh", "loop-audit", "brainification-guard", "capability-check", "action-loop", "forgetting", "dream-replay", "curiosity", "self-assess", "predictive-loop", "sensory-integration", "emotional-consolidation", "narrative", "associative", "self-axioms", "memory-manager", "proactive", "reconcile", "pg-backfill", "quality-gate", "plugin-smoke", "answer-eval", "snapshot", "brain-report", "consolidate-recent", "market-list", "situation", "opsbot-cycle", "perception-continuous", "all")  # 2026-09-01 对账 + PG→SQLite 反向同步  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
+$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "sublimate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "usage", "rollout-audit", "audit-ps1", "forgetting", "produce", "federation-sync", "tune", "fulltest", "pg-sync", "evolve", "observe", "value-recalib", "replay", "extract-skills", "perception-bridge", "cognitive-eval", "event-extract", "reversible-compress", "memory-purify", "cognition-agent", "dcpm-consolidate", "replay-consolidate", "integrity-monitor", "perception-scan", "self-reflect", "cognition-check", "web-perception", "web-search", "drift-check", "brain-health", "identity-refresh", "loop-audit", "brainification-guard", "capability-check", "action-loop", "forgetting", "dream-replay", "curiosity", "self-assess", "predictive-loop", "sensory-integration", "emotional-consolidation", "narrative", "associative", "self-axioms", "memory-manager", "proactive", "reconcile", "pg-backfill", "quality-gate", "plugin-smoke", "answer-eval", "snapshot", "brain-report", "consolidate-recent", "market-list", "situation", "opsbot-cycle", "perception-continuous", "expiry-review", "all")  # 2026-09-01 对账 + PG→SQLite 反向同步  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
 $normalized = @()
 # 环境感知流（2026-09 EXECUTION 136）：日志告警自动感知入记忆
 $perceptionScanCmd = @"
@@ -1013,6 +1013,18 @@ runpy.run_path(r"$TrinityRoot\scripts\evolve_patch.py", run_name="__main__")
 "@
 $evolvePrompt = "运行 auto-evolve（每日真实小目标无人值守——门禁通过自动合入），汇报补丁结果。"
 
+# 过期复核队列（2026-09-02 Fable 对照 459.4）：扫 metadata expires_at 到期/临期记忆
+# → ~/.trinity/state/expiry_review_*.json 复核队列（dry-run 默认只出队列不动库）
+$expiryReviewCmd = @"
+import sys, os
+sys.path.insert(0, r"$TrinityRoot")
+os.environ.setdefault("TRINITY_STORAGE_BACKEND", "postgresql")
+import runpy
+sys.argv = ["expiry_review", "--horizon-days", "7", "--dry-run"]
+runpy.run_path(r"$TrinityRoot\scripts\run_expiry_review.py", run_name="__main__")
+"@
+$expiryReviewPrompt = "运行 scripts/run_expiry_review.py（expires_at 临期/到期复核队列，dry-run 只出清单）"
+
 # ── 选择任务 ──────────────────────────────────────────────────────────────
 if ($Tasks -contains "all") { $Tasks = @("health", "evolution", "mirror", "decay", "tiers", "consolidate", "dedup", "sync", "compact", "pagetree", "backup", "selftest") }
 if ($Tasks -contains "compress") { $Tasks = @($Tasks | Where-Object { $_ -ne "compress" }) + "decay" }
@@ -1113,6 +1125,7 @@ foreach ($t in $Tasks) {
     "situation" { Invoke-Task -Name "situation" -DirectCommand $situationCmd -DshPrompt $situationPrompt }  # 2026-09-02 情境流
     "opsbot-cycle" { Invoke-Task -Name "opsbot-cycle" -DirectCommand $opsbotCmd -DshPrompt $opsbotPrompt }  # 2026-09-02 第二 agent 自治
     "perception-continuous" { Invoke-Task -Name "perception-continuous" -DirectCommand $perceptionContinuousCmd -DshPrompt $perceptionContinuousPrompt }  # 2026-09-02 持续感知
+    "expiry-review" { Invoke-Task -Name "expiry-review" -DirectCommand $expiryReviewCmd -DshPrompt $expiryReviewPrompt }  # 2026-09-02 459.4 过期复核队列
     "perception-scan" { Invoke-Task -Name "perception-scan" -DirectCommand $perceptionScanCmd -DshPrompt $perceptionScanPrompt }
     "integrity-monitor" { Invoke-Task -Name "integrity-monitor" -LeaseJob "integrity-monitor" -DirectCommand $integrityMonitorCmd -DshPrompt $integrityMonitorPrompt }
     "cognition-agent" { Invoke-Task -Name "cognition-agent" -DirectCommand $cognitionAgentCmd -DshPrompt $cognitionAgentPrompt }  # 2026-09 主动主体

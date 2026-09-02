@@ -551,7 +551,18 @@ def main():
                              "需 TRINITY_DECAY_API_KEY/TRINITY_API_KEY 环境变量）")
     parser.add_argument("--llm-model", default="",
                         help="真实 LLM 模型名（缺省读 TRINITY_DECAY_MODEL，再缺省 deepseek-chat）")
+    parser.add_argument("--confirm", action="store_true",
+                        help="确认批量衰减/压缩执行（2026-09-02 Fable 对照 P2-⑤："
+                             "TRINITY_DECAY_REQUIRE_CONFIRM=on 时不可逆批量操作必需）")
     args = parser.parse_args()
+
+    # 2026-09-02（Fable 对照审计 P2-⑤）：不可逆批量操作 confirm 门禁——
+    # 默认（无人值守维护链不设 env）行为不变；显式要求确认时缺 --confirm 直接拒绝。
+    if os.environ.get("TRINITY_DECAY_REQUIRE_CONFIRM", "").strip().lower() in ("1", "on", "true", "yes"):
+        if not args.confirm:
+            raise SystemExit(
+                "bulk decay/compress requires --confirm "
+                "(TRINITY_DECAY_REQUIRE_CONFIRM=on)")
 
     # ── Build compressor ─────────────────────────────────────
     (

@@ -1,4 +1,4 @@
-"""Trinity client - ingestion & write pipeline mixin (split from client.py, 2026-08-17).
+﻿"""Trinity client - ingestion & write pipeline mixin (split from client.py, 2026-08-17).
 
 Part of the Trinity client package decomposition. Behavior identical to
 the pre-split single-file implementation.
@@ -9,6 +9,7 @@ import json
 import os
 import sys
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -184,6 +185,11 @@ class _IngestionMixin:
         # 推测/加工物"，防止推断内容被当作事实长期固化（Fable 泄露揭示的
         # 记忆治理第一问：did the user provide it, or did the model infer it?）。
         metadata = dict(metadata or {})
+        # 2026-09-02（Fable 对照审计 P1-④）：条目级 expires_at 归一——datetime
+        # 转 ISO 字符串（JSON 可落库）；过去时刻由下方"写入即到期"块即时归档。
+        _ea_val = metadata.get("expires_at")
+        if isinstance(_ea_val, datetime):
+            metadata["expires_at"] = _ea_val.isoformat()
         _prov = metadata.get("provenance_role")
         if _prov not in ("explicit", "inferred", "derived"):
             _ct = str(metadata.get("content_type") or "")
@@ -411,6 +417,33 @@ class _IngestionMixin:
                         agent_id=agent_id, persona_id=persona_id,
                         details=details,
                     )
+            except Exception:
+                pass
+
+        # 2026-09-02（Fable 对照审计 P1-④）：条目级 expires_at——写入即到期
+        # （expires_at 已是过去时刻）→ 立即归档（不进 active 检索面）+
+        # 链式审计 action=EXPIRED_AT（source=ingest）。未来到期由每日
+        # maintenance expiry-review 任务扫入复核队列
+        # （scripts/run_expiry_review.py，临期 7 天 + 到期两组清单）。
+        if memory_id and self._adapter and not isolated_test_write:
+            try:
+                _ea_v2 = (metadata or {}).get("expires_at")
+                if _ea_v2:
+                    _ea_dt = (
+                        _ea_v2 if isinstance(_ea_v2, datetime)
+                        else datetime.fromisoformat(str(_ea_v2).replace("Z", "+00:00")))
+                    if _ea_dt.tzinfo is None:
+                        _ea_dt = _ea_dt.replace(tzinfo=timezone.utc)
+                    if _ea_dt <= datetime.now(timezone.utc):
+                        self._adapter.archive_memories([memory_id])
+                        if hasattr(self._adapter, "write_audit_log"):
+                            self._adapter.write_audit_log(
+                                memory_id=memory_id, action="EXPIRED_AT",
+                                agent_id=agent_id, persona_id=persona_id,
+                                details={"expires_at": str(_ea_v2),
+                                         "source": "ingest",
+                                         "reason": "already expired at write"},
+                            )
             except Exception:
                 pass
 

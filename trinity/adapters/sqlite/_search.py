@@ -267,6 +267,10 @@ class _SearchMixin:
                 "provenance_role": _md.get("provenance_role"),
                 "score": round(norm_score, 4),
             })
+        # 2026-09-02（Fable 对照审计 P2-⑥）：读侧 untrusted 标注
+        from trinity.security.readside import annotate_readside
+        for _d in results:
+            annotate_readside(_d)
 
         return results
     def _search_like(
@@ -323,5 +327,9 @@ class _SearchMixin:
                 "provenance_role": _md.get("provenance_role"),
                 "score": row["score"],
             })
+        # 2026-09-02（Fable 对照审计 P2-⑥）：读侧 untrusted 标注
+        from trinity.security.readside import annotate_readside
+        for _d in results:
+            annotate_readside(_d)
 
         return results

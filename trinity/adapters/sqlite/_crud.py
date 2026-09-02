@@ -1,4 +1,4 @@
-"""SQLite adapter - memory CRUD & lifecycle mixin (split from sqlite.py, 2026-08-17).
+﻿"""SQLite adapter - memory CRUD & lifecycle mixin (split from sqlite.py, 2026-08-17).
 
 Part of the SQLiteAdapter package decomposition. Behavior identical to the
 pre-split single-file implementation.
@@ -366,6 +366,49 @@ class _CrudMixin:
             )
             conn.commit()
             return True
+    @_safe_write
+    def purge_memory(self, memory_id: str, reason: str = "") -> Dict[str, Any]:
+        """GDPR 硬擦除（2026-09-02, Fable 对照审计 P2-⑤⑦）。覆写销毁+行保留。"""
+        with self._write_lock:
+            conn = self._conn
+            if not conn:
+                return {"memory_id": memory_id, "purged": False, "error": "no conn"}
+            row = conn.execute(
+                "SELECT memory_id, persona_id, sha256_hash FROM memories WHERE memory_id = ?",
+                (memory_id,),
+            ).fetchone()
+            if not row:
+                return {"memory_id": memory_id, "purged": False, "error": "not_found"}
+            prior_hash = row["sha256_hash"]
+            persona_id = row["persona_id"]
+            now = datetime.now(timezone.utc).isoformat()
+            sentinel = "[HARD_PURGED %s] %s" % (now, memory_id)
+            meta = json.dumps({"hard_purged": True, "purged_at": now,
+                               "reason": (reason or "")[:200]}, ensure_ascii=False)
+            enc = self._encrypt_content(sentinel)
+            sent_hash = self._compute_sha256(sentinel)
+            conn.execute(
+                "UPDATE memories SET content = ?, tokenized_content = ?,"
+                " status = 'gdpr_deleted', sha256_hash = ?, content_hash = ?,"
+                " metadata = ?, importance = 0, updated_at = ? WHERE memory_id = ?",
+                (enc, sentinel, sent_hash, sent_hash, meta, now, memory_id),
+            )
+            conn.execute(
+                "UPDATE memory_versions SET content = ? WHERE memory_id = ?",
+                (sentinel, memory_id),
+            )
+            try:
+                conn.execute(
+                    "DELETE FROM memory_links WHERE memory_id = ?"
+                    " OR from_memory_id = ? OR to_memory_id = ?",
+                    (memory_id, memory_id, memory_id),
+                )
+            except Exception:
+                pass
+            conn.commit()
+            return {"memory_id": memory_id, "purged": True,
+                    "prior_sha256": prior_hash, "status": "gdpr_deleted",
+                    "persona_id": persona_id}
     @_safe_write
     def update_memory(
         self,
