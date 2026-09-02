@@ -114,4 +114,4 @@ QA Acc:    81.6%
 | 官方 oracle 500 题 R@1/3/5/10（复现跑，EXIT=0） | **1.000 / 1.000 / 1.000 / 1.000**（六类全绿） | .trinity/bench-official/lme_oracle_500_repro_20260902.json |
 | 官方 oracle 500 题 AnswerAcc（2026-09-02 上午锁定，LLM judge，$0.40） | **0.560**（SS-U 0.986 / KU 0.731 / SS-A 0.679 / TR 0.399 / MS 0.391 / SS-P 0.367） | output/official_lmeval_S_answer500.json |
 | runner 隔离修复 | longmemeval_official_runner.py 强制 sqlite 临时库 + WAL/sync=OFF（此前误连生产 PG：慢 10x + lme 类目污染 21,773 条 archived） | benchmark/longmemeval_official_runner.py |
-| 生成侧弱项策略 A/B（tr/ms/ss-p × base/tr/ms/ssp） | 进行中 → .trinity/bench-official/qa_strategy_*.json | benchmark/answer_eval_strategies.py |
+| 生成侧弱项策略 A/B（每类 30 题同题对照，LLM judge，~19min） | TR: base .667→**tr .800(+13.3pp)**/ms .767；MS: base .200→ms/tr .267(+6.7pp)；SS-P: base .267→**ms .467(+20pp)**（ssp 两段式负收益 -6.7~-23pp，已证伪弃用） | .trinity/bench-official/qa_strategy_20260902_205414.json + benchmark/answer_eval_strategies.py |

@@ -15563,3 +15563,12 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 
 ### 459.3 P0 验证
 - pytest tests/test_sensitive_policy.py 13 passed（24s）；模块/接线语法全过。
+
+### 458.1b QA 策略 A/B 终结果（2026-09-02 21:13，每类 30 题同题对照，oracle + LLM judge）
+| 类目 | base | tr(日期线索) | ms(跨会话整合) | ssp(两段式) | 结论 |
+|---|---|---|---|---|---|
+| temporal-reasoning | .667 | **.800 (+13.3pp)** | .767 (+10pp) | .433 (-23pp) | tr 生效：日期线索+时序提示 |
+| multi-session | .200 | .267 (+6.7pp) | .267 (+6.7pp) | .100 (-10pp) | ms/tr 微增益；MS 仍是生成整合难点 |
+| single-session-preference | .267 | .267 | **.467 (+20pp)** | .200 (-6.7pp) | ms(带会话标注+冲突取新)意外最强；ssp 两段式证伪 |
+- 子集口径与全量类别基线不同（同题对照 Δ 才是证据）；ssp 两段式二次生成引入噪音，弃用；
+- 产物：.trinity/bench-official/qa_strategy_20260902_205414.json（elapsed 1138s）。

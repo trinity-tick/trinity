@@ -161,35 +161,36 @@ def main() -> int:
     strategies = ["base", "tr", "ms", "ssp"]
     results = {s: {} for s in strategies}
     t0 = time.time()
+    accs = {s: {t: [0, 0] for t in pool} for s in strategies}
     for t, qlist in pool.items():
-        for strategy in strategies:
-            acc = 0
-            total = 0
-            for qi, q in enumerate(qlist):
-                tmp = tempfile.mkdtemp(prefix="qa_s_")
-                db = os.path.join(tmp, "s.db")
-                ad = SQLiteAdapter(db_path=db)
-                ad.connect()
-                try:
-                    records = []
-                    sid_list = q.get("haystack_session_ids") or []
-                    for idx, msgs in enumerate(q.get("haystack_sessions") or []):
-                        real_sid = str(sid_list[idx]) if idx < len(sid_list) else "sess_%d" % idx
-                        for m in msgs:
-                            content = str(m.get("content") or "") if isinstance(m, dict) else str(m)
-                            if content.strip():
-                                records.append({"content": content[:2000], "persona_id": "u1",
-                                                "session_id": real_sid, "agent_id": "u1", "importance": 0.5})
-                    ad.ingest_batch(records)
-                    hits = ad.search_memories(query=str(q.get("question") or ""), top_k=10)
-                finally:
-                    ad.disconnect()
+        for qi, q in enumerate(qlist):
+            tmp = tempfile.mkdtemp(prefix="qa_s_")
+            db = os.path.join(tmp, "s.db")
+            ad = SQLiteAdapter(db_path=db)
+            ad.connect()
+            try:
+                records = []
+                sid_list = q.get("haystack_session_ids") or []
+                for idx, msgs in enumerate(q.get("haystack_sessions") or []):
+                    real_sid = str(sid_list[idx]) if idx < len(sid_list) else "sess_%d" % idx
+                    for m in msgs:
+                        content = str(m.get("content") or "") if isinstance(m, dict) else str(m)
+                        if content.strip():
+                            records.append({"content": content[:2000], "persona_id": "u1",
+                                            "session_id": real_sid, "agent_id": "u1", "importance": 0.5})
+                ad.ingest_batch(records)
+                hits = ad.search_memories(query=str(q.get("question") or ""), top_k=10)
+            finally:
+                ad.disconnect()
+            for strategy in strategies:
                 ans, ok = answer_question(llm, q, hits, strategy)
-                acc += 1 if ok else 0
-                total += 1
-                if qi % 10 == 9:
-                    print("  [%s][%s] %d/%d acc=%.3f" % (t, strategy, qi + 1, total, acc / max(1, total)), flush=True)
-            results[strategy][t] = round(acc / max(1, total), 4)
+                accs[strategy][t][0] += 1 if ok else 0
+                accs[strategy][t][1] += 1
+            if qi % 10 == 9:
+                line = " ".join("%s=%d/%d" % (s, accs[s][t][0], accs[s][t][1]) for s in strategies)
+                print("  [%s] %d/30 %s" % (t, qi + 1, line), flush=True)
+    for s in strategies:
+        results[s] = {t: round(accs[s][t][0] / max(1, accs[s][t][1]), 4) for t in pool}
     out = {"ts": time.strftime("%Y-%m-%d %H:%M:%S"), "per_cat": args.per,
            "elapsed_s": round(time.time() - t0, 1), "results": results}
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
