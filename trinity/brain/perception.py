@@ -30,7 +30,8 @@ logger = logging.getLogger("trinity.brain.perception")
 CHANNEL_BASE = {
     "alert": 0.7, "error": 0.7, "critical": 0.85, "warning": 0.5,
     "system": 0.3, "session": 0.4, "user": 0.5, "external": 0.4,
-    "monitor": 0.6, "web": 0.6, "websearch": 0.6, "default": 0.4,  # 2026-09 (EXECUTION 158): web 通道（网络感知）
+    "monitor": 0.6, "web": 0.6, "websearch": 0.6, "vision": 0.6,  # 2026-09-02 (EXECUTION 458): 视觉通道（语义截图感知）
+    "default": 0.4,
 }
 # 习惯化窗口（秒）
 HABITUATION_WINDOW = 86400

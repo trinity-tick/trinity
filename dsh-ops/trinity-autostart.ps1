@@ -99,7 +99,7 @@ while ($true) {
     # ── 每日 03:00-03:10：decay + tiers + sync（需 PG）──────────
     $today = $now.ToString("yyyyMMdd")
     if ((Test-Path $Maintenance) -and $now.Hour -eq 3 -and $now.Minute -lt 10 -and $lastDaily -ne $today) {
-        Invoke-Script -Path $Maintenance -ArgsList @("-Tasks", "pg-backfill,mirror,decay,tiers,consolidate,dedup,pg-sync,sync,compact,agent-ttl,active-health,backup,observe,value-recalib,perception-bridge,dcpm-consolidate,integrity-monitor,self-reflect,reconcile,snapshot,market-list,replay,curiosity,proactive,cognition-agent,situation") -Label "maintenance(decay,tiers,sync)"  # 2026-09-01: +market-list -TimeoutSec 2400  # 2026-09-01: pg-backfill 前置；decay/tiers 走 PG；snapshot=AGENTS.md 快照刷新
+        Invoke-Script -Path $Maintenance -ArgsList @("-Tasks", "pg-backfill,mirror,decay,tiers,consolidate,dedup,pg-sync,sync,compact,agent-ttl,active-health,backup,observe,value-recalib,perception-bridge,dcpm-consolidate,integrity-monitor,self-reflect,reconcile,snapshot,market-list,replay,curiosity,proactive,cognition-agent,situation,opsbot-cycle,perception-continuous") -Label "maintenance(decay,tiers,sync)"  # 2026-09-01: +market-list -TimeoutSec 2400  # 2026-09-01: pg-backfill 前置；decay/tiers 走 PG；snapshot=AGENTS.md 快照刷新
         $lastDaily = $today
     }
 
@@ -113,6 +113,16 @@ while ($true) {
     if ((Test-Path $Maintenance) -and $now.DayOfWeek -eq 'Sunday' -and $now.Hour -eq 3 -and $now.Minute -ge 10 -and $now.Minute -lt 40 -and $lastWeeklyAcc -ne $today) {
         Invoke-Script -Path $Maintenance -ArgsList @("-Tasks", "answer-eval") -Label "maintenance(answer-eval)" -TimeoutSec 2400
         $lastWeeklyAcc = $today
+    }
+
+    # ── 每 30 分钟：持续感知流（EXECUTION 458 P1-2；marker 文件防抖）──
+    $percMark = Join-Path $LogDir "perception-loop.mark"
+    $percDue = $false
+    if (-not (Test-Path $percMark)) { $percDue = $true }
+    elseif (((Get-Date) - (Get-Item $percMark).LastWriteTime).TotalMinutes -ge 30) { $percDue = $true }
+    if ($percDue -and (Test-Path $Maintenance)) {
+        Invoke-Script -Path $Maintenance -ArgsList @("-Tasks", "perception-continuous") -Label "maintenance(perception)"
+        Set-Content -Path $percMark -Value (Get-Date -Format o)
     }
 
     Start-Sleep -Seconds $SupervisorIntervalSec

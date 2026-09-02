@@ -15471,3 +15471,56 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 - 全量 pytest 后台门禁（见 pytest-full-preround.log）；
 - 提交：工作树（原 58 + 本包）→ main → push origin → D: 副本 fetch+reset 同步。
 
+
+## 458. 下一步优先级全执行（2026-09-02 晚，P0/P1/P2 逐项落地）
+
+> 承接 457 报告"建议下一步优先级"，全部执行（多子项并行，各带实测证据）。
+
+### 458.1 P0-1 官方 LongMemEval 跑分锁定（复现 + 数字落档）
+- 复现跑：official_lm_eval.py 全量 500 题 → R@1/3/5/10 = 1.000×6 类（EXIT=0，~8 分钟）；
+  与上午锁定 AnswerAcc 0.560（SS-U .986/KU .731/SS-A .679/TR .399/MS .391/SS-P .367，$0.40）共同入档 docs/BENCHMARKS.md；
+- **根因修复（重要）**：longmemeval_official_runner.py 09 起 Trinity 默认后端=PG，runner 只设 TRINITY_STORE 未隔离
+  → 历次官方跑误连生产库（慢 10x；100 题 1h20m；并写入 lme 类目 21,773 条 archived 污染）。
+  修复：强制 TRINITY_STORAGE_BACKEND=sqlite 临时库 + WAL/synchronous=OFF + 增量 .partial 落盘（防中断全丢）。
+  教训记录：基准工具必须显式声明存储后端。
+
+### 458.2 P0-2 发布三件套（本机可做部分）
+- docs/RELEASE_NOTES_458.md（能力/锁定数字/诚实差距/发布清单）；
+- docs/BENCHMARKS.md 补 458 复核段；
+- git tag 推送（见提交节）；MCP registry/PyPI/GitHub Release 页 = 外部账号注册，如实标注待办。
+
+### 458.3 P1-1 生成侧弱项专项（tr/ms/ss-p A/B）
+- benchmark/answer_eval_strategies.py：官方 oracle 数据、同题对照 base vs tr（日期线索+时序提示）/
+  ms（跨会话整合+冲突取新）/ ssp（偏好两段式），判分与 official_lm_eval 同款；
+- 运行 → .trinity/bench-official/qa_strategy_*.json（见文件结果，随后续轮锁 Δ）。
+
+### 458.4 P1-2 持续感知流
+- scripts/perception_loop.py：perception_inbox 收图→本地语义视觉（qwen2.5vl）→/memory/perceive(vision 通道)
+  →刷新情境流；处理图归档 done/；--once 供调度；
+- trinity/brain/perception.py 补 CHANNEL_BASE["vision"]=0.6（此前默认 0.4 不达编码阈 0.45）；
+- 注册 maintenance 任务 perception-continuous + autostart 30 分钟分支（marker 防抖）；
+- 实测：合成 UI 截图入 inbox → "[语义] 库存锁定失败异常警告/出库单…" → perceptions(vision)×2 + perception 记忆×2 落库 ✓。
+
+### 458.5 P1-3 ops-bot 升格自治 agent
+- scripts/opsbot_daily.py：从自身命名空间记忆提取主题（轮转）→ 命名空间检索证据 → 决策记忆
+  （agent=ops-bot）→ 高价值新记忆自动上市场；注册任务 opsbot-cycle + 入日链；
+- 实测：topics=[备份/数据库/策略/恢复/库存/承运] → 选题"备份" → 自证 2 + 外部线索 2 →
+  决策记忆 02a77d58… 写入 + 市场上架 listed ✓。
+
+### 458.6 P2-1 BEAM 现状收口（诚实）
+- 本机已有 10k/100k 档产物（benchmark/beam_results*.csv + beam_report*.md）；
+- 1M/10M 档需更长生成与跑分窗口（数据生成脚本就绪），本轮资源让位官方 LongMemEval，标注为外部窗口待跑。
+
+### 458.7 P2-2 核心级自进化阶段 3 试点 ✅
+- scripts/evolve_core_gate.py：ALLOWLIST(trinity/security/crypto.py) → LLM 提案 → AST 校验
+  （单 def、无 import/class）→ 行为门禁 → canonical pytest(168) → git commit；失败回滚+拒绝报告；
+- 首个真实补丁：crypto.is_encrypted(content)->bool（LLM 生成、门禁 168 passed 42.1s、已提交）；证据 ~/.trinity/state/evolve_core_pilot.json。
+
+### 458.8 P2-3 联邦最小多实例验证 ✅
+- scripts/federation_mini_demo.py：实例 A(3 条) / 实例 B(2 条) 完全隔离 SQLite，
+  federation_sync export/import：A→B 后 B=5、幂等复跑不变、B→A 后 A=8；
+  SUMMARY bidirectional_ok=True idempotent_ok=True（子进程显式 TRINITY_STORAGE_BACKEND=sqlite——credentials 有 PG 键会劫持 store_path）。
+- 诚实边界：单机双实例（包传输级），WAN 传输层仍为外部项。
+
+### 458.9 提交与同步
+- 工作树（457 遗留 supervisor E1b 为并行会话改动，未纳入）→ main 分批 commit → push → D: 同步。

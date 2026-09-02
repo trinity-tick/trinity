@@ -29,7 +29,7 @@ param(
 
 # 兼容 powershell -File 传参：命令行里的 "a,b,c" 会以单个字符串到达，
 # 这里统一按逗号拆分 + 校验。
-$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "sublimate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "usage", "rollout-audit", "audit-ps1", "forgetting", "produce", "federation-sync", "tune", "fulltest", "pg-sync", "evolve", "observe", "value-recalib", "replay", "extract-skills", "perception-bridge", "cognitive-eval", "event-extract", "reversible-compress", "memory-purify", "cognition-agent", "dcpm-consolidate", "replay-consolidate", "integrity-monitor", "perception-scan", "self-reflect", "cognition-check", "web-perception", "web-search", "drift-check", "brain-health", "identity-refresh", "loop-audit", "brainification-guard", "capability-check", "action-loop", "forgetting", "dream-replay", "curiosity", "self-assess", "predictive-loop", "sensory-integration", "emotional-consolidation", "narrative", "associative", "self-axioms", "memory-manager", "proactive", "reconcile", "pg-backfill", "quality-gate", "plugin-smoke", "answer-eval", "snapshot", "brain-report", "consolidate-recent", "market-list", "situation", "all")  # 2026-09-01 对账 + PG→SQLite 反向同步  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
+$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "sublimate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "usage", "rollout-audit", "audit-ps1", "forgetting", "produce", "federation-sync", "tune", "fulltest", "pg-sync", "evolve", "observe", "value-recalib", "replay", "extract-skills", "perception-bridge", "cognitive-eval", "event-extract", "reversible-compress", "memory-purify", "cognition-agent", "dcpm-consolidate", "replay-consolidate", "integrity-monitor", "perception-scan", "self-reflect", "cognition-check", "web-perception", "web-search", "drift-check", "brain-health", "identity-refresh", "loop-audit", "brainification-guard", "capability-check", "action-loop", "forgetting", "dream-replay", "curiosity", "self-assess", "predictive-loop", "sensory-integration", "emotional-consolidation", "narrative", "associative", "self-axioms", "memory-manager", "proactive", "reconcile", "pg-backfill", "quality-gate", "plugin-smoke", "answer-eval", "snapshot", "brain-report", "consolidate-recent", "market-list", "situation", "opsbot-cycle", "perception-continuous", "all")  # 2026-09-01 对账 + PG→SQLite 反向同步  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
 $normalized = @()
 # 环境感知流（2026-09 EXECUTION 136）：日志告警自动感知入记忆
 $perceptionScanCmd = @"
@@ -952,6 +952,26 @@ runpy.run_path(r"$TrinityRoot/scripts/run_situation_stream.py", run_name="__main
 "@
 $situationPrompt = "刷新情境持续上下文流（当下信号→situation_stream.json + PG ctx:brain），输出摘要。"
 
+# ops-bot 自治日循环（2026-09-02 EXECUTION 458）：第二 agent 自己思考/决策/上架
+$opsbotCmd = @"
+import sys
+sys.path.insert(0, r"$TrinityRoot")
+import runpy
+sys.argv = ["opsbot_daily"]
+runpy.run_path(r"$TrinityRoot/scripts/opsbot_daily.py", run_name="__main__")
+"@
+$opsbotPrompt = "运行 ops-bot 自治日循环（自身主题→检索→决策记忆→市场上架），输出主题/决策/挂单。"
+
+# 持续感知流（2026-09-02 EXECUTION 458）：inbox 截图→语义视觉→感知记忆→情境流
+$perceptionContinuousCmd = @"
+import sys
+sys.path.insert(0, r"$TrinityRoot")
+import runpy
+sys.argv = ["perception_loop", "--once"]
+runpy.run_path(r"$TrinityRoot/scripts/perception_loop.py", run_name="__main__")
+"@
+$perceptionContinuousPrompt = "持续感知流一轮：处理 perception_inbox 新图（本地语义视觉→感知记忆→刷新情境流），输出 perceived/processed 数。"
+
 # 质量门禁（2026-09-01 短板 #1）：500q 检索 R@5（keyword/hybrid 逐类目）+ 延迟 + 对账，
 # 输出 ~/.trinity/bench-results/quality-gate-*.json；阈值不过 exit 1。显式调用，不进日链。
 $qualityGateCmd = @"
@@ -1091,6 +1111,8 @@ foreach ($t in $Tasks) {
     "cognition-check" { Invoke-Task -Name "cognition-check" -DirectCommand $cognitionCheckCmd -DshPrompt $cognitionCheckPrompt }
     "self-reflect" { Invoke-Task -Name "self-reflect" -DirectCommand $selfReflectCmd -DshPrompt $selfReflectPrompt }
     "situation" { Invoke-Task -Name "situation" -DirectCommand $situationCmd -DshPrompt $situationPrompt }  # 2026-09-02 情境流
+    "opsbot-cycle" { Invoke-Task -Name "opsbot-cycle" -DirectCommand $opsbotCmd -DshPrompt $opsbotPrompt }  # 2026-09-02 第二 agent 自治
+    "perception-continuous" { Invoke-Task -Name "perception-continuous" -DirectCommand $perceptionContinuousCmd -DshPrompt $perceptionContinuousPrompt }  # 2026-09-02 持续感知
     "perception-scan" { Invoke-Task -Name "perception-scan" -DirectCommand $perceptionScanCmd -DshPrompt $perceptionScanPrompt }
     "integrity-monitor" { Invoke-Task -Name "integrity-monitor" -LeaseJob "integrity-monitor" -DirectCommand $integrityMonitorCmd -DshPrompt $integrityMonitorPrompt }
     "cognition-agent" { Invoke-Task -Name "cognition-agent" -DirectCommand $cognitionAgentCmd -DshPrompt $cognitionAgentPrompt }  # 2026-09 主动主体

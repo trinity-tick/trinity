@@ -106,3 +106,12 @@ QA Acc:    81.6%
 - [ ] PersonalMemEval（个性化记忆评测）
 - [ ] MultiModal-MemEval（多模态记忆评测）
 - [ ] MemSafety-Bench（记忆安全评测）
+
+## EXECUTION 458 复核（2026-09-02 晚，官方数字锁定）
+
+| 项目 | 值 | 证据 |
+|---|---|---|
+| 官方 oracle 500 题 R@1/3/5/10（复现跑，EXIT=0） | **1.000 / 1.000 / 1.000 / 1.000**（六类全绿） | .trinity/bench-official/lme_oracle_500_repro_20260902.json |
+| 官方 oracle 500 题 AnswerAcc（2026-09-02 上午锁定，LLM judge，$0.40） | **0.560**（SS-U 0.986 / KU 0.731 / SS-A 0.679 / TR 0.399 / MS 0.391 / SS-P 0.367） | output/official_lmeval_S_answer500.json |
+| runner 隔离修复 | longmemeval_official_runner.py 强制 sqlite 临时库 + WAL/sync=OFF（此前误连生产 PG：慢 10x + lme 类目污染 21,773 条 archived） | benchmark/longmemeval_official_runner.py |
+| 生成侧弱项策略 A/B（tr/ms/ss-p × base/tr/ms/ssp） | 进行中 → .trinity/bench-official/qa_strategy_*.json | benchmark/answer_eval_strategies.py |

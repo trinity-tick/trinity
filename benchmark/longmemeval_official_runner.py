@@ -45,7 +45,23 @@ def llm_chat(system, user, max_tokens=120, temp=0.0):
 
 # Trinity engine (temp store, FTS5+BM25; keep embedding off for speed)
 import tempfile
+# 2026-09-02 (EXECUTION 458): 临时评测库 WAL + 关同步 —— 实测默认每 ingest ~1s(fsync)，
+# 500 题 x ~50 会话会到 7h+；临时库数据可丢，sync=OFF 安全且提速 >50x
+import sqlite3 as _sq
+_orig_connect = _sq.connect
+def _fast_connect(*a, **k):
+    con = _orig_connect(*a, **k)
+    try:
+        con.execute("PRAGMA journal_mode=WAL")
+        con.execute("PRAGMA synchronous=OFF")
+        con.execute("PRAGMA cache_size=-32000")
+    except Exception:
+        pass
+    return con
+_sq.connect = _fast_connect
 os.environ["TRINITY_STORE"] = tempfile.mkdtemp(prefix="lme_official_")
+os.environ["TRINITY_STORAGE_BACKEND"] = "sqlite"  # 2026-09-02 (EXECUTION 458): 强制临时 SQLite——
+# 09 起后端默认 PG，runner 此前误连生产库（慢 10x + lme 类目污染 21,773 条），必须显式隔离
 os.environ["TRINITY_LLM_EXTRACT"] = "off"      # no write-time LLM (benchmark retrieval only)
 os.environ["TRINITY_ISOLATE_TEST_WRITES"] = "off"
 os.environ["TRINITY_MEMORY_ENABLED"] = "0"
@@ -202,7 +218,13 @@ for qi, q in enumerate(data):
         done = qi + 1
         sr = sum(1 for x in results if x["session_recall"]) / max(1, len(results))
         tr = sum(1 for x in results if x["turn_recall"]) / max(1, len(results))
-        print(f"[{done}/{len(data)}] {el:.0f}s elapsed | session_R@{args.top_k}={sr:.3f} turn_R@{args.top_k}={tr:.3f}", flush=True)
+        print(f"[{done}/{len(data)}] {el:.0f}s elapsed ({el/done:.1f}s/q, eta {(el/done)*(len(data)-done)/60:.0f}min) | session_R@{args.top_k}={sr:.3f} turn_R@{args.top_k}={tr:.3f}", flush=True)
+    if (qi + 1) % 25 == 0 or qi + 1 == len(data):
+        try:
+            with open(args.out + ".partial", "w", encoding="utf-8") as f:
+                json.dump({"partial": True, "n": len(results), "results": results}, f, ensure_ascii=False)
+        except Exception:
+            pass
 
 # summary
 n = len(results)
