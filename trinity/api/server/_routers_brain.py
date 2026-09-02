@@ -188,9 +188,9 @@ def memory_perceive(
             from trinity.core.client._helpers import _get_embedding_engine
             from PIL import Image as _PIL
             _img = _PIL.open(_io.BytesIO(_b64.b64decode(image)))
-            # 视觉描述：走已有 image 描述能力（失败静默降级）
+            # 视觉描述：语义优先（本地 VL 模型）、特征降级（EXECUTION 457）
             try:
-                from trinity.vision import describe_image as _desc
+                from trinity.vision import describe_image_any as _desc
                 _desc_text = _desc(_img)
                 if _desc_text:
                     signal = f"[vision] {signal} | 画面: {str(_desc_text)[:300]}"

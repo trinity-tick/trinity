@@ -18,12 +18,25 @@
 
 | 参数 | 值 |
 |------|-----|
-| 系统版本 | Trinity v6.19 |
-| 检索方法 | TF-IDF cosine similarity (baseline, 无 LLM reranker) |
+| 系统版本 | Trinity v8.2.1 |
+| 检索方法 | FTS5 keyword（jieba 中文分词 + BM25） |
 | 数据集 | LongMemEval Mock (500题, 6类, 10 personas) |
 | 记忆会话 | 10 personas × 6 sessions = 60 个多轮对话 |
 | 总消息 chunks | 484 条 |
 | Top-K | 10 |
+
+### 官方 LongMemEval-S（2026-09-02 新增，正式替代 mock 降级）
+
+| 参数 | 值 |
+|------|-----|
+| 数据集 | **官方 LongMemEval-S（xiaowu0162/longmemeval-cleaned, longmemeval_s_cleaned.json, 500 题 6 类）** |
+| 数据来源 | HuggingFace 官方（hf-mirror 下载，277MB；oracle 变体 15.4MB） |
+| 评测语义 | 每问摄入 haystack 全部会话消息（每消息=一条记忆，会话 id 对齐官方）→ 检索 query → 命中 answer_session_ids 即中 |
+| R@1 / R@5 / R@10 | **1.000 / 1.000 / 1.000**（FTS keyword，手工抽查验证 top-1 为答案会话） |
+| AnswerAcc | **0.560**（500q 全量，oracle 上下文 + LLM judge，$0.405；SS-U 0.986 / KU 0.731 / SS-A 0.679 / TR 0.399 / MS 0.391 / SS-P 0.367） |
+| 交叉印证 | multi-session 0.391 与 mock 的 MS（0.10-0.14）同族弱项；single-session-preference 0.367 与 mock SS-P（0.52-0.58）同族——跨数据集双弱项交叉验证 |
+| 工具 | benchmark/official_lm_eval.py（--limit N [--answer]） |
+| 备注 | S 级 haystack 关键词友好；更难的 M 变体（longmemeval_m_cleaned.json）待跑 |
 
 ### 总体分数
 

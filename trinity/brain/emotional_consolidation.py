@@ -55,8 +55,16 @@ def emotional_consolidate(limit: int = 100, write: bool = True) -> dict:
             if write:
                 # 杏仁核效应：情绪记忆强化（importance 微升 + access+1）
                 new_imp = min(float(imp or 0.5) + 0.05, 0.95)
-                cur.execute("UPDATE memories SET importance=%s, access_count=%s WHERE memory_id=%s",
-                            (new_imp, (acc or 0) + 1, mid))
+                # 2026-09-01（价值闭环）：打 emotional_salience 标签，供 value-recalib 纳入价值评估
+                _tag = json.dumps({"emotional_salience": round(strength, 2)}, ensure_ascii=False)
+                cur.execute("""
+                    UPDATE memories SET importance=%s, access_count=%s,
+                        metadata = CASE
+                            WHEN jsonb_typeof(metadata) = 'object' THEN metadata || %s::jsonb
+                            ELSE '{}'::jsonb || %s::jsonb
+                        END
+                    WHERE memory_id=%s
+                """, (new_imp, (acc or 0) + 1, _tag, _tag, mid))
         else:
             neutral += 1
     conn.commit()

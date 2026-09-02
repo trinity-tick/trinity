@@ -419,7 +419,8 @@ class _IngestionMixin:
 
         return result
     _ISOLATED_TEST_AGENTS = {"stress-agent", "lock-test", "stress-test", "stress-db-writer"}
-    _ISOLATED_TEST_CATEGORIES = {"stress-test", "stress_test"}
+    # 2026-09-02: 补 test-stim（审计发现 test-stim-001~015 活跃污染，写入未隔离）
+    _ISOLATED_TEST_CATEGORIES = {"stress-test", "stress_test", "test-stim", "test_stim"}
     _ISOLATED_TEST_TAGS = {"locktest", "stress"}
     def _is_isolated_test_write(
         self, agent_id: str, category: str, tags: Optional[List[str]],

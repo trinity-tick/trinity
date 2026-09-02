@@ -42,7 +42,7 @@ def _port_free(host: str, port: int) -> bool:
         return True
 
 
-def _wait_for_server(url: str, timeout: int = 20) -> bool:
+def _wait_for_server(url: str, timeout: int = 60) -> bool:  # 2026-09-01: 20s 太短（聚合器预热分钟级）
     """Wait for the Trinity server to be ready."""
     import urllib.request
     deadline = time.monotonic() + timeout
@@ -74,10 +74,17 @@ def trinity_server():
     env = os.environ.copy()
     env["PYTHONPATH"] = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     env["TRINITY_DB_PATH"] = TEST_DB_PATH
+    # 2026-09-01: 测试服务器禁用聚合器（e2e 只测引擎/身份/记忆端点，聚合器预热 2-3 分钟导致 20s 等待必超时）
+    env["TRINITY_MEMORY_ENABLED"] = "0"
 
     # Remove test DB if it exists to start fresh
-    if os.path.exists(TEST_DB_PATH):
-        os.remove(TEST_DB_PATH)
+    # 2026-09-01: 连带清理 -wal/-shm（上一轮残留 WAL 会让新服务器 SQLite 启动失败 → 60s 超时）
+    import glob as _glob
+    for _p in _glob.glob(TEST_DB_PATH + "*"):
+        try:
+            os.remove(_p)
+        except OSError:
+            pass
 
     proc = subprocess.Popen(
         [

@@ -12,6 +12,8 @@ Usage:
 """
 
 from trinity.version import __version__, VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH, VERSION_TUPLE, VERSION_STRING
+# 2026-09-02：集中凭证解析 + psycopg2.connect 补丁（brain/* 等存量硬编码点自动生效）
+from trinity.security import credentials as _credentials  # noqa: F401  # noqa: E402
 __all__ = [
     "Trinity",
     "TrinityClient",

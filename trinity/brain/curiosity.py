@@ -56,11 +56,11 @@ def curiosity_drive(topics: list, max_search: int = 2) -> dict:
     results = {"searched": [], "failed": []}
     for t in topics[:max_search]:
         try:
-            sys.path.insert(0, r"D:\\trinity-code")
+            sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
             import runpy
             _old = sys.argv
             sys.argv = ["web_search", "--query=" + str(t["topic"])[:40], "--max=5"]
-            runpy.run_path(r"D:\\trinity-code\\scripts\\web_search.py", run_name="__main__")
+            runpy.run_path(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "scripts", "web_search.py"), run_name="__main__")
             sys.argv = _old
             results["searched"].append(t["topic"])
         except Exception as e:

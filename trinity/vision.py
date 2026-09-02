@@ -9,6 +9,8 @@
 
 describe_image(image: PIL.Image) -> str
 """
+import os
+import json
 import math
 
 
@@ -110,3 +112,107 @@ def describe_image_b64(b64_str: str) -> str:
         return describe_image(img)
     except Exception:
         return None
+
+
+# ── 2026-09-02 (EXECUTION 457): 语义级画面理解（本地 VL 模型）─────────
+# 体检结论：感知 85% 是"特征级"（颜色/对比/边缘），缺语义级画面理解。
+# 本机 Ollama 拉取 qwen2.5vl:3b（本地视觉语言模型），OpenAI 兼容通道：
+#   语义描述成功 → 真正"看懂画面"；模型不可用/超时 → 静默降级特征描述。
+# 开关：TRINITY_VISION_SEMANTIC=0 关闭（保持确定性/省时）；默认 1。
+_SEM_CHECKED = False
+_SEM_OK = False
+
+
+def _semantic_available() -> bool:
+    """探测本地 VL 模型可用性（每进程一次 + 失败冷却 60s）。"""
+    global _SEM_CHECKED, _SEM_OK
+    if _SEM_CHECKED:
+        return _SEM_OK
+    if os.environ.get("TRINITY_VISION_SEMANTIC", "1") == "0":
+        _SEM_CHECKED = True
+        return False
+    import urllib.request
+    model = os.environ.get("TRINITY_VISION_MODEL", "qwen2.5vl:3b")
+    base = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
+    base = base if base.startswith("http") else "http://" + base
+    base = base.replace("0.0.0.0", "127.0.0.1")  # Windows 上 0.0.0.0 不可连接
+    try:
+        with urllib.request.urlopen(base + "/v1/models", timeout=4) as r:
+            data = json.loads(r.read().decode())
+        ids = [m.get("id", "") for m in data.get("data", [])]
+        _SEM_OK = any(model in i for i in ids)
+    except Exception:
+        _SEM_OK = False
+    _SEM_CHECKED = True
+    return _SEM_OK
+
+
+def describe_image_semantic(image, max_tokens: int = 220) -> str:
+    """语义级画面描述（本地 VL，OpenAI 兼容；失败返回 None → 调用方降级）。"""
+    import base64 as _b64, io as _io
+    if not _semantic_available():
+        return None
+    try:
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+        buf = _io.BytesIO()
+        # 压缩到宽 1024 内，控制 token
+        w, h = image.size
+        if w > 1024:
+            image = image.resize((1024, int(h * 1024 / w)))
+        image.save(buf, format="PNG")
+        b64 = _b64.b64encode(buf.getvalue()).decode()
+        model = os.environ.get("TRINITY_VISION_MODEL", "qwen2.5vl:3b")
+        base = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
+        base = base if base.startswith("http") else "http://" + base
+        base = base.replace("0.0.0.0", "127.0.0.1")  # Windows 上 0.0.0.0 不可连接
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": [
+                {"type": "text",
+                 "text": "用中文简要描述这张截图/图像的内容：界面类型、主要元素、"
+                         "可见文字、状态与异常线索（不超过 60 字，只描述看到的事实）"},
+                {"type": "image_url",
+                 "image_url": {"url": "data:image/png;base64," + b64}},
+            ]}],
+            "max_tokens": max_tokens, "temperature": 0.1,
+            "stream": False,
+        }
+        import urllib.request
+        req = urllib.request.Request(
+            base + "/v1/chat/completions",
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=120) as r:
+            resp = json.loads(r.read().decode())
+        txt = ((resp.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
+        return " ".join(txt.split())[:200] or None
+    except Exception:
+        return None
+
+
+def describe_image_any(image) -> str:
+    """语义优先、特征降级的统一入口（EXECUTION 457）。"""
+    sem = describe_image_semantic(image)
+    if sem:
+        return "[语义] " + sem
+    feat = describe_image(image)
+    return ("[特征] " + feat) if feat else None
+
+
+def describe_image_b64_semantic(b64_str: str) -> str:
+    """base64 图像 → 语义描述（失败降级特征）。"""
+    try:
+        import base64 as _b64, io as _io
+        from PIL import Image as _PIL
+        img = _PIL.open(_io.BytesIO(_b64.b64decode(b64_str)))
+        return describe_image_any(img)
+    except Exception:
+        return None
+
+
+def _semantic_reset():
+    """测试/诊断用：重置可用性缓存。"""
+    global _SEM_CHECKED, _SEM_OK
+    _SEM_CHECKED = False
+    _SEM_OK = False

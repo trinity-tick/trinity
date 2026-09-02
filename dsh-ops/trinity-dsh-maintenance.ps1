@@ -29,7 +29,7 @@ param(
 
 # 兼容 powershell -File 传参：命令行里的 "a,b,c" 会以单个字符串到达，
 # 这里统一按逗号拆分 + 校验。
-$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "sublimate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "usage", "rollout-audit", "audit-ps1", "forgetting", "produce", "federation-sync", "tune", "fulltest", "pg-sync", "evolve", "observe", "value-recalib", "replay", "extract-skills", "perception-bridge", "cognitive-eval", "event-extract", "reversible-compress", "memory-purify", "cognition-agent", "dcpm-consolidate", "replay-consolidate", "integrity-monitor", "perception-scan", "self-reflect", "cognition-check", "web-perception", "web-search", "drift-check", "brain-health", "identity-refresh", "loop-audit", "brainification-guard", "capability-check", "action-loop", "forgetting", "dream-replay", "curiosity", "self-assess", "predictive-loop", "sensory-integration", "emotional-consolidation", "narrative", "associative", "self-axioms", "memory-manager", "proactive", "reconcile", "pg-backfill", "quality-gate", "all")  # 2026-09-01 对账 + PG→SQLite 反向同步  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
+$allowed = @("health", "evolution", "mirror", "decay", "compress", "tiers", "consolidate", "sublimate", "dedup", "sync", "agent-sync", "pool-sync", "compact", "backup", "selftest", "session-summarize", "session-auto", "agent-ttl", "db-health", "active-health", "slo", "consistency", "evolve-auto", "evolve-env", "consolidate-temporal", "memory-ops", "pagetree", "eval", "review", "usage", "rollout-audit", "audit-ps1", "forgetting", "produce", "federation-sync", "tune", "fulltest", "pg-sync", "evolve", "observe", "value-recalib", "replay", "extract-skills", "perception-bridge", "cognitive-eval", "event-extract", "reversible-compress", "memory-purify", "cognition-agent", "dcpm-consolidate", "replay-consolidate", "integrity-monitor", "perception-scan", "self-reflect", "cognition-check", "web-perception", "web-search", "drift-check", "brain-health", "identity-refresh", "loop-audit", "brainification-guard", "capability-check", "action-loop", "forgetting", "dream-replay", "curiosity", "self-assess", "predictive-loop", "sensory-integration", "emotional-consolidation", "narrative", "associative", "self-axioms", "memory-manager", "proactive", "reconcile", "pg-backfill", "quality-gate", "plugin-smoke", "answer-eval", "snapshot", "brain-report", "consolidate-recent", "market-list", "situation", "all")  # 2026-09-01 对账 + PG→SQLite 反向同步  # 2026-08-18 SRE: slo 报告任务; 2026-08-21: agent-sync 多机同步 + pool-sync 聚合池水位同步; 2026-08-21: consistency 聚合池vs引擎库一致性校验（治理层只读）
 $normalized = @()
 # 环境感知流（2026-09 EXECUTION 136）：日志告警自动感知入记忆
 $perceptionScanCmd = @"
@@ -380,14 +380,26 @@ $healthPrompt = "在 C:\Users\Administrator\trinity 运行 python health_check.p
 # 注意：中途相位只在内存（core.py 的 current_cycle/_phase_queue），跨进程不保留，
 # 因此必须在同一进程内跑满 5 tick 才能完成一个周期。
 $evoCmd = @"
-import sys, json
+import sys, json, glob, os
 sys.path.insert(0, r"$TrinityRoot")
 from trinity.evolution import MetaEvolution
+# 2026-09-01（D 修复）：把最近一次质量门禁指标喂进 tick 上下文——让进化环"看到"检索质量
+# 数字（gate_ok/r5/延迟），为其后续决策提供评测锚点；无结果时为 None。
+_gate = None
+try:
+    _gs = sorted(glob.glob(os.path.expanduser("~/.trinity/bench-results/quality-gate-*.json")))
+    if _gs:
+        _g = json.load(open(_gs[-1], encoding="utf-8"))
+        _gate = {"gate_ok": _g.get("gate_ok"), "keyword_r5": (_g.get("keyword") or {}).get("r5"),
+                 "hybrid_r5": (_g.get("hybrid") or {}).get("r5"),
+                 "p50_ms": (_g.get("keyword") or {}).get("p50_ms"), "ts": _g.get("ts")}
+except Exception:
+    _gate = None
 evo = MetaEvolution()
 phases = []
 last = None
 for i in range(5):
-    last = evo.tick({"action": "scheduled", "source": "dsh-maintenance"})
+    last = evo.tick({"action": "scheduled", "source": "dsh-maintenance", "quality_gate": _gate})
     phases.append(last.get("phase"))
     if last.get("cycle_complete"):
         break
@@ -402,7 +414,7 @@ print(json.dumps({"phases": phases, "cycle_complete": last.get("cycle_complete")
 "@
 $evoPrompt = "在 C:\Users\Administrator\trinity 用 Python 执行一次完整的 Trinity 进化周期：from trinity.evolution import MetaEvolution; evo=MetaEvolution(); 在同一进程内连续 tick 直至 cycle_complete（最多 5 次）; evo.save_state()。然后读取 evo.diagnostics() 汇报执行的相位序列、是否完成周期、总周期数、偏好与模式数量。"
 
-# 记忆衰减 + 压缩（Option A，2026-08-15：--store sqlite 直接作用于 SQLite 运行时大库）
+# 记忆衰减 + 压缩（2026-09-01 迁移：--store pg 作用于 PG 主存储；SQLite 由 pg-backfill 派生镜像）
 # 注意：脚本按"最冷优先"取 N 条（access_count ASC, created_at ASC，N=--limit），compressor 默认用 mock_llm_compress；DecayLimit 默认 500（P1-1，覆盖 active 约 27%，全量可 -DecayLimit 5000）
 # （非真实 LLM 摘要）。为控制每次运行的影响面，默认限制 DecayLimit=100 条，
 # 并建议接入真实 LLM（MemoryCompressor(llm_callable=...)）后再放开。
@@ -410,7 +422,7 @@ $decayCmd = @"
 import sys, json
 sys.path.insert(0, r"$TrinityRoot")
 import runpy
-sys.argv = ["run_decay_compress", "--store", "sqlite",
+sys.argv = ["run_decay_compress", "--store", "pg", "--host", "127.0.0.1", "--port", "$PgPort", "--user", "$PgUser", "--password", "$PgPass",  # 2026-09-01: PG 单写主（localhost→::1 会被 pg_hba 拒，须显式 127.0.0.1）
             "--limit", "$DecayLimit", "--llm", "$DecayLLM",
             "--output", r"$LogDir\decay_compress_$Timestamp.json"]
 runpy.run_path(r"$TrinityRoot\scripts\run_decay_compress.py", run_name="__main__")
@@ -422,7 +434,7 @@ $tiersCmd = @"
 import sys, json
 sys.path.insert(0, r"$TrinityRoot")
 import runpy
-sys.argv = ["run_memory_tiers", "--store", "sqlite", "--limit", "10000",
+sys.argv = ["run_memory_tiers", "--store", "pg", "--host", "127.0.0.1", "--port", "$PgPort", "--user", "$PgUser", "--password", "$PgPass", "--limit", "10000",  # 2026-09-01: PG 单写主（localhost→::1 被拒）
             "--output", r"$LogDir\memory_tiers_$Timestamp.json"]
 runpy.run_path(r"$TrinityRoot\scripts\run_memory_tiers.py", run_name="__main__")
 "@
@@ -433,11 +445,23 @@ $consolidateCmd = @"
 import sys
 sys.path.insert(0, r"$TrinityRoot")
 import runpy
-sys.argv = ["sleep_consolidation", "--store", "sqlite", "--llm", "$DecayLLM",
+sys.argv = ["sleep_consolidation", "--store", "sqlite", "--llm", "$DecayLLM", "--facts", "20", "--min-importance", "0.2",  # 2026-09-01: 抽取规模化(5→20)
             "--output", r"$LogDir\sleep_consolidation_$Timestamp.json"]
 runpy.run_path(r"$TrinityRoot\scripts\sleep_consolidation.py", run_name="__main__")
 "@
 $consolidatePrompt = "在 C:\Users\Administrator\trinity 运行 python scripts/sleep_consolidation.py --store sqlite --llm mock（睡眠式记忆整合：衰减扫描压缩 + 从高重要性记忆聚合提取可固化事实 + 实体图更新，结果写入 .trinity\logs），汇报各阶段统计；失败阶段明确报告。"
+
+# 事件驱动巩固（2026-09-01 大脑化第三阶段）：仅聚合近 1 天记忆的小批高频巩固
+$consolidateRecentCmd = @"
+import sys
+sys.path.insert(0, r"$TrinityRoot")
+import runpy
+sys.argv = ["sleep_consolidation", "--store", "sqlite", "--llm", "$DecayLLM",
+            "--facts", "10", "--min-importance", "0.3", "--recent-days", "1",
+            "--output", r"$LogDir/sleep_consolidation_recent_$Timestamp.json"]  # 2026-09-01: 正斜杠路径
+runpy.run_path(r"$TrinityRoot/scripts/sleep_consolidation.py", run_name="__main__")
+"@
+$consolidateRecentPrompt = "运行近期巩固（sleep_consolidation --recent-days 1 --facts 10）：仅聚合近 1 天记忆，小批高频，汇报提取/持久化/实体统计。"
 
 # 实体去重（P0-3，2026-08-15）：归一化 + embedding 相似合并
 $dedupCmd = @"
@@ -886,6 +910,48 @@ runpy.run_path(r"$TrinityRoot/scripts/reconcile_pg_sqlite.py", run_name="__main_
 "@
 $reconcilePrompt = "运行 PG vs SQLite 只读对账，汇报 total / pg_only / sq_only / active 集合差 / 哈希不一致数。"
 
+# AGENTS.md 快照刷新（2026-09-01 文档漂移修复）：重建头部快照块（会话/事件/目标/活跃目标/最近会话）
+$snapshotCmd = @"
+import sys
+sys.path.insert(0, r"$TrinityRoot")
+import runpy
+sys.argv = ["update_agents_snapshot"]
+runpy.run_path(r"$TrinityRoot/scripts/update_agents_snapshot.py", run_name="__main__")
+# 2026-09-01（自传注入）：同步刷新用户全局 AGENTS.md 快照段（dsh-agent-instructions 每会话加载）
+runpy.run_path(r"$TrinityRoot/scripts/update_dsh_agents_md.py", run_name="__main__")
+"@
+$snapshotPrompt = "刷新 AGENTS.md 头部快照（会话/事件/目标计数 + 活跃目标 + 最近会话），汇报刷新结果。"
+
+# 大脑体检周报（2026-09-01 大脑化层3）：聚合检索/生成/一致性/巩固/健康/水位 → 周报
+$brainReportCmd = @"
+import sys
+sys.path.insert(0, r"$TrinityRoot")
+import runpy
+sys.argv = ["brain_report"]
+runpy.run_path(r"$TrinityRoot/scripts/brain_report.py", run_name="__main__")
+"@
+$brainReportPrompt = "生成记忆系统大脑体检周报（检索R@5/生成AnswerAcc/一致性/压缩忠实度/服务健康/事件水位），输出 .trinity/bench-results/brain-report-*.md。"
+
+# 市场供给（2026-09-01 生态启动）：高价值记忆自动上架（去重，幂等）
+$marketListCmd = @"
+import sys
+sys.path.insert(0, r"$TrinityRoot")
+import runpy
+sys.argv = ["market_list_high_value", "--top", "20"]
+runpy.run_path(r"$TrinityRoot/scripts/market_list_high_value.py", run_name="__main__")
+"@
+$marketListPrompt = "运行市场供给：挑选高价值记忆（decision/insight/milestone/summary × importance>=0.8）自动上架记忆市场，去重幂等，汇报上架/跳过/失败。"
+
+# 情境流刷新（2026-09-02 大脑化 EXECUTION 457）：情境=持续上下文流（非按查询现算）
+$situationCmd = @"
+import sys
+sys.path.insert(0, r"$TrinityRoot")
+import runpy
+sys.argv = ["run_situation_stream"]
+runpy.run_path(r"$TrinityRoot/scripts/run_situation_stream.py", run_name="__main__")
+"@
+$situationPrompt = "刷新情境持续上下文流（当下信号→situation_stream.json + PG ctx:brain），输出摘要。"
+
 # 质量门禁（2026-09-01 短板 #1）：500q 检索 R@5（keyword/hybrid 逐类目）+ 延迟 + 对账，
 # 输出 ~/.trinity/bench-results/quality-gate-*.json；阈值不过 exit 1。显式调用，不进日链。
 $qualityGateCmd = @"
@@ -896,6 +962,26 @@ sys.argv = ["quality_gate"]
 runpy.run_path(r"$TrinityRoot/scripts/quality_gate.py", run_name="__main__")
 "@
 $qualityGatePrompt = "运行 500q 检索质量门禁（R@5 keyword/hybrid 逐类目 + p50/p95 延迟 + 对账摘要），按阈值判 PASS/FAIL。"
+
+# DSH 插件冒烟（2026-09-01 rc.7 契约回归）：bundle 层 + trinity_ping + 水位推进
+$pluginSmokeCmd = @"
+import sys
+sys.path.insert(0, r"$TrinityRoot")
+import runpy
+sys.argv = ["dsh_plugin_smoke"]
+runpy.run_path(r"$TrinityRoot/scripts/dsh_plugin_smoke.py", run_name="__main__")
+"@
+$pluginSmokePrompt = "运行 DSH dsh-trinity 插件冒烟：合成配置含 trinity 层 + headless 会话 trinity_ping + dsh_events 水位推进。"
+
+# AnswerAcc 评测（2026-09-01 中期方向：生成侧周度例行，500q LLM，20-30 分钟）
+$answerEvalCmd = @"
+import sys
+sys.path.insert(0, r"$TrinityRoot")
+import runpy
+sys.argv = ["answer_eval", "--limit", "500", "--ms-top-k", "20", "--ms-ctx-len", "900"]  # 2026-09-01: MS 增强；reasoner 线上化全量验证无增益(0.125 vs chat 0.09-0.14)已回退, 见 ANSWEREVAL_OPTIMIZATIONS.md
+runpy.run_path(r"$TrinityRoot/benchmark/answer_eval.py", run_name="__main__")
+"@
+$answerEvalPrompt = "运行 500q AnswerAcc 生成侧评测（检索 top-5 + DeepSeek 生成 + 事实包含率判分），输出 output/answer_eval_results.json。"
 
 # 每日 auto-evolve（2026-08-29 递归闭环真实使用）：无人值守补丁（门禁+回滚）
 $evolveCmd = @"
@@ -927,6 +1013,7 @@ foreach ($t in $Tasks) {
         "tiers"     { Invoke-Task -Name "tiers"         -DirectCommand $tiersCmd  -DshPrompt $tiersPrompt }
         "mirror"    { Invoke-Task -Name "mirror"       -DirectCommand $mirrorCmd -DshPrompt $mirrorPrompt }
         "consolidate" { Invoke-Task -Name "consolidate" -DirectCommand $consolidateCmd -DshPrompt $consolidatePrompt }
+        "consolidate-recent" { Invoke-Task -Name "consolidate-recent" -DirectCommand $consolidateRecentCmd -DshPrompt $consolidateRecentPrompt }  # 2026-09-01 事件驱动巩固
         "dedup"      { Invoke-Task -Name "dedup"           -DirectCommand $dedupCmd      -DshPrompt $dedupPrompt }
         "sync"      { Invoke-Task -Name "sync"           -DirectCommand $syncCmd   -DshPrompt $syncPrompt }
         "agent-sync" { Invoke-Task -Name "agent-sync" -DirectCommand $agentSyncCmd -DshPrompt $agentSyncPrompt }  # 2026-08-21 多机同步
@@ -972,6 +1059,11 @@ foreach ($t in $Tasks) {
         "pg-backfill" { Invoke-Task -Name "pg-backfill" -DirectCommand $pgBackfillCmd -DshPrompt $pgBackfillPrompt }  # 2026-09-01 PG→SQLite 反向同步
         "reconcile" { Invoke-Task -Name "reconcile" -DirectCommand $reconcileCmd -DshPrompt $reconcilePrompt }  # 2026-09-01 双库对账（只读）
         "quality-gate" { Invoke-Task -Name "quality-gate" -DirectCommand $qualityGateCmd -DshPrompt $qualityGatePrompt }  # 2026-09-01 检索质量门禁
+        "snapshot" { Invoke-Task -Name "snapshot" -DirectCommand $snapshotCmd -DshPrompt $snapshotPrompt }  # 2026-09-01 AGENTS.md 快照刷新
+        "brain-report" { Invoke-Task -Name "brain-report" -DirectCommand $brainReportCmd -DshPrompt $brainReportPrompt }  # 2026-09-01 大脑体检周报
+        "market-list" { Invoke-Task -Name "market-list" -DirectCommand $marketListCmd -DshPrompt $marketListPrompt }  # 2026-09-01 市场供给自动化
+        "plugin-smoke" { Invoke-Task -Name "plugin-smoke" -DirectCommand $pluginSmokeCmd -DshPrompt $pluginSmokePrompt }  # 2026-09-01 DSH 插件冒烟
+        "answer-eval" { Invoke-Task -Name "answer-eval" -DirectCommand $answerEvalCmd -DshPrompt $answerEvalPrompt }  # 2026-09-01 AnswerAcc 生成侧评测
         "evolve"  { Invoke-Task -Name "evolve"   -DirectCommand $evolveCmd  -DshPrompt $evolvePrompt }  # 2026-08-29 每日自改
         "observe" { Invoke-Task -Name "observe" -DirectCommand $observeCmd -DshPrompt $observePrompt }  # 2026-09 Ollama 解耦观察期检查
         "value-recalib" { Invoke-Task -Name "value-recalib" -DirectCommand $valueRecalibCmd -DshPrompt $valueRecalibPrompt }  # 2026-09 价值驱动编码补标
@@ -998,6 +1090,7 @@ foreach ($t in $Tasks) {
     "web-perception" { Invoke-Task -Name "web-perception" -DirectCommand $webPerceptionCmd -DshPrompt $webPerceptionPrompt }
     "cognition-check" { Invoke-Task -Name "cognition-check" -DirectCommand $cognitionCheckCmd -DshPrompt $cognitionCheckPrompt }
     "self-reflect" { Invoke-Task -Name "self-reflect" -DirectCommand $selfReflectCmd -DshPrompt $selfReflectPrompt }
+    "situation" { Invoke-Task -Name "situation" -DirectCommand $situationCmd -DshPrompt $situationPrompt }  # 2026-09-02 情境流
     "perception-scan" { Invoke-Task -Name "perception-scan" -DirectCommand $perceptionScanCmd -DshPrompt $perceptionScanPrompt }
     "integrity-monitor" { Invoke-Task -Name "integrity-monitor" -LeaseJob "integrity-monitor" -DirectCommand $integrityMonitorCmd -DshPrompt $integrityMonitorPrompt }
     "cognition-agent" { Invoke-Task -Name "cognition-agent" -DirectCommand $cognitionAgentCmd -DshPrompt $cognitionAgentPrompt }  # 2026-09 主动主体

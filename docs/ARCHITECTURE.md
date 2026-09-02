@@ -100,9 +100,10 @@ benchmark_scripts、tests（独立测试）、migrations、cluster、**neuromorp
 ---
 ---
 
-# 大脑化全景（2026-09，EXECUTION 116-219 更新）
+# 大脑化全景（2026-09，EXECUTION 116-456 更新；457 轮情境流/语义视觉落地）
 
-> Trinity 的认知机制（全部运行时生效）。42 项注册能力。
+> Trinity 的认知机制（全部运行时生效）。59 项注册能力（EXECUTION 240 全验证）；
+> 大脑模块索引 110 个/7 层（brain/MODULES.md，EXECUTION 298）。
 
 ## 记忆类（17）
 | 机制 | 轮次 |
@@ -117,7 +118,7 @@ benchmark_scripts、tests（独立测试）、migrations、cluster、**neuromorp
 ## 自我/意识类（7）
 | 机制 | 轮次 |
 |---|---|
-| 会话身份 / 全局自我 / 自我反思 / 自我评估 / 叙事自我 / 自我预测 / 自我公理（6/6）/ 意识蓝图（82/100）/ 情绪公理（5/5） |
+| 会话身份 / 全局自我 / 自我反思 / 自我评估 / 叙事自我 / 自我预测 / 自我公理（6/6）/ 意识蓝图（85/100，情境 9/10）/ 情绪公理（5/5）/ 情境持续流 / 语义视觉 / 社会闭环（市场真实成交） |
 
 ## 社会类（5）
 | 机制 | 轮次 |
@@ -133,9 +134,16 @@ benchmark_scripts、tests（独立测试）、migrations、cluster、**neuromorp
 Amaya/Active Perception/Interoceptive/Mental Workspace/Blueprint/Active Inference/MATE/affective-episodic/UVT-LM/Hindsight/Agentic Memory/MUSE/ECA/ToM/心理模拟/SAA/情绪调节/Discovery by Dreaming/Anima/Dopamine/Social Learning/Metamemory/Cognitive Flexibility/Habit Formation/记忆重构
 
 ## 保障体系
-- 29 维护任务 / 4 维守卫（系统/大脑化/能力/闭环）/ 42 能力注册
+- 30 维护任务（+situation 情境流）/ 4 维守卫（系统/大脑化/能力/闭环）/ 59 能力注册
 - 自我公理 6/6（120 分）/ 情绪公理 5/5（100 分）
 - 10 闭环审计 / 30+ 测试 / OPERATIONS 手册
 
-## 大脑距离（219 轮）
-记忆 97% / 认知 95% / 意识 70% / 感知 85% / 社会 90%
+## 大脑距离（最近一次官方自评 = EXECUTION 240；219→240 变化：认知+1 意识+2 社会+5）
+记忆 97% / 认知 96% / 意识 72% / 感知 85% / 社会 95%
+
+> 457 轮（2026-09-02 大脑化体检优化）落地后新增可测证据：
+> - 意识蓝图 82 → **85/100**（情境感知判据 6 → **9**：情境=持续上下文流，非按查询现算）
+> - 情境流：situation_stream.json + PG ctx:brain 双写，检索自动注入"当下"
+> - 感知：语义级画面理解接通（本地 qwen2.5vl:3b；/memory/perceive 语义优先特征降级）
+> - 社会：第二真实 agent（ops-bot）种子 + 记忆市场真实成交（tx 完成）+ ToM 推断命中 8/8
+> - 图谱：entities 187 → 3,188 / relations 980 → 17,803（graph_densify 日门幂等）

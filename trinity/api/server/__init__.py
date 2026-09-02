@@ -30,6 +30,7 @@ from typing import Any, Dict, List, Optional
 from contextlib import asynccontextmanager
 
 from trinity import Trinity
+from trinity.version import __version__ as TRINITY_VERSION  # 2026-09-01: 版本单一源
 from trinity.agents import MemoryAggregator, create_aggregator
 from trinity.api.rbac_middleware import RBACMiddleware, get_rbac_engine
 from trinity.api.middleware import (
@@ -195,7 +196,7 @@ app = FastAPI(
 | A2A 协议 | 10 | Agent 注册、任务、消息|
 | Marvis 适配器| 4 | 注册、调度、快照、信任|
 """,
-    version="8.2.0",
+    version=TRINITY_VERSION,  # 2026-09-01: 跟随 version.py 单一源（原硬编码 8.2.0）
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -533,6 +534,15 @@ def main():
     parser.add_argument("--host", default="0.0.0.0", help="Host")
     parser.add_argument("--reload", action="store_true", help="Enable auto-reload")
     args = parser.parse_args()
+    # 2026-09-02（CE 修复后恢复预加载）：模型缓存 tokenizer.json 已重下修复，
+    # CE 在 transformers 4.51 下加载 0.3s / 重排 0.2s。顺序 preload（先于 onnx）
+    # 保证 DLL 安全（st→pg→onnx 顺序实证安全）；失败静默降级 ollama。
+    try:
+        from trinity.vector_index.preload_reranker import preload, prewarm_model
+        if preload():
+            prewarm_model("chinese")
+    except Exception:
+        pass
     tls_kwargs = _tls_uvicorn_kwargs()
     scheme = "https" if tls_kwargs else "http"
     print(f"Trinity API Server v{app.version} starting on {scheme}://{args.host}:{args.port}")

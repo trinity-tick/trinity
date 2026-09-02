@@ -109,20 +109,48 @@ def phase1_decay_compress(adapter: Any, limit: int, dry_run: bool, llm_real: boo
     return stats
 
 
-FACT_PROMPT_SYS = (
-    "你是记忆整合引擎。从用户提供的记忆条目中提取可长期固化的事实（fact）。"
-    "只输出 JSON 数组，每项 {fact, entities: [实体名...], importance: 0-1}，最多 5 条；"
-    "不要输出其它内容。"
-)
+def _fact_prompt_sys(max_facts: int) -> str:
+    """2026-09-01（大脑化层1 抽取规模化）：max_facts 参数化（原硬编码 5 条）。"""
+    return (
+        "你是记忆整合引擎。从用户提供的记忆条目中提取可长期固化的事实（fact）。"
+        "只输出 JSON 数组，每项 {fact, entities: [实体名...], importance: 0-1}，最多 %d 条；"
+        "不要输出其它内容。" % max_facts
+    )
 
 
-def phase2_extract_facts(adapter: Any, top_n: int = 20, llm_real: bool = False, dry_run: bool = False) -> List[Dict[str, Any]]:
+def phase2_extract_facts(adapter: Any, top_n: int = 20, llm_real: bool = False, dry_run: bool = False,
+                         max_facts: int = 20, min_importance: float = 0.2,
+                         recent_days: int = 0) -> List[Dict[str, Any]]:
     """Phase 2: LLM 事实提取——从近期高重要性记忆聚合出可固化事实。"""
     conn = adapter._conn
-    rows = conn.execute("""
-        SELECT memory_id, content, importance, created_at FROM memories
-        WHERE status='active' ORDER BY importance DESC, created_at DESC LIMIT ?
-    """, (top_n,)).fetchall()
+    # 2026-09-01（事件驱动轻量版）：--recent-days 只聚合近期记忆（分钟级感知的日链形态）
+    if recent_days > 0:
+        from datetime import datetime, timedelta, timezone
+        _cutoff = (datetime.now(timezone.utc) - timedelta(days=recent_days)).isoformat()
+        rows = conn.execute("""
+            SELECT memory_id, content, importance, created_at FROM memories
+            WHERE status='active' AND created_at > ?
+            ORDER BY importance DESC, created_at DESC LIMIT ?
+        """, (_cutoff, top_n)).fetchall()
+    else:
+        rows = conn.execute("""
+            SELECT memory_id, content, importance, created_at FROM memories
+            WHERE status='active' ORDER BY importance DESC, created_at DESC LIMIT ?
+        """, (top_n,)).fetchall()
+    # 2026-09-01（加密盲区修复）：content 密文(enc:v1:)须先解密，否则 LLM 只见密文
+    # 提取恒 0（近期记忆全加密 → consolidate-recent extracted=0 的根因）
+    _cipher = getattr(adapter, "_cipher", None)
+    if _cipher is not None:
+        _rows2 = []
+        for r in rows:
+            c = r["content"] or ""
+            if isinstance(c, str) and c.startswith("enc:v1:"):
+                try:
+                    c = _cipher.decrypt(c)
+                except Exception:
+                    pass
+            _rows2.append(dict(r, content=c))
+        rows = _rows2
     if not rows:
         return []
     aggregate = "\n---\n".join(
@@ -135,12 +163,13 @@ def phase2_extract_facts(adapter: Any, top_n: int = 20, llm_real: bool = False, 
         return facts
     try:
         llm = _make_llm_callable()
-        raw = llm(FACT_PROMPT_SYS, f"记忆列表：\n{aggregate}\n\n请提取事实（JSON 数组）。")
+        raw = llm(_fact_prompt_sys(max_facts), f"记忆列表：\n{aggregate}\n\n请提取事实（JSON 数组）。")
         m = re.search(r"\[.*\]", raw, re.S)
         if m:
             facts = json.loads(m.group(0))
             if isinstance(facts, list):
-                facts = [f for f in facts if isinstance(f, dict) and f.get("fact")][:5]
+                facts = [f for f in facts if isinstance(f, dict) and f.get("fact")
+                         and float(f.get("importance", 0.0) or 0.0) >= min_importance][:max_facts]
     except Exception as e:  # noqa: BLE001
         logger.error("Phase2: LLM extraction failed: %s", e)
         return []
@@ -195,6 +224,10 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--limit", type=int, default=200, help="Phase1 扫描上限")
     parser.add_argument("--extract-top-n", type=int, default=20, help="Phase2 聚合记忆数")
+    # 2026-09-01（大脑化层1）：抽取规模化 + 置信度门槛
+    parser.add_argument("--facts", type=int, default=20, help="Phase2 最大提取事实数（原 5）")
+    parser.add_argument("--min-importance", type=float, default=0.2, help="Phase2 事实 importance 门槛")
+    parser.add_argument("--recent-days", type=int, default=0, help="2026-09-01: 仅聚合近 N 天记忆（0=全部，事件驱动轻量形态）")
     parser.add_argument("--llm", choices=["mock", "real", "auto"], default="auto",
                         help="auto(默认)=有 TRINITY/DEEPSEEK key 走 real，否则 mock")
     parser.add_argument("--output", default="")
@@ -213,7 +246,9 @@ def main() -> int:
     try:
         stats["phases"]["decay_compress"] = phase1_decay_compress(
             adapter, args.limit, args.dry_run, llm_real)
-        facts = phase2_extract_facts(adapter, args.extract_top_n, llm_real, args.dry_run)
+        facts = phase2_extract_facts(adapter, args.extract_top_n, llm_real, args.dry_run,
+                                      max_facts=args.facts, min_importance=args.min_importance,
+                                      recent_days=args.recent_days)
         stats["phases"]["extract_facts"] = {"extracted": len(facts)}
         stats["phases"]["graph_update"] = {"entities_upserted": phase3_update_graph(adapter, facts) if not args.dry_run else 0}
     finally:

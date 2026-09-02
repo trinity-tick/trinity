@@ -117,3 +117,22 @@ def get_storage_cipher() -> Optional[StorageCipher]:
         logger.error("TRINITY_STORAGE_ENCRYPTION=on 但无法获取密钥，加密未生效")
         return None
     return StorageCipher(key)
+
+
+def decrypt_content(content: Any) -> Any:
+    """检索出口统一解密（2026-09-02 brain fix）。
+
+    存储加密默认开启后，落盘 content 为 enc:v1 密文；此前检索路径
+    （search/search_hybrid/API/worker）从未解密，导致 90% 活跃记忆对消费方
+    不可读。此处 fail-open：未加密字符串、cipher 不可用或解密失败时原样返回
+    （与 SQLite adapter 的 fail-open 行为一致）。
+    """
+    if not isinstance(content, str) or not content.startswith(_PREFIX):
+        return content
+    try:
+        cipher = get_storage_cipher()
+        if cipher is None:
+            return content
+        return cipher.decrypt(content)
+    except Exception:
+        return content

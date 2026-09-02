@@ -45,7 +45,8 @@ def main() -> int:
     cur = conn.cursor()
     # 候选：active + 未打标（metadata 无 value_model）或 importance_score <= 0.5
     cur.execute("""
-        SELECT memory_id, content, importance_score
+        SELECT memory_id, content, importance_score,
+               COALESCE(metadata->>'emotional_salience', '0')::float8 AS emo_sal
         FROM memories
         WHERE status = 'active'
           AND (importance_score IS NULL
@@ -56,6 +57,8 @@ def main() -> int:
     """, (args.limit,))
     rows = cur.fetchall()
     print(f"candidates: {len(rows)}")
+    # 2026-09-01（价值闭环）：情绪 salience 混入价值（emotional_consolidation 打的标签）
+    emo_map = {str(mid): float(emo or 0) for mid, _c, _i, emo in rows}
 
     done = skipped = failed = 0
     # 2026-09（EXECUTION 105.10）：批量评估（一次 LLM 调用 5 条，调用次数 -80%）
@@ -79,6 +82,12 @@ def main() -> int:
             print(f"  [dry] {mid} value={ev['value']} imp_old={imp_map.get(str(mid))} factors={ev['factors']} ({dt:.1f}s)")
             done += 1
             continue
+        # 2026-09-01（价值闭环）：高情绪记忆价值加权（salience>=0.5 时 +15%/点）
+        _emo = emo_map.get(str(mid), 0.0)
+        if _emo >= 0.5:
+            ev["value"] = min(1.0, float(ev["value"]) * (1.0 + 0.15 * _emo))
+            ev["factors"] = dict(ev.get("factors") or {})
+            ev["factors"]["emotional_salience"] = round(_emo, 2)
         meta = json.dumps({"value_model": ev["version"],
                            "value_factors": ev["factors"],
                            "value_reason": ev["reason"]}, ensure_ascii=False)

@@ -14,15 +14,18 @@ import os
 import sys
 import json
 
+# 2026-09-02: 动态定位仓库根（消除 D: 副本隐式依赖，与 engine_worker 清理一致）
+_SCRIPTS_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "scripts")
+
 
 def slow_wave_consolidation(max_items: int = 20) -> dict:
     """慢波阶段：巩固事实记忆（随机复习 + 轻度强化）。"""
     try:
-        sys.path.insert(0, r"D:\\trinity-code")
+        sys.path.insert(0, _SCRIPTS_ROOT)
         import runpy
         _old = sys.argv
         sys.argv = ["dream_replay", f"--max={max_items}", "--write"]
-        runpy.run_path(r"D:\\trinity-code\\scripts\\dream_replay.py", run_name="__main__")
+        runpy.run_path(os.path.join(_SCRIPTS_ROOT, "dream_replay.py"), run_name="__main__")
         sys.argv = _old
         return {"stage": "slow_wave", "consolidated": max_items,
                 "note": "事实记忆复习强化（海马重放）"}
@@ -33,17 +36,17 @@ def slow_wave_consolidation(max_items: int = 20) -> dict:
 def rem_consolidation(max_combos: int = 3) -> dict:
     """REM 阶段：情感整合 + 跨域重组。"""
     try:
-        sys.path.insert(0, r"D:\\trinity-code")
+        sys.path.insert(0, _SCRIPTS_ROOT)
         import runpy
         _old = sys.argv
         sys.argv = ["dream_replay", "--max=5", "--write"]
-        runpy.run_path(r"D:\\trinity-code\\scripts\\dream_replay.py", run_name="__main__")
+        runpy.run_path(os.path.join(_SCRIPTS_ROOT, "dream_replay.py"), run_name="__main__")
         sys.argv = _old
         # 情感记忆整合（杏仁核效应）
         from trinity.brain.emotional_consolidation import emotional_consolidate
         emo = emotional_consolidate(limit=50)
         # 跨域重组
-        sys.path.insert(0, r"D:\\trinity-code\\scripts")
+        sys.path.insert(0, _SCRIPTS_ROOT)
         from dream_replay import dream_recombine
         recomb = dream_recombine(max_combos)
         return {"stage": "rem", "emotional": emo.get("emotional", 0),

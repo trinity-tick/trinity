@@ -30,7 +30,7 @@ def _env_config() -> Dict[str, Any]:
     if db_url:
         return {"url": db_url}
 
-    return {
+    cfg = {
         "host": os.environ.get("PGHOST", "localhost"),
         "port": int(os.environ.get("PGPORT", "5432")),
         "dbname": os.environ.get("PGDATABASE", os.environ.get("PGDBNAME", "trinity")),
@@ -39,6 +39,22 @@ def _env_config() -> Dict[str, Any]:
         "min_conn": int(os.environ.get("PG_MIN_CONN", "1")),
         "max_conn": int(os.environ.get("PG_MAX_CONN", "10")),
     }
+    # 2026-09-02: 凭证自举——TRINITY_PG_* env 与 ~/.dsh/.credentials.yaml 覆盖
+    # （优先级：PGHOST 等 libpq env > TRINITY_PG_* env > yaml > 默认值）
+    try:
+        from trinity.security.credentials import _load_yaml as _ly
+        _y = _ly()
+        if _y:
+            cfg.update(_y)
+    except Exception:
+        pass
+    for _k, _envk in (("host", "TRINITY_PG_HOST"), ("port", "TRINITY_PG_PORT"),
+                      ("dbname", "TRINITY_PG_DB"), ("user", "TRINITY_PG_USER"),
+                      ("password", "TRINITY_PG_PASSWORD")):
+        _v = os.environ.get(_envk)
+        if _v:
+            cfg[_k] = int(_v) if _k == "port" else _v
+    return cfg
 
 
 class PostgreSQLAdapter(StorageAdapter):
@@ -395,22 +411,24 @@ class PostgreSQLAdapter(StorageAdapter):
         CREATE INDEX IF NOT EXISTS idx_agent_registry_status ON agent_registry(status);
 
         -- Insert sample data if empty
-        -- 2026-09 修复: sha256() 返回 bytea, 转 varchar(64) 会超长(backslash-x 转义) -> encode hex (新库必炸, 旧库表非空未触发)
-        INSERT INTO memories (memory_id, session_id, persona_id, tenant_id, content, role, sha256_hash, category)
+        -- 2026-09 修复1: sha256() 返回 bytea, 转 varchar(64) 会超长 -> encode hex (新库必炸)
+        -- 2026-09-01 修复2: 原 SQL 哈希了不带时间戳的常量，与 content(含 NOW() 时间戳) 不一致
+        --   → 双库对账 hash_mismatch=1 的根因（b4b11a0f 系统行）。改为 Python 侧先构造完整内容再哈希。
+        INSERT INTO memories (memory_id, session_id, persona_id, tenant_id, content, role, sha256_hash, content_hash, category)
         SELECT uuid_generate_v4(), uuid_generate_v4(), 'system', 'default', 'Trinity PostgreSQL initialized at ' || NOW(), 'system',
-               encode(sha256('Trinity PostgreSQL initialized'), 'hex'), 'system'
+               encode(sha256('Trinity PostgreSQL initialized at ' || NOW()), 'hex'),
+               encode(sha256('Trinity PostgreSQL initialized at ' || NOW()), 'hex'), 'system'
         WHERE NOT EXISTS (SELECT 1 FROM memories WHERE persona_id = 'system' AND role = 'system');
         """
 
         try:
             with self._get_conn() as conn:
                 with conn.cursor() as cur:
-                    # 2026-09-01 (P4 修复): 初始化全程持 pg_advisory_lock（会话级，
-                    # 连接断开自动释放）——多进程同时首次建表时，末尾的
-                    # INSERT ... WHERE NOT EXISTS 会互相等 RowExclusiveLock 触发
-                    # deadlock（每日链 self-reflect 段每天出现，被容错吞掉但刷屏）。
-                    # advisory lock 把各进程的初始化串行化，幂等无害。
-                    cur.execute("SELECT pg_advisory_lock(72744721)")
+                    # 2026-09-01 (P4 修复 v2): xact 级 advisory 锁——事务结束(commit/rollback)
+                    # 自动释放，杜绝"aborted 事务阻塞 unlock → 会话持锁 → 同进程自锁死"
+                    # 缺陷（2026-09-01 16:1x 实测：两池连接一持锁一排队，API 启动卡死）。
+                    # 多进程首次建表串行化目标不变；异常路径显式 rollback 清事务。
+                    cur.execute("SELECT pg_advisory_xact_lock(72744721)")
                     try:
                         # Split and execute each statement
                         for statement in init_sql.split(";"):
@@ -418,8 +436,9 @@ class PostgreSQLAdapter(StorageAdapter):
                             if stmt:
                                 cur.execute(stmt)
                         conn.commit()
-                    finally:
-                        cur.execute("SELECT pg_advisory_unlock(72744721)")
+                    except Exception:
+                        conn.rollback()  # 清掉 aborted 事务，xact 锁随回滚自动释放
+                        raise
             logger.info("PostgreSQL schema created/verified")
         except Exception as e:
             logger.warning("Schema creation issue (may already exist): %s", e)
@@ -491,6 +510,13 @@ class PostgreSQLAdapter(StorageAdapter):
             "persona_id": persona_id,
             "session_id": session_id,
         }
+
+    # 2026-09-02: 读取路径统一解密（与 SQLiteAdapter 对齐）。PG 混存 SQLite 同步来的
+    # enc:v1 密文行与本地明文行；fail-open：非密文/无密钥/解密失败原样返回。
+    @staticmethod
+    def _decrypt_content(content: Any) -> Any:
+        from trinity.security.crypto import decrypt_content
+        return decrypt_content(content)
 
     def search_memories(
         self,
@@ -578,10 +604,11 @@ class PostgreSQLAdapter(StorageAdapter):
 
                 results = []
                 for row in cur.fetchall():
+                    _c = self._decrypt_content(row["content"])
                     results.append({
                         "memory_id": str(row["memory_id"]),
-                        "content": row["content"],
-                        "content_preview": row["content"][:100],
+                        "content": _c,
+                        "content_preview": _c[:100],
                         "persona_id": row["persona_id"],
                         "session_id": str(row["session_id"]),
                         "role": row["role"],
@@ -662,10 +689,11 @@ class PostgreSQLAdapter(StorageAdapter):
                 """, params)
                 results = []
                 for row in cur.fetchall():
+                    _c = self._decrypt_content(row["content"])
                     results.append({
                         "memory_id": str(row["memory_id"]),
-                        "content": row["content"],
-                        "content_preview": row["content"][:100],
+                        "content": _c,
+                        "content_preview": _c[:100],
                         "persona_id": row["persona_id"],
                         "session_id": str(row["session_id"]),
                         "role": row["role"],
@@ -730,7 +758,7 @@ class PostgreSQLAdapter(StorageAdapter):
                     "SELECT memory_id, content FROM memories WHERE embedding IS NULL ORDER BY created_at LIMIT %s",
                     (limit,),
                 )
-                return [{"memory_id": str(r["memory_id"]), "content": r["content"]} for r in cur.fetchall()]
+                return [{"memory_id": str(r["memory_id"]), "content": self._decrypt_content(r["content"])} for r in cur.fetchall()]
 
     def get_memory(self, memory_id: str) -> Optional[Dict[str, Any]]:
         import psycopg2.extras
@@ -739,7 +767,12 @@ class PostgreSQLAdapter(StorageAdapter):
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
                 cur.execute("SELECT * FROM memories WHERE memory_id = %s", (memory_id,))
                 row = cur.fetchone()
-                return dict(row) if row else None
+                if not row:
+                    return None
+                d = dict(row)
+                if d.get("content"):
+                    d["content"] = self._decrypt_content(d["content"])
+                return d
 
     def get_memory_owners(self, memory_ids: List[str]) -> Dict[str, Dict[str, Any]]:
         """批量查询记忆的归属与状态（hybrid 检索隔离后过滤用；与 SQLiteAdapter 同接口）。"""
@@ -857,7 +890,12 @@ class PostgreSQLAdapter(StorageAdapter):
                 # Return updated memory
                 cur.execute("SELECT * FROM memories WHERE memory_id = %s", (memory_id,))
                 row = cur.fetchone()
-                return dict(row) if row else None
+                if not row:
+                    return None
+                d = dict(row)
+                if d.get("content"):
+                    d["content"] = self._decrypt_content(d["content"])
+                return d
 
     # ── Version Chain ─────────────────────────────────────────────
 
@@ -890,7 +928,13 @@ class PostgreSQLAdapter(StorageAdapter):
                     SELECT * FROM memory_versions
                     WHERE memory_id = %s ORDER BY created_at ASC
                 """, (memory_id,))
-                return [dict(row) for row in cur.fetchall()]
+                out = []
+                for row in cur.fetchall():
+                    d = dict(row)
+                    if d.get("content"):
+                        d["content"] = self._decrypt_content(d["content"])
+                    out.append(d)
+                return out
 
     def get_all_memories(self, agent_id: Optional[str] = None, limit: int = 200) -> List[Dict[str, Any]]:
         import psycopg2.extras
@@ -909,7 +953,13 @@ class PostgreSQLAdapter(StorageAdapter):
                         WHERE status = 'active'
                         ORDER BY created_at DESC LIMIT %s
                     """, (limit,))
-                return [dict(row) for row in cur.fetchall()]
+                out = []
+                for row in cur.fetchall():
+                    d = dict(row)
+                    if d.get("content"):
+                        d["content"] = self._decrypt_content(d["content"])
+                    out.append(d)
+                return out
 
     # ── TTL & 自动老化 ────────────────────────────────────────────
 

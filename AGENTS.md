@@ -4,12 +4,12 @@
 > 自动了解 Trinity 记忆层的存在、用法与当前状态。
 > 相关规范背景：OpenAI AGENTS.md / Anthropic CLAUDE.md 的"文件即记忆"标准。
 
-## Trinity 记忆层实时快照（生成于 2026-08-24 15:26:38）
+## Trinity 记忆层实时快照（生成于 2026-09-02 03:21:12，snapshot 任务自动刷新）
 
 | 指标 | 值 |
 |---|---|
-| 会话数 | 240 |
-| 结构事件数 | 26663 |
+| 会话数 | 246 |
+| 结构事件数 | 28533 |
 | 目标数 | 71 |
 | Todos | 108 |
 | 计划 | 0 |
@@ -18,24 +18,25 @@
 
 | 状态 | 阶段 | 轮次 | 目标 |
 |---|---|---|---|
-| active | active | 0 | 完成 DeepSeek Harness 迭代升级：全局 @deepseek-ai/dsh 0.1.0-rc.6 → 0.1.0-rc.7(latest)，核对 dsh-trinity 插件版本配套与 ~/.dsh profiles 补丁，重启 web 宿主(:3080)后验证 GUI 与 trinity_* 工具可用， |
-| active | active | 0 | 完成旺店通WMS操作规则规范迭代收尾：依据已有9域规则文档与知识来源，补齐并验证三个补充域文件（企业版补充域/帮助手册补充域/跨境版补充域）到 C:/Users/Administrator/KnowledgeBase/AI_WMS/smartcos-wms/docs/，并将迭代结果写入Trinity记忆。 |
 | active | active | 0 | 继续执行优化（第三轮）：1) GEN-3 生成侧再优化——KU/SS-P 类目专用提示词 + 上下文剪枝实验（每问只喂最相关 3-5 条 vs 10 条，测噪音对 AnswerAcc 的影响），全量 500q 对比 0.678 基线；2) CH-1 KG/混合通道归因——用 search_hybrid(fusion)  |
-| active | - | 0 | 按已批准的 Trinity 发展规划执行全部建议：里程碑1（统一 SQuAD 评测口径、修复 Cluster Stress Raft 单 leader 异常、跑官方 LongMemEval-S/LoCoMo/BEAM 1M-10M 基准、同步版本号 v8.2.0）；里程碑2（decay 接入真实 LLM 摘要、决策并落 |
-| active | - | 0 | 按 docs_site/optimization-plan.md 的 8 个优化点全方位执行：1) 答案生成评测 harness（mock 500q × DeepSeek → accuracy/latency/cost，逐类目报告）；2) PG FTS GIN 索引 + BEAM 规模复测（对比有/无索引延迟）；3)  |
-| active | - | 0 | 按优化建议继续执行（第二轮）：1) 生成侧优化——重点提升 TR 时序类目 AnswerAcc（先分析 TR 题结构/失败模式，改进答案提示词与 judge 评分，重跑 500q 对比 0.602 基线）；2) OPT7 后续——修复 Trinity.search 的 mode 参数装饰性问题（semantic/hyb |
-| active | - | 0 | 继续执行优化（第三轮）：1) GEN-3 生成侧再优化——KU/SS-P 类目专用提示词 + 上下文剪枝实验（每问只喂最相关 3-5 条 vs 10 条，测噪音对 AnswerAcc 的影响），全量 500q 对比 0.678 基线；2) CH-1 KG/混合通道归因——用 search_hybrid(fusion)  |
-| active | - | 0 | 执行 EXECUTION_PLAN_V2.md 全部 14 个项目（A1-A5、B1-B5、C1-C4）：每个项目产出可运行工件并验证，修复评测发现的 2 个 API bug，更新执行计划状态，最终汇总完成情况与遗留项。 |
+| active | - | 0 | 按已批准的建议清单全面优化 Trinity：P0-1 用 DSH agent/workflow 修复 Trinity 已知 bug（pytest 5 fail/6 error + keyword 多词 FTS5 检索 bug）；P0-2 用 dsh-credentials 消除 PG 密码/API key 明文并让维护 |
+| active | - | 0 | 处理 benchmarks.md 遗留四项：① 跑官方 LongMemEval-S(500题)/LoCoMo(1982题) 或明确不可行时降级（如官方子集+如实标注）并更新对比表；② 统一 SQuAD 评测入口（消除 35.6% vs 98.3% 双口径）；③ 修复 Cluster Stress Raft 三节点全 l |
 | active | - | 0 | 执行 smartcos-wms 剩余全部建议：①golangci 债务逐包清理（errcheck 249/unused 47/ineffassign 29 等共 328 项，清理后 lint 显著归零或大幅下降且 build/test 全绿）；②实现 12 个 MOCK-ONLY API 端点（carriers/rou |
 | active | - | 0 | 按行业操作页形态（扫码优先+任务队列+动作按钮+状态自动流转）重做 SmartCos WMS 全部作业页面：收货作业(ArrivalCounting)、上架作业(Putaway)、称重作业(PackageWeighing)、发货作业(ShipConfirm)、复核作业(VerificationWorkbench)、打包 |
+| active | - | 0 | 按 wms-ui-assessment 建议全方位精细化执行：P1（拣货/收货行级扫码确认、发货运单回传记录、工作台 AI 闭环状态卡）、P2（复核页组件化、上架 AI 建议卡突出、收货差异转质检）、P3（称重 DWS 读秤增强、打包页对接 box_types 主数据、盘点体验微调）；每项后端+前端落地、真实数据/端点 |
+| active | - | 0 | 执行 EXECUTION_PLAN_V2.md 全部 14 个项目（A1-A5、B1-B5、C1-C4）：每个项目产出可运行工件并验证，修复评测发现的 2 个 API bug，更新执行计划状态，最终汇总完成情况与遗留项。 |
+| active | - | 0 | 按已批准的 Trinity 发展规划执行全部建议：里程碑1（统一 SQuAD 评测口径、修复 Cluster Stress Raft 单 leader 异常、跑官方 LongMemEval-S/LoCoMo/BEAM 1M-10M 基准、同步版本号 v8.2.0）；里程碑2（decay 接入真实 LLM 摘要、决策并落 |
+| active | - | 0 | 按 docs_site/optimization-plan.md 的 8 个优化点全方位执行：1) 答案生成评测 harness（mock 500q × DeepSeek → accuracy/latency/cost，逐类目报告）；2) PG FTS GIN 索引 + BEAM 规模复测（对比有/无索引延迟）；3)  |
+| active | active | 0 | 完成旺店通WMS操作规则规范迭代收尾：依据已有9域规则文档与知识来源，补齐并验证三个补充域文件（企业版补充域/帮助手册补充域/跨境版补充域）到 C:/Users/Administrator/KnowledgeBase/AI_WMS/smartcos-wms/docs/，并将迭代结果写入Trinity记忆。 |
 
 ### 最近会话（recent sessions）
 
-- `session-2a57782f-210b-47c4-9262-19006693eb42` [active] (untitled)
-- `session-f66f1c7f-a632-4b35-a894-2a88678d67e3` [compacted] (untitled)
-- `session-e99b9491-2e7c-4405-bd52-187b3c498fe2` [compacted] (untitled)
-- `session-9c0e55d0-b601-483d-8cb8-e05dbf0328c7` [compacted] (untitled)
-- `session-48b90a9b-15cd-4933-a5d8-0846b0a2fc92` [compacted] (untitled)
+- session-892e6701-a0bb-48f7-82db-19df3bbc2f1d [active] (untitled)
+- session-9b103746-ad8b-4a5d-945e-3c2a0dd1251b [active] (untitled)
+- session-0b7708ab-4e80-420d-9a7a-af3785817a1a [active] (untitled)
+- session-598f3b29-5ca9-42b7-9fa9-f9b20114983a [active] (untitled)
+- session-a94c6721-00bf-4ed0-a91d-bea3fcb50e11 [active] (untitled)
+
 
 ## 1. Trinity 是什么
 
@@ -51,8 +52,8 @@ Trinity，而不是仅凭当前上下文猜测。
 - **MCP（推荐）**：本机 MCP server 暴露 `memory_search` / `memory_write` /
   `memory_update` / `memory_delete` / `audit_query` / `memory_tag_search`
   （stdio 模式无鉴权；streamable-http :8003 用 Bearer token）。
-- **REST**：`GET http://127.0.0.1:8001/memory/search?q=...&top_k=5`
-  （混合检索；`/memory/search/hybrid` 走 5 通道 RRF 融合）。
+- **REST**：`POST http://127.0.0.1:8001/memory/search/hybrid`（body: {"query":"...", "top_k":5}；
+  混合检索，5 通道 RRF 融合）。注：GET /memory/search 不存在（404）——2026-09-01 文档修正。
 - **CLI**：`python -m trinity search --query "..." --top-k 5`。
 
 检索建议：

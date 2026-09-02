@@ -121,13 +121,26 @@ def build_prompt(
     q_terms = set(re.findall(r"[a-z0-9]+", question.lower()))
 
     if strategy == "turn":
+        # 2026-09-02（推理质量修复）：移植 temporal/pref 的证据过滤——原始实现把
+        # 检索到的整块内容（含 JSON slots 噪音/超长文档）直接塞给 LLM，实测
+        # multi-session 问题恒答 UNKNOWN（证据其实包含答案）。现按查询词过滤 +
+        # 每轮截断 1000 字符 + 每块最多 8 轮，显著去噪。
         ctx: List[str] = []
         for e in evidence:
             c = (e.get("content") or "").strip()
-            if c:
-                ctx.append(c)
+            if not c:
+                continue
+            turns = _split_turns(c)[:inner2_max_turns]
+            kept = []
+            # 2026-09-02: 中文/无拉丁词查询（q_terms<=1）词过滤会误伤——保底 5 条
+            _keep_min = 5 if len(q_terms) <= 1 else 2
+            for t_ in turns:
+                tl = t_.lower()
+                if any(term in tl for term in q_terms) or len(kept) < _keep_min:
+                    kept.append(t_[:1000])
+            ctx.append("\n".join(kept[:8]) if kept else c[:12000])
         ctx = ctx[:top_turns]
-        ctx_text = "\n" + "===TURN===" + "\n".join(ctx)
+        ctx_text = "\n" + "\n===TURN===\n".join(ctx)
         return {"system": GEN_SYS_PLAIN,
                 "user": "Conversation excerpts:" + ctx_text + "\n\nQuestion: " + question + "\nAnswer:"}
 
@@ -176,9 +189,14 @@ def build_prompt(
                 "user": "Conversation excerpts:" + ctx_plain[:12000]}
 
     # plain / knowledge-update
-    ctx_text = "\n" + "===SESSION===" + "\n".join(
-        (e.get("content") or "").strip() for e in evidence if (e.get("content") or "").strip()
-    )
+    # 2026-09-02（回归修复）：中文查询的词过滤会误伤答案（q_terms 只有拉丁词，
+    # 中文答案条目被丢弃 → UNKNOWN；实测保底 2 条恰好是噪音）。改为仅截断去噪。
+    ctx_plain2: List[str] = [
+        (e.get("content") or "").strip()[:1500]
+        for e in evidence
+        if (e.get("content") or "").strip()
+    ]
+    ctx_text = "\n" + "===SESSION===" + "\n".join(ctx_plain2)
     return {"system": GEN_SYS_PLAIN,
             "user": "Conversation excerpts:" + ctx_text + "\n\nQuestion: " + question + "\nAnswer:"}
 

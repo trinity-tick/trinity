@@ -156,6 +156,10 @@ class _SearchMixin:
                 _mode == "hybrid"
                 and self._hybrid_retriever is not None
             )
+            if _use_hybrid:
+                # 2026-09-02（brain fix）：先等 BM25 预构建完成再跑 hybrid 检索，
+                # 消除构建线程与首搜惰性导入的并发崩溃竞态。
+                self._wait_bm25_ready()
             _use_graph = (
                 _mode in ("graph", "hybrid")
                 and hasattr(self._adapter, "search_graph")
@@ -375,6 +379,17 @@ class _SearchMixin:
                       "est_cost_usd": round(_tok_total / 1000.0 * _price_k, 6)}
         except Exception:
             _usage = {}
+
+        # 2026-09-02（brain fix）：检索出口统一解密（enc:v1 → 明文；fail-open）
+        # 存储加密默认开启后 content 密文落盘，此前所有检索路径均未解密——
+        # 此处为 search() 唯一出口，覆盖 hybrid/semantic/graph/exact/keyword。
+        from trinity.security.crypto import decrypt_content
+        for _rr in raw_results:
+            if isinstance(_rr, dict) and _rr.get("content"):
+                _rr["content"] = decrypt_content(_rr["content"])
+        for _pm in pushed:
+            if isinstance(_pm, dict) and _pm.get("content"):
+                _pm["content"] = decrypt_content(_pm["content"])
         return {
             "results": raw_results,
             "pushed_memories": pushed,
@@ -427,6 +442,25 @@ class _SearchMixin:
         """
         try:
             parts = []
+            # 2026-09-02 (EXECUTION 457): 情境明文助手——解密 enc:v1 + 滤噪音
+            # （raw PG 读取无解密，密文/错误串会污染情境嵌入）
+            def _plain(_v, _max=None):
+                try:
+                    _s = str(_v or "").strip()
+                    if _s.startswith("enc:v1:"):
+                        try:
+                            from trinity.security.crypto import decrypt_content as _dc
+                            _s = str(_dc(_s) or "").strip()
+                        except Exception:
+                            return ""
+                    if _s.startswith("enc:v1:"):
+                        return ""  # 解密失败 → 丢弃密文
+                    _s = _s.replace("[self-identity] ", "").replace("[vision] ", "")
+                    if _s.lower().startswith("error") or "fserror" in _s[:80].lower():
+                        return ""
+                    return _s[:_max] if _max else _s
+                except Exception:
+                    return ""
             _lq = getattr(self, "_last_query", "")
             # 2026-09 (EXECUTION 149): 自我模型雏形——会话身份进入情境
             try:
@@ -452,9 +486,18 @@ class _SearchMixin:
                 _grow = _gcur.fetchone()
                 _gconn.close()
                 if _grow:
-                    _gid = str(_grow[0]).replace("[self-identity] ", "")
+                    _gid = _plain(_grow[0], 110)
                     if _gid and _gid not in parts:
-                        parts.append("[自我] " + _gid[:120])
+                        parts.append("[自我] " + _gid)
+            except Exception:
+                pass
+            # 2026-09-02 (EXECUTION 457): 情境持续上下文流——"当下"摘要注入
+            # （意识蓝图情境维度从"按查询现算"升级为"持续在线上下文"）
+            try:
+                from trinity.brain.situation_stream import get_stream as _gs
+                _sx = _gs(max_age_sec=600, allow_refresh=True)
+                if _sx and _sx not in parts:
+                    parts.append(str(_sx)[:140])
             except Exception:
                 pass
             # EXECUTION 141: persistent context load
@@ -482,7 +525,7 @@ class _SearchMixin:
                         _cur = _conn.cursor()
                         _cur.execute("SELECT content FROM memories WHERE category='perception' AND status='active' ORDER BY created_at DESC LIMIT 3")
                         for _row in _cur.fetchall():
-                            _c = str(_row[0] or "")[:40]
+                            _c = _plain(_row[0], 40)
                             if _c:
                                 _pc.append(_c)
                         _conn.close()
@@ -1213,8 +1256,24 @@ class _SearchMixin:
                 except Exception:
                     pass
 
-            threading.Thread(target=_build, daemon=True,
-                             name="bm25-prewarm").start()
+            self._bm25_build_thread = threading.Thread(target=_build, daemon=True,
+                                                       name="bm25-prewarm")
+            self._bm25_build_thread.start()
+
+    def _wait_bm25_ready(self, timeout: float = 60.0) -> None:
+        """等待 BM25 预构建完成（2026-09-02 brain fix）。
+
+        实测：BM25 后台构建线程与首次 hybrid 搜索的惰性原生导入（PPR/聚合器/
+        procedural 通道）并发时，概率性触发 Windows access violation 进程崩溃
+        （0xC0000005，worker 被杀）。join 序列化构建与首搜，消除竞态；
+        超时后继续（空索引优雅降级），不阻塞调用方。
+        """
+        if self._bm25_ready:
+            return
+        _t = getattr(self, "_bm25_build_thread", None)
+        if _t is not None and _t.is_alive():
+            _t.join(timeout=timeout)
+
     def _rrf_merge(
         self,
         a: List[Dict[str, Any]],
@@ -1442,22 +1501,26 @@ class _SearchMixin:
             # 2026-09 (P1-1): CrossEncoder 两阶段 rerank——RRF 融合后对 top
             # candidates 语义精排；模型不可用/加载失败自动降级 no-op（原行为）。
             try:
-                from trinity.vector_index.reranker import CrossEncoderReranker
-                _rk = getattr(self, "_reranker", None)
-                if _rk is None:
-                    _rk = CrossEncoderReranker(model_name="chinese")
-                    self._reranker = _rk
-                if results:
-                    _rk_results = _rk.rerank(
-                        query=query,
-                        candidates=results,
-                        top_k=top_k,
-                        text_key="content",
-                        id_key="memory_id",
-                        score_key="rerank_score",
-                    )
-                    if _rk_results:
-                        results = _rk_results
+                # 2026-09-02（CE 修复后默认开）：API 预加载后走真 CE（0.2s/批）；
+                # 未预加载进程（worker）由 _preload_ok 守卫安全降级 ollama bge-m3，
+                # 零崩溃。TRINITY_CROSSENCODER_RERANK=off 可关。
+                if os.environ.get("TRINITY_CROSSENCODER_RERANK", "on").strip().lower() in ("1", "on", "true", "yes"):
+                    from trinity.vector_index.reranker import CrossEncoderReranker
+                    _rk = getattr(self, "_reranker", None)
+                    if _rk is None:
+                        _rk = CrossEncoderReranker(model_name="chinese")
+                        self._reranker = _rk
+                    if results:
+                        _rk_results = _rk.rerank(
+                            query=query,
+                            candidates=results,
+                            top_k=top_k,
+                            text_key="content",
+                            id_key="memory_id",
+                            score_key="rerank_score",
+                        )
+                        if _rk_results:
+                            results = _rk_results
             except Exception:
                 pass
             # 2026-09 (EXECUTION 116): DCPM 双过程钩子——System1 快路径信念命中
@@ -1647,9 +1710,17 @@ class _SearchMixin:
                         result["recall"] = _rr.get("recall")
                 except Exception:
                     pass
+            # 2026-09-02（brain fix）：检索出口统一解密（enc:v1 → 明文；fail-open）
+            from trinity.security.crypto import decrypt_content
+            for _r in (result.get("results") or []):
+                if isinstance(_r, dict) and _r.get("content"):
+                    _r["content"] = decrypt_content(_r["content"])
             return result
 
         hr = self.hybrid_retriever
+        # 2026-09-02（brain fix）：先等 BM25 预构建完成再跑 full 路径检索，
+        # 消除构建线程与首搜惰性导入的并发崩溃竞态。
+        self._wait_bm25_ready()
 
         # 如有 agent/persona/tenant 过滤，在向量侧 wrap search_fn；
         # 同时把隔离维度折入 retriever 语义缓存 key，防止跨租户缓存串扰。
@@ -1721,5 +1792,11 @@ class _SearchMixin:
 
         # ②自适应路由：full 路径标记
         result.setdefault("breakdown", {})["routing"] = "full"
+
+        # 2026-09-02（brain fix）：检索出口统一解密（enc:v1 → 明文；fail-open）
+        from trinity.security.crypto import decrypt_content
+        for _r in (result.get("results") or []):
+            if isinstance(_r, dict) and _r.get("content"):
+                _r["content"] = decrypt_content(_r["content"])
 
         return result

@@ -15,22 +15,45 @@ import json
 
 
 def infer_agent(agent_id: str) -> dict:
-    """推断 Agent 心理状态（关注/知识/活跃度/信誉）。"""
+    """推断 Agent 心理状态（关注/知识/活跃度/信誉）。
+
+    EXECUTION 457 修复：session_context 无 agent_id 列（原 focus 查询静默失败）；
+    改从该 agent 的 active 记忆内容直接推断关注（解密 + 前缀），各项查询独立守卫。
+    """
     state = {"agent": agent_id, "focus": [], "knowledge": 0, "activity": 0, "reputation": None}
     try:
         import psycopg2
         conn = psycopg2.connect(host="127.0.0.1", port=5432, dbname="trinity",
                                 user="trinity", password="trinity")
         cur = conn.cursor()
-        # 该 agent 的记忆（知识量）
-        cur.execute("SELECT count(*) FROM memories WHERE agent_id=%s AND status='active'", (agent_id,))
-        state["knowledge"] = cur.fetchone()[0]
-        # 最近查询（关注）
-        cur.execute("SELECT last_query FROM session_context WHERE agent_id=%s ORDER BY updated_at DESC LIMIT 3", (agent_id,))
-        state["focus"] = [str(r[0])[:30] for r in cur.fetchall() if r[0]]
+        # 该 agent 的记忆（知识量 + 关注内容）
+        try:
+            cur.execute("SELECT count(*) FROM memories WHERE agent_id=%s AND status='active'", (agent_id,))
+            state["knowledge"] = int(cur.fetchone()[0] or 0)
+        except Exception:
+            pass
+        try:
+            cur.execute("SELECT content FROM memories WHERE agent_id=%s AND status='active' "
+                        "ORDER BY (importance::float8) DESC NULLS LAST LIMIT 3", (agent_id,))
+            for row in cur.fetchall():
+                c = str(row[0] or "")
+                if c.startswith("enc:v1:"):
+                    try:
+                        from trinity.security.crypto import decrypt_content
+                        c = str(decrypt_content(c) or "")
+                    except Exception:
+                        c = ""
+                if c and not c.startswith("enc:v1:"):
+                    state["focus"].append(" ".join(c.split())[:40])
+        except Exception:
+            pass
         # 审计活跃（近期活动）
-        cur.execute("SELECT count(*) FROM audit_log WHERE agent_id=%s AND timestamp > NOW() - interval '7 days'", (agent_id,))
-        state["activity"] = cur.fetchone()[0]
+        try:
+            cur.execute("SELECT count(*) FROM audit_log WHERE agent_id=%s "
+                        "AND timestamp > NOW() - interval '7 days'", (agent_id,))
+            state["activity"] = int(cur.fetchone()[0] or 0)
+        except Exception:
+            pass
         conn.close()
         # 市场信誉
         try:
@@ -44,7 +67,7 @@ def infer_agent(agent_id: str) -> dict:
         pass
     # 心理画像（推断）
     if state["focus"]:
-        state["inferred_focus"] = "关注：" + "、".join(state["focus"][:2])
+        state["inferred_focus"] = "关注：" + "、".join(str(x)[:22] for x in state["focus"][:2])
     if state["knowledge"] == 0:
         state["mental_state"] = "新来者（知识少）"
     elif state["knowledge"] < 10:

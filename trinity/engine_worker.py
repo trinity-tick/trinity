@@ -55,6 +55,13 @@ os.environ.setdefault("TRINITY_MEMORY_ENABLED", "0")
 # 2026-08-17（锁争用根治）: 写锁等待 3s 快速失败（默认 15s 的多步写入可叠加
 # >60s 工具超时），由 _retry_on_locked 自动重试，最坏秒级失败+重试而非卡死。
 os.environ.setdefault("TRINITY_SQLITE_BUSY_TIMEOUT_MS", "3000")
+# 2026-09-02（brain fix）：生产推理通道 RouteReasoner 默认开启（含桥缺失时的
+# OpenDomainReasoner 兜底；插件/API 仍可用 TRINITY_ROUTE_REASONER 覆盖）。
+os.environ.setdefault("TRINITY_ROUTE_REASONER", "on")
+# 2026-09-02（brain fix）：worker 默认关闭 light 路径 rerank——ollama bge-m3 冷加载
+# ~40s 叠加引擎/BM25 初始化会超 60s 工具预算（实测 worker 被杀）。API 保持 on（mmarco
+# 本地 0.13s 快路径）；worker 检索已有 RRF 排序，关 rerank 对质量影响极小。
+os.environ.setdefault("TRINITY_CROSSENCODER_RERANK", "off")
 
 from trinity.core.client import Trinity  # noqa: E402
 
@@ -407,7 +414,7 @@ def _identity_register(params: dict) -> dict:
         result = engine.register_identity_anchor(
             agent_id=agent_id,
             anchor_type="agent",
-            value=name,
+            content=name,
         )
     except Exception as exc:  # 锚点已存在等场景不致命
         result = {"status": "exists_or_failed", "detail": str(exc)}
@@ -579,11 +586,12 @@ def _web_search(params: dict) -> dict:
     if not query:
         return {"error": "query required"}
     try:
-        import sys as _sys
-        _sys.path.insert(0, r"D:\\trinity-code")
-        import runpy
+        # 2026-09-02: 动态解析仓库根（消除对 D: 副本的隐式依赖）
+        import sys as _sys, os as _os, runpy
+        _root = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+        _sys.path.insert(0, _root)
         _sys.argv = ["web_search", "--query=" + query[:60], "--max=5"]
-        runpy.run_path(r"D:\\trinity-code\\scripts\\web_search.py", run_name="__main__")
+        runpy.run_path(_os.path.join(_root, "scripts", "web_search.py"), run_name="__main__")
         return {"ok": True, "query": query[:60]}
     except Exception as e:
         return {"ok": False, "error": str(e)[:120]}
@@ -612,8 +620,7 @@ def _reflect(params: dict) -> dict:
     """自省：对指定会话生成自省并写入记忆。"""
     sid = str(params.get("session_id") or "default")
     try:
-        import sys as _sys
-        _sys.path.insert(0, r"D:\\trinity-code")
+        # 2026-09-02: trinity 已在进程路径上，删除冗余 D: insert
         from trinity.adapters.postgresql import PostgreSQLAdapter
         from trinity.brain.self_model import reflect_to_memory
         _a = PostgreSQLAdapter(auto_connect=True)
@@ -631,8 +638,7 @@ def _reflect(params: dict) -> dict:
 def _brain_capabilities(params: dict) -> dict:
     """大脑方向能力注册表：列出全部已激活认知/记忆模块可用性。"""
     try:
-        import sys as _sys
-        _sys.path.insert(0, r"D:\\trinity-code")
+        # 2026-09-02: trinity 已在进程路径上，删除冗余 D: insert
         from trinity import Trinity
         m = Trinity(adapter="postgresql")
         r = m.brain_capabilities()
@@ -678,6 +684,10 @@ def _emit(obj: dict) -> None:
 
 def main() -> int:
     global _request_in_flight, _request_start
+    # 2026-09-02（brain fix）：worker 不做阻塞式 reranker 预加载——sentence_transformers
+    # 导入 ~20s 会让首个请求超 60s 工具超时。reranker._load_model 的 _preload_ok 守卫
+    # 保证：未预加载且 onnx/libpq 已加载时安全降级到 ollama bi-encoder（bge-m3）重排，
+    # 不硬崩溃。CE 模型路径由 API 进程启动期顺序预加载承担。
     _start_watchdog()
     _start_prewarm()
     for line in sys.stdin:

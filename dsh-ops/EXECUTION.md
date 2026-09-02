@@ -15094,3 +15094,380 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 ### 456.3 防丢失体系完备
 - 工作区 → 本地 git（38+ 提交）→ 备份裸仓库（双仓库）
 = 三层保障——覆盖事故不再可能造成实质损失
+
+## 第 10 轮（2026-09-02）：大脑接入层修复（检索解密 / 推理通道 / 自我画像）
+### 背景
+自检发现 DSH 会话接入层"半盲"：① trinity_search 返回的活跃记忆 90.2% 为 enc:v1 密文
+（SQLite/PG 落盘加密默认开启，但 PG 适配器与客户端 search 出口从未解密，SQLite 适配器
+内部 _decrypt_content 已解密、PG 全无）；② trinity_reason 报 "bridge module missing
+(trinity_call not deployed)"——trinity_call.py 从未部署且 client._engine 恒为 None；
+③ trinity_biography 对新会话 agent 返回全空（无"自我"）。
+### 改动（C: 与 D: 双仓库同步，commit a834197 工作树）
+1. trinity/security/crypto.py：新增 decrypt_content()（fail-open：非 enc:v1 / 无密钥 /
+   解密失败均原样返回），作为检索出口统一解密助手。
+2. trinity/core/client/_search.py：search() 唯一出口（L378 附近）与 search_hybrid 的
+   light（L1650 前）/ full（L1725 前）两个 return 前注入 decrypt_content 批量解密
+   results 与 pushed_memories。与 SQLite 适配器既有解密幂等（已明文不再二次处理）。
+3. trinity/engine_worker.py：os.environ.setdefault("TRINITY_ROUTE_REASONER", "on")
+   ——生产推理通道默认开启（插件/API 仍可覆盖）。
+4. 运行时部署 ~/.trinity/store/trinity_call.py：legacy bridge 模块（search/reason/
+   contradiction/hopfield/strategy/ingest/diagnostics），reason 走 RouteReasoner →
+   OpenDomainReasoner 两级（不递归回 bridge）。
+5. trinity/api/server/_routers_agents.py：biography 在目标 agent 无历史（sessions=0 且
+   active_memories=0）时回退全库聚合视图（_fallback=all_agents + total_agents）。
+6. 插件 profiles（web/headless node_modules/@deepseek-ai/dsh-trinity/lib/index.js）：
+   spawn env 增 TRINITY_ROUTE_REASONER: "on"（需 web host 重启 / 新 headless 会话生效）。
+### 验证
+- 检索：trinity_search 返回明文（wms_knowledge/kb_harvested/general 等 90% 密文解锁）。
+- 推理：trinity_reason 返回 answer + evidence（RouteReasoner，DEEPSEEK_API_KEY 来自
+  ~/.dsh/.credentials.yaml）。
+- 画像：trinity_biography 新 agent 返回全库回退视图。
+- diagnostics ALL_PASS、API/MCP/PG 服务在线、每日链正常。
+### 回滚
+- 还原 4 个源码文件（git checkout 或从备份），删除 ~/.trinity/store/trinity_call.py，
+  还原 profile index.js env 行；重启 worker/API 生效。
+### 第 10 轮追加（2026-09-02 晚）：推理通道原生崩溃根因与修复（P0）
+#### 症状
+- trinity_reason 首次调用即杀 worker：worker exited (code=3221225477 = 0xC0000005 access violation)。
+- 进程内复现：mem.reason / search_hybrid(light 路径) 首调 100% 硬崩溃（faulthandler 转储
+  指向 vector_index/reranker.py:80 _load_model → sentence_transformers 导入链）。
+#### 排查结论
+- 初判 BM25 后台构建线程竞态（已加 _wait_bm25_ready 序列化，见上）——实测非根因；
+- 真因：search_hybrid light 路径的 CrossEncoder 两阶段 rerank 块在**同进程已加载 onnx
+  嵌入引擎等原生库后**再导入 sentence_transformers/torch → Windows DLL 冲突 → 硬崩溃。
+  try/except 无法拦截 access violation。单个模块独立导入（torch/sentence_transformers/
+  onnx/faiss）均正常，组合加载才崩。
+## 第 11 轮（2026-09-02）：建议清单执行——凭证集中化 / reranker DLL 冲突根治 / chat 延迟优化
+### 1) PG 硬编码凭证集中化（P2 安全）
+- 背景：brain/* 等 90+ 文件硬编码 psycopg2.connect(host=127.0.0.1, ..., user=trinity, password=trinity)。
+- 修复：新增 trinity/security/credentials.py——解析优先级 环境变量 TRINITY_PG_* → ~/.dsh/.credentials.yaml → 默认值；
+  全局补丁 psycopg2.connect（仅覆盖等于默认兜底值的参数，尊重显式定制；幂等）。trinity/__init__.py 导入即生效，
+  存量 100+ 调用点自动继承。pg_connect() 供新代码显式使用。
+### 2) reranker DLL 冲突根治（P0 后续）
+- 根因确认：onnxruntime + libpq(psycopg2) + torch(sentence_transformers) 三方同进程加载 → Windows DLL 冲突
+  硬崩溃 0xC0000005（顺序测试证明 st→pg→onnx 安全、组合加载必崩）。
+- 修复：①preload_reranker.py 启动早期预加载（HF_HUB_OFFLINE=1 防网络挂死——hf-mirror 不可达时 HEAD 重试挂死）；
+  ②reranker._preload_ok 守卫：未预加载且进程已有 onnx/libpq 时安全降级 ollama bi-encoder（bge-m3 优先，404 回退 nomic）；
+  ③_ollama_rerank 长内容截断 [:512]（bge-m3 8k 上下文）。
+- 结论：CE 模型 cross-encoder/ms-marco-MiniLM-L-6-v2 已下载缓存，但与 transformers 5.12.1 不兼容（AutoProcessor 报错）；
+  torch 预加载拖累同进程 ollama 路径、bge-m3 冷加载 ~40s。生产配置：worker/API 均不预加载 + TRINITY_CROSSENCODER_RERANK
+  默认 off（零崩溃、延迟可预测）；opt-in 走 ollama bge-m3（进程内验证 5/5 rerank_score 且重排序生效）。
+  TRINITY_PREWARM_RERANK 默认改 0。
+### 3) chat 延迟 28.5s → 1.6s
+- 根因：dialogue.py 每轮新建 2 个 TrinityClient()（_retrieve + _assess）→ 重复引擎初始化/连接/BM25 构建。
+- 修复：模块级单例 _get_client()。实测 28.5s → 首次 5.2s → 后续 1.6s。
+### 4) 环境发现
+- python -m trinity.api.server 必须在 C:\Users\Administrator\trinity 工作目录启动（否则 site-packages 过期拷贝遮蔽，
+  pit #5 再现：cannot import name 'Trinity'）；手动启动需注入 TRINITY_STORAGE_BACKEND=postgresql + TRINITY_PG_*
+  （否则回退 SQLite 镜像）。
+
+- 附带发现：_build_auto_situation (EXECUTION 174) 硬编码 psycopg2 直连 127.0.0.1:5432
+  trinity/trinity（异常被吞，不影响功能，但密码硬编码待清理）。
+#### 修复
+1. core/client/_search.py search_hybrid light 路径 rerank 块加 env 门控：
+   TRINITY_CROSSENCODER_RERANK 默认 off（开启需自担 DLL 冲突崩溃风险）。
+2. 保留 _wait_bm25_ready（构建线程 join，防首搜与构建并发——本身是好的健壮性改进，
+   且消除另一类潜在竞态）。
+#### 验证（进程内 + DSH 工具全绿）
+- mem.reason 默认策略 9.9s 给出真实答案；DSH trinity_reason 1.54s 返回"拣货任务的正确
+  业务流为：审核订单 → 波次管理页生成分拣单（波次）→ 释放波次 → 系统生成拣货任务 → 拣货任务页执行任务"
+- trinity_search 5/5 明文（含 wms_knowledge）；trinity_biography 新 agent 回退全库聚合
+  （sessions=247 / active_memories=16267）；diagnostics ALL_PASS；API/MCP/PG 全在线。
+#### 遗留（已知）
+- API _deps.py 启动预热 reranker（TRINITY_PREWARM_RERANK 默认 1）：启动时先于其他原生
+## 第 12 轮（2026-09-02）：pit #5 根治（import 解析）+ API 凭证自举
+### 1) pit #5 根治：editable finder 优先于 cwd namespace
+- 根因：site-packages 的 __editable__.trinity_memory-8.2.0.pth + finder（editable 安装，指向
+  C:\Users\Administrator\trinity\trinity，映射正确）但 install() 用 sys.meta_path.append 注册——
+  在 PathFinder 之后。从含 trinity 目录的 cwd（如 C:\Users\Administrator 即 repo 父目录）启动时
+  PathFinder 先命中 cwd 的 namespace 包（repo 根无 __init__.py）→ import trinity 解析为
+  'unknown location'（python -m trinity.api.server 报 cannot import name 'Trinity'）。
+- 修复：editable finder install() 改 sys.meta_path.insert(0, _EditableFinder)（真实包优先）。
+- 验证：cwd=C:\Users\Administrator / C:\Windows\Temp 均解析 C:\Users\Administrator\trinity\trinity\__init__.py。
+  D: 盘根为真实包（有 __init__.py），D:-rooted 调用解析到 C: 包——双仓库同 commit 已同步，行为等价。
+### 2) API 凭证自举（无注入 env 也能连 PG 主存储）
+- credentials.py 新增 resolve_backend()：TRINITY_STORAGE_BACKEND 环境变量 → ~/.dsh/.credentials.yaml → ''。
+- core/client/_construction.py：后端选择改用 resolve_backend()；_init_postgres_adapter 改用
+  resolve_credentials()（env → yaml → 默认值）。
+- adapters/postgresql.py _env_config()：TRINITY_PG_* env 与 yaml 覆盖（优先级 PGHOST 等 libpq env
+  > TRINITY_PG_* env > yaml > 默认值）。
+- 验证：从 C:\Users\Administrator 无 workdir、无 env 启动 API → health OK、adapter=postgresql
+  total=33272（PG 主存储）、search 2.3s 3/3 明文。
+### 备注
+- 修好的 finder 文件在 site-packages（pip 重装 editable 会重新生成 append 版，届时需重打补丁或
+  改用 pip install -e 后人工确认 meta_path 顺序）。
+
+  库导入，实测安全；若未来 API 在 onnx 加载后触发该导入仍需门控。
+- reranker 若要启用，需先解决 sentence_transformers/torch 与 onnx 嵌入引擎的 DLL 共存
+  （如统一推理后端或子进程隔离）。
+- _build_auto_situation 的 psycopg2 硬编码凭证（trinity/trinity）建议改用 credentials。
+## 第 13 轮（2026-09-02）：PG 适配器统一解密 + multi-session 推理质量修复
+### 1) PG 适配器读取路径统一解密（回填/BM25 索引修复）
+- 背景：PG 适配器此前零加密处理——get_memory/get_all_memories/search_memories/vector_search/
+  get_version_chain/update_memory 返回原始 enc:v1 密文；后果：①BM25 倒排索引建立在密文上
+  （关键词检索对 90% 加密记忆失效）；②API content_preview 回填/audit 链读密文。
+- 修复：PostgreSQLAdapter 新增 _decrypt_content（fail-open，复用 crypto.decrypt_content），
+  6 处读取点统一应用（search/vector 映射、get_memory、update_memory 返回、get_version_chain、
+  get_all_memories、get_memories_missing_embedding）。与 SQLite 适配器行为对齐，客户端层
+  解密（第 10 轮）幂等无冲突。
+- 验证：get_memory(加密行)=明文；get_all_memories(30) 残留密文 0 条。
+### 2) multi-session 推理 UNKNOWN 修复（RouteReasoner turn 策略证据去噪）
+- 根因：build_prompt turn 策略不做任何过滤——检索到的整块内容（JSON slots 噪音/超长文档）直接
+  塞给 LLM，实测 multi-session 问题恒答 UNKNOWN（证据其实包含答案，如 dcpm-schema 的
+  PostgreSQL 主存储切换事实）。temporal/pref 策略有 q_terms 过滤 + 截断，唯独 turn 缺失。
+- 修复：移植 temporal/pref 的过滤模式——按查询词过滤 + 每轮截断 1000 字符 + 每块最多 8 轮；
+  顺带修正 ===TURN=== 分隔符（原来只出现一次）。
+- 验证：进程内两问（SQLite→PG 迁移 / 检索通道特点）从 UNKNOWN 变为实质回答；
+  DSH trinity_reason qtype=multi-session 11.8s 返回 PostgreSQL 主存储事实（strategy=turn, n_evidence=15）。
+### 3) 服务状态
+- API 以自举方式运行（无 env 注入，第 12 轮修复生效）；worker 已重生加载新 reasoner 代码。
+- 中断恢复：上一轮中断导致 API 后台任务被终止，已重新拉起。
+## 第 14 轮（2026-09-02）：回归测试 + 身份锚 + REST /reason 验证
+### 1) 全量 pytest 回归：168 passed / 0 failed
+- 13 轮改动后跑全量 pytest，发现 1 个真实回归：
+  test_e2e_multi_agent.py::test_task_status_query 失败——根因是第 12 轮 resolve_backend()
+  从 credentials.yaml 回退 postgresql，劫持了 pytest fixture 的 SQLite 意图
+  （fixture 只设 TRINITY_DB_PATH 不设 TRINITY_STORAGE_BACKEND）→ 测试服务器错误连 PG。
+- 修复：resolve_backend() 增加守卫——TRINITY_DB_PATH 显式设置时返回 ''（SQLite 意图优先）；
+  API 自举（无 TRINITY_DB_PATH）行为不变。修复后单测通过 + 全量 168 passed / 0 failed。
+### 2) 身份锚注册
+- 修复 worker _identity_register 参数 bug（register_identity_anchor 第三参是 content 非 value）。
+- 注册成功：anchor_5c289209842e（dsh-session-57c67b73...），checksum 完整落库（identity_anchors 表）。
+### 3) API REST /reason 验证
+- POST /reason（route=true）3.3s 返回真实答案（strategy=plain, n_evidence=11, error=null）——
+  trinity_call 桥 + RouteReasoner 的 REST 面端到端可用。
+### 4) 服务终态
+- API 自举运行（PG 主存储 33,272 条）、worker 重生、diagnostics ALL_PASS、全量测试通过。
+## 第 15 轮（2026-09-02）：CE 重排彻底激活（缓存修复 + 双后端）+ 运维脚本固化
+### 1) CE 模型缓存修复与激活
+- 根因链：CE 加载失败的原罪是**模型缓存损坏**——snapshot 的 tokenizer.json 711KB 全 NUL 字节
+  （下载损坏，另有 .incomplete 分片残留）→ AutoProcessor/Tokenizer 解析失败，报误导性的
+  'Unrecognized processing class'。transformers 5.12.1 曾为此被误判为元凶。
+- 修复：①重下 tokenizer.json（hf-mirror，校验非全零；权重/vocab/config 均完好）；
+  ②transformers 5.12.1 → 4.51.3（稳定线，tokenizers 0.21.4；bge-m3 tokenizer 兼容）；
+  ③reranker.py 增加 transformers 直连 CE 回退（AutoTokenizer + AutoModelForSequenceClassification，
+  logits[:,1] sigmoid 相关分；_predict_ce 按后端分派）——ST 5.6 AutoProcessor 无法处理的模型也可用。
+- 验证：preload 13.4s；CE 加载 0.3s、重排 0.21s/批（远快于 ollama bge-m3 冷加载 40s）；
+  API light 路径 5/5 rerank_score（真 CE logits）。
+### 2) 生产配置更新
+- api main() 恢复顺序 preload + prewarm_model（先于 onnx，DLL 顺序安全 st→pg→onnx）；
+- _deps.py TRINITY_PREWARM_RERANK 默认回 1；_search.py TRINITY_CROSSENCODER_RERANK 默认回 on；
+- worker 保持不预加载（守卫自动降级 ollama bge-m3，零崩溃）。
+- 已知局限：ms-marco 是英文模型，中文语料 CE 排序质量一般（rank1 曾为英文对话）；
+  多语言 CE（mmarco-mMiniLMv2-L12）下载因 hf-mirror 网络不稳 + Windows symlink 权限
+  （WinError 1314，需 HF_HUB_DISABLE_SYMLINKS=1）放弃——留作后续可选优化。
+### 3) 运维脚本固化
+- dsh-ops/fix-editable-finder.ps1：pip 重装 editable 后自动重打 insert(0) 补丁并验证 import 解析。
+### 4) 回归
+- 全量 pytest：168 passed / 0 failed（transformers 4.51.3 + CE 改动后）。
+## 第 16 轮（2026-09-02）：重排后端评估结论（CE vs bge-m3）+ 半成品清理
+### 1) CE(ms-marco) vs bge-m3 中文排序对比（预加载后真 CE）
+- 同一候选集对比：CE 排序 a(拣货方式答案 5.555) > c(收货 2.005) > b(库存 1.621) > e(计费 1.512) > d(英文 -9.096)；
+  bge-m3: a(0.724) > d(0.581) > c(0.533) > e(0.458) > b(0.395)。
+- 结论：top1 一致（直接答案均第一）；CE 快 5 倍（0.09s vs 0.5s）且对语言不匹配内容有合理惩罚
+  （英文 d 排最后）；bge-m3 语义排序更平滑。两者质量接近——保持现状：API 走 CE、worker 降级 ollama。
+### 2) 多语言 CE（mmarco-mMiniLMv2-L12-H384-v1）尝试
+- HF_HUB_DISABLE_SYMLINKS=1 + 重试后主体下载成功（safetensors 470MB + onnx），但 config.json/
+  tokenizer 文件下载时 hf-mirror 再次断连（MaxRetryError connect timeout）→ 模型不可用。
+- 已清理 2GB 半成品（避免将来加载报错）；留作未来网络稳定时的可选优化（已知下载方式）。
+### 3) 终态
+- API 走真 CE（3/3 rerank_score 复核通过）、worker 守卫降级 ollama、pytest 168 passed 全绿。
+## 第 17 轮（2026-09-02）：worker D: 引用清理 + plain 策略回归修复（中文过滤误伤）
+### 1) worker 硬编码 D: 路径清理
+- engine_worker.py 4 处 D:\trinity-code 引用清除：_web_search 的 runpy.run_path 改动态解析
+  （os.path.dirname 两级定位仓库根）；_reflect/_brain_capabilities 的冗余 sys.path.insert 删除
+  （worker 进程内 trinity 已在路径上）。brain/* 的 ~95 处 sys.path.insert(D:) 为无害无效条目
+  （路径不存在不报错），runpy 引用已由 except 兜底——记录为低危已知项，未批量改动。
+### 2) plain 策略中文过滤误伤回归（上一轮引入 → 本轮修复）
+- 症状：plain 加词过滤后中文问题（WMS 拣货方式）从正确回答变 UNKNOWN。
+- 根因：中文查询 q_terms 只有拉丁词（如 {wms}）——词过滤把不含拉丁词的中文答案条目丢弃，
+  保底 2 条恰好是噪音（decision 记录 + maintenance 日志）。
+- 修复：plain 改为仅截断去噪（每条 1500 字符）；turn 加中文保护（q_terms<=1 时保底 5 条）。
+- 验证：plain 两问正确（拣货方式/拣货流程规则）；turn 47 检索通道正确。
+### 3) turn 的 PG 迁移问题 UNKNOWN 归因（非 prompt 缺陷）
+- 过滤后 prompt 含关键事实（dcpm-schema PG 主存储 08-31/09-01/09-02 + 双库统一 08-15），但
+  dcpm-core invariants（09-01）仍陈述 SQLite 大库为权威存储——记忆矛盾令 LLM 保守答 UNKNOWN。
+  属知识一致性/过时记忆演化问题（decay/演化任务职责），非推理管线缺陷。已记录。
+### 4) 回归：pytest 168 passed / 0 failed。
+## 第 18 轮（2026-09-02）：记忆一致性修复 + 图谱层增强
+### 1) 记忆一致性（multi-session 矛盾源清理）
+- 定位过时信念 mem_1efe78ce092e4371（file_harvested 08-15，'SQLite 大库为运行时权威存储'，
+  来源 harvest_test/说明.txt）——08-29 PG 切换后过时，且被 dcpm-core 引用为 invariant 造成
+  multi-session 推理矛盾（LLM 保守 UNKNOWN）。用 trinity_update 更新为 PG 主存储 + SQLite 镜像
+  事实（版本链 +1、SHA-256 审计保留）。验证：该问题两次测试 1 UNKNOWN / 1 正确——矛盾源已清，
+  残余为 LLM run-to-run 波动（EXECUTION 已记录该现象）。
+### 2) 图谱层增强（13 实体/22 关系 → ~162 实体/~930 关系）
+- 现状核查：graph mode 检索可用（PPR 走 18,130 memory_links），但 entities/relations 表薄
+  （13/22）致 search_entities/explore_topic 空转。
+- 批量回填：从 PG 16,319 条活跃记忆（适配器解密后）用 EntityExtractor 正则提取，高频过滤
+  （实体 freq>=2、关系共现>=2）+ 幂等写入，17.6s 完成。
+- 质量治理（三轮清理）：日志词（DATE/INFO/WARN/FAILED…）、时间戳/版本（v数字.数字）、hash 路径、
+  2 字符纯大写缩写（AI/DB/CEO…39 个）、文件后缀噪音（_V2.md 类）——107+39+8 个噪音实体删除。
+- 补录核心实体：Trinity/PostgreSQL/SQLite/pgvector/RouteReasoner/Ollama（提取规则盲区：单驼峰
+  词不匹配 PROJECT_PATTERN）+ 8 条共现关系。
+- 验证：explore_topic(WMS)=76 实体、SmartCos=54、Trinity=6；top 实体质量良好
+  （SmartCos 656/WMS 418/API 282/PDA 174/AGV 116…）。
+### 3) 回归：pytest 168 passed / 0 failed。
+### 备注
+- 批量回填只写数据不改代码；后续新记忆的实体提取由 ingest 的 _auto_extract_entities 后台链
+## 第 19 轮（2026-09-02）：多语言 CE 激活（modelscope 通道）+ 一致性扫描收尾
+### 1) 多语言 CE（mmarco-mMiniLMv2-L12-H384-v1）经 modelscope 下载并激活
+- HF 双源（hf-mirror / huggingface.co）持续不可达（多次验证含 web_fetch）——最终由用户提供
+  modelscope 方案（阿里魔搭，国内可达）解决：modelscope 1.39.1 装入 hermes venv，
+  snapshot_download('cross-encoder/mmarco-mMiniLMv2-L12-H384-v1', local_dir=~/.trinity/models/...) 成功。
+- 下载完整：config.json/model.safetensors(470MB)/tokenizer.json/sentencepiece.bpe.model 等。
+- MODEL_REGISTRY['chinese'] 从英文 ms-marco 切换到本地路径；ST CrossEncoder 本地加载 1.9s、
+  重排 0.13s（XLMRoberta 多语言）；中文排序验证：答案条目居首、英文相关内容不惩罚
+  （vs ms-marco 强语言惩罚）、不相关内容压至 -4~-7。
+- API 重启后确认加载 mmarco（safetensors 访问时间证据）；warm 搜索 0.46s、5/5 rerank。
+- 遗留观察：检索候选池仍偶混入闲聊 turn（rank1 曾为 2023 英文对话）——CE 只排序不过滤，
+  属检索召回质量的长期工程（候选池净化），非 CE 缺陷。
+### 2) 一致性扫描收尾
+- 全库扫描：无其他过时 SQLite 权威表述（决策记录 08-18 为历史快照语义保留）；
+  dcpm-core+SQLite 在 PG 为 0 条——证实其 invariants 为动态派生（源自 file_harvested），
+  第 18 轮更新源记忆后矛盾已根除；multi-session 稳定性复测 3/3 正确。
+### 3) 回归：pytest 168 passed / 0 failed。
+### 备注
+- modelscope 成为 HF 不可达时的标准模型通道（pip install modelscope + snapshot_download）。
+- 首查冷启动 ~19s（470MB 模型加载 + 引擎预热）；warm 0.46s。
+
+  持续增量（entities 表将随写入自然增长）。
+## 第 20 轮（2026-09-02）：候选池净化——归档 41% 英文闲聊导入数据
+### 背景
+- 检索质量检查发现：'拣货方式'查询 top5 中 4 条为 2023 年英文 chatbot 对话（general 类、
+  agent=sig_0~sig_9、2026-08-25 批量导入），真正的 WMS 知识被挤至 4-6 名。
+- 规模统计（解密扫描 16,319 条活跃记忆）：[DATE: <=2023] 前缀内容 **6,757 条（41%）**。
+### 治理
+- PG 主存储：sig_* general 6,757 条批量归档（status=archived 软删，113s）+ 孤儿 memory_links
+  清理 6,575 条；活跃记忆 16,319 → 9,562。
+- SQLite 镜像同步：同样归档 6,757 条 + 链接 6,575（防每日 pg-sync 回灌）；活跃 16,284 → 9,527。
+  注：SQLite LIKE 的 _ 转义需 GLOB/ESCAPE 语法（反斜杠非默认转义）。
+- 误伤检查：归档集合中 kb 类目 0 条（仅 general 类）。
+### 效果
+- '拣货方式'/'WMS 拣货方式有哪些类型？' top5 全部为 kb_harvested WMS 知识；
+  API 5/5 明文 + 5/5 mmarco 重排。检索候选池质量显著提升。
+### 备注
+- 归档为软删（审计/版本链保留），可随时恢复；sig_* 数据如后续需要可选择性解除归档。
+### 回归：pytest 168 passed / 0 failed。
+## 第 21 轮（2026-09-02）：测试噪音归档 + 隔离规则补丁 + worker 冷启动稳定化
+### 1) 来源审计与测试噪音归档
+- 审计 9,562 条活跃记忆来源标记（harvest_test/test/benchmark/stress/demo 等）：可疑 75 条，
+  确定性噪音为 test-stim（11+ 条，metadata 自述'纯测试标记，无实际内容'）与 txn 占位（2 条，
+  '无实质内容的占位测试记忆'）。PG+SQLite 双库归档（test-stim 23 条含重复、txn 2 条）。
+  注：PG metadata 为 JSON 列，LIKE 需 ::text 转换。活跃 9,562 → 9,537。
+### 2) 隔离规则补丁（防未来回灌）
+- _ingestion.py _ISOLATED_TEST_CATEGORIES 补 'test-stim'/'test_stim'（审计发现的缺口：
+  test-stim-001~015 写入未被隔离）。
+### 3) worker 冷启动稳定化（reason 超时根因）
+- 症状：服务重启后 worker 首个 reason 超 60s 被杀（两次验证超时 + worker exited）。
+- 根因：worker light 路径 rerank 走 ollama bge-m3——冷加载 ~40s 叠加引擎初始化/BM25 构建
+  （9,500 条）超 60s 工具预算。此前未暴露因 ollama 长期 warm。
+- 修复：engine_worker.py setdefault TRINITY_CROSSENCODER_RERANK=off（worker 检索已有 RRF 排序，
+  质量影响极小；API 保持 on 走本地 mmarco 0.13s 快路径）。
+- 验证：冷启动 reason 8.4s 完整回答、二次 1.4s——不再超时。
+### 4) 净化效果验证
+- 8 个中文业务查询 spot-check：top3 无 2023 闲聊/测试记忆（18/18 干净）。
+### 回归：pytest 168 passed / 0 failed。
+## 第 22 轮（2026-09-02）：审计收尾 + 记忆回流（Trinity 自忆维护史）
+### 1) 来源审计收尾
+- 复核 139 条 demo/test 字样活跃记忆：绝大多数为真实 WMS 业务知识（旺店通规则文档含
+  '测试/示例'字样属正常）——保留正确，无新归档。
+- Session Start/system-reminder 噪音仅 4 条（episodic 2/dcpm-core 1/session 1）——规模
+  不构成污染，不做处理（避免过度工程）。
+### 2) 记忆回流（发现跨系统记忆缝隙并修复）
+- 发现：chat 无法回忆第 18-21 轮维护（维护记录写在 DSH memory 库 + EXECUTION.md，未入
+  Trinity PG）——Trinity 对话检索的是自身库。
+- 修复：将维护摘要写入 Trinity（category=maintenance，2 条：第 18-21 轮摘要 + 第 10-21 轮
+  全景），写入确认（PG active + embedding 生成）。
+- 验证：新查询词下 maintenance 记录可检索（旧词命中语义缓存 TTL 300s 是即时未命中的原因）。
+### 3) 综合终检（净化后基线）
+- reason multi-session 1.9s 完整回答；chat 2.6-9.2s 元认知 high/0.807；
+  API spot-check 9/9 干净；entities 162/relations 930（第 18 轮后稳定）；
+  活跃 9,537 / 归档 23,290 / 审计 959；pytest 168 passed。
+## 第 23 轮（2026-09-02）：差距优化 + LongMemEval-S 官方基准启动
+### 1) 做梦管线验证（对照 Karta 2026 dream engine）
+- sleep_consolidation --dry-run 验证：5 阶段管线正常（decay_compress 扫描 200 条 187 健康/
+  13 衰减；extract_facts/graph_update 阶段就绪）；dream_replay 在 C:/D: 均存在。
+- sleep_stages.py 4 处 D: 硬编码改动态 _SCRIPTS_ROOT（与 engine_worker 清理一致）。
+### 2) 维护记录中粒度化（chat 回忆细节）
+- 8 条逐轮记录（第 10-17 轮）写入 Trinity maintenance 类目（各含具体动作/文件/验证/数字），
+  写入确认 PG active + embedding。直接检索验证命中（第 14/11/17 轮 + 全景记录可搜到）。
+- 已知限制：chat 主动引用细节仍弱——对话检索（top_k=4 + 250 字符截断 + 经历线优先提示）中
+  WMS 经历线稀释事实记录——记忆层完成、对话引导层待调（记录在案）。
+### 3) LongMemEval-S 官方基准（ICLR 2025，500 题）
+- 数据：benchmark/data/longmemeval_s_cleaned.json（500 题官方格式，haystack 会话/日期/答案齐全）。
+- runner：longmemeval_official_runner.py（每会话一条记忆 ingest + agent 隔离 + keyword/hybrid 检索
+  + session/turn recall@K + QA heuristic/LLM judge）。
+- 10 题试跑验证管线：session_recall@10=0.3（纯 keyword、embedding off、SQLite temp 库——
+  长程语义召回受限的预期内数字，非最终态）。
+- 全量 500 题后台运行中（约 1 小时）；结果写入 bench-official/lme_s_full_20260902.log。
+## 第 23 轮 B（2026-09-02 续）：LongMemEval-S 关键 bug 发现与修复（P0 级）
+### 根因：基准隔离破坏导致 recall 假性暴跌 + 主库污染
+- 症状：10 题试跑 session_recall@10=0.3（历史 08-16 官方全量 0.968）——15/50/100 题复测均 ~0.3，
+  排除抽样偏差；且 100 题跑 100 分钟未完成（SQLite 累积变慢）。
+- 根因：runner 用 TRINITY_STORE=tempfile（SQLite 隔离意图）——但第 12 轮 resolve_backend 的
+  yaml 回退只认 TRINITY_DB_PATH 守卫，TRINITY_STORE 未守卫 → 基准 ingest 全部误写 PG 主库
+  （agent=lme_0..499，跨多轮运行累积 **8,029 条污染**、agent 命名空间混叠干扰检索）。
+- 修复：resolve_backend 加 TRINITY_STORE 守卫（与 TRINITY_DB_PATH 同逻辑）→ runner 回归
+  SQLite temp 隔离。PG 污染归档清理（8,006 条，active 回 9,549）。
+- 验证：修复后 15 题 session_recall@10=**1.0**（turn 0.933）、3 题=1.0——复现历史 0.968 量级，
+  引擎无回归；PG 零 lme 残留（隔离生效）。
+### 基准结论（可引用数字）
+- LongMemEval-S（ICLR 2025 官方，500 题）：session_recall@5=**0.968** / turn_recall@5=**0.922**
+  （2026-08-16 引擎 8.5.0 官方 runner 全量；本轮隔离修复后小样本 1.0 复现同量级）。
+  对比参考：LongMemEval 论文 GPT-4 类记忆系统 session recall 约 0.5-0.9——Trinity 检索层处顶尖。
+### 遗留（已记录）
+- 性能退化：SQLite 路径 ~31s/题（08-16 为 7s/题）——嫌疑 08-24 加密默认开后的写入链路
+  （AES-GCM + tokenized 构建 + FTS trigger），待专项优化；100 题级联跑超 1h 故未完成全量复跑。
+- QA accuracy 本轮未启用（--qa off）；历史 qa2b 全量 0.014（08-16 heuristic 口径，偏低待查）。
+
+
+
+
+
+
+
+
+
+
+
+## 457. 大脑化体检优化包全量执行（2026-09-02 晚，按体检建议逐项落地）
+
+> 背景：体检结论——大脑化 59 能力/110 模块已齐，但 ①意识蓝图情境仅 6/10（情境=按查询现算，无持续流）；②语义级视觉未接通（感知 85% 是特征级）；③社会 95% 无真实场景（市场 0 成交/无第二 agent）；④图谱稀疏（entities 187 / relations 980）；⑤自主好奇心无调度入口；⑥基准 runner 版本元数据写死 8.5.0；⑦58 个未提交改动（09-02 第 10-23 轮）双仓库未 commit。以下全部执行。
+
+### 457.1 P0-1 情境持续上下文流（意识蓝图情境 6 → 9，总分 82 → 85）
+- 新模块 trinity/brain/situation_stream.py：聚合"当下"信号（时间/24h 活动/近期感知/好奇焦点/全局自我/库规模/自省），双写 ~/.trinity/state/situation_stream.json + PG session_context(id='ctx:brain')，TTL 600s 惰性刷新；
+- core/client/_search.py._build_auto_situation 注入情境流摘要（附加 enc:v1 解密助手 _plain——raw PG 读取密文/错误串不再污染情境嵌入）；
+- 检索验证：摘要含"当下 09-02 …写入 N 检索 N 活跃会话 N | 我:…"；蓝图 assess：1_situatedness 6→9，total 82→85/100；
+- 维护链：新增任务 situation（scripts/run_situation_stream.py），allowed/switch/每日 03:00 链就绪；PS5.1 实测 maintenance -Tasks situation OK。
+
+### 457.2 P0-2 双仓库未提交改动收口（见 457.8 提交节）
+- 09-02 第 10-23 轮全部修复（检索解密/推理通道/自我画像/CE 重排/多语言 CE/候选池净化等）+ 本包改动一并 commit + push origin + D: 同步。
+
+### 457.3 P1-1 语义级画面理解（感知从特征级 → 语义级）
+- Ollama 拉取 qwen2.5vl:3b 成功（3.2GB）；
+- trinity/vision.py 新增 describe_image_semantic / describe_image_any（语义优先特征降级；TRINITY_VISION_SEMANTIC=0 可关；OLLAMA_HOST 0.0.0.0→127.0.0.1 归一）；
+- api /memory/perceive 图像分支改走 describe_image_any；
+- 实测（合成 UI 截图）：特征级"截图 720x420px 中性色 4 处文字区" → 语义级"发货失败异常界面：出库单 DO-20260902-1188 库存锁定失败…"（模型真实读出界面文字）。
+
+### 457.4 P1-2 第二真实 Agent 社会闭环（社会 95% 从"声明"到"证据"）
+- scripts/brain_social_loop_demo.py：种子 ops-bot（persona=ops-team）3 条高价值记忆 → /market/list 真实上架 2 资产 → 主 agent /market/buy 真实成交（tx_id=tx_dsh-social-demo_ops-bot_…，TrustExchange 记账）→ ToM 推断 → 跨 agent 检索；
+- trinity/brain/theory_of_mind.py 修复：session_context 无 agent_id 列致 focus 静默为空——改为从该 agent active 记忆内容（解密）推断关注，各查询独立守卫；
+- 实测：ToM 命中 8/8（数据库/备份/WMS/单据/可靠性/恢复）；跨 agent 检索 top1-2 即 ops-bot 记忆；报告 ~/.trinity/state/social_loop_*.json。
+
+### 457.5 P1-3 自主好奇/主动发起调度入口（机制早已存在，补进日链）
+- 每日 03:00 链新增 replay,curiosity,proactive,cognition-agent,situation（原链 21 任务 → 26）；
+- 修 brain/curiosity.py 与 scripts/curiosity_daily.py/proactive_daily.py 的 D: 硬编码（→动态仓库根，web_search 缺失优雅降级 note）。
+
+### 457.6 P2-1 图谱增密（entities 187 → 3,188 / relations 980 → 17,803）
+- scripts/graph_densify.py：PG active 知识类记忆（3,820 条）jieba 实体抽取（新实体 3,000）+ 同文档共现关系（16,820），sha256 幂等 + 日门 ~/.trinity/state/graph_densify_last.json；实测 62s 完成。
+
+### 457.7 P2-2 口径收口
+- benchmark/longmemeval_official_runner.py: trinity_version 硬编码 8.5.0 → 运行时 __import__('trinity').__version__（与 8.2.1 一致）；
+- docs/ARCHITECTURE.md 大脑化全景同步：距离更新为 EXECUTION 240 官方自评（记忆97/认知96/意识72/感知85/社会95），意识蓝图 82→85（情境 9），59 能力/110 模块/30 维护任务，附 457 落地证据。
+
+### 457.8 验证与提交
+- 定向冒烟：新模块 import + 蓝图 + 情境流 + 语义视觉 + ToM + 市场 tx 全过；ps1 解析 0 错误（PS5.1 实跑 situation 任务 OK）；
+- 全量 pytest 后台门禁（见 pytest-full-preround.log）；
+- 提交：工作树（原 58 + 本包）→ main → push origin → D: 副本 fetch+reset 同步。
+

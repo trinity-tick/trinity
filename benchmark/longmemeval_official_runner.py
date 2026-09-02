@@ -208,7 +208,8 @@ for qi, q in enumerate(data):
 n = len(results)
 summary = {
     "dataset": "longmemeval_s_cleaned (official, ICLR 2025)",
-    "questions": n, "top_k": args.top_k, "trinity_version": "8.5.0",
+    "questions": n, "top_k": args.top_k,
+    "trinity_version": getattr(__import__("trinity"), "__version__", "unknown"),
     "session_recall_at_k": round(sum(1 for x in results if x["session_recall"]) / n, 4),
     "turn_recall_at_k": round(sum(1 for x in results if x["turn_recall"]) / n, 4),
     "mean_hit_position": round(sum(x["hit_position"] or args.top_k for x in results) / n, 2),

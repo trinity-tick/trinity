@@ -3,7 +3,7 @@
 import sys, os, json
 
 def main():
-    sys.path.insert(0, r"D:\trinity-code")
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
     os.environ.setdefault("PGHOST", "127.0.0.1"); os.environ.setdefault("PGPORT", "5432")
     os.environ.setdefault("PGDATABASE", "trinity"); os.environ.setdefault("PGUSER", "trinity")

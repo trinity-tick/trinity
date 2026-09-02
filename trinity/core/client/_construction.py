@@ -135,7 +135,9 @@ class _ConstructionMixin:
         self._compressor = None
 
         # 2026-08-29 (PG switch): TRINITY_STORAGE_BACKEND env overrides default adapter
-        _env_backend = os.environ.get("TRINITY_STORAGE_BACKEND", "").strip().lower()
+        # 2026-09-02: 无 env 时回退 ~/.dsh/.credentials.yaml（API/脚本自举）
+        from trinity.security.credentials import resolve_backend as _resolve_backend
+        _env_backend = _resolve_backend()
         if adapter is None and _env_backend == "postgresql":
             adapter = "postgresql"
         if adapter == "postgresql":
@@ -195,12 +197,15 @@ class _ConstructionMixin:
             self._engine_error = f"{type(exc).__name__}: {exc}"
     def _init_postgres_adapter(self):
         from trinity.adapters.postgresql import PostgreSQLAdapter
+        # 2026-09-02: 凭证自举——env → credentials.yaml → 默认值
+        from trinity.security.credentials import resolve_credentials as _pg_creds
+        _c = _pg_creds()
         self._adapter = PostgreSQLAdapter(
-            host=os.environ.get("TRINITY_PG_HOST", "localhost"),
-            port=int(os.environ.get("TRINITY_PG_PORT", "5432")),
-            dbname=os.environ.get("TRINITY_PG_DB", "trinity"),
-            user=os.environ.get("TRINITY_PG_USER", "trinity"),
-            password=os.environ.get("TRINITY_PG_PASSWORD", "trinity"),
+            host=_c["host"],
+            port=_c["port"],
+            dbname=_c["dbname"],
+            user=_c["user"],
+            password=_c["password"],
         )
         self._adapter.connect()
     @property

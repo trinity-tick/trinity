@@ -96,25 +96,40 @@ class CompressionReport:
 
 _COMPRESSION_SYSTEM_PROMPT = """\
 You are a memory compression agent. Your task is to distill multiple memory entries
-into a single concise summary that preserves all critical information.
+into a single dense summary that preserves all critical information.
 
 Rules:
 1. Preserve ALL entity names (people, organizations, products, tools)
 2. Preserve ALL dates and time references
 3. Preserve ALL key decisions, conclusions, and action items
 4. Preserve ALL numbers, amounts, metrics mentioned
-5. Remove redundant descriptions and repetitive content
-6. Output ONLY the compressed summary text — no preamble, no markdown headings
-7. Keep the summary under 500 words
-8. Use a factual, neutral tone
+5. Remove redundant descriptions and repetitive content, but DO NOT merge away specifics
+6. COVER EVERY ENTRY: each input entry [i] must contribute at least one specific,
+   recognizable fact (exact name/number/date/decision) to the summary — no entry
+   may be dropped entirely (2026-09-01 忠实度修复：此前批量摘要丢 55-65% 关键句)
+7. Output ONLY the compressed summary text — no preamble, no markdown headings
+8. Keep the summary dense but complete; up to 700 words
+9. Use a factual, neutral tone
+10. Prefix each bullet with the source entry numbers, e.g. "- [1,3] <fact>"
+11. QUOTE from the source: for each bullet, reuse the exact noun phrases / numbers /
+    dates from the original entry instead of paraphrasing them away (2026-09-01 v3)
+12. One bullet per fact; do NOT merge multiple entries' facts into one sentence
 
-Output format (plain text only):
-<summary text here>
+Output format (plain text only, bullet list, one fact per bullet):
+- [entry numbers] <specific fact with exact names/numbers/dates quoted from source>
+- [entry numbers] <specific fact with exact names/numbers/dates quoted from source>
 """
 
 _COMPRESSION_USER_TEMPLATE = """\
 Compress the following {count} memory entries of type "{memory_type}" into one
-concise summary. Preserve entities, dates, decisions, and numbers.
+dense summary. Cover EVERY entry with at least one specific fact; KEEP THE
+EXACT names, dates, numbers and decisions - quote them from the source entries
+rather than summarizing them away. Output one fact per bullet, prefixed with
+source entry numbers ([i]), no preamble.
+
+Example output shape:
+- [1] Alice Chen joined Amazon in March 2020 as a Product Manager
+- [2,3] The WMS go-live was scheduled for 2026-09-15; UAT had 12 open defects
 
 Memory entries:
 {entries}

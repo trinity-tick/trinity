@@ -27,11 +27,22 @@ logger = logging.getLogger("trinity.cognition.dialogue")
 NL = chr(10)
 MAX_HISTORY = 6  # 工作记忆轮次上限（注意容量）
 
+# 2026-09-02（brain fix）：对话客户端单例——每次调用新建 TrinityClient() 会重复
+# 支付引擎初始化/连接/BM25 构建成本（实测单轮对话 28.5s，其中两处各建一个 client）。
+_client = None
+
+
+def _get_client():
+    global _client
+    if _client is None:
+        from ..core.client import TrinityClient
+        _client = TrinityClient()
+    return _client
+
 
 def _retrieve(query: str, top_k: int = 4) -> list:
     try:
-        from ..core.client import TrinityClient
-        c = TrinityClient()
+        c = _get_client()
         data = c.search_hybrid(query=query, top_k=top_k, strategy="rrf")
         results = data.get("results", []) if isinstance(data, dict) else data
         return [str(r.get("content_preview") or r.get("content") or "")[:250]
@@ -43,8 +54,7 @@ def _retrieve(query: str, top_k: int = 4) -> list:
 def _assess(query: str) -> Dict[str, Any]:
     """对话轮次的元认知（信心+缺口提示）。"""
     try:
-        from ..core.client import TrinityClient
-        c = TrinityClient()
+        c = _get_client()
         data = c.search_hybrid(query=query, top_k=5, strategy="rrf")
         results = data.get("results", []) if isinstance(data, dict) else data
         channels = []

@@ -7,6 +7,8 @@ from typing import Any, Dict
 
 from fastapi import APIRouter
 
+from trinity.version import __version__ as TRINITY_VERSION  # 2026-09-01: 版本单一源
+
 from ._deps import _live_memory as get_memory
 from ._models import MarvisAgentRegisterRequest, MarvisDispatchRequest
 from ._routers_a2a import _get_a2a_registry, _get_a2a_task_manager
@@ -36,7 +38,7 @@ async def marvis_register_agent(req: MarvisAgentRegisterRequest):
         agent_id=req.agent_id,
         name=req.agent_name,
         description=req.metadata.get("description", f"Marvis sub-agent: {req.agent_name}"),
-        version="8.2.0",
+        version=TRINITY_VERSION,  # 2026-09-01: 跟随 version.py 单一源（原硬编码 8.2.0）
         capabilities=req.capabilities,
         endpoints=[f"/a2a/agents/{req.agent_id}"],
         skills=skills,

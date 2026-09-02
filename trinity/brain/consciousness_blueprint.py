@@ -19,6 +19,7 @@
 import os
 import sys
 import json
+import time
 
 
 def assess_blueprint() -> dict:
@@ -30,9 +31,28 @@ def assess_blueprint() -> dict:
                                 user="trinity", password="trinity")
         cur = conn.cursor()
 
-        # 1) 情境感知：会话上下文存在
+        # 1) 情境感知：持续上下文流存在且新鲜（EXECUTION 457 升级——不再是
+        #    "ctx 行数"，而是：流快照新鲜度 + 24h 活跃会话 + 感知焦点文件）
         cur.execute("SELECT count(*) FROM session_context")
-        checks["1_situatedness"] = min(10, 3 + cur.fetchone()[0] // 3)
+        _ctx_total = int(cur.fetchone()[0] or 0)
+        cur.execute("SELECT count(DISTINCT id) FROM session_context "
+                    "WHERE updated_at > now() - interval '24 hours'")
+        _ctx_fresh = int(cur.fetchone()[0] or 0)
+        _sfile = os.path.expanduser("~/.trinity/state/situation_stream.json")
+        try:
+            _sfresh = os.path.exists(_sfile) and (time.time() - os.path.getmtime(_sfile)) < 3600
+        except Exception:
+            _sfresh = False
+        _sc1 = 0 if _ctx_total == 0 else 3  # 有持久化上下文基础
+        if _ctx_total and _ctx_fresh >= 1:
+            _sc1 += 3  # 24h 内有活跃会话 → 状态在滚动
+        if _sfresh:
+            _sc1 += 2  # 情境流快照新鲜（≤1h）
+        if os.path.exists(os.path.expanduser("~/.trinity/perception_focus.json")):
+            _sc1 += 1  # 好奇焦点（主动感知方向）存在
+        if _ctx_fresh >= 5:
+            _sc1 += 1  # 多会话并行
+        checks["1_situatedness"] = min(10, _sc1)
 
         # 2) 自我模型：全局身份
         cur.execute("SELECT count(*) FROM memories WHERE category='self-identity'")

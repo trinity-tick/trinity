@@ -67,6 +67,7 @@ function Invoke-Script {
 $lastMaint = (Get-Date).AddHours(-25)
 $lastDaily = ""
 $lastWeekly = ""  # 2026-09-01: 每周质量门禁
+$lastWeeklyAcc = ""  # 2026-09-01: 每周 AnswerAcc 评测
 
 Write-Log "autostart loop started (supervisor=${SupervisorIntervalSec}s, maint=${MaintIntervalSec}s)"
 
@@ -98,14 +99,20 @@ while ($true) {
     # ── 每日 03:00-03:10：decay + tiers + sync（需 PG）──────────
     $today = $now.ToString("yyyyMMdd")
     if ((Test-Path $Maintenance) -and $now.Hour -eq 3 -and $now.Minute -lt 10 -and $lastDaily -ne $today) {
-        Invoke-Script -Path $Maintenance -ArgsList @("-Tasks", "mirror,pg-backfill,decay,tiers,consolidate,dedup,sync,compact,agent-ttl,active-health,backup,observe,value-recalib,perception-bridge,dcpm-consolidate,integrity-monitor,self-reflect,reconcile") -Label "maintenance(decay,tiers,sync)" -TimeoutSec 2400  # 2026-09-01: +pg-backfill 反向同步 +reconcile 对账
+        Invoke-Script -Path $Maintenance -ArgsList @("-Tasks", "pg-backfill,mirror,decay,tiers,consolidate,dedup,pg-sync,sync,compact,agent-ttl,active-health,backup,observe,value-recalib,perception-bridge,dcpm-consolidate,integrity-monitor,self-reflect,reconcile,snapshot,market-list,replay,curiosity,proactive,cognition-agent,situation") -Label "maintenance(decay,tiers,sync)"  # 2026-09-01: +market-list -TimeoutSec 2400  # 2026-09-01: pg-backfill 前置；decay/tiers 走 PG；snapshot=AGENTS.md 快照刷新
         $lastDaily = $today
     }
 
-    # ── 每周一 03:10-03:30：质量门禁（500q R@5 基线 0.916，2026-09-01）────────
+    # ── 每周一 03:10-03:30：质量门禁 + 插件冒烟（2026-09-01）────────
     if ((Test-Path $Maintenance) -and $now.DayOfWeek -eq 'Monday' -and $now.Hour -eq 3 -and $now.Minute -ge 10 -and $now.Minute -lt 30 -and $lastWeekly -ne $today) {
-        Invoke-Script -Path $Maintenance -ArgsList @("-Tasks", "quality-gate") -Label "maintenance(quality-gate)" -TimeoutSec 1200
+        Invoke-Script -Path $Maintenance -ArgsList @("-Tasks", "quality-gate,plugin-smoke,brain-report") -Label "maintenance(quality-gate)" -TimeoutSec 1500  # 2026-09-01: +brain-report 周报
         $lastWeekly = $today
+    }
+
+    # ── 每周日 03:10-03:40：AnswerAcc 生成侧评测（500q LLM，20-30 分钟，2026-09-01）────────
+    if ((Test-Path $Maintenance) -and $now.DayOfWeek -eq 'Sunday' -and $now.Hour -eq 3 -and $now.Minute -ge 10 -and $now.Minute -lt 40 -and $lastWeeklyAcc -ne $today) {
+        Invoke-Script -Path $Maintenance -ArgsList @("-Tasks", "answer-eval") -Label "maintenance(answer-eval)" -TimeoutSec 2400
+        $lastWeeklyAcc = $today
     }
 
     Start-Sleep -Seconds $SupervisorIntervalSec

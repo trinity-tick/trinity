@@ -86,7 +86,7 @@ function createWorker(config) {
 			// 会创建共享 MemoryAggregator 并启动 agg-ann-prewarm——真实大库 11k+ 条 faiss
 			// 构建数分钟，GIL 饥饿把 worker 主循环拖死，ping/write 排队超时）。
 			// worker 只需引擎功能，聚合器由 rl_feedback 等按需懒创建。
-			env: { ...scrubbedParentEnv(), TRINITY_MEMORY_ENABLED: "0" },
+			env: { ...scrubbedParentEnv(), TRINITY_MEMORY_ENABLED: "0", TRINITY_STORAGE_BACKEND: "postgresql", TRINITY_ROUTE_REASONER: "on" },  // 2026-09-01: PG 单写主；2026-09-02: 推理通道 RouteReasoner 开启
 			windowsHide: true
 		});
 		// 引擎日志经 stderr 转发（不 inherit，避免污染调用方 stderr/协议）
@@ -253,6 +253,64 @@ function registerTools(ctx, worker) {
 	const tools = [
 		tool("trinity_ping", "Ping the Trinity engine worker. Returns pong with timestamp.",
 			{}, jsonSchema, () => worker.call("ping", {})),
+
+		// 2026-09-01（大脑化层3 自传注入）：agent 可随时查询"我是谁/做过什么/偏好如何演化"
+		tool("trinity_biography", "Self-model biography: aggregated view of the current agent (sessions, active memories, category profile, importance distribution, preferences). Use it to know 'who I am / what I have done'. Requires trinity-api (:8001).",
+			{
+				agent_id: { type: "string", description: "Agent id (defaults to current DSH session agent)." }
+			},
+			jsonSchema,
+			async (a, exec) => {
+				const ident = sessionIdentity(exec);
+				const aid = a.agent_id || ident?.agentId || "default";
+				const res = await fetch("http://127.0.0.1:8001/agents/" + encodeURIComponent(aid) + "/biography");
+				if (!res.ok) return { error: "trinity-api biography failed: " + res.status };
+				const bio = await res.json();
+				return {
+					agent_id: bio.agent_id,
+					sessions: bio.sessions,
+					active_memories: bio.active_memories,
+					categories: bio.categories,
+					importance_dist: bio.importance_dist,
+					preferences: bio.preferences
+				};
+			}),
+
+		// 2026-09-01（生态需求侧）：市场浏览与购买——agent 可检索/购买其他 agent 上架的记忆资产
+		tool("trinity_market_search", "Browse the Trinity memory market: search memory assets listed by other agents (modality/category filter). Use it to find reusable knowledge assets before buying. Requires trinity-api (:8001).",
+			{
+				query: { type: "string", required: true, description: "Search query." },
+				limit: { type: "integer", description: "Max results (default 5)." }
+			},
+			jsonSchema,
+			async (a, exec) => {
+				const q = encodeURIComponent(a.query || "");
+				const res = await fetch("http://127.0.0.1:8001/market/search?q=" + q + "&limit=" + (a.limit || 5));
+				if (!res.ok) return { error: "market search failed: " + res.status };
+				return await res.json();
+			}),
+
+		tool("trinity_market_buy", "Buy a memory asset from the Trinity memory market (pay with trust score). Use the asset_id from trinity_market_search.",
+			{
+				asset_id: { type: "string", required: true, description: "Asset id from market search." },
+				offer_price: { type: "number", description: "Offer price in trust score (default 0 = free)." }
+			},
+			jsonSchema,
+			async (a, exec) => {
+				const ident = sessionIdentity(exec);
+				const buyer = ident?.agentId || "default";
+				const res = await fetch("http://127.0.0.1:8001/market/buy", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						buyer_agent: buyer,
+						asset_id: a.asset_id,
+						offer_price: a.offer_price || 0
+					})
+				});
+				if (!res.ok) return { error: "market buy failed: " + res.status };
+				return await res.json();
+			}),
 
 		tool("trinity_chat", "Chat with the Trinity cognitive agent: memory-injected dialogue with metacognition (confidence/gaps). Uses the full memory loop as context. Requires trinity-api (:8001) online.",
 			{

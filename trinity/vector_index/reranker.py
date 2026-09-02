@@ -23,15 +23,31 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+
+def _preload_ok() -> bool:
+    """是否允许在当前进程导入 sentence_transformers（DLL 冲突防护）。"""
+    import sys
+    try:
+        from trinity.vector_index import preload_reranker as _pr
+    except Exception:
+        _pr = None
+    if _pr is not None and _pr.is_preloaded():
+        return True
+    # 未预加载：仅当进程尚未加载冲突原生库（onnx/libpq）时允许惰性导入（轻量脚本场景）
+    if "psycopg2" in sys.modules or "onnxruntime" in sys.modules:
+        return False
+    return True
+
+
 # Default ranking model mapping (quality vs speed)
 MODEL_REGISTRY = {
     "fast": "cross-encoder/ms-marco-MiniLM-L-6-v2",       # fastest, good enough
     "balanced": "cross-encoder/ms-marco-MiniLM-L-12-v2",  # good balance
     "accurate": "BAAI/bge-reranker-v2-m3",                 # best quality, larger
-    # 2026-09: chinese 改指 ms-marco-MiniLM-L-6-v2——v2-m3(~2.2GB)受限网络
-    # 下载不可靠（incomplete 分片重试），且 bge-small-zh 是 embedding 非 CE
-    # （分类头 MISSING 随机初始化）。ms-marco 是真正 CrossEncoder、88MB 缓存完整。
-    "chinese": "cross-encoder/ms-marco-MiniLM-L-6-v2",    # CE reranker (cached)
+    # 2026-09-02: chinese 指向本地多语言 CE（mmarco-mMiniLMv2-L12-H384-v1，
+    # XLMRoberta 多语言，经 modelscope 下载至 ~/.trinity/models/——HF 网络不可达时的
+    # 替代通道；对中文排序显著优于英文 ms-marco）。本地路径缺失时回退英文 ms-marco。
+    "chinese": r"C:\Users\Administrator\.trinity\models\mmarco-mMiniLMv2-L12-H384-v1",
 }
 DEFAULT_MODEL = "balanced"
 
@@ -76,7 +92,22 @@ class CrossEncoderReranker:
         """
         if self._model_loaded or self._model_failed:
             return
+        # 2026-09-02（brain fix）：Windows DLL 冲突防护——onnxruntime/libpq 已加载后
+        # 再导入 sentence_transformers/torch 会硬崩溃（0xC0000005，try/except 无法拦截）。
+        # 必须先经 preload_reranker.preload() 在启动早期导入；未预加载且进程已有
+        # 冲突原生库时直接降级（ollama bi-encoder / no-op），不再冒险导入。
+        if not _preload_ok():
+            self._model_failed = True
+            logger.warning(
+                "Cross-Encoder skipped: sentence_transformers 未预加载且进程已含 "
+                "onnx/libpq（DLL 冲突风险），降级 ollama bi-encoder / no-op。"
+            )
+            return
         try:
+            # 2026-09-02：强制离线加载（HF 新鲜度检查在网络不可达时会挂死请求）
+            import os as _os
+            _os.environ.setdefault("HF_HUB_OFFLINE", "1")
+            _os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
             from sentence_transformers import CrossEncoder
             self._model = CrossEncoder(
                 self._model_name,
@@ -84,17 +115,53 @@ class CrossEncoderReranker:
                 max_length=self._max_length,
             )
             self._model_loaded = True
+            self._ce_backend = "sentence_transformers"
             logger.info(
                 "Loaded Cross-Encoder: %s (device=%s)",
                 self._model_name, self._device or "auto"
             )
         except Exception as e:
-            self._model_failed = True
-            logger.warning(
-                "Failed to load Cross-Encoder '%s': %s. "
-                "Falling back to identity reranking (no-op).",
-                self._model_name, e
+            # 2026-09-02（CE 兼容性修复）：ST 5.6 AutoProcessor 对无 processor 配置的旧模型
+            # （如 cross-encoder/ms-marco-MiniLM-L-6-v2）直接报错——回退 transformers 直连
+            # CE（AutoTokenizer + AutoModelForSequenceClassification，logits[:,1] 相关分），
+            # 绕开 ST 的 AutoProcessor。实测 transformers 4.51 下加载/推理正常。
+            try:
+                from transformers import AutoTokenizer, AutoModelForSequenceClassification
+                self._tok = AutoTokenizer.from_pretrained(self._model_name)
+                self._model = AutoModelForSequenceClassification.from_pretrained(
+                    self._model_name)
+                self._model.eval()
+                self._model_loaded = True
+                self._ce_backend = "transformers"
+                logger.info(
+                    "Loaded Cross-Encoder (transformers fallback): %s",
+                    self._model_name,
+                )
+            except Exception as e2:
+                self._model_failed = True
+                logger.warning(
+                    "Failed to load Cross-Encoder '%s' (ST: %s; TF: %s). "
+                    "Falling back to ollama/no-op.",
+                    self._model_name, e, e2,
+                )
+
+    def _predict_ce(self, pairs: List[Tuple[str, str]]) -> List[float]:
+        """按后端分派 CE 推理（sentence_transformers 或 transformers 直连）。"""
+        if getattr(self, "_ce_backend", None) == "transformers":
+            import torch
+            enc = self._tok(
+                list(pairs), padding=True, truncation=True,
+                max_length=self._max_length, return_tensors="pt",
             )
+            with torch.no_grad():
+                out = self._model(**enc)
+            if out.logits.size(1) > 1:
+                scores = torch.sigmoid(out.logits[:, 1])
+            else:
+                scores = torch.sigmoid(out.logits[:, 0])
+            return [float(s) for s in scores]
+        return [float(s) for s in self._model.predict(
+            list(pairs), batch_size=self._batch_size, show_progress_bar=False)]
 
     def _ollama_rerank(
         self,
@@ -113,12 +180,18 @@ class CrossEncoderReranker:
         import requests as _req
         texts = [cand.get(text_key) or cand.get("content") or cand.get(id_key, "")
                  for cand in candidates]
+        # 2026-09-02：截断长文档（bge-m3 8k 上下文；实测超长输入致 ollama embed 失败）
+        texts = [str(t)[:512] for t in texts]
         if not texts:
             return candidates[:top_k]
-        model = "nomic-embed-text:v1.5"
+        # 2026-09-02：中文语料优先 bge-m3（多语言），模型缺失时回退 nomic-embed-text
         resp = _req.post("http://127.0.0.1:11434/api/embed",
-                         json={"model": model, "input": [query] + texts},
+                         json={"model": "bge-m3:latest", "input": [query] + texts},
                          timeout=120)
+        if resp.status_code == 404:
+            resp = _req.post("http://127.0.0.1:11434/api/embed",
+                             json={"model": "nomic-embed-text:v1.5", "input": [query] + texts},
+                             timeout=120)
         resp.raise_for_status()
         vecs = resp.json().get("embeddings")
         if not vecs or len(vecs) != 1 + len(texts):
@@ -182,12 +255,9 @@ class CrossEncoderReranker:
         ]
         pairs = [(query, text) for text in texts]
 
-        # Score in batches using the Cross-Encoder
-        scores = self._model.predict(
-            pairs,
-            batch_size=self._batch_size,
-            show_progress_bar=False,
-        )
+        # Score in batches using the Cross-Encoder（2026-09-02：按后端分派，
+        # 支持 sentence_transformers / transformers 直连两种 CE 后端）
+        scores = self._predict_ce(pairs)
 
         elapsed = time.perf_counter() - start
         self._total_reranks += 1

@@ -124,6 +124,7 @@ class MetaEvolution:
                 self._observation_hooks.append(self._audit_observation_hook)
                 self._observation_hooks.append(self._audit_observation_hook)
                 self._observation_hooks.append(self._self_reflection_observation_hook)
+                self._observation_hooks.append(self._quality_gate_observation_hook)  # 2026-09-01: 门禁指标入观察
         except Exception:
             pass
 
@@ -165,6 +166,32 @@ class MetaEvolution:
     def register_observation_hook(self, hook: Callable):
         """Register a function that returns observations."""
         self._observation_hooks.append(hook)
+
+    def _quality_gate_observation_hook(self, context: Dict[str, Any]) -> List[Dict]:
+        """2026-09-01: 把维护链注入的 quality_gate 指标转成观察——进化环"看到"检索质量。
+
+        维护链 evolution wrapper 会在 context 里带 {"quality_gate": {...}}（最新门禁结果）。
+        门禁 FAIL 时额外产出一条 correction 候选，供 analyze/plan 阶段消费。
+        """
+        gate = context.get("quality_gate") if isinstance(context, dict) else None
+        if not gate:
+            return []
+        obs = [{
+            "type": "quality_gate",
+            "gate_ok": gate.get("gate_ok"),
+            "keyword_r5": gate.get("keyword_r5"),
+            "hybrid_r5": gate.get("hybrid_r5"),
+            "p50_ms": gate.get("p50_ms"),
+            "ts": gate.get("ts") or time.time(),
+        }]
+        if not gate.get("gate_ok"):
+            obs.append({
+                "type": "correction",  # 2026-09-01: 与 analyze 消费的类型对齐
+                "source": "quality_gate",
+                "suggestion": "quality gate FAILED (R@5 below threshold) — investigate retrieval regression",
+                "ts": time.time(),
+            })
+        return obs
 
     def _audit_observation_hook(self, context: Dict[str, Any]) -> List[Dict]:
         """Mine the audit log (search/ingest actions) for real usage patterns.
@@ -421,6 +448,24 @@ class MetaEvolution:
             key = p.get("key", p.get("description", "unknown"))
             pattern_counts[key] = pattern_counts.get(key, 0) + 1
 
+        # 2026-09-01（大脑化层2 元认知回写）：correction 观察 → corrections_log（此前恒 0）
+        for o in corrections:
+            self.state.corrections_log.append({
+                "ts": time.time(),
+                "source": o.get("source", "evolution"),
+                "suggestion": o.get("suggestion", o.get("description", "")),
+                "status": "open",
+            })
+        # 2026-09-01（消费闭环）：同源 correction 在后续 PASS 观察时自动标记 resolved
+        # （元认知从"记录"到"确认解决"——gate FAIL→correction→PASS→resolved）
+        _pass_sources = {o.get("source", "quality_gate") for o in observations
+                         if o.get("type") == "quality_gate" and o.get("gate_ok")}
+        for _c in self.state.corrections_log:
+            if _c.get("status") == "open" and _c.get("source") in _pass_sources:
+                _c["status"] = "resolved"
+                _c["resolved_ts"] = time.time()
+        self.state.corrections_log = self.state.corrections_log[-100:]
+
         # Update state
         for key, count in pattern_counts.items():
             if count >= 3:
@@ -453,6 +498,7 @@ class MetaEvolution:
 
         return {
             "corrections_found": len(corrections),
+            "corrections": [{"source": c.get("source", "evolution"), "suggestion": c.get("suggestion", c.get("description", ""))} for c in corrections],
             "patterns_detected": len(pattern_counts),
             "preferences_found": len(preferences),
             "pattern_summary": dict(sorted(pattern_counts.items(), key=lambda x: -x[1])[:10]),
@@ -469,6 +515,7 @@ class MetaEvolution:
                 "type": "update_corrections",
                 "priority": "high",
                 "target": os.path.join(self.skill_dir, "corrections.md"),
+                "suggestions": analysis.get("corrections", []),  # 2026-09-01: 携带实际建议
             })
 
         # If new patterns confirmed, plan to update memory.md
@@ -621,6 +668,14 @@ class MetaEvolution:
         if not os.path.exists(path):
             with open(path, "w", encoding="utf-8") as f:
                 f.write("# Corrections Log\n\n## Initialized\n- System initialized\n")
+
+        # 2026-09-01（大脑化层2）：把实际建议追加进 corrections.md（此前只建文件不写内容）
+        suggestions = action.get("suggestions") or []
+        if suggestions:
+            with open(path, "a", encoding="utf-8") as f:
+                f.write("\n## %s\n" % time.strftime("%Y-%m-%d %H:%M:%S"))
+                for s in suggestions:
+                    f.write("- [%s] %s\n" % (s.get("source", "?"), s.get("suggestion", "")))
 
         return {"action": "update_corrections", "status": "done", "file": path}
 

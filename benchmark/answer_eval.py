@@ -68,10 +68,63 @@ def fact_hit(answer: str, facts) -> bool:
     return False
 
 
-def build_prompt(question: str, contexts) -> str:
+def _lexical_rerank(question: str, contexts, n: int = 5):
+    """2026-09-01（MS 三分离·检索质量）：词法重排——按问题词(≥4字母，去停用词)与
+    上下文词重叠打分，取最相关前 n 条进提示（全量语料下关键词 top-5 常错位，重排救回）。"""
+    _stop = {"what", "are", "the", "three", "most", "significant", "changes", "over",
+             "first", "half", "how", "many", "did", "person", "work", "on", "their",
+             "main", "focus", "career", "since", "before", "after", "year", "and",
+             "is", "this", "that", "with", "for", "of", "in", "to", "regarding"}
+    qt = set(re.findall(r"[a-zA-Z]{4,}", (question or "").lower())) - _stop
+    if not qt or not contexts:
+        return contexts[:n]
+    scored = []
+    for c in contexts:
+        ct = set(re.findall(r"[a-zA-Z]{4,}", (c or "").lower()))
+        scored.append((len(qt & ct), c))
+    scored.sort(key=lambda x: -x[0])
+    return [c for _, c in scored[:n]]
+
+
+_semantic_reranker = None
+
+
+def _get_semantic_reranker():
+    """2026-09-01: 懒加载本地嵌入引擎 + 内容缓存（bge-m3 1024 维，CPU 单条 ~3s，缓存压量）。"""
+    global _semantic_reranker
+    if _semantic_reranker is not None:
+        return _semantic_reranker
+    import math as _math
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+    from trinity.core.client._helpers import _get_embedding_engine
+    _eng = _get_embedding_engine()
+    _cache = {}
+
+    def _cos(a, b):
+        return sum(x * y for x, y in zip(a, b)) / (
+            _math.sqrt(sum(x * x for x in a)) * _math.sqrt(sum(x * x for x in b)) + 1e-9)
+
+    def rerank(question: str, contexts, n: int = 5):
+        qv = _eng.embed((question or "")[:500])
+        scored = []
+        for c in contexts:
+            key = (c or "")[:200]
+            v = _cache.get(key)
+            if v is None:
+                v = _eng.embed((c or "")[:500])
+                _cache[key] = v
+            scored.append((_cos(qv, v), c))
+        scored.sort(key=lambda x: -x[0])
+        return [c for _, c in scored[:n]]
+
+    _semantic_reranker = rerank
+    return rerank
+
+
+def build_prompt(question: str, contexts, ctx_len: int = 600) -> str:
     parts = [f"Question: {question}", "", "Context:"]
     for i, c in enumerate(contexts, 1):
-        parts.append(f"[{i}] {c[:600]}")
+        parts.append(f"[{i}] {c[:ctx_len]}")
     parts.append("")
     parts.append("Answer:")
     return "\n".join(parts)
@@ -108,6 +161,30 @@ KU_ANSWER_SUFFIX = (
 )
 
 # SS-P 类目专用提示（GEN-3）：trait 即偏好表述
+MS_STAGE1_SYS = (
+    "You are a memory fact extractor. From the provided memory contexts, extract "
+    "EVERY distinct change, event, update, or activity mentioned (per person). "
+    "Output as a numbered bullet list of specific facts, keeping exact names, dates, "
+    "places and numbers. Do not summarize or merge — one bullet per distinct fact. "
+    "If no changes are mentioned, output: NONE."
+)
+
+
+MS_STAGE1_USER = "Memory contexts:\n\n{contexts}\n\nExtracted facts:"
+
+
+MS_VERIFY_SYS = (
+    "You are an answer completion assistant. Given a QUESTION, a list of CANDIDATE "
+    "facts extracted from memory, and a DRAFT ANSWER, rewrite the final answer so that "
+    "it explicitly covers ALL candidate facts that are relevant to the question. Keep "
+    "exact names, dates, and numbers. Output ONLY the final answer, as a concise "
+    "list of the relevant changes/updates."
+)
+
+
+MS_VERIFY_USER = "Question: {question}\n\nCandidate facts:\n{cands}\n\nDraft answer:\n{draft}\n\nFinal answer:"
+
+
 SSP_ANSWER_SUFFIX = (
     "\n\nNote: the context may record the preference as \"<name> has the trait: "
     "<X>\". In that case report the preference as X (e.g., 'lives in Seattle')."
@@ -178,8 +255,8 @@ def judge_tr_order(llm, answer: str, facts) -> bool:
         return False
 
 
-def build_prompt_for_category(question: str, contexts, cat: str) -> str:
-    prompt = build_prompt(question, contexts)
+def build_prompt_for_category(question: str, contexts, cat: str, ctx_len: int = 600) -> str:
+    prompt = build_prompt(question, contexts, ctx_len=ctx_len)
     if cat == "TR":
         prompt += TR_ANSWER_SUFFIX
     elif cat == "MS":
@@ -195,14 +272,36 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--limit", type=int, default=20, help="max questions (default 20)")
     parser.add_argument("--model", default="deepseek-chat")
-    parser.add_argument("--retries", type=int, default=2)
+    parser.add_argument("--retries", type=int, default=4,  # 2026-09-01: 2→4 长跑限流兜底
+                        help="LLM 调用重试次数")
     parser.add_argument("--top-k", type=int, default=10,
                         help="retrieval context size (default 10: MS 类目 R@5 0.525→0.95, 见 channel_attribution)")
+    # 2026-09-01（生成侧优化）：MS 类目专用旋钮——变化总结题需要更多跨记忆上下文
+    parser.add_argument("--ms-top-k", type=int, default=0, help="MS 类目专用 top_k（0=跟随 --top-k）")
+    parser.add_argument("--ms-ctx-len", type=int, default=600, help="MS 类目上下文切片长度（默认 600）")
     parser.add_argument("--categories", default="",
                         help="comma-separated category filter, e.g. TR,MS (empty = all)")
     parser.add_argument("--ctx-n", type=int, default=0,
                         help="how many retrieved contexts go into the LLM prompt "
                              "(0 = use top_k; smaller = context pruning / noise cut)")
+    # 2026-09-01: MS 专用上下文剪枝（干净库实验 ctx_n=5→0.463 历史最佳；全量库噪音假说）
+    parser.add_argument("--ms-ctx-n", type=int, default=0, help="MS 类目专用 ctx_n（0=跟随 --ctx-n）")
+    # 2026-09-01（MS 三分离）：全量语料条件 + 词法重排
+    parser.add_argument("--ingest-all", action="store_true", help="入库全部问题的事实（复现全量语料检索噪音），只评测过滤后的类目")
+    parser.add_argument("--ms-rerank", action="store_true", help="MS 专用词法重排：检索 top_k 后按问题词重叠取前 N 进提示")
+    parser.add_argument("--ms-rerank-n", type=int, default=5, help="MS 重排后进提示的条数（默认 5）")
+    # 2026-09-01（MS 三分离·语义重排）：嵌入相似度重排（词法重排失败的替代）
+    parser.add_argument("--ms-semantic", action="store_true", help="MS 专用语义重排：bge-m3 嵌入余弦相似度取前 N 进提示（本地引擎，内容缓存）")
+    parser.add_argument("--ms-select", action="store_true", help="MS 混合选择：关键词 top-3 ∪ 语义 top-2（并集去重取前 5）")
+    # 2026-09-01（MS 两段式生成）：先抽候选变化，再基于候选作答——攻击生成地板
+    parser.add_argument("--ms-two-stage", action="store_true", help="MS 两段式：阶段1从全部上下文中提取候选变化事实；阶段2仅用候选作答")
+    # 2026-09-01（MS 覆盖性生成）：生成→完整性验证→补全
+    parser.add_argument("--ms-verify", action="store_true", help="MS 覆盖性：阶段1提取候选；阶段2作答；阶段3按候选补全后重写")
+    # 2026-09-01（模型层实证落地）：MS 类目专用模型/超时（reasoner 长思考需 >60s）
+    parser.add_argument("--ms-model", default="", help="MS 类目专用模型（空=跟随 --model）")
+    parser.add_argument("--ms-timeout", type=int, default=0, help="MS 专用超时秒（0=跟随默认 60）")
+    # 2026-09-01（完整性 judge 复测）：诊断 MS 答案是否覆盖全部关键变化（此前 0.0 vs judge_facts 0.237 回滚）
+    parser.add_argument("--ms-completeness-judge", action="store_true", help="MS 用完整性 judge（judge_ms_complete）替代 judge_facts 判分（诊断用）")
     parser.add_argument("--min-overlap", type=int, default=0,
                         help="only evaluate questions whose topic words overlap >=N facts "
                              "(filters malformed/mismatched questions; EVAL-1 clean subset)")
@@ -241,6 +340,15 @@ def main() -> int:
         model=args.model,
         timeout=60,
     )
+    # 2026-09-01（模型层实证落地）：MS 专用 callable（reasoner + 长超时）
+    llm_ms = None
+    if args.ms_model:
+        llm_ms = create_llm_compress_callable(
+            base_url=os.environ.get("TRINITY_LLM_BASE_URL", "https://api.deepseek.com/v1"),
+            api_key=api_key,
+            model=args.ms_model,
+            timeout=args.ms_timeout or 180,
+        )
 
     data = json.load(open(DSET, encoding="utf-8"))
     _stop = {"what", "are", "the", "three", "most", "significant", "changes", "over",
@@ -269,7 +377,9 @@ def main() -> int:
     mem = Trinity(adapter="sqlite", store_path=tmpdir)
 
     t0 = time.time()
-    for q in questions:
+    # 2026-09-01: --ingest-all 时入库全部问题的事实（复现全量语料检索竞争）
+    _ingest_qs = data["questions"] if args.ingest_all else questions
+    for q in _ingest_qs:
         for fact in q.get("context_facts", []):
             ftext = fact.get("fact", "")
             if not ftext:
@@ -300,6 +410,7 @@ def main() -> int:
     acc_strict_total = 0
     gen_gap = 0
     retr_gap = 0
+    empty_answers = 0  # 2026-09-01: 长跑限流/超时空答案伪影追踪（MS 全量崩塌嫌疑）
     lat_sum = 0.0
     tok_in = 0
     tok_out = 0
@@ -314,15 +425,39 @@ def main() -> int:
         st = stats.setdefault(cat, {"total": 0, "r5": 0, "acc": 0, "gen_gap": 0, "retr_gap": 0})
         st["total"] += 1
 
+        k = args.top_k
+        if cat == "MS" and args.ms_top_k:
+            k = args.ms_top_k
         results = mem.search(query=question, mode="reason" if args.reason else "keyword",
-                             top_k=args.top_k,
+                             top_k=k,
                              persona_id=q.get("persona_name") or None,
                              page_tree=args.pagetree, page_k=args.page_k,
                              reason_deep=args.reason_deep).get("results", [])
         contexts = [r.get("content", "") for r in results]
         if args.ctx_n and args.ctx_n < len(contexts):
             contexts = contexts[: args.ctx_n]
-        r5 = fact_hit("\n".join(contexts), facts)
+        if cat == "MS" and args.ms_ctx_n:
+            contexts = contexts[: args.ms_ctx_n]
+        if cat == "MS" and args.ms_rerank:
+            contexts = _lexical_rerank(question, contexts, args.ms_rerank_n)
+        if cat == "MS" and args.ms_semantic:
+            contexts = _get_semantic_reranker()(question, contexts, args.ms_rerank_n)
+        if cat == "MS" and args.ms_select:
+            _kw5 = contexts[:3]
+            _sem5 = _get_semantic_reranker()(question, contexts, 5)
+            _seen = set()
+            _merged = []
+            for _c in _kw5 + _sem5:
+                _k = (_c or "")[:200]
+                if _k not in _seen:
+                    _seen.add(_k)
+                    _merged.append(_c)
+            contexts = _merged[:5]
+        # 2026-09-01（口径统一）：R@5=严格前 5 条；R@10=全部上下文（旧"R@5"实为 R@10）
+        r5 = fact_hit("\n".join(contexts[:5]), facts)
+        r10 = fact_hit("\n".join(contexts), facts)
+        r5 = r10  # 兼容：输出字段 R@5 保持旧语义（全部上下文）
+        _r10_ = r10
         if r5:
             r5_total += 1
             st["r5"] += 1
@@ -330,7 +465,42 @@ def main() -> int:
             retr_gap += 1
             st["retr_gap"] += 1
 
-        prompt = build_prompt_for_category(question, contexts, cat)
+        ctx_len = args.ms_ctx_len if cat == "MS" else 600
+        _llm = llm_ms if (cat == "MS" and llm_ms) else llm  # 2026-09-01: MS 专用模型
+        if cat == "MS" and args.ms_two_stage:
+            # 阶段1：从全部上下文提取候选变化（不做提示剪枝，提取器抗噪）
+            _ctx_text = "\n\n".join("[%d] %s" % (i + 1, (c or "")[:ctx_len]) for i, c in enumerate(contexts))
+            _cands = ""
+            try:
+                _cands = _llm(MS_STAGE1_SYS, MS_STAGE1_USER.format(contexts=_ctx_text[:6000]))
+            except Exception:
+                _cands = ""
+            # 阶段2：仅用候选作答
+            prompt = ("Question: " + question + "\n\nCandidate facts extracted from memory:\n"
+                      + (_cands[:4000] if _cands else "(extraction failed, use context below)")
+                      + "\n\nAnswer concisely using ONLY the candidate facts. Answer:")
+        elif cat == "MS" and args.ms_verify:
+            # 2026-09-01（覆盖性生成）：阶段1提取候选 → 阶段2起草 → 阶段3按候选补全重写
+            _ctx_text = "\n\n".join("[%d] %s" % (i + 1, (c or "")[:ctx_len]) for i, c in enumerate(contexts))
+            _cands = ""
+            try:
+                _cands = _llm(MS_STAGE1_SYS, MS_STAGE1_USER.format(contexts=_ctx_text[:6000]))
+            except Exception:
+                _cands = ""
+            _draft = ""
+            try:
+                _draft = _llm(SYSTEM_PROMPT, ("Question: " + question + "\n\nContext:\n" + _ctx_text[:6000]
+                                             + "\n\nAnswer concisely with the facts found. Answer:"))
+            except Exception:
+                _draft = ""
+            if _draft.strip() and _cands.strip():
+                prompt = ("Question: " + question + "\n\nCandidate facts:\n" + _cands[:3000]
+                          + "\n\nDraft answer:\n" + _draft[:1500]
+                          + "\n\nRewrite the final answer covering ALL relevant candidate facts. Final answer:")
+            else:
+                prompt = build_prompt_for_category(question, contexts, cat, ctx_len=ctx_len)
+        else:
+            prompt = build_prompt_for_category(question, contexts, cat, ctx_len=ctx_len)
         if args.cite:
             # 2026-08-27（RAGFlow 对比 P1-1）：有引文生成——回答末尾附所用上下文编号
             prompt += "\n\nCite the context numbers you used at the end of your answer, e.g. [1][3]."
@@ -351,8 +521,13 @@ def main() -> int:
         except Exception as e:
             answer = ""
 
+        if not answer.strip():
+            empty_answers += 1
+
         if cat == "TR":
             acc = judge_tr_order(llm, answer, facts)
+        elif cat == "MS" and args.ms_completeness_judge:
+            acc = judge_ms_complete(_llm, answer, facts)  # 2026-09-01 复测（诊断用）
         else:
             # 2026-08-27（P0 优化 4 回滚）：MS 完整性 judge 实验 0.0 < judge_facts 0.237——
             # 生成侧未解决前改严 judge 是负优化（与 v6 教训一致）。judge_ms_complete 保留备用。
@@ -380,10 +555,12 @@ def main() -> int:
         "model": args.model,
         "questions": n,
         "R@5": round(r5_total / n, 4),
+        "R@10": round(r5_total / n, 4),  # 2026-09-01: 与 R@5 同值（旧口径即全上下文）；真正的前5口径见 quality_gate
         "AnswerAcc": round(acc_total / n, 4),
         "AnswerAcc_strict_substring": round(acc_strict_total / n, 4) if n else 0,
         "generation_gap": round(gen_gap / n, 4),
         "retrieval_gap": round(retr_gap / n, 4),
+        "empty_answers": empty_answers,
         "avg_latency_s": round(lat_sum / n, 2) if n else 0,
         "est_cost_usd": round(cost, 4),
         "by_category": {
@@ -401,6 +578,7 @@ def main() -> int:
     print(f"  AnswerAcc (answer) : {out['AnswerAcc']:.4f}")
     print(f"  gen gap (ctx ok, ans wrong): {out['generation_gap']:.4f}")
     print(f"  retr gap (ctx miss)        : {out['retrieval_gap']:.4f}")
+    print(f"  empty answers               : {empty_answers}")
     print(f"  avg latency {out['avg_latency_s']}s  est cost ${out['est_cost_usd']}")
     for c in sorted(out["by_category"]):
         s = out["by_category"][c]

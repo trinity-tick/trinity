@@ -152,7 +152,8 @@ def _startup_prewarm() -> None:
         except Exception:
             pass
         # 2026-09 (EXECUTION 124): reranker 预热——首查不再卡 2-10s
-        # （CE 加载/降级判定移到启动期；TRINITY_PREWARM_RERANK=0 关闭）。
+        # 2026-09-02（CE 修复后恢复默认开）：main() 已顺序 preload，此处后台加载 CE
+        # 模型（缓存完整，~0.3s）；TRINITY_PREWARM_RERANK=0 可关。
         if os.environ.get("TRINITY_PREWARM_RERANK", "1") == "1":
             try:
                 from trinity.vector_index.reranker import CrossEncoderReranker

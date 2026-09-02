@@ -570,6 +570,14 @@ def main():
         "general": args.lambda_general,
     })
 
+    # 2026-09-01（元认知行动化）：quality-strict 标记存在（质量门禁 FAIL）→ 保守遗忘
+    # （λ×0.8：检索质量差时放慢遗忘，避免在系统状态不佳时丢记忆）
+    _strict_marker = os.path.join(os.path.expanduser("~/.trinity"), ".quality-strict")
+    if os.path.exists(_strict_marker):
+        for _k in list(decay_config.lambda_per_type.keys()):
+            decay_config.lambda_per_type[_k] = round(decay_config.lambda_per_type.get(_k, 0.05) * 0.8, 4)
+        logger.info("CONSERVATIVE DECAY (quality-strict marker present): lambda x0.8")
+
     engine = MemoryDecayEngine(config=decay_config)
     logger.info("Decay engine initialized: %s", json.dumps(engine.summary(), indent=2))
 

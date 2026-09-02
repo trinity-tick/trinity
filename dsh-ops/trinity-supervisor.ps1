@@ -143,7 +143,8 @@ function Test-McpAlive {
 
 function Test-ApiHealth {
     try {
-        $r = Invoke-WebRequest -Uri "http://127.0.0.1:8001/health" -TimeoutSec 3 -UseBasicParsing -ErrorAction Stop
+        # 2026-09-01: 3→10s——API 聚合器预热(2-3分钟)期间 /health 无响应，3s 探针误判 DOWN 引发重启风暴
+        $r = Invoke-WebRequest -Uri "http://127.0.0.1:8001/health" -TimeoutSec 10 -UseBasicParsing -ErrorAction Stop
         return ($r.StatusCode -eq 200)
     } catch { return $false }
 }
@@ -219,7 +220,15 @@ if (-not (Test-Tcp -Port 8010)) {
 
 # ── 1. API ────────────────────────────────────────────────────────────────
 if (-not (Test-ApiHealth)) {
-    if (Should-Restart "api") {
+    # 2026-09-01（重启风暴修复）：启动宽限期——端口已监听且 6 分钟内刚重启过 = 预热中，不重启
+    $apiPortUp = Test-Tcp -Port 8001
+    $apiGrace = $false
+    if ($apiPortUp -and $state.restartedAt.api) {
+        try { $apiGrace = ((Get-Date) - [datetime]::Parse($state.restartedAt.api)).TotalMinutes -lt 6 } catch { $apiGrace = $false }
+    }
+    if ($apiGrace) {
+        Write-Log "api starting (port up, prewarm grace) — skip restart" "WARN"
+    } elseif (Should-Restart "api") {
         Write-Log "api DOWN (health probe failed) — restarting" "WARN"
         Start-WithLogs -Name "api" -Exe $ApiPy -ArgList @("-m", "trinity.api.server", "--port", "8001", "--host", "127.0.0.1")  # 2026-08-17 安全加固：仅本机
         $state.restartedAt.api = $now.ToString("o")
@@ -240,7 +249,7 @@ if (-not (Test-ApiHealth)) {
 }
 
 # ── 2. MCP (SSE) ──────────────────────────────────────────────────────────
-if (-not (Test-McpAlive)) {
+if (1 -eq 2) { #MCP8000-DISABLED E1
     $portHeld = Test-Tcp -Port 8000
     $reason = if ($portHeld) { "port 8000 held by non-trinity process (e.g. Docker)" } else { "port 8000 closed" }
     if (Should-Restart "mcp") {
@@ -315,14 +324,57 @@ if (Test-Path $SysPy) {
 # 失败则 pg_ctl start 兜底（60s 重启间隔保护，避免反复拉起空转）。
 # docker trinity-db(:5430) 是 docker 栈自身库（compose 自管），不再由本守护拉起。
 if (Test-Tcp -Port 5432) {
-    Write-Log "pg-maintenance OK (:5432 trinity-pg service)"
+    # 2026-09-01（僵尸 postmaster 事故修复）：端口通 ≠ 数据库可用——16:44 事故中
+    # postmaster 半死占端口、子进程全灭、supervisor 误判 OK 不自愈。升级为真实连接探测。
+    $pgRealOk = $false
+    if (Test-Path $SysPy) {
+        $pcr = & $SysPy "$TrinityRoot/scripts/pg_conn_check.py" --warn 150 2>&1 | Out-String
+        $pgRealOk = ($pcr -match "PGCONN: \d+/" -and $pcr -notmatch "ERROR")
+    }
+    if ($pgRealOk) {
+        Write-Log "pg-maintenance OK (:5432 trinity-pg service)"
+    } else {
+        Write-Log "pg-maintenance DOWN (:5432 port open but connect failed - zombie postmaster?)" "WARN"
+        if (Should-Restart "pg-maintenance") {
+            Write-Log "pg-maintenance restarting (kill remnants + pg_ctl)" "WARN"
+            $pgKill = "C:\Users\Administrator\AppData\Local\Temp\pg_kill.ps1"
+            $pgKillLines = @(
+'$pgctl = "C:\Users\Administrator\Desktop\pgsql\bin\pg_ctl.exe"',
+'$pgdata = "C:\Users\Administrator\.trinity\pgdata"',
+'& $pgctl stop -D $pgdata -m immediate 2>&1 | Out-File "C:\Users\Administrator\.trinity\logs\elevated-pg-start.log" -Append',
+'Start-Sleep -Seconds 3',
+'Get-Process -Name postgres -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue',
+'Start-Sleep -Seconds 2',
+'& $pgctl start -D $pgdata -l (Join-Path $pgdata "pg.log") 2>&1 | Out-File "C:\Users\Administrator\.trinity\logs\elevated-pg-start.log" -Append'
+            )
+            $pgKillLines | Set-Content -Path $pgKill -Encoding UTF8
+            $null = Start-Process powershell -Verb RunAs -ArgumentList @("-NoProfile","-ExecutionPolicy","Bypass","-File",$pgKill) -PassThru -Wait
+            $state.restartedAt.'pg-maintenance' = $now.ToString("o")
+        }
+    }
 } else {
     if (Should-Restart "pg-maintenance") {
         $pgStarted = $false
         if (Get-Service trinity-pg -ErrorAction SilentlyContinue) {
-            Write-Log "pg-maintenance DOWN (:5432 closed) — Start-Service trinity-pg" "WARN"
-            try { Start-Service trinity-pg -ErrorAction Stop; $pgStarted = $true }
-            catch { Write-Log "pg-maintenance: Start-Service failed: $($_.Exception.Message)" "WARN" }
+            Write-Log "pg-maintenance DOWN (:5432 closed) — Start-Service trinity-pg (elevated helper)" "WARN"
+            # 2026-09-01（演练发现修复）：非提权上下文 Start-Service 必败（Access denied）。
+            # 先走提权助手（RunAs + UAC 静默放行），失败再降级直连尝试与 pg_ctl 兜底。
+            $pgHelper = Join-Path $PSScriptRoot "elevated-pg-start.ps1"
+            $helperOk = $false
+            if (Test-Path $pgHelper) {
+                try {
+                    Remove-Item "C:\Users\Administrator\.trinity\logs\elevated-pg-start.log" -ErrorAction SilentlyContinue
+                    $hp = Start-Process powershell -Verb RunAs -ArgumentList @("-NoProfile","-ExecutionPolicy","Bypass","-File",$pgHelper) -PassThru -Wait -ErrorAction Stop
+                    if ($hp.ExitCode -eq 0 -and (Get-NetTCPConnection -LocalPort 5432 -State Listen -ErrorAction SilentlyContinue)) {
+                        $helperOk = $true; $pgStarted = $true
+                        Write-Log "pg-maintenance: elevated Start-Service OK"
+                    }
+                } catch { Write-Log "pg-maintenance: elevated helper failed: $($_.Exception.Message)" "WARN" }
+            }
+            if (-not $helperOk) {
+                try { Start-Service trinity-pg -ErrorAction Stop; $pgStarted = $true }
+                catch { Write-Log "pg-maintenance: Start-Service failed: $($_.Exception.Message)" "WARN" }
+            }
         }
         if (-not $pgStarted) {
             $pgCtl = "C:\Users\Administrator\Desktop\pgsql\bin\pg_ctl.exe"
@@ -355,13 +407,68 @@ if (Test-Path $SysPy) {
 }
 
 Save-State $state
+# 2026-09-01（连接耗尽事故监控）：PG 连接数超阈值立即 WARN
+if (Test-Path $SysPy) {
+    $pcc = & $SysPy "$TrinityRoot\scripts\pg_conn_check.py" --warn 150 2>&1 | Out-String
+    if ($pcc -match "HIGH") { Write-Log ("PG connections HIGH: " + $pcc.Trim()) "WARN" }
+}
 # 2026-09-01 (P2 修复): 移除 embed keepalive 僵尸探针——Ollama 解耦（EXECUTION 104.6）后
 # trinity 不再依赖 Ollama 常驻（observe: ollama_established_pids=[] 且向量检索正常），
 # 该探针每轮超时只产生噪音 WARN（2026-09-01 单日 9 次）。如需保活语义，跑 observe 任务即可。
 # 2026-09-01 (P1b): 结构事件水位告警——dsh_events 超过 24h 无新事件 = 插件 structure_sync
 # 断流（2026-08-24 起曾静默冻结 8 天无人发现），立即 WARN 提醒排查插件同步链路。
 if (Test-Path $SysPy) {
-    $wm = & $SysPy "$TrinityRoot\scripts\structure_watermark_check.py" 2>&1 | Out-String
+    $wm = & $SysPy "$TrinityRoot/scripts/structure_watermark_check.py" 2>&1 | Out-String  # 2026-09-01: 正斜杠修复
     if ($wm -match "STALE") { Write-Log ("structure watermark STALE: " + $wm.Trim()) "WARN" }
 }
+
+# ── 4.5 事件驱动巩固（2026-09-01 大脑化第三阶段）：dsh_events 近 1h 增量超阈值
+# 且距上次巩固 > 25 分钟 → 触发 consolidate-recent（小批高频，天级时滞→分钟级）
+if (Test-Path $SysPy) {
+    $ev = & $SysPy "$TrinityRoot/scripts/event_volume.py" --hours 1 2>&1 | Out-String  # 2026-09-01 修复: 正斜杠路径（此前 \s \e 被吞）
+    $evCount = 0
+    if ($ev -match "EVENTS last .*: (\d+)") { $evCount = [int]$Matches[1] }
+    $lastConsolidate = $state.lastConsolidateAt
+    $due = $true
+    if ($lastConsolidate) {
+        $due = ((Get-Date) - [datetime]::Parse($lastConsolidate)).TotalMinutes -gt 25
+    }
+    # 2026-09-01: 每日上限（默认 24 次/天）——防异常高频空跑
+    $consolidateDay = $state.consolidateDay
+    if ($consolidateDay -ne (Get-Date).ToString("yyyy-MM-dd")) {
+        $state | Add-Member -NotePropertyName consolidateDay -NotePropertyValue (Get-Date).ToString("yyyy-MM-dd") -Force
+        $state | Add-Member -NotePropertyName consolidateCount -NotePropertyValue 0 -Force
+        $consolidateDay = (Get-Date).ToString("yyyy-MM-dd")
+    }
+    if ($evCount -ge 10 -and $due -and ($state.consolidateCount -lt 24)) {
+        Write-Log "event-driven consolidate triggered (events_1h=$evCount)"
+        # 2026-09-01 修复: Invoke-Script 是 autostart 的函数，supervisor 内不存在 → 直接拉起 maintenance
+        $null = Start-Process powershell -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+            (Join-Path $PSScriptRoot "trinity-dsh-maintenance.ps1"), "-Tasks", "consolidate-recent") `
+            -WindowStyle Hidden -Wait
+        $state | Add-Member -NotePropertyName lastConsolidateAt -NotePropertyValue (Get-Date).ToString("o") -Force  # 2026-09-01: PSCustomObject 直接赋值新属性会报错
+        $state.consolidateCount = [int]$state.consolidateCount + 1
+        Save-State $state  # 2026-09-01 修复: 钩子在主 Save-State(409) 之后运行, 不重存则间隔永远失效(每轮都触发)
+    } elseif ($evCount -lt 10) {
+        Write-Log "event-driven consolidate: quiet (events_1h=$evCount < 10) — skipped"
+    }
+}
 Write-Log "supervisor pass complete"
+# ---- 5. Trinity single-process memory cap (E1 2026-09-02; kill oversize -> auto-respawn) ----
+$MemMetric = 12GB
+$MemManagedRe = 'trinity\.api\.server|trinity\.mcp\.server|collector|gateway\.server|memory_stream_server|engine_worker'
+try {
+  Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'python.exe' } | ForEach-Object {
+    $cl = $_.CommandLine
+    if ($cl -and ($cl -match $MemManagedRe)) {
+      $pmGB = [math]::Round($_.PrivateMemorySize64 / 1GB, 2)
+      if ($_.PrivateMemorySize64 -gt $MemMetric) {
+        Write-Log ('MEM-LIMIT hit: PID ' + $_.ProcessId + ' ' + $pmGB + 'GB > 12GB - killing (auto-respawn next pass)') 'WARN'
+        Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+      } else {
+        Write-Log ('MEM: PID ' + $_.ProcessId + ' ' + $pmGB + 'GB (limit 12GB)')
+      }
+    }
+  }
+} catch { Write-Log ('MEM-LIMIT check error: ' + $_.Exception.Message) 'WARN' }
+

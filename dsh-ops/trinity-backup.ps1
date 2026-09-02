@@ -1,4 +1,4 @@
-# Trinity WAL 安全备份 + 保留策略 (基建夯实 2026-08-16)
+﻿# Trinity WAL 安全备份 + 保留策略 (基建夯实 2026-08-16)
 param([int]$RetentionDays = 14)
 $ErrorActionPreference = "Stop"
 $src = Join-Path $env:USERPROFILE ".trinity\store\trinity_store.db"
@@ -48,3 +48,30 @@ if (Test-Path $pgDump) {
 } else {
     Write-Output "pg_dump not found at $pgDump - PG backup skipped"
 }
+
+# ── 异卷备份（2026-09-01，异地/异盘物理级保护）：C: 备份产物复制到 D:（独立物理卷）──
+$offsiteDir = "D:\trinity-backups"
+if (-not (Test-Path $offsiteDir)) { New-Item -ItemType Directory -Path $offsiteDir -Force | Out-Null }
+$copied = 0
+foreach ($pattern in @("trinity_store_*.db", "trinity_pg_*.dump")) {
+    $latest = Get-ChildItem $dir -Filter $pattern -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($latest) {
+        try {
+            Copy-Item $latest.FullName (Join-Path $offsiteDir $latest.Name) -Force
+            $dst = Join-Path $offsiteDir $latest.Name
+            $srcSz = (Get-Item $latest.FullName).Length
+            $dstSz = (Get-Item $dst).Length
+            if ($srcSz -eq $dstSz) {
+                Write-Output "offsite backup -> $dst ($([math]::Round($dstSz/1MB,1)) MB, size verified)"
+                $copied++
+            } else {
+                Write-Output "OFFSITE BACKUP MISMATCH: $($latest.Name) $srcSz vs $dstSz"
+            }
+        } catch {
+            Write-Output "OFFSITE BACKUP ERROR ($($latest.Name)): $($_.Exception.Message)"
+        }
+    }
+}
+# 异卷保留 14 天
+Get-ChildItem $offsiteDir -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-$RetentionDays) } | Remove-Item -ErrorAction SilentlyContinue
+Write-Output "offsite backup done: $copied/2 artifacts copied to D:\trinity-backups"

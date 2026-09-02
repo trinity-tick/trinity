@@ -36,6 +36,7 @@ def main() -> int:
     ap.add_argument("--dataset", default="")
     ap.add_argument("--fail-r5", type=float, default=0.55)
     ap.add_argument("--fail-hybrid-gap", type=float, default=0.02)
+    ap.add_argument("--ablate", action="store_true", help="100q 子集通道归因对比")
     args = ap.parse_args()
 
     ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -65,19 +66,25 @@ def main() -> int:
             except Exception:
                 pass
 
-    def eval_r5(mode, k=5):
+    def eval_r5(mode="hybrid", k=5, use_all_channels=True, via_hybrid=False, limit=None):
         hits = n = 0
         cat = {}
         lat = []
-        for q in questions:
+        qs = questions[:limit] if limit else questions
+        for q in qs:
             c = q.get("category", "?")
             question = q.get("question", "")
             facts = [f.get("fact", "").strip() for f in q.get("context_facts", []) if f and f.get("fact")]
             if not facts or not question:
                 continue
             t0 = time.time()
-            res = mem.search(query=question, mode=mode, top_k=k,
-                             persona_id=q.get("persona_name") or None).get("results", [])
+            if via_hybrid:
+                res = mem.search_hybrid(query=question, top_k=k, strategy="rrf",
+                                        persona_id=q.get("persona_name") or None).get("results", [])
+            else:
+                res = mem.search(query=question, mode=mode, top_k=k,
+                                 use_all_channels=use_all_channels,
+                                 persona_id=q.get("persona_name") or None).get("results", [])
             lat.append((time.time() - t0) * 1000)
             contents = "\n".join(r.get("content", "") for r in res)
             hit = any(f and f in contents for f in facts)
@@ -93,6 +100,9 @@ def main() -> int:
 
     kw = eval_r5("keyword")
     hy = eval_r5("hybrid")
+    # 2026-09-01（口径统一）：R@10（事实在前 10 条命中）——answer_eval 旧"R@5"实为
+    # 全上下文口径(0.992)；本门禁 R@5=0.916 是严格前 5。双口径并存可互比。
+    kw10 = eval_r5("keyword", k=10)
 
     # 对账面（只读，尽力而为）
     drift = None
@@ -106,15 +116,31 @@ def main() -> int:
     except Exception:
         pass
 
+    # ── 通道归因 ablation（2026-09-01 CH-1 落地）：100 题子集上对比各配置 ──
+    ablate = None
+    if args.ablate:
+        ablate = {}
+        for cfg, cfg_kw in [
+            ("keyword", dict(mode="keyword")),
+            ("hybrid_all_channels", dict(mode="hybrid", use_all_channels=True)),
+            ("hybrid_single_channel", dict(mode="hybrid", use_all_channels=False)),
+            ("search_hybrid_rrf", dict(via_hybrid=True)),
+        ]:
+            _r = eval_r5(k=5, limit=100, **cfg_kw)
+            ablate[cfg] = {"r5": round(_r["r5"], 4), "p50_ms": round(_r["p50_ms"], 1)}
+        print("ABLATE(100q): " + json.dumps(ablate, ensure_ascii=False))
+
     cats = ["KU", "MS", "SS-A", "SS-P", "SS-U", "TR"]
     report = {
         "ts": datetime.datetime.now().isoformat(timespec="seconds"),
         "dataset": os.path.basename(dset),
+        "keyword_r10": {"r5": round(kw10["r5"], 4), "p50_ms": round(kw10["p50_ms"], 1)},
         "keyword": {"r5": round(kw["r5"], 4), "p50_ms": round(kw["p50_ms"], 1), "p95_ms": round(kw["p95_ms"], 1),
                     "per_category": {c: round(kw["cat"][c]["hits"] / kw["cat"][c]["total"], 4) if kw["cat"].get(c) else None for c in cats}},
         "hybrid": {"r5": round(hy["r5"], 4), "p50_ms": round(hy["p50_ms"], 1), "p95_ms": round(hy["p95_ms"], 1),
                    "per_category": {c: round(hy["cat"][c]["hits"] / hy["cat"][c]["total"], 4) if hy["cat"].get(c) else None for c in cats}},
         "reconcile": drift,
+        "ablate": ablate,
     }
     ok = kw["r5"] >= args.fail_r5 and hy["r5"] >= kw["r5"] - args.fail_hybrid_gap
     report["gate_ok"] = ok
@@ -127,6 +153,16 @@ def main() -> int:
     print(json.dumps(report, ensure_ascii=False, indent=1))
     print("QUALITY-GATE: %s (keyword R@5=%.3f hybrid R@5=%.3f threshold=%.2f)" %
           ("PASS" if ok else "FAIL", kw["r5"], hy["r5"], args.fail_r5))
+    # 2026-09-01（元认知行动化）：FAIL→写 .quality-strict 标记(decay 保守化)；PASS→清除
+    _marker = os.path.join(os.path.expanduser("~/.trinity"), ".quality-strict")
+    if ok:
+        if os.path.exists(_marker):
+            os.remove(_marker)
+            print("QUALITY-GATE: strict marker cleared (recovered)")
+    else:
+        with open(_marker, "w", encoding="utf-8") as _f:
+            _f.write("quality gate FAIL at %s\n" % datetime.datetime.now().isoformat(timespec="seconds"))
+        print("QUALITY-GATE: strict marker written (conservative decay ON)")
     return 0 if ok else 1
 
 

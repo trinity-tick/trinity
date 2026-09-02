@@ -26,6 +26,55 @@ from ._routers_memories import search_memories
 router = APIRouter()
 
 
+@router.get("/agents/{agent_id}/biography")
+async def get_agent_biography(agent_id: str):
+    """自传式记忆（2026-09-01 大脑化层3）：per-agent 聚合视图。"""
+    import json as _json
+    import os as _os
+    import sqlite3 as _sq
+    _db = _os.path.expanduser("~/.trinity/store/trinity_store.db")
+    _out = {"agent_id": agent_id}
+    try:
+        _conn = _sq.connect(_db, timeout=15)
+        _conn.row_factory = _sq.Row
+        _q = lambda sql, *p: _conn.execute(sql, p).fetchall()
+        _out["sessions"] = _q("SELECT COUNT(*) c FROM dsh_sessions WHERE agent_id=?", agent_id)[0][0]
+        _out["active_memories"] = _q("SELECT COUNT(*) c FROM memories WHERE agent_id=? AND status='active'", agent_id)[0][0]
+        _out["categories"] = {r[0]: r[1] for r in _q(
+            "SELECT category, COUNT(*) c FROM memories WHERE agent_id=? AND status='active' GROUP BY category ORDER BY 2 DESC LIMIT 15", agent_id)}
+        _out["importance_dist"] = {str(r[0]): r[1] for r in _q(
+            "SELECT ROUND(importance*10)/10 b, COUNT(*) c FROM memories WHERE agent_id=? AND status='active' GROUP BY b ORDER BY 1", agent_id)}
+        _conn.close()
+    except Exception as _e:
+        _out["error"] = str(_e)
+    # 2026-09-02（brain fix）：新会话 agent 无记忆时回退全库聚合视图，避免"自我空白"
+    # （条件用 active_memories==0：会话自身已注册 dsh_sessions 计 1，但仍无"自我"）
+    if "error" not in _out and _out.get("active_memories", 0) == 0:
+        try:
+            _conn2 = _sq.connect(_db, timeout=15)
+            _conn2.row_factory = _sq.Row
+            _q2 = lambda sql, *p: _conn2.execute(sql, p).fetchall()
+            _out["_fallback"] = "all_agents"
+            _out["total_agents"] = _q2("SELECT COUNT(DISTINCT agent_id) c FROM memories WHERE status='active'")[0][0]
+            _out["sessions"] = _q2("SELECT COUNT(*) c FROM dsh_sessions")[0][0]
+            _out["active_memories"] = _q2("SELECT COUNT(*) c FROM memories WHERE status='active'")[0][0]
+            _out["categories"] = {r[0]: r[1] for r in _q2(
+                "SELECT category, COUNT(*) c FROM memories WHERE status='active' GROUP BY category ORDER BY 2 DESC LIMIT 15")}
+            _out["importance_dist"] = {str(r[0]): r[1] for r in _q2(
+                "SELECT ROUND(importance*10)/10 b, COUNT(*) c FROM memories WHERE status='active' GROUP BY b ORDER BY 1")}
+            _conn2.close()
+        except Exception as _e2:
+            _out["_fallback_error"] = str(_e2)
+    try:
+        _evo_path = _os.path.expanduser("~/.trinity/evolution_state.json")
+        if _os.path.exists(_evo_path):
+            _evo = _json.load(open(_evo_path, encoding="utf-8"))
+            _out["preferences"] = {k: v for k, v in (_evo.get("active_preferences") or {}).items()}
+    except Exception:
+        pass
+    return _out
+
+
 @router.get("/agents/weights")
 async def get_agent_weights():
     """查看所有Agent 权重配置。"""
