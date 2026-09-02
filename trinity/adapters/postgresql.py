@@ -605,6 +605,16 @@ class PostgreSQLAdapter(StorageAdapter):
                 results = []
                 for row in cur.fetchall():
                     _c = self._decrypt_content(row["content"])
+                    _md_raw = row["metadata"] if "metadata" in row.keys() else None
+                    _md = {}
+                    if isinstance(_md_raw, dict):
+                        _md = _md_raw
+                    elif isinstance(_md_raw, str):
+                        try:
+                            _md = json.loads(_md_raw or "{}")
+                        except Exception:
+                            _md = {}
+                    # 2026-09-02（Fable 对照审计 P0-②）：检索输出带 provenance_role
                     results.append({
                         "memory_id": str(row["memory_id"]),
                         "content": _c,
@@ -617,7 +627,8 @@ class PostgreSQLAdapter(StorageAdapter):
                         "category": row["category"],
                         "modality": row["modality"],
                         "created_at": row["created_at"].isoformat() if hasattr(row["created_at"], "isoformat") else str(row["created_at"]),
-                        "metadata": row["metadata"] if "metadata" in row.keys() else None,
+                        "metadata": _md or None,
+                        "provenance_role": _md.get("provenance_role") if _md else None,
                         "score": float(row["score"]) if row["score"] else 0.0,
                     })
 

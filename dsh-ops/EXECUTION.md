@@ -15524,3 +15524,42 @@ verification 27 / bi 23 / handler_auth 22 / handler.go 16 / inventory_repo 13
 
 ### 458.9 提交与同步
 - 工作树（457 遗留 supervisor E1b 为并行会话改动，未纳入）→ main 分批 commit → push → D: 同步。
+## 459. Fable 5.1 泄露对照审计建议全量执行（2026-09-02，P0→P2 逐项落地）
+
+> 背景：Anthropic Fable 5.1 发布当日系统提示词（27.5 万字符）遭泄露（Pliny
+> CL4R1T4S），公开转载揭示其记忆系统设计：①"至死不记"隐私禁区（未成年身份/
+> 法律敏感/心理推断/性史/自残，用户主动暴露也强制清空）；②记忆治理四问
+> （为何存/谁提供 vs 谁推断/何时过期/可否检阅删除）；③46 工具 schema 与运行时
+> 组装上下文。对照 Trinity 现有机制（SHA-256 链式审计/加密/隔离）产出差距
+> 清单并按 P0-P2 全量执行。
+
+### 459.1 P0-① 敏感类别写入门控（NEVER_STORE 名单 + POLICY_PURGE 拒存）
+- 新模块 trinity/security/sensitive.py：双语（zh/en）规则扫描，5 类别对齐 Fable
+  禁区——minors_pii（未成年身份，年龄词+身份词 40 字窗口共现防误伤）/
+  legal_status（犯罪记录/案底/移民/种姓）/ psych_health（确诊/住院/用药语境）/
+  sexual_history（性史等强信号）/ self_harm（自杀自残，含英文）。
+- 语义分级：high（组合强信号，默认拒存）→ 内容**根本不落库** + 审计
+  action=POLICY_PURGE（details 含类别/标签/severity，memory_id=NULL）；
+  medium（单点提及如"抑郁"）→ 仅 metadata["sensitive_scan"] 标记不阻断；
+  策略开关 TRINITY_SENSITIVE_POLICY=quarantine 可把高危降级为隔离归档
+  （落库 archived + 审计 action=POLICY_QUARANTINE）；TRINITY_SENSITIVE_SCAN=off
+  整体关闭（默认 on）。接线点：core/client/_ingestion.py ingest（唯一落库汇聚点，
+  在 store_memory 之前、加密之前执行）。
+- 规则冒烟 15/15（正例 6/负例 9，含 WMS 业务文本零误伤）；pytest 13 passed
+  （tests/test_sensitive_policy.py：拒存零落库+审计、quarantine 归档、medium 标记、
+  off 放行、正常写入无感）。
+
+### 459.2 P0-② provenance_role 强制（来源语义：谁说 vs 谁推断）
+- ingest 强制归一 metadata.provenance_role ∈ explicit|inferred|derived：
+  显式传入优先；否则 role=assistant/system、modality≠text（代码/轨迹/感知）、
+  content_type∈kb 系、generated=True → derived；user_verbatim/user_stated →
+  explicit；其余默认 inferred（防"系统推断被当用户原话固化"，对齐 Fable 治理
+  第一问）；非法值自动兜底重推。
+- 检索输出：sqlite _search.py（FTS+LIKE 两 builder）SELECT 补 metadata 列，
+  PG postgresql.py search 结果映射补顶层 provenance_role + metadata（JSONB
+  dict/str 双兼容）；旧数据无键 → 顶层 None（legacy 语义，回填任务见 459.4）。
+- 测试：ingest 四向（默认 inferred/显式 explicit/assistant→derived/非法兜底）+
+  检索输出两断言（FTS 通道 provenance_role=inferred/explicit）。
+
+### 459.3 P0 验证
+- pytest tests/test_sensitive_policy.py 13 passed（24s）；模块/接线语法全过。

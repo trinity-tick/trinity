@@ -176,6 +176,27 @@ class _IngestionMixin:
         except Exception:
             pass
 
+        # 2026-09-02（Fable 5.1 对照审计 P0-②）：provenance_role 强制归一——
+        # 记忆来源语义：explicit（用户明示）/ inferred（系统推断）/
+        # derived（派生产物：摘要/感知/代码/轨迹/知识导入等）。写路径强制
+        # 落 metadata.provenance_role：显式传入优先；否则按 role/modality/
+        # content_type 启发式推断。检索侧据此区分"用户说过的话"与"系统的
+        # 推测/加工物"，防止推断内容被当作事实长期固化（Fable 泄露揭示的
+        # 记忆治理第一问：did the user provide it, or did the model infer it?）。
+        metadata = dict(metadata or {})
+        _prov = metadata.get("provenance_role")
+        if _prov not in ("explicit", "inferred", "derived"):
+            _ct = str(metadata.get("content_type") or "")
+            if role in ("assistant", "system") or modality != "text" \
+                    or _ct in ("kb", "kb_harvested", "wms_knowledge", "harvested") \
+                    or metadata.get("generated") is True:
+                _prov = "derived"
+            elif metadata.get("user_verbatim") is True or metadata.get("user_stated") is True:
+                _prov = "explicit"
+            else:
+                _prov = "inferred"
+            metadata["provenance_role"] = _prov
+
         # 2026-08-16(基建夯实):压测/锁测试写入隔离        # 2026-08-16(基建夯实):压测/锁测试写入隔离——已知测试 agent/category/
         # 标签/内容标记的写入强制 archived(仍落库可查、不占 active 检索面)。
         # 开关 TRINITY_ISOLATE_TEST_WRITES=off 可关闭。
@@ -201,6 +222,55 @@ class _IngestionMixin:
                         isolated_test_write = True  # 复用隔离归档机制
         except Exception:
             injection_report = None  # 扫描失败不阻断写入
+
+        # 2026-09-02（Fable 5.1 对照审计 P0-①）：敏感类别写入门控——对齐
+        # Anthropic 泄露揭示的"至死不记"隐私禁区（未成年身份/法律敏感/
+        # 心理诊断/性史/自残轻生）。高危命中默认**拒存**（内容不落库，
+        # 审计 action=POLICY_PURGE）；TRINITY_SENSITIVE_POLICY=quarantine
+        # 降级为隔离归档（落库但 archived 不进检索面，审计
+        # action=POLICY_QUARANTINE）；中危仅打 metadata["sensitive_scan"]
+        # 标记。TRINITY_SENSITIVE_SCAN=off 关闭（默认 on）。
+        sensitive_report: Optional[Dict[str, Any]] = None
+        sensitive_quarantine = False
+        try:
+            from trinity.security.sensitive import (
+                policy_block_result, scan_sensitive, sensitive_scan_enabled)
+            if sensitive_scan_enabled():
+                sensitive_report = scan_sensitive(content or "")
+                if sensitive_report.get("flagged"):
+                    metadata = dict(metadata or {})
+                    metadata["sensitive_scan"] = {
+                        "severity": sensitive_report.get("severity"),
+                        "categories": sensitive_report.get("categories", []),
+                    }
+                    if sensitive_report.get("severity") == "high":
+                        if sensitive_report.get("policy") == "quarantine":
+                            sensitive_quarantine = True
+                            isolated_test_write = True  # 复用隔离归档机制
+                        else:
+                            # refuse（默认策略）：拒存——审计 POLICY_PURGE 后
+                            # 直接返回，内容根本不落库（Fable 语义"强制不记"）。
+                            try:
+                                if self._adapter and hasattr(
+                                        self._adapter, "write_audit_log"):
+                                    self._adapter.write_audit_log(
+                                        memory_id=None, action="POLICY_PURGE",
+                                        agent_id=agent_id, persona_id=persona_id,
+                                        details={
+                                            "category": category, "tags": tags,
+                                            "severity": sensitive_report.get("severity"),
+                                            "sensitive_categories":
+                                                sensitive_report.get("categories", []),
+                                            "labels": [h["pattern"] for h in
+                                                       sensitive_report.get("hits", [])],
+                                            "policy": "refuse",
+                                        },
+                                    )
+                            except Exception:
+                                pass
+                            return policy_block_result(sensitive_report)
+        except Exception:
+            sensitive_report = None  # 扫描失败不阻断写入
 
         result: Dict[str, Any] = {}
         if self._adapter:
@@ -319,7 +389,16 @@ class _IngestionMixin:
                 self._adapter.archive_memories([memory_id])
                 action = "ISOLATED_TEST_WRITE"
                 details: Dict[str, Any] = {"category": category, "tags": tags}
-                if injection_report is not None and injection_report.get("flagged"):
+                if sensitive_quarantine:
+                    # 2026-09-02（Fable 对照审计 P0-①）：敏感内容隔离归档单独记审计
+                    action = "POLICY_QUARANTINE"
+                    details = {
+                        "severity": (sensitive_report or {}).get("severity"),
+                        "sensitive_categories":
+                            (sensitive_report or {}).get("categories", []),
+                        "policy": "quarantine",
+                    }
+                elif injection_report is not None and injection_report.get("flagged"):
                     # 2026-08-24（R8 P1-6）：投毒注入隔离单独记审计
                     action = "INJECTION_ISOLATED"
                     details = {

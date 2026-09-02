@@ -200,7 +200,7 @@ class _SearchMixin:
             SELECT m.memory_id, m.content, m.persona_id, m.session_id, m.role,
                    m.importance, m.tags, m.category, m.modality, m.created_at,
                    m.source_uri, m.memory_layer, m.access_count, m.last_accessed_at,
-                   fts.rank as score
+                   m.metadata, fts.rank as score
             FROM memories m
             INNER JOIN (
                 SELECT rowid, rank
@@ -237,6 +237,16 @@ class _SearchMixin:
             rank = row["score"] if row["score"] is not None else min_rank
             norm_score = 1.0 - (rank - min_rank) / rank_range
             content = self._decrypt_content(row["content"])
+            _md_raw = row["metadata"] if "metadata" in row.keys() else None
+            _md = {}
+            if isinstance(_md_raw, str):
+                try:
+                    _md = json.loads(_md_raw or "{}")
+                except Exception:
+                    _md = {}
+            elif isinstance(_md_raw, dict):
+                _md = _md_raw
+            # 2026-09-02（Fable 对照审计 P0-②）：检索输出带 provenance_role
             results.append({
                 "memory_id": row["memory_id"],
                 "content": content,
@@ -253,8 +263,8 @@ class _SearchMixin:
                 "memory_layer": row["memory_layer"] if "memory_layer" in row.keys() else None,
                 "access_count": row["access_count"] if "access_count" in row.keys() else 0,
                 "last_accessed_at": row["last_accessed_at"] if "last_accessed_at" in row.keys() else None,
-                "access_count": row["access_count"] if "access_count" in row.keys() else 0,
-                "last_accessed_at": row["last_accessed_at"] if "last_accessed_at" in row.keys() else None,
+                "metadata": _md,
+                "provenance_role": _md.get("provenance_role"),
                 "score": round(norm_score, 4),
             })
 
@@ -276,7 +286,7 @@ class _SearchMixin:
             SELECT memory_id, content, persona_id, session_id, role,
                    importance, tags, category, modality, created_at,
                    source_uri, memory_layer, access_count, last_accessed_at,
-                   0.8 as score
+                   metadata, 0.8 as score
             FROM memories
             WHERE {where}
               AND (content LIKE ? OR tags LIKE ?)
@@ -287,6 +297,15 @@ class _SearchMixin:
         results = []
         for row in cursor.fetchall():
             content = self._decrypt_content(row["content"])
+            _md_raw = row["metadata"] if "metadata" in row.keys() else None
+            _md = {}
+            if isinstance(_md_raw, str):
+                try:
+                    _md = json.loads(_md_raw or "{}")
+                except Exception:
+                    _md = {}
+            elif isinstance(_md_raw, dict):
+                _md = _md_raw
             results.append({
                 "memory_id": row["memory_id"],
                 "content": content,
@@ -300,6 +319,8 @@ class _SearchMixin:
                 "modality": row["modality"],
                 "created_at": row["created_at"],
                 "memory_layer": row["memory_layer"] if "memory_layer" in row.keys() else None,
+                "metadata": _md,
+                "provenance_role": _md.get("provenance_role"),
                 "score": row["score"],
             })
 
