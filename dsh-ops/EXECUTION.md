@@ -483,3 +483,10 @@
 
 ### 469.4 收尾
 - BENCHMARKS/LEADERBOARD/EXECUTION 落档；临时目录清理；提交推送 D 同步。
+
+## 470. 时间线扩展到 KU（2026-09-03）：未达门槛，留档
+
+- 30 题同题 A/B：routed cap5 ref .833 vs timeline_ctx(top40) **.867（+3.3pp，flips=3）** → 低于 +10pp/4 翻转门槛，不采纳；
+- 结论：KU 已 .82-.87 高位，newer-wins 提示词已覆盖大部分；时间线视图对其边际有限；
+  TR（v5 +2.3pp 全量正）仍是时间线机制唯一全量受益者；
+- runner 零改动，v5=0.644 锁定不变；临时目录清理；EXECUTION 记录 + 提交推送 D 同步。
