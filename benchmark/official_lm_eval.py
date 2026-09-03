@@ -140,8 +140,9 @@ def build_qa_prompt(qtype, question, results, strategy, cap=5):
 # EXECUTION 463: 按类目路由的检索/上下文配置（top_k=检索条数，cap=上下文条数上限）
 # 463 全量复测结论：SS-P/KU 的 cap14 外推在子集(+10pp/+6.7pp)不稳健——
 # 全量 v3=0.626 < v2 0.642（SS-P -6.7pp/MS -3.0pp 噪声翻转），已回滚；
-# 仅保留 multi-session 20/14（EXECUTION 462 全量锁证 +22.6pp）。
-# 官方锁定口径 = v2（0.642）。
+# EXECUTION 467 复测结论：MS 查询词覆盖组装 30 题 +10pp 但在全量翻转（v4=0.618 < v2 0.642，
+# MS -9.8pp）→ 已回滚。经验固化：30 题抽样对 MS 类不可靠，采纳前必须全量验证或 ≥60 题分层样本。
+# 官方锁定口径 = v2（0.642）：multi-session 20/14（EXECUTION 462 全量锁证 +22.6pp）。
 _ROUTE = {
     "multi-session": {"top_k": 20, "cap": 14},
 }
