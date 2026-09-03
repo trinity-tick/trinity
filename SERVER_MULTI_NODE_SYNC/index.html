@@ -1,0 +1,1976 @@
+
+<!doctype html>
+<html lang="zh" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="智能记忆体基础设施 — 架构/基准/合规/运维/协议文档">
+      
+      
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>服务器 + 多机 Trinity 实时记忆汇聚方案（SERVER_MULTI_NODE_SYNC） - Trinity Memory OS</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#trinity-server_multi_node_sync" class="md-skip">
+          跳转至
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="页眉">
+    <a href=".." title="Trinity Memory OS" class="md-header__button md-logo" aria-label="Trinity Memory OS" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Trinity Memory OS
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              服务器 + 多机 Trinity 实时记忆汇聚方案（SERVER_MULTI_NODE_SYNC）
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="搜索" placeholder="搜索" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="查找">
+        
+        <button type="reset" class="md-search__icon md-icon" title="清空当前内容" aria-label="清空当前内容" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            正在初始化搜索引擎
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="导航栏" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Trinity Memory OS" class="md-nav__button md-logo" aria-label="Trinity Memory OS" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Trinity Memory OS
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API_REFERENCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Api Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BENCHMARKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BEST_PRACTICES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Best Practices
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CAPABILITY_MAP_20260814/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Capability Map 20260814
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COMPARISON_VS_2026_SOTA/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparison Vs 2026 Sota
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COMPLIANCE_GDPR_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compliance Gdpr 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CODE_STRUCTURE_AUDIT_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Structure Audit 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CROSS_WINDOW/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cross Window
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DSH_INTEGRATION_STATUS_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dsh Integration Status 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../EVOLUTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evolution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FEATURE_OVERVIEW_20260815.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature Overview 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FUTURE_PLAN_20260815.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Future Plan 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FUTURE_PLAN_V2_20260815.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Future Plan V2 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FUNCTION_SUMMARY_20260814.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Function Summary 20260814
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FUSION_PLAN_20260814/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fusion Plan 20260814
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../JOINT_CAPABILITY_MAP_20260814/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Joint Capability Map 20260814
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../KGRAPH_USAGE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kgraph Usage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MCP_STATUS_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mcp Status 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MCP_RELEASE_CHECKLIST_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mcp Release Checklist 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MEMORY_MARKET_PROTOCOL/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory Market Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MIGRATION_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../NEW_MODULES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    New Modules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OPS_NOTES_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ops Notes 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OPTIMIZATION_DIRECTIONS_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimization Directions 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PERF_NOTES_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Perf Notes 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PLANNING_REVIEW_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Planning Review 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../STORAGE_ENCRYPTION_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage Encryption 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../QUICKSTART_GATEWAY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart Gateway
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TRINITY_SUMMARY_20260815.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trinity Summary 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TRINITY_STATUS_20260815_V2.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trinity Status 20260815 V2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../WMS_INTEGRATION_PLAN.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wms Integration Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../anti_loop_self_check/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anti Loop Self Check
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DOC_FUSION_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Doc Fusion 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../multi-tenant/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi Tenant
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../multimodal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multimodal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wms_execution_check.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wms Execution Check
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wms_execution_check_v3.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wms Execution Check V3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wms_five_dimension_design.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wms Five Dimension Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wms_five_dimension_summary.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wms Five Dimension Summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wms_gap_analysis_v2.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wms Gap Analysis V2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wms_progress_report.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wms Progress Report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        一、架构总览
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        二、同步机制设计（实时增量推送）
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="二、同步机制设计（实时增量推送）">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 模式选择：轮询增量推送（推荐）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-sync-agent-250-300-python" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 sync-agent 组件设计（新增，约 250-300 行 Python）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 双向同步（可选，二期）
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        三、服务器部署设计
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        四、各电脑部署设计
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        五、实时性与一致性
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        六、安全
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        七、可行性评估（现成 vs 要开发）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        八、实施计划（分阶段，每阶段可验证）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        九、风险与对策
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        十、关键决策点（待确认）
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="trinity-server_multi_node_sync">服务器 + 多机 Trinity 实时记忆汇聚方案（SERVER_MULTI_NODE_SYNC）</h1>
+<blockquote>
+<p>日期：2026-08-18 | 状态：<strong>方案设计（待 P0 验证后实施）</strong>
+目标：服务器安装 Trinity 作权威汇聚端；每台电脑独立 Trinity 实例；记忆<strong>实时增量同步</strong>到服务器，统一处理（检索/治理/跨机共享）。
+依据：已核实服务器写端点 schema（/agents/memory/bulk_write、/memories）、SDK（Python/Go/TS）、federation_sync.py、多租户与 agent 隔离。</p>
+</blockquote>
+<h2 id="_1">一、架构总览</h2>
+<p>服务器（权威汇聚端）:
+  Trinity API :8001 + PostgreSQL（权威库）
+    - 鉴权: TRINITY_API_KEY / GATEWAY_API_KEY
+    - 汇聚: 各电脑 agent_id 隔离 + 共享池检索
+    - 治理: decay/tiers/consolidate/审计/合规</p>
+<p>电脑 A: Trinity 本地(SQLite 权威) + sync-agent（智能体 1..n）
+  电脑 B: Trinity 本地(SQLite 权威) + sync-agent（智能体 m..k）
+  同步: 本地 sync-agent → HTTPS + Bearer → 服务器 /agents/memory/bulk_write</p>
+<p><strong>核心思路</strong>：本地实例照常工作（智能体读写本地库、零延迟）；一个轻量 <strong>sync-agent 守护进程</strong>
+监视本地库的新增/变更记忆，秒级增量推送到服务器（幂等去重）。服务器统一承载跨机检索、治理与备份。</p>
+<h2 id="_2">二、同步机制设计（实时增量推送）</h2>
+<h3 id="21">2.1 模式选择：轮询增量推送（推荐）</h3>
+<table>
+<thead>
+<tr>
+<th>模式</th>
+<th>实时性</th>
+<th>侵入性</th>
+<th>复杂度</th>
+<th>结论</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>写路径钩子（事务内同步推送）</td>
+<td>严格实时</td>
+<td>高（改 adapters 写路径）</td>
+<td>高</td>
+<td>备选</td>
+</tr>
+<tr>
+<td><strong>轮询增量推送</strong>（游标 + 批推）</td>
+<td>秒级（2-5s）</td>
+<td>零（独立进程）</td>
+<td>低</td>
+<td>推荐</td>
+</tr>
+<tr>
+<td>定时全量联邦（federation_sync.py）</td>
+<td>分钟~小时</td>
+<td>零</td>
+<td>低</td>
+<td>兜底/首轮</td>
+</tr>
+</tbody>
+</table>
+<p>轮询模式复用 <strong>collector DshEventsSource 的成熟模式</strong>（游标 + 增量 + 断线续传），风险最低。</p>
+<h3 id="22-sync-agent-250-300-python">2.2 sync-agent 组件设计（新增，约 250-300 行 Python）</h3>
+<p>trinity-sync-agent（每台电脑一个守护进程）:
+  - 读本地库: SELECT memory_id, content, agent_id, persona_id, importance, tags,
+    category, metadata, updated_at FROM memories
+    WHERE updated_at &gt; 游标 ORDER BY updated_at LIMIT 200   (游标持久化 json)
+  - 批推: POST 服务器 /agents/memory/bulk_write
+    { entries: [ {agent_id, content, category, importance, tags, metadata} ] }
+    (max 100/批, 已核实 schema)
+  - 幂等: 服务器 ingest 按 content_hash 自动去重 → 重复推送无害
+  - 断线: 指数退避重试 + 游标不前进 → 恢复后续传
+  - 配置: sync-agent.yaml (server_url, api_key, interval=3s, agent_filter, direction)</p>
+<h3 id="23">2.3 双向同步（可选，二期）</h3>
+<ul>
+<li>默认<strong>单向：本地 → 服务器</strong>（汇聚，满足"统一处理"）；</li>
+<li>二期可选<strong>服务器 → 本地回写</strong>（如服务器治理后的知识包/共享记忆分发）——用同一增量协议反向；</li>
+<li>冲突策略：content_hash 去重 + updated_at newer 保留（复用 federation 已有策略）。</li>
+</ul>
+<h2 id="_3">三、服务器部署设计</h2>
+<table>
+<thead>
+<tr>
+<th>项</th>
+<th>方案</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>运行形态</td>
+<td>Docker Compose（trinity-api + trinity-mcp + trinity-db PG + dash）或原生 pip install</td>
+</tr>
+<tr>
+<td>权威库</td>
+<td><strong>PostgreSQL</strong>（多机并发写安全；SQLite 只适合单机）</td>
+</tr>
+<tr>
+<td>端口</td>
+<td>修正 docker-compose：api 8001:8001（现文件 8005:8100 是本机并存栈参数，需改）</td>
+</tr>
+<tr>
+<td>鉴权</td>
+<td>TRINITY_API_KEY（API）/ GATEWAY_API_KEY（Gateway）Bearer；防火墙只放行 8001/8000</td>
+</tr>
+<tr>
+<td>传输</td>
+<td>Nginx/Caddy 反代 + HTTPS（服务器公网或内网 IP）</td>
+</tr>
+<tr>
+<td>维护</td>
+<td>每日链（mirror/decay/tiers/consolidate/active-health/backup）照常</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_4">四、各电脑部署设计</h2>
+<table>
+<thead>
+<tr>
+<th>项</th>
+<th>方案</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>本地实例</td>
+<td>Trinity 原生安装（SQLite 权威，Python 3.10+）；智能体照常本地工作</td>
+</tr>
+<tr>
+<td>sync-agent</td>
+<td>脚本分发；systemd（Linux）/计划任务或 VBS（Windows）自启</td>
+</tr>
+<tr>
+<td>网络</td>
+<td>仅出站 HTTPS 到服务器（无需公网入站，安全）</td>
+</tr>
+<tr>
+<td>容量</td>
+<td>本地库照常增长；服务器按汇聚总量扩容（PG）</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_5">五、实时性与一致性</h2>
+<ul>
+<li><strong>实时性</strong>：interval=3s 轮询 → 端到端 ~3-6s 延迟（准实时）；严格实时可二期改写路径钩子；</li>
+<li><strong>一致性</strong>：content_hash 幂等去重；同内容更新以 updated_at 新者胜；</li>
+<li><strong>断线</strong>：游标持久化 + 退避重试 + 幂等 → 恢复即续传，不丢不重；</li>
+<li><strong>顺序</strong>：按 updated_at 增量，批量 &lt;200 条/轮，跨机顺序无关（每机独立游标）。</li>
+</ul>
+<h2 id="_6">六、安全</h2>
+<ul>
+<li>每台电脑一个 <strong>API Key</strong>（或按 agent 分发子 key）；服务器记录来源（agent_id + metadata.sync_source 机器标识）；</li>
+<li>HTTPS 全程；本地库不暴露公网；</li>
+<li>服务器审计链自动记录每条同步记忆的写入动作（可追溯哪台机器/哪个 agent）。</li>
+</ul>
+<h2 id="vs">七、可行性评估（现成 vs 要开发）</h2>
+<table>
+<thead>
+<tr>
+<th>能力</th>
+<th>状态</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>服务器部署</td>
+<td>现成</td>
+<td>docker-compose / 原生；需按服务器修正端口映射</td>
+</tr>
+<tr>
+<td>写端点</td>
+<td>现成</td>
+<td>/agents/memory/bulk_write（100/批）、/memories——schema 已核实</td>
+</tr>
+<tr>
+<td>去重/隔离/审计</td>
+<td>现成</td>
+<td>content_hash 去重、agent_id 隔离、多租户、审计链</td>
+</tr>
+<tr>
+<td>SDK</td>
+<td>现成</td>
+<td>Python/Go/TS（base_url 指向服务器）</td>
+</tr>
+<tr>
+<td>批处理兜底</td>
+<td>现成</td>
+<td>federation_sync.py（全量/增量快照）</td>
+</tr>
+<tr>
+<td><strong>sync-agent</strong></td>
+<td><strong>要开发</strong></td>
+<td>~250-300 行 Python，复用 collector 增量模式，风险低</td>
+</tr>
+<tr>
+<td>服务器→本地回写</td>
+<td>二期</td>
+<td>可选</td>
+</tr>
+</tbody>
+</table>
+<p><strong>结论：可行性高。服务器端零改造（纯用现成端点），唯一新组件是每机的 sync-agent（小、低风险、有成熟模式可循）。</strong></p>
+<h2 id="_7">八、实施计划（分阶段，每阶段可验证）</h2>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>内容</th>
+<th>时长</th>
+<th>出口标准</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>P0 概念验证</strong></td>
+<td>本机模拟双实例：临时 SQLite 库（扮演电脑 B）+ sync-agent → 本机 :8001，验证端到端汇聚 + 检索</td>
+<td>半天</td>
+<td>推送的记忆能在服务器检索到，agent 隔离正确，重复推送幂等</td>
+</tr>
+<tr>
+<td>P1 服务器部署</td>
+<td>服务器 docker（端口修正 + PG + 鉴权 + HTTPS）</td>
+<td>1-2 天</td>
+<td>服务器 API 公网/内网可访问，鉴权生效</td>
+</tr>
+<tr>
+<td>P2 单机试点</td>
+<td>一台真实电脑装 sync-agent，跑 1-2 天</td>
+<td>1 天</td>
+<td>实时汇聚稳定，日志/监控正常</td>
+</tr>
+<tr>
+<td>P3 多机推广</td>
+<td>其余电脑接入 + 运维（监控/备份/可选回写）</td>
+<td>按需</td>
+<td>全部机器记忆统一在服务器处理</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_8">九、风险与对策</h2>
+<table>
+<thead>
+<tr>
+<th>风险</th>
+<th>对策</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>本地库与 sync-agent 并发读锁</td>
+<td>SQLite WAL 多读（已有）；读写分离连接</td>
+</tr>
+<tr>
+<td>推送风暴（大量历史记忆首轮）</td>
+<td>首轮按批次限速（sleep + 分批），或先 federation 全量再增量</td>
+</tr>
+<tr>
+<td>服务器 PG 性能</td>
+<td>维护链照常（decay/consolidate 控量）；索引</td>
+</tr>
+<tr>
+<td>网络不可达</td>
+<td>退避重试 + 本地继续工作（同步是旁路，不影响本地智能体）</td>
+</tr>
+<tr>
+<td>隐私</td>
+<td>按 agent/persona 过滤同步范围；敏感记忆不打标不推（metadata 标记）</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_9">十、关键决策点（待确认）</h2>
+<ol>
+<li><strong>同步方向</strong>：仅本地→服务器（汇聚）还是需要双向？——默认单向；</li>
+<li><strong>实时粒度</strong>：3s 轮询（推荐）还是写路径钩子（严格实时、侵入）？——推荐轮询；</li>
+<li><strong>服务器环境</strong>：公网云（HTTPS+域名）还是内网 NAS/PC？——决定反代与安全配置；</li>
+<li><strong>P0 验证时机</strong>：是否现在本机模拟验证（半天）后再上服务器？——建议先 P0。</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

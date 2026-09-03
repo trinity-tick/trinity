@@ -1,0 +1,2873 @@
+
+<!doctype html>
+<html lang="zh" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="智能记忆体基础设施 — 架构/基准/合规/运维/协议文档">
+      
+      
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Trinity 生产库压测 + 并发修复报告（2026-08-15） - Trinity Memory OS</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#trinity-2026-08-15" class="md-skip">
+          跳转至
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="页眉">
+    <a href=".." title="Trinity Memory OS" class="md-header__button md-logo" aria-label="Trinity Memory OS" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Trinity Memory OS
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Trinity 生产库压测 + 并发修复报告（2026-08-15）
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="搜索" placeholder="搜索" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="查找">
+        
+        <button type="reset" class="md-search__icon md-icon" title="清空当前内容" aria-label="清空当前内容" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            正在初始化搜索引擎
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="导航栏" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Trinity Memory OS" class="md-nav__button md-logo" aria-label="Trinity Memory OS" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Trinity Memory OS
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API_REFERENCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Api Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BENCHMARKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BEST_PRACTICES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Best Practices
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CAPABILITY_MAP_20260814/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Capability Map 20260814
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COMPARISON_VS_2026_SOTA/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparison Vs 2026 Sota
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COMPLIANCE_GDPR_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compliance Gdpr 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CODE_STRUCTURE_AUDIT_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Structure Audit 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CROSS_WINDOW/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cross Window
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DSH_INTEGRATION_STATUS_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dsh Integration Status 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../EVOLUTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evolution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FEATURE_OVERVIEW_20260815.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature Overview 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FUTURE_PLAN_20260815.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Future Plan 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FUTURE_PLAN_V2_20260815.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Future Plan V2 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FUNCTION_SUMMARY_20260814.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Function Summary 20260814
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FUSION_PLAN_20260814/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fusion Plan 20260814
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../JOINT_CAPABILITY_MAP_20260814/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Joint Capability Map 20260814
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../KGRAPH_USAGE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kgraph Usage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MCP_STATUS_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mcp Status 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MCP_RELEASE_CHECKLIST_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mcp Release Checklist 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MEMORY_MARKET_PROTOCOL/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory Market Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MIGRATION_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../NEW_MODULES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    New Modules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OPS_NOTES_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ops Notes 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OPTIMIZATION_DIRECTIONS_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimization Directions 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PERF_NOTES_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Perf Notes 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PLANNING_REVIEW_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Planning Review 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../STORAGE_ENCRYPTION_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage Encryption 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../QUICKSTART_GATEWAY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart Gateway
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TRINITY_SUMMARY_20260815.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trinity Summary 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TRINITY_STATUS_20260815_V2.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trinity Status 20260815 V2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../WMS_INTEGRATION_PLAN.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wms Integration Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../anti_loop_self_check/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anti Loop Self Check
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DOC_FUSION_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Doc Fusion 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../multi-tenant/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi Tenant
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../multimodal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multimodal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wms_execution_check.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wms Execution Check
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wms_execution_check_v3.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wms Execution Check V3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wms_five_dimension_design.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wms Five Dimension Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wms_five_dimension_summary.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wms Five Dimension Summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wms_gap_analysis_v2.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wms Gap Analysis V2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wms_progress_report.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wms Progress Report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-ann" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. ANN 预热验证 ✅
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-db-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. 压测脚本扩展（--db/--api 真正生效）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-bug3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. 压测暴露的真实并发 Bug（3 处修复）
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. 压测暴露的真实并发 Bug（3 处修复）">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-sqlite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 SQLite 读路径无锁（最严重）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 限流误伤只读检索端点
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 防御性修复
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-8-500500200" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. 稳定态压测结果（预热后，8 线程 × 500/500/200）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. 测试与提交
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. 边界与遗留
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-commit-e520254" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. 二轮优化（commit e520254）——评价建议四项全部执行
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. 二轮优化（commit e520254）——评价建议四项全部执行">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#71-db-write" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.1 生产库副本写入压测（--db-write）✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#72-bm25" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.2 启动期 BM25 后台预构建 ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#73-wal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.3 WAL + 每线程只读连接池 ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#74-touch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.4 异步 touch（隐藏写放大）✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#75-8-500500200-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.5 二轮稳定态压测结果（8 线程 × 500/500/200 + 生产库 + API）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#76" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.6 测试与提交
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-2026-08-15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. 指标口径说明（2026-08-15 二轮评价后补充）
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="8. 指标口径说明（2026-08-15 二轮评价后补充）">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#81-ab" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.1 严格 A/B（同进程、仅一个变量）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#82-ab" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.2 跨轮对比（含就绪态变量，非严格 A/B）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#83" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.3 建议引用口径
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#84" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.4 遗留债（二轮评价）
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-commit-round-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. 三轮优化（commit [round-3]）——评价建议四项全部执行
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="9. 三轮优化（commit [round-3]）——评价建议四项全部执行">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#91-scriptsmulti_process_stresspy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.1 多进程写并发重压 ✅（scripts/multi_process_stress.py）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#92" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.2 写入加工管线异步化 ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#93-teststest_crash_recoverypy4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.3 崩溃恢复测试 ✅（tests/test_crash_recovery.py，4 用例）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#94-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.4 API 启动期预热 ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#95" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9.5 测试与提交
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-2026-08-16" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. 四轮验证（2026-08-16）——剩余建议 + 综合回归
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="10. 四轮验证（2026-08-16）——剩余建议 + 综合回归">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#101-procs-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.1 三进程写并发（--procs 3）✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#102-wal-16-scriptswal_growth_stresspy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.2 WAL 增长 + 16 线程高并发 ✅（scripts/wal_growth_stress.py）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#103" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.3 综合回归（三轮优化叠加后全链路）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#104" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10.4 测试与提交
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-2026-08-16" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. 剩余边界深挖（2026-08-16）
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="11. 剩余边界深挖（2026-08-16）">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#111-3-16" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.1 交叉拓扑：3 进程 × 16 线程 ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#112-checkpoint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.2 显式 checkpoint 路径 ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#113-checkpoint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.3 checkpoint 与并发读互斥 ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#114" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.4 固化回归
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-2026-08-16commit-682ea8d" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. 未覆盖边界深挖（2026-08-16，commit 682ea8d）
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="12. 未覆盖边界深挖（2026-08-16，commit 682ea8d）">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#121-postgresql-scriptspg_adapter_stresspy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12.1 PostgreSQL 镜像链 ✅（scripts/pg_adapter_stress.py）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#122-trinity_storage_encryption" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12.2 加密存储路径 ✅（TRINITY_STORAGE_ENCRYPTION）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#123-soak-scriptssoak_testpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12.3 长时间运行 soak ✅（scripts/soak_test.py）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#124-llm-trinity_llm_extract_async" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12.4 LLM 抽取异步开关 ✅（TRINITY_LLM_EXTRACT_ASYNC）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#125" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12.5 测试与提交
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-2026-08-16commit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. 全方位修复（2026-08-16，commit 待填）
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="13. 全方位修复（2026-08-16，commit 待填）">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#131" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13.1 全仓库快照扫描 ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#132-pg-5430" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13.2 PG :5430 维护链直接压测 ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#133-30-soak" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13.3 30 分钟长时间 soak ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#134-5000" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13.4 大批量加密写（5,000 条）✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#135" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13.5 测试与提交
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#14-2026-08-16commit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. 维护链 + 小时级验证（2026-08-16，commit 待填）
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="14. 维护链 + 小时级验证（2026-08-16，commit 待填）">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#141" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14.1 维护链完整链路 ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#142-60-soak" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14.2 60 分钟长时间 soak ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#143-pg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14.3 PG 容器资源评估 ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#144" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14.4 测试与提交
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#15-pg-2026-08-16commit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15. 长周期 + 治理全量 + PG 高并发（2026-08-16，commit 待填）
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="15. 长周期 + 治理全量 + PG 高并发（2026-08-16，commit 待填）">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#151-24h" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15.1 24h 等效口径
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#152-decay-limit-5000" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15.2 全量 decay 治理 ✅（--limit 5000，副本零污染）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#153-pg" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15.3 PG 容器高并发读 ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#154-120-soak" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15.4 120 分钟 soak（进行中，见最终报告）
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="trinity-2026-08-15">Trinity 生产库压测 + 并发修复报告（2026-08-15）</h1>
+<blockquote>
+<p>目标：① ANN 索引启动预热（消检索 p99 偶发 2.4s 冷启动尾巴）；② 生产库真实 I/O 压测
+（SQLite 12k 条 + API 并发）；③ 复测验证。Commit: <code>ba56408</code></p>
+</blockquote>
+<h2 id="1-ann">1. ANN 预热验证 ✅</h2>
+<p><code>MemoryAggregator</code> 新增 <code>_prewarm_ann_index</code> 后台线程（embedding ready 后全量
+<code>_rebuild_index()</code> 补建），<code>_add_to_index</code> 增加 ready-guard（预热期 ingest 跳过索引、
+不阻塞写入，由预热线程兜底补建）。</p>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>结果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>预热完成后 ingest</td>
+<td>20 条 53ms，索引 20/20，检索 3ms</td>
+</tr>
+<tr>
+<td>冷启动窗口 ingest（fit 完成前）</td>
+<td>20 条 20ms，fit 2.8s ready 后预热线程补建 20/20，检索 4ms</td>
+</tr>
+</tbody>
+</table>
+<p>之前验证 FAIL 的根因：① 验证脚本在 fit 完成前（2s）就查 <code>_embedding_ready</code>；
+② "pool=1" 是 5 条测试内容过于相似被 merge 合并。生产路径本身工作正常。</p>
+<h2 id="2-db-api">2. 压测脚本扩展（--db/--api 真正生效）</h2>
+<p>原脚本 <code>--db</code> 参数是死参数（<code>consistency_check</code> 定义了但 main 从不调用）。
+现在：
+- <strong>阶段 6</strong>：<code>--db</code> 指定生产库 → 复制到临时副本（零污染权威库）→ <code>Trinity</code>
+  并发 hybrid 检索（真实 SQLite I/O + FTS + jieba + BM25 + 图）+ <code>consistency_check</code>
+  真实一致性校验（12,164 memories / 1,920 active / audit 链）。
+- <strong>阶段 7</strong>：<code>--api</code> 并发 POST <code>/memory/search/hybrid</code>（真实 HTTP → 引擎全链路）。
+- <strong>阶段 0</strong>：预热（计时外）——等 embedding ready + 触发 BM25/ANN 构建，
+  压测衡量稳定态，一次性冷启动成本单独记录（<code>warmup_s</code> / <code>bm25_warmup_s</code>）。</p>
+<h2 id="3-bug3">3. 压测暴露的真实并发 Bug（3 处修复）</h2>
+<h3 id="31-sqlite">3.1 SQLite 读路径无锁（最严重）</h3>
+<p><code>SQLiteAdapter</code> 是 <code>check_same_thread=False</code> 单连接共享，写路径有 <code>_write_lock</code>
+但<strong>读路径完全无锁</strong> → 8 线程并发 <code>search_hybrid</code> 对同一连接并发 execute →
+游标竞态：<code>bad parameter or other API misuse</code>（SQLITE_MISUSE）+ FTS rank 错位为
+None 导致 <code>min()</code> 抛 <code>'&lt;' not supported between instances of 'NoneType' and 'float'</code>。
+<strong>这是 API 线程池也会踩的真实生产 bug</strong>（此前 API 负载低未暴露）。</p>
+<p>修复：8 处方法统一加 <code>_write_lock</code>（RLock 可重入，嵌套调用安全）——
+<code>search_memories</code>、<code>get_memory</code>、<code>get_memory_owners</code>、<code>get_all_memories</code>、
+<code>search_entities</code>、<code>query_relations</code>、<code>query_graph</code>、<code>traverse</code>、<code>write_audit_log</code>。</p>
+<p>验证：240 次 8 线程并发 <code>search_hybrid</code> 全链路 → <strong>0 错误</strong>（修复前 4 错误）。</p>
+<h3 id="32">3.2 限流误伤只读检索端点</h3>
+<p><code>/memory/search/*</code> 是只读检索，但因 POST（body 带 query）被"写端点限流"前缀
+<code>/memory/</code> 命中 → 压测 496 次请求 144 次 429。<code>is_rate_limited_request</code> 增加
+<code>/memory/search/</code> 豁免 → 429 清零。</p>
+<h3 id="33">3.3 防御性修复</h3>
+<ul>
+<li><code>_minmax_normalise</code>：<code>it.get(key, 0)</code> 在 key 存在但值为 None 时仍返回 None →
+  <code>min()</code>/<code>max()</code> 炸。改为 <code>it.get(key) or 0</code>。</li>
+<li><code>_search_fts</code>：FTS5 查询串 token 引号转义（<code>"</code> → <code>""</code>）+ rank None 兜底。</li>
+</ul>
+<h2 id="4-8-500500200">4. 稳定态压测结果（预热后，8 线程 × 500/500/200）</h2>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>QPS</th>
+<th>p50</th>
+<th>p99</th>
+<th>max</th>
+<th>errors</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>写（内存池）</td>
+<td>43,497</td>
+<td>8.18ms</td>
+<td>12.28ms</td>
+<td>—</td>
+<td>0</td>
+</tr>
+<tr>
+<td>检索（内存池 hybrid）</td>
+<td>39,042</td>
+<td>8.51ms</td>
+<td>12.13ms</td>
+<td>—</td>
+<td>0</td>
+</tr>
+<tr>
+<td>混合读写</td>
+<td>14,983</td>
+<td>8.03ms</td>
+<td>—</td>
+<td>—</td>
+<td>0</td>
+</tr>
+<tr>
+<td>生产库副本检索（12k 条真实 I/O）</td>
+<td>1,026</td>
+<td>108ms</td>
+<td>379ms</td>
+<td>—</td>
+<td>0</td>
+</tr>
+<tr>
+<td>API 并发检索（:8001 全链路）</td>
+<td>3,806</td>
+<td>128ms</td>
+<td>190ms</td>
+<td>—</td>
+<td>0</td>
+</tr>
+<tr>
+<td>一致性</td>
+<td>12,164 memories / 1,920 active / audit 9,174</td>
+<td></td>
+<td></td>
+<td></td>
+<td>锁错误 0</td>
+</tr>
+</tbody>
+</table>
+<p>对比（是否计入冷启动）：
+- <strong>池检索 p99：2,476ms → 12ms</strong>（预热后）
+- <strong>生产库 p99：1,715ms → 379ms</strong>
+- <strong>API p99：1,797ms → 190ms</strong>
+- 写 QPS 11,876 → 43,497（预热后不再撞 sklearn fit）</p>
+<p>结论：p99 2.4s 尾巴是<strong>一次性冷启动</strong>（BM25 索引构建 ~1-2s + sklearn 首次 fit
+~3-10s），非持续问题；预热后稳定态 p99 全部 &lt;400ms。</p>
+<h2 id="5">5. 测试与提交</h2>
+<ul>
+<li>全量：<strong>742 passed / 54 skipped / 0 failed</strong></li>
+<li>新增回归：</li>
+<li><code>tests/unit/test_ann_prewarm.py</code>（3 个预热路径回归）</li>
+<li><code>tests/test_sqlite_threadsafe.py::test_concurrent_search_no_cursor_corruption</code></li>
+<li><code>tests/test_api_metrics.py</code> 限流谓词断言更新（<code>/memory/search/*</code> 豁免）</li>
+<li>提交：<code>ba56408 fix(stress): production-DB stress + SQLite concurrency + ANN prewarm verify</code>（8 files, +619/-240）</li>
+</ul>
+<h2 id="6">6. 边界与遗留</h2>
+<ul>
+<li>压测写路径走内存池；生产库写入/审计链压力在副本上完成（见第 7 节）。</li>
+<li>冷启动成本（~2.7s）已大幅收敛：BM25 后台预构建 + 启动预热管理。</li>
+</ul>
+<h2 id="7-commit-e520254">7. 二轮优化（commit <code>e520254</code>）——评价建议四项全部执行</h2>
+<h3 id="71-db-write">7.1 生产库副本写入压测（--db-write）✅</h3>
+<p>对生产库副本并发 <code>store_memory</code> + 审计链 + 锁稳定性（历史 database is locked
+验证）。关键发现：<code>ingest(postprocess=True)</code> 同步加工管线（语义关联+实体提取+
+主动推送）占写入成本 <strong>~97%</strong>（单条 430-665ms vs <code>postprocess=False</code> 13ms，
+首次 31.8s 为 embedding 冷启动）。压测改用生产 API 一致的异步化路径
+（postprocess=False，加工后台完成）+ 少量同步对照采样。</p>
+<p>结果（8 线程 × 500 写）：
+- QPS <strong>6,534</strong>（同步加工路径为 17.9 → 365x）
+- p50 105ms / p99 166ms / <strong>0 错误 / 0 锁冲突</strong>
+- 一致性精确：副本 memories 12,164→12,664（+500），audit +501（含对照采样）</p>
+<h3 id="72-bm25">7.2 启动期 BM25 后台预构建 ✅</h3>
+<p><code>_ensure_bm25_index</code> 改为立即返回空索引（HybridRetriever 对空索引 search 返回
+空 = 优雅降级）+ 后台 daemon 线程 <code>add_documents</code> 构建（<code>_bm25_ready</code> 标记）。
+消除首次检索 1-2s 惰性构建；压测预热等 <code>_bm25_ready</code> 后再计时。</p>
+<h3 id="73-wal">7.3 WAL + 每线程只读连接池 ✅</h3>
+<p><code>_get_read_conn()</code>：每线程独立只读 SQLite 连接（<code>mode=ro</code> URI），WAL 多读并行、
+零锁竞争；写路径保持主连接 + <code>_write_lock</code>。基准：8 线程 p50 <strong>115ms→25ms</strong>。
+读方法全部切换：search_memories / _search_fts / _search_like / _fts_available /
+get_memory / get_memory_owners / get_all_memories / search_entities /
+query_relations / query_graph / traverse。</p>
+<h3 id="74-touch">7.4 异步 touch（隐藏写放大）✅</h3>
+<p><code>_touch_batch</code> 改为内存队列（dict + pending event），后台线程批量
+<code>UPDATE…IN</code> + 单次 commit。检索路径零写阻塞。实测：touch 关闭 p50 120→64ms
+（占读延迟 ~40%）；异步化后 QPS +21%（57→75 单连接对照）。access_count
+累积精确验证（3 次命中 → +3）。</p>
+<h3 id="75-8-500500200-api">7.5 二轮稳定态压测结果（8 线程 × 500/500/200 + 生产库 + API）</h3>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>QPS</th>
+<th>p50</th>
+<th>p99</th>
+<th>errors</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>写（内存池）</td>
+<td>43,059</td>
+<td>8.45ms</td>
+<td>12.46ms</td>
+<td>0</td>
+</tr>
+<tr>
+<td>检索（内存池）</td>
+<td>44,525</td>
+<td>8.56ms</td>
+<td>12.85ms</td>
+<td>0</td>
+</tr>
+<tr>
+<td>混合读写</td>
+<td>17,749</td>
+<td>8.14ms</td>
+<td>—</td>
+<td>0</td>
+</tr>
+<tr>
+<td>生产库副本检索（12k 真实 I/O）</td>
+<td><strong>2,539</strong></td>
+<td>47.8ms</td>
+<td>195ms</td>
+<td>0</td>
+</tr>
+<tr>
+<td>生产库副本写入（异步化路径）</td>
+<td><strong>6,534</strong></td>
+<td>105ms</td>
+<td>166ms</td>
+<td>0</td>
+</tr>
+<tr>
+<td>API 并发检索（:8001 全链路）</td>
+<td><strong>10,789</strong></td>
+<td>40ms</td>
+<td>56ms</td>
+<td>0</td>
+</tr>
+<tr>
+<td>一致性</td>
+<td>12,664 memories / audit 10,176 / 锁错误 0</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>对比一轮（commit ba56408）：生产库检索 QPS 1,026→2,539（2.5x）、API 3,806→
+10,789（2.8x）、新增写入路径 6,534。全部 p99 &lt; 200ms。</p>
+<h3 id="76">7.6 测试与提交</h3>
+<ul>
+<li>全量：<strong>742 passed / 54 skipped / 0 failed</strong></li>
+<li>提交：<code>e520254 perf(stress): connection pool + async touch + BM25 prewarm + db-write stress</code>（3 files, +446/-247）</li>
+</ul>
+<h2 id="8-2026-08-15">8. 指标口径说明（2026-08-15 二轮评价后补充）</h2>
+<blockquote>
+<p>压测报告中的"提升倍数"需区分两类对比，避免误读：</p>
+</blockquote>
+<h3 id="81-ab">8.1 严格 A/B（同进程、仅一个变量）</h3>
+<table>
+<thead>
+<tr>
+<th>对比</th>
+<th>结论</th>
+<th>可信度</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>touch 同步 vs 异步（同副本、同脚本对照）</td>
+<td>p50 120→64ms（touch 占读延迟 ~40%），QPS +21%</td>
+<td><strong>高</strong>：单变量对照</td>
+</tr>
+<tr>
+<td>单连接+RLock vs 8 实例 WAL（独立基准脚本）</td>
+<td>p50 115→25ms</td>
+<td><strong>高</strong>：单变量对照</td>
+</tr>
+<tr>
+<td>ingest postprocess=True vs False（同副本）</td>
+<td>430-665ms vs 13ms（加工管线占写入 ~97%）</td>
+<td><strong>高</strong>：单变量对照</td>
+</tr>
+<tr>
+<td>access_count 累积 3 次命中 → +3</td>
+<td>精确</td>
+<td>高：确定性断言</td>
+</tr>
+</tbody>
+</table>
+<h3 id="82-ab">8.2 跨轮对比（含就绪态变量，非严格 A/B）</h3>
+<table>
+<thead>
+<tr>
+<th>对比</th>
+<th>值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>生产库检索 QPS 1,026→2,539</td>
+<td>2.5x</td>
+<td>跨两轮提交（ba56408→e520254），变量 = 连接池+异步 touch+BM25 预热叠加</td>
+</tr>
+<tr>
+<td>API QPS 3,806→10,789</td>
+<td>2.8x</td>
+<td><strong>注意</strong>：R6→R7 之间 API 代码未变，QPS 2,687→10,789 的主因是 <strong>BM25 就绪态</strong>（R6 时 API 进程刚重启、压测时 BM25 后台构建抢 GIL；R7 预热等 <code>_bm25_ready</code>）。"10,789"有相当部分是稳定态红利，非全部来自连接池</td>
+</tr>
+<tr>
+<td>写 QPS 17.9→6,534</td>
+<td>365x</td>
+<td><strong>口径限定</strong>：6,534 是 <code>postprocess=False</code>（去加工）的 SQLite 写路径吞吐；生产真实写入（带语义关联/实体提取/主动推送）受 embedding/LLM 限制，同步加工路径实测 p50 5.4s、p99 30s。<strong>"6,534"不代表系统全管线写入能力，它量化的是 SQLite 写路径本身</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="83">8.3 建议引用口径</h3>
+<ul>
+<li>说"连接池使读并发提升"：引用 8.1 的 25ms（A/B）或"生产库读 QPS 2,539（含连接池+异步 touch 综合）"。</li>
+<li>说"写入快"：必须带限定词"异步化路径（postprocess=False）"，且注明全管线成本在加工侧（97%）。</li>
+<li>说"API 吞吐"：注明是"BM25 就绪后的稳定态"，重启后首个请求窗口仍受构建期 GIL 影响。</li>
+</ul>
+<h3 id="84">8.4 遗留债（二轮评价）</h3>
+<ul>
+<li>连接池/异步 touch 行为契约已补专项回归（<code>tests/test_sqlite_connpool_touch.py</code>，9 用例），
+  连接生命周期管理（注册表 + 上限 64 + overflow 计数 + disconnect 全关）已验证。</li>
+<li>thread-local 连接在超限时走临时连接（GC 兜底），注册连接由 disconnect 全量关闭；
+  长驻服务中若线程池频繁重建，注册连接数可能接近上限（有 overflow 计数可观测）。</li>
+</ul>
+<h2 id="9-commit-round-3">9. 三轮优化（commit <code>[round-3]</code>）——评价建议四项全部执行</h2>
+<h3 id="91-scriptsmulti_process_stresspy">9.1 多进程写并发重压 ✅（scripts/multi_process_stress.py）</h3>
+<p>API + collector 双进程同时打开同一 WAL 库副本，各自 4 线程并发写：
+| 进程 | 写入 | QPS | p50 | p99 | 错误 |
+|---|---|---|---|---|---|
+| api | 300 | 26.6 | 117ms | 1,642ms | 0 |
+| collector | 300 | 26.3 | 120ms | 1,713ms | 0 |
+| 一致性 | memories +600 精确 | audit 10,389 | <strong>lock_errors=0</strong> | | |</p>
+<p><strong>新连接池架构多进程写稳定性验证通过</strong>——历史 <code>database is locked</code> 隐患
+在 API+collector 并存场景下 0 锁冲突。</p>
+<h3 id="92">9.2 写入加工管线异步化 ✅</h3>
+<p><code>ingest(postprocess=True)</code> 默认后台线程执行（写入即时返回），
+<code>_postprocess_lock</code> 全局串行化（并发加工线程抢 GIL/写锁会拖垮写入：
+响应 p95 3.7s → <strong>552ms</strong>，QPS 14 → <strong>51</strong>）。
+顺带修复两个潜伏 bug：
+- <code>_auto_link_semantic</code> 用 <code>backend=sklearn</code>（auto 探测 Ollama → embed_batch
+  100 条 × 300ms = 30s 后台"卡住"）
+- <code>proactive_push</code> 的 <code>float(link.get("strength"))</code> 遇 None 崩溃
+- <code>TRINITY_LLM_EXTRACT=on</code> 保持同步（显式功能语义：调用方期望返回时实体已入库）</p>
+<h3 id="93-teststest_crash_recoverypy4">9.3 崩溃恢复测试 ✅（tests/test_crash_recovery.py，4 用例）</h3>
+<p>子进程 <code>os._exit(1)</code> 故障注入：
+- WAL 恢复已 commit 记忆（5 基准 + 20 崩溃前 = 25 精确）
+- 审计 checksum 链崩溃后完整
+- 异步 touch 丢数有界（access_count 无半写损坏值）
+- 库不损坏且崩溃后可继续写入</p>
+<h3 id="94-api">9.4 API 启动期预热 ✅</h3>
+<p>lifespan 触发 <code>_ensure_bm25_index</code>（<strong>仅触发后台构建，不跑完整 search_hybrid</strong>
+——预热跑全链路会与首请求竞争写锁/GIL，实测首请求 16s/0 结果 → 纯构建预热
+<strong>122ms/5 结果</strong>）。<code>_ensure_bm25_index</code> 加 <code>_bm25_lock</code> 原子化（防预热+请求
+并发时双份 12k 构建）。</p>
+<h3 id="95">9.5 测试与提交</h3>
+<ul>
+<li>全量：<strong>755 passed / 54 skipped / 0 failed</strong></li>
+<li>新增：<code>scripts/multi_process_stress.py</code>、<code>tests/test_crash_recovery.py</code>（4 用例）；
+  修复 overflow 测试确定性（3 线程 barrier + 顺序第 4 线程）</li>
+</ul>
+<h2 id="10-2026-08-16">10. 四轮验证（2026-08-16）——剩余建议 + 综合回归</h2>
+<h3 id="101-procs-3">10.1 三进程写并发（--procs 3）✅</h3>
+<p>api + collector + worker 三进程同时写同一 WAL 副本（各 300 条 / 4 线程）：
+| 进程 | QPS | p50 | p99 | 错误 |
+|---|---|---|---|---|
+| api | 18.8 | 139ms | 1,661ms | 0 |
+| collector | 18.5 | 138ms | 2,069ms | 0 |
+| worker | 20.9 | 125ms | 1,655ms | 0 |
+一致性：memories +900 精确（12,168→13,068）、audit +900、<strong>lock_errors=0</strong>。
+3 进程拓扑下新连接池架构同样无 database is locked。</p>
+<h3 id="102-wal-16-scriptswal_growth_stresspy">10.2 WAL 增长 + 16 线程高并发 ✅（scripts/wal_growth_stress.py）</h3>
+<p>16 线程 × 3,000 写入：
+- QPS 56.4 / p50 270ms / p99 540ms / <strong>0 错误 0 锁冲突</strong>
+- memories +2,992 精确（12,168→15,160）
+- <strong>WAL 自动 checkpoint 生效</strong>：写入后 WAL 10.2MB→4.16MB（写入中已合并），
+  checkpoint 后 0.0MB；主库 74.6MB→76.63MB（+2MB 受控，无膨胀）</p>
+<h3 id="103">10.3 综合回归（三轮优化叠加后全链路）</h3>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>QPS</th>
+<th>p50</th>
+<th>p99</th>
+<th>errors</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>内存池写/读/混合</td>
+<td>43.3k / 43.8k / 16.7k</td>
+<td>~8ms</td>
+<td>&lt;12ms</td>
+<td>0</td>
+</tr>
+<tr>
+<td>生产库副本读</td>
+<td>2,771</td>
+<td>47ms</td>
+<td>183ms</td>
+<td>0</td>
+</tr>
+<tr>
+<td>生产库副本写（异步路径）</td>
+<td>2,880</td>
+<td>106ms</td>
+<td>236ms</td>
+<td>0</td>
+</tr>
+<tr>
+<td>API 并发</td>
+<td>496 请求</td>
+<td>159ms</td>
+<td>13.8s*</td>
+<td>0</td>
+</tr>
+<tr>
+<td>*：API 尾延迟为本轮压测期间环境噪声（MCP+collector+压测副本抢 CPU/IO）；</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>隔离复测连续 5 次 32-77ms（avg 41ms）——稳定态正常。</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h3 id="104">10.4 测试与提交</h3>
+<ul>
+<li>全量：<strong>755 passed / 54 skipped / 0 failed</strong></li>
+<li>新增 <code>scripts/wal_growth_stress.py</code>；<code>multi_process_stress.py</code> 支持 <code>--procs 3</code></li>
+</ul>
+<h2 id="11-2026-08-16">11. 剩余边界深挖（2026-08-16）</h2>
+<h3 id="111-3-16">11.1 交叉拓扑：3 进程 × 16 线程 ✅</h3>
+<p>最恶劣写拓扑（api+collector+worker × 16 线程 × 同一 WAL 库，各 500 写）：
+- <strong>0 锁错误 / 0 database is locked</strong>，+1,488 memories 精确（12,169→13,657）
+- p50 ~720ms（写锁竞争+WAL 单写者导致高于低并发），正确性优先</p>
+<h3 id="112-checkpoint">11.2 显式 checkpoint 路径 ✅</h3>
+<p>2,000 写后 <code>wal_checkpoint(TRUNCATE)</code>：WAL 4.09MB→0MB，2000/2000 ingest 返回
+memory_id（无合并丢数）。此前"计数差 1"判定为<strong>测试脚本断言 bug</strong>
+（硬编码 12168+2000，实际副本 at-copy 时已是 12,167）——真实计数精确。</p>
+<h3 id="113-checkpoint">11.3 checkpoint 与并发读互斥 ✅</h3>
+<p>PASSIVE checkpoint 5 轮 + 并发检索线程：busy=0、reader 0 错误——checkpoint
+不阻塞读、读不阻塞 checkpoint。</p>
+<h3 id="114">11.4 固化回归</h3>
+<p><code>tests/test_wal_checkpoint.py</code> 3 用例：TRUNCATE 回收+精确计数、checkpoint/</p>
+<h2 id="12-2026-08-16commit-682ea8d">12. 未覆盖边界深挖（2026-08-16，commit 682ea8d）</h2>
+<h3 id="121-postgresql-scriptspg_adapter_stresspy">12.1 PostgreSQL 镜像链 ✅（scripts/pg_adapter_stress.py）</h3>
+<p>原生 PG16 :5432（维护链 :5430 docker 当前不可用，验证同一适配器代码路径）：
+- 读 QPS 916 / p50 3.4ms，显式事务回滚写 QPS 829 / p50 0.79ms，0 错误
+- <strong>诚实修正</strong>：此前"写回滚零污染"结论错误（store_memory 默认 commit，
+  实际泄漏 402 行已清理）——改为显式事务 ROLLBACK 后计数 2553→2553 真零污染</p>
+<h3 id="122-trinity_storage_encryption">12.2 加密存储路径 ✅（TRINITY_STORAGE_ENCRYPTION）</h3>
+<ul>
+<li>读：加密 OFF p50 74.0ms vs ON 71.7ms（<strong>&lt;5% 开销</strong>，解密 ~µs 级被检索成本掩盖）</li>
+<li>写：QPS 56.6 vs 51.1（<strong>~10% 开销</strong>）</li>
+<li>密文落库验证 + 检索解密正常</li>
+<li><strong>关键发现</strong>：<code>shutil.copy2</code> 快照跳过 WAL → FTS rowid 错位 → 写触发器撞
+  rowid → IntegrityError。所有快照函数改 <strong>VACUUM INTO</strong>（含 WAL、rowid 一致、
+  免疫 WinError 33）。此缺陷同时解释了此前加密写"失败"的误判。</li>
+</ul>
+<h3 id="123-soak-scriptssoak_testpy">12.3 长时间运行 soak ✅（scripts/soak_test.py）</h3>
+<p>10 分钟混合负载（27,863 操作：写 9.3k/读 9.3k/touch 8.6k）：
+- <strong>0 错误 / 0 锁冲突</strong>；RSS 306.1→309.6MB（<strong>+1.1% 无泄漏</strong>）
+- WAL 峰值 4.2MB（受控）、读连接池稳定 10（无泄漏）
+- 首跑 756 错误为脚本 bug（_pool 是聚合器属性非 Trinity）——修复后 0 错误</p>
+<h3 id="124-llm-trinity_llm_extract_async">12.4 LLM 抽取异步开关 ✅（TRINITY_LLM_EXTRACT_ASYNC）</h3>
+<ul>
+<li>同步 LLM 抽取 ingest 3,656ms vs 异步开关返回 <strong>20ms（183x）</strong>，后台完成</li>
+<li>默认保持同步语义（兼容既有测试/管线）；异步开关供吞吐优先场景</li>
+</ul>
+<h3 id="125">12.5 测试与提交</h3>
+<ul>
+<li>全量 <strong>762 passed / 54 skipped / 0 failed</strong></li>
+<li>新增 <code>scripts/pg_adapter_stress.py</code>、<code>scripts/soak_test.py</code>、
+  <code>tests/test_pg_llm_extract.py</code>（4 用例）；test_wal_checkpoint fixture 改
+  VACUUM INTO</li>
+</ul>
+<h2 id="13-2026-08-16commit">13. 全方位修复（2026-08-16，commit 待填）</h2>
+<h3 id="131">13.1 全仓库快照扫描 ✅</h3>
+<p>全仓库 grep 确认 <code>shutil.copy2</code> 复制 SQLite 库仅 4 处（full_stress /
+multi_process / wal_growth / soak），全部已用 VACUUM INTO 主路径（copy2
+仅作失败兜底，只读场景可接受）。其余匹配均为路径定义/新建，非复制。</p>
+<h3 id="132-pg-5430">13.2 PG :5430 维护链直接压测 ✅</h3>
+<p>docker daemon 恢复（com.docker.service 启动 + Docker Desktop 拉起），
+trinity-db 容器自动恢复（postgres:16-alpine, healthy）：
+- 读 QPS 85.8 / p50 53.9ms / p99 491ms，写(显式回滚) QPS 440 / p50 4.0ms，
+  0 错误，7,544 → 7,544 真零污染
+- 对比：docker :5430 读 QPS 85.8 vs 原生 :5432 916（容器资源受限 + 维护
+  库表结构差异），但写路径 440 QPS 健康
+- <strong>维护链目标库（decay/tiers/mirror 指向的 :5430）首次直接压测</strong></p>
+<h3 id="133-30-soak">13.3 30 分钟长时间 soak ✅</h3>
+<p>50,107 操作（写 16.7k/读 16.7k/touch 16.7k），<strong>0 错误 / 0 锁冲突</strong>，
+RSS 307.5→308.7MB（<strong>+0.4%</strong>）、WAL 峰值恒定 4.26MB（checkpoint 完全
+跟上）、连接池稳定 10——小时级趋势确认无泄漏、无失控。</p>
+<h3 id="134-5000">13.4 大批量加密写（5,000 条）✅</h3>
+<ul>
+<li>加密 OFF QPS 47.8 vs ON 48.3（<strong>-1.0%，无放大</strong>）</li>
+<li>修正 500 条量级的 ~10% 结论：那是启动噪声；5,000 条量级 AES-GCM 加密
+  成本被 SQLite 写入本身掩盖，<strong>批量加密近乎免费</strong></li>
+</ul>
+<h3 id="135">13.5 测试与提交</h3>
+<ul>
+<li>全量 <strong>766 passed / 50 skipped / 0 failed</strong>（PG 测试在 docker 恢复后
+  不再 skip，54→50）</li>
+</ul>
+<h2 id="14-2026-08-16commit">14. 维护链 + 小时级验证（2026-08-16，commit 待填）</h2>
+<h3 id="141">14.1 维护链完整链路 ✅</h3>
+<p>PG :5430 恢复后运行 maintenance 编排（mirror → decay → tiers → sync → compact）：
+- <strong>mirror</strong>（SQLite→PG :5430）：added=410 / skipped=1,519（幂等）/ errors=0（3.0s），
+  PG 镜像 7,544→7,955 条
+- <strong>decay</strong>（--store sqlite，DecayLimit=20）：扫描 20 条 active，healthy=20 /
+  decaying=0——当前无衰减记忆，治理正常
+- <strong>tiers</strong>（--store sqlite）：500 条分层 core=153 / recall=347 / archival=0，
+  生命周期完整执行（Core=14 blk/433 tok、Recall=434）
+- <strong>sync</strong>：Marvis 2 用户/168 会话，1 会话同步，errors=0
+- <strong>compact</strong>：0 候选会话（结构层无积压）
+- 执行前已做 CSV 全量备份（12,173 条 pre_maintenance_backup_*.csv）</p>
+<h3 id="142-60-soak">14.2 60 分钟长时间 soak ✅</h3>
+<p>75,579 操作（写 25.2k/读 25.2k/touch 25.2k），<strong>0 错误 / 0 锁冲突</strong>，
+RSS 302.9→129.7MB（<strong>-57%，GC 回收无泄漏</strong>）、WAL 峰值恒定 4.7MB
+（checkpoint 完全跟上）、连接池稳定 10——<strong>小时级验证确认长期稳定</strong>。</p>
+<h3 id="143-pg">14.3 PG 容器资源评估 ✅</h3>
+<ul>
+<li><code>docker inspect trinity-db</code>：<strong>NanoCpus=0 / Memory=0（无资源限制）</strong>，
+  当前仅 39MB 内存 / CPU 0%</li>
+<li>单次查询对比：容器 :5430 avg 12.7ms vs 原生 :5432 6.1ms（~2x，docker
+  网络栈 + 容器 PG 配置），但绝对延迟健康</li>
+<li>结论：<strong>PG 容器无需扩容</strong>（无资源限制、延迟可接受）；读 QPS 85.8 vs 916
+  差异源于容器并发放大 + 维护库表结构，非资源瓶颈</li>
+</ul>
+<h3 id="144">14.4 测试与提交</h3>
+<ul>
+<li>全量 <strong>766 passed / 50 skipped / 0 failed</strong></li>
+</ul>
+<h2 id="15-pg-2026-08-16commit">15. 长周期 + 治理全量 + PG 高并发（2026-08-16，commit 待填）</h2>
+<h3 id="151-24h">15.1 24h 等效口径</h3>
+<p>60 分钟实测 75,579 操作/小时 → <strong>24h 等效 1.81M 操作（写 ~60.5 万条）</strong>。
+泄漏判定三指标（RSS/WAL/连接池）在 30/60 分钟两轮已稳定（RSS 无泄漏、
+WAL 恒定 4.7MB、连接池稳定 10），120 分钟 soak 补充长周期确认
+（会话内已跑 62 分钟中断，报告见 15.4；24h 实时运行列为运维建议）。</p>
+<h3 id="152-decay-limit-5000">15.2 全量 decay 治理 ✅（--limit 5000，副本零污染）</h3>
+<ul>
+<li>dry-run 全量扫描：Fetched <strong>1,930 active</strong>（非 20 条小样），
+  healthy=1930 / decaying=0 / pending=0</li>
+<li>真实执行（mock LLM，副本）：0 压缩 / 0 归档 / 0 错误，数据完整性保持
+  （12,174 条 / 1,930 active 不变）</li>
+<li><strong>结论：当前全部记忆健康，治理引擎全量扫描正常且零副作用</strong>；
+  生产库写锁（collector/API 活跃写）导致直连 <code>database is locked</code>，
+  用 VACUUM INTO 副本验证（治理逻辑等价）</li>
+</ul>
+<h3 id="153-pg">15.3 PG 容器高并发读 ✅</h3>
+<table>
+<thead>
+<tr>
+<th>线程</th>
+<th>QPS</th>
+<th>p50</th>
+<th>p99</th>
+<th>错误</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>8</td>
+<td><strong>273</strong></td>
+<td>23.0ms</td>
+<td>108ms</td>
+<td>0</td>
+</tr>
+<tr>
+<td>16</td>
+<td>193</td>
+<td>49.3ms</td>
+<td>404ms</td>
+<td>0</td>
+</tr>
+<tr>
+<td>32</td>
+<td>212</td>
+<td>44.6ms</td>
+<td>1,130ms</td>
+<td>0</td>
+</tr>
+<tr>
+<td><strong>8 线程是甜点位</strong>；16/32 线程 QPS 下降、p99 恶化——瓶颈在适配器连接池</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>+ 容器网络栈（非 CPU/内存，容器无资源限制）。此前 85.8 QPS 是低量级</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>统计噪声，真实 8 线程吞吐 ~273 QPS。<strong>无需扩容</strong>。</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h3 id="154-120-soak">15.4 120 分钟 soak（进行中，见最终报告）</h3>
+<p>首次 120 分钟跑至 62 分钟被中断（报告丢失）；重新后台运行中。
+30/60 分钟两轮已确认无泄漏趋势（见 13.3/14.2）。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

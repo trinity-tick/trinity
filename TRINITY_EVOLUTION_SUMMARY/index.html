@@ -1,0 +1,2100 @@
+
+<!doctype html>
+<html lang="zh" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="智能记忆体基础设施 — 架构/基准/合规/运维/协议文档">
+      
+      
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Trinity 进化全景：四轮借鉴优化梳理（2026-08-26） - Trinity Memory OS</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#trinity-2026-08-26" class="md-skip">
+          跳转至
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="页眉">
+    <a href=".." title="Trinity Memory OS" class="md-header__button md-logo" aria-label="Trinity Memory OS" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Trinity Memory OS
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Trinity 进化全景：四轮借鉴优化梳理（2026-08-26）
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="搜索" placeholder="搜索" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="查找">
+        
+        <button type="reset" class="md-search__icon md-icon" title="清空当前内容" aria-label="清空当前内容" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            正在初始化搜索引擎
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="导航栏" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Trinity Memory OS" class="md-nav__button md-logo" aria-label="Trinity Memory OS" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Trinity Memory OS
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../API_REFERENCE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Api Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BENCHMARKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BEST_PRACTICES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Best Practices
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CAPABILITY_MAP_20260814/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Capability Map 20260814
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COMPARISON_VS_2026_SOTA/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comparison Vs 2026 Sota
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COMPLIANCE_GDPR_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compliance Gdpr 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CODE_STRUCTURE_AUDIT_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Structure Audit 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CROSS_WINDOW/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cross Window
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DSH_INTEGRATION_STATUS_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dsh Integration Status 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../EVOLUTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evolution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FEATURE_OVERVIEW_20260815.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Feature Overview 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FUTURE_PLAN_20260815.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Future Plan 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FUTURE_PLAN_V2_20260815.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Future Plan V2 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FUNCTION_SUMMARY_20260814.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Function Summary 20260814
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../FUSION_PLAN_20260814/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fusion Plan 20260814
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../JOINT_CAPABILITY_MAP_20260814/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Joint Capability Map 20260814
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../KGRAPH_USAGE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kgraph Usage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MCP_STATUS_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mcp Status 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MCP_RELEASE_CHECKLIST_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mcp Release Checklist 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MEMORY_MARKET_PROTOCOL/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Memory Market Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MIGRATION_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migration Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../NEW_MODULES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    New Modules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OPS_NOTES_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Ops Notes 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OPTIMIZATION_DIRECTIONS_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Optimization Directions 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PERF_NOTES_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Perf Notes 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PLANNING_REVIEW_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Planning Review 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../STORAGE_ENCRYPTION_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage Encryption 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../QUICKSTART_GATEWAY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart Gateway
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECURITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TRINITY_SUMMARY_20260815.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trinity Summary 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TRINITY_STATUS_20260815_V2.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trinity Status 20260815 V2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../WMS_INTEGRATION_PLAN.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wms Integration Plan
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../anti_loop_self_check/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anti Loop Self Check
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DOC_FUSION_20260815/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Doc Fusion 20260815
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../multi-tenant/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi Tenant
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../multimodal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multimodal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wms_execution_check.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wms Execution Check
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wms_execution_check_v3.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wms Execution Check V3
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wms_five_dimension_design.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wms Five Dimension Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wms_five_dimension_summary.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wms Five Dimension Summary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wms_gap_analysis_v2.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wms Gap Analysis V2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wms_progress_report.md" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wms Progress Report
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        一、核心指标前后对比
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        二、四轮借鉴逐一对比
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="二、四轮借鉴逐一对比">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-pageindex-llm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        第 1 轮：PageIndex（无向量树索引 + LLM 推理检索）→ 页式记忆检索
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-budibaseautomations-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        第 2 轮：Budibase（Automations/表视图/行级权限/公开 API）→ 运维层三件套
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-codexrolloutresume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        第 3 轮：Codex（沙箱+审批/rollout/resume/模型路由）→ 执行策略与可观测
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-dshgoal-eval-skill" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        第 4 轮：DSH（goal 引擎/eval 断言/skill 运行时）→ 目标驱动自进化
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        三、当前架构图
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        四、新增资产清单
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="四、新增资产清单">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        新模块（8 个）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        新脚本（5 个）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#api-13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        新增 API 端点（13 个）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        新增环境变量（本会话）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-73" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        新增测试（7 文件 / 73 用例）
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        五、自进化闭环（当前形态）
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        六、回滚矩阵
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        七、已知遗留与后续方向
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+
+<h1 id="trinity-2026-08-26">Trinity 进化全景：四轮借鉴优化梳理（2026-08-26）</h1>
+<blockquote>
+<p>本文档对"四轮借鉴优化"（PageIndex → Budibase → Codex → DSH）前后的 Trinity 做全方位对比与现状盘点。
+基线 = 本轮优化开始前（EXECUTION.md 第 20 节之前）；权威变更记录见 <code>dsh-ops/EXECUTION.md</code> 第 20-26 节。</p>
+</blockquote>
+<hr />
+<h2 id="_1">一、核心指标前后对比</h2>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>优化前（基线）</th>
+<th>优化后（当前）</th>
+<th>变化</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>500q AnswerAcc（keyword 基线）</td>
+<td>0.678（GEN-1 记录）</td>
+<td>0.726（同 harness 重测）</td>
+<td>+0.048</td>
+</tr>
+<tr>
+<td>500q AnswerAcc（<strong>reason 模式</strong>）</td>
+<td>—（不存在）</td>
+<td><strong>0.752</strong></td>
+<td>新增能力，+0.026 vs 基线</td>
+</tr>
+<tr>
+<td>500q R@5（reason 模式）</td>
+<td>—</td>
+<td><strong>0.994</strong>（超 keyword 0.992）</td>
+<td>新增能力</td>
+</tr>
+<tr>
+<td>MS 类目 R@5（reason）</td>
+<td>—</td>
+<td>0.963（修复前 0.60）</td>
+<td>判题修复恢复</td>
+</tr>
+<tr>
+<td>TR 类目 AnswerAcc（reason）</td>
+<td>0.688</td>
+<td><strong>0.787</strong></td>
+<td>+0.099</td>
+</tr>
+<tr>
+<td>SS-P 类目 AnswerAcc（reason）</td>
+<td>0.533</td>
+<td><strong>0.667</strong></td>
+<td>+0.134</td>
+</tr>
+<tr>
+<td>生产难查询 R@10（95 条近义改写）</td>
+<td>—（无评测集）</td>
+<td>keyword 0.432 / <strong>reason 0.547</strong></td>
+<td>新增评测能力，+0.115</td>
+</tr>
+<tr>
+<td>hybrid R@5（+页树通道 novel_only）</td>
+<td>0.980（5 通道）</td>
+<td><strong>0.984</strong></td>
+<td>页通道纯增益</td>
+</tr>
+<tr>
+<td>专项单元测试</td>
+<td>0（新增前）</td>
+<td><strong>73</strong>（7 个测试文件）</td>
+<td>新增</td>
+</tr>
+<tr>
+<td>维护链任务</td>
+<td>25</td>
+<td><strong>28</strong>（+pagetree/eval/all）</td>
+<td>+2 实质任务</td>
+</tr>
+<tr>
+<td>记忆库规模</td>
+<td>22,732 active</td>
+<td>22,732 active（页树 8,992 条入树）</td>
+<td>页树构建</td>
+</tr>
+<tr>
+<td>页树</td>
+<td>—（不存在）</td>
+<td>43 类目 / 270 簇 / 117 簇有 LLM 摘要</td>
+<td>新增</td>
+</tr>
+<tr>
+<td>目标引擎</td>
+<td>—（无目标概念）</td>
+<td>2 个真实目标（1 complete + 1 active）</td>
+<td>新增</td>
+</tr>
+<tr>
+<td>API 端点</td>
+<td>原生</td>
+<td>+<strong>13 个</strong>（/goals×4、/skills×2、/automation×4、/api/openapi.json 等）</td>
+<td>新增</td>
+</tr>
+<tr>
+<td>MCP 工具</td>
+<td>9</td>
+<td><strong>11</strong>（+skill_list/skill_load；memory_search 增 view/visibility 参数）</td>
+<td>新增</td>
+</tr>
+<tr>
+<td>环境变量（TRINITY_*）</td>
+<td>~70</td>
+<td><strong>~90</strong>（+自动化/路由/可见性等）</td>
+<td>新增</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_2">二、四轮借鉴逐一对比</h2>
+<h3 id="1-pageindex-llm">第 1 轮：PageIndex（无向量树索引 + LLM 推理检索）→ 页式记忆检索</h3>
+<table>
+<thead>
+<tr>
+<th>PageIndex 机制</th>
+<th>Trinity 落地</th>
+<th>证据</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>树索引（目录树）</td>
+<td><code>trinity/retrieval/pagetree.py</code>：category→簇→记忆页树，纯元数据建树（8,992 条/75s）</td>
+<td><code>~/.trinity/store/pagetree.json</code></td>
+</tr>
+<tr>
+<td>Flash 无 LLM 结构提取</td>
+<td>簇轴 = persona→主标签→untagged；IDF 页打分 + 短查询守卫 + 隔离过滤</td>
+<td>检索侧归因：+2 题独中</td>
+</tr>
+<tr>
+<td>节点摘要（便宜模型）</td>
+<td><code>scripts/run_pagetree_summaries.py</code>（增量，deepseek-chat）</td>
+<td>117/270 簇有摘要</td>
+</tr>
+<tr>
+<td>LLM 树搜索（chat_model）</td>
+<td><code>mode="reason"</code>（候选=基础+页+向量，LLM 判题，base 填充不截断）</td>
+<td>AnswerAcc 0.752 / holdout R@10 0.547</td>
+</tr>
+<tr>
+<td>结果可溯源</td>
+<td>结果带 page_path/page_title/page_node</td>
+<td>API 返回</td>
+</tr>
+</tbody>
+</table>
+<p><strong>关键修复</strong>（过程中实证）：多租户隔离过滤、短查询守卫、IDF 加权、小簇 min_df、tokenize 去重、hybrid novel_only 通道（只增不减）。</p>
+<h3 id="2-budibaseautomations-api">第 2 轮：Budibase（Automations/表视图/行级权限/公开 API）→ 运维层三件套</h3>
+<table>
+<thead>
+<tr>
+<th>Budibase 机制</th>
+<th>Trinity 落地</th>
+<th>证据</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Automations（触发器→动作链）</td>
+<td><code>trinity/automation/</code>：事件（memory.write/search、goal.updated）+ YAML 规则 + 动作（notify/exec）</td>
+<td>E2E：emitted/matched/executed/failed 统计</td>
+</tr>
+<tr>
+<td>表视图</td>
+<td><code>trinity/views.py</code> + <code>~/.trinity/views.yaml</code> + <code>search(view=)</code></td>
+<td>单元测试 9 例</td>
+</tr>
+<tr>
+<td>行级权限（Row-level Security）</td>
+<td><code>trinity/security/visibility.py</code>（白名单+参数化）+ RBAC 角色规则（TRINITY_VISIBILITY_<ROLE>）</td>
+<td>viewer 角色过滤实测</td>
+</tr>
+<tr>
+<td>公开 API 一等公民</td>
+<td><code>GET /api/openapi.json</code>（增强文档）+ 新端点</td>
+<td>12 paths 文档</td>
+</tr>
+</tbody>
+</table>
+<h3 id="3-codexrolloutresume">第 3 轮：Codex（沙箱+审批/rollout/resume/模型路由）→ 执行策略与可观测</h3>
+<table>
+<thead>
+<tr>
+<th>Codex 机制</th>
+<th>Trinity 落地</th>
+<th>证据</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>sandbox_mode + approval_policy</td>
+<td>动作 mode（read-only/auto/full）+ approval（never/on-failure/always）+ 命令白名单</td>
+<td>白名单拦截实测</td>
+</tr>
+<tr>
+<td>审批队列</td>
+<td><code>pending.json</code> + <code>GET /automation/pending</code> + <code>POST /automation/approve</code></td>
+<td>approve 剥离 approval 防死循环修复</td>
+</tr>
+<tr>
+<td>Rollout JSONL</td>
+<td><code>~/.trinity/automation/rollouts/&lt;date&gt;.jsonl</code> + <code>scripts/rollout_inspect.py</code></td>
+<td>inspect 汇总实测</td>
+</tr>
+<tr>
+<td>resume</td>
+<td><code>run_pagetree_summaries</code> checkpoint（done/failed + --retry-failed）</td>
+<td>dry-run 实测</td>
+</tr>
+<tr>
+<td>模型路由（auto）</td>
+<td><code>resolve_model_for(task_type)</code>（TRINITY_LLM_ROUTING），接入 summarize/retrieval_judge</td>
+<td>编译+接入</td>
+</tr>
+</tbody>
+</table>
+<h3 id="4-dshgoal-eval-skill">第 4 轮：DSH（goal 引擎/eval 断言/skill 运行时）→ 目标驱动自进化</h3>
+<table>
+<thead>
+<tr>
+<th>DSH 机制</th>
+<th>Trinity 落地</th>
+<th>证据</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>create_goal/update_goal</td>
+<td><code>trinity/evolution/goals.py</code>（acceptance 验收、3 轮无进展 blocked、RLock）</td>
+<td>E2E：REST 创建→evaluate→complete</td>
+</tr>
+<tr>
+<td>eval 断言</td>
+<td><code>trinity/eval/</code> + <code>scripts/run_evals.py</code>：10 个断言任务，维护链 -Tasks eval，evolution CERTIFY 集成</td>
+<td>10/10 通过</td>
+</tr>
+<tr>
+<td>skill 运行时</td>
+<td><code>trinity/skills/</code> + data/skills frontmatter + MCP skill_list/skill_load + REST /skills</td>
+<td>5 skills 注册</td>
+</tr>
+<tr>
+<td>目标驱动进化</td>
+<td>evolution 周期完成自动评估 active goals</td>
+<td>g_93a63 active（holdout R@10≥0.60）</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_3">三、当前架构图</h2>
+<pre><code>                          ┌─────────────────────────────────────────────┐
+                          │             Trinity v8.2.0                 │
+                          │   检索层：FTS5(默认) · hybrid-RRF · 页树     │
+                          │   reason(LLM判题) · graph · semantic        │
+                          ├─────────────────────────────────────────────┤
+   API :8001              │  运维层：automation(事件规则+审批+rollout)   │
+   MCP stdio/:8000        │  治理层：goal引擎 · eval断言 · visibility   │
+   Gateway :8002          │  结构层：dsh_sessions/events/goals/todos    │
+                          │  技能层：data/skills(frontmatter)           │
+                          ├─────────────────────────────────────────────┤
+                          │  存储：SQLite大库(22.7k) · pagetree.json    │
+                          │        goals.json · automation/ · views.yaml│
+                          │        PG镜像:5430 · 备份 14天              │
+                          └─────────────────────────────────────────────┘
+   维护链(28任务) ← supervisor ← autostart  ── 每日：pagetree/eval/decay/tiers/sync/backup...
+   evolution 周期(OBSERVE→ANALYZE→PLAN→EXECUTE→CERTIFY) → evaluate_goals
+   CERTIFY → eval_assertions(10项) → skills 沉淀(corrections.md frontmatter 保护)
+</code></pre>
+<h2 id="_4">四、新增资产清单</h2>
+<h3 id="8">新模块（8 个）</h3>
+<ul>
+<li><code>trinity/retrieval/pagetree.py</code>（页树）、<code>trinity/automation/</code>（引擎+审批+rollout）、
+  <code>trinity/views.py</code>（记忆视图）、<code>trinity/security/visibility.py</code>（行级规则）、
+  <code>trinity/eval/</code>（断言评测）、<code>trinity/skills/</code>（技能运行时）、
+  <code>trinity/evolution/goals.py</code>（目标引擎）、<code>trinity/api/openapi_spec.py</code>（API 文档）</li>
+</ul>
+<h3 id="5">新脚本（5 个）</h3>
+<ul>
+<li><code>scripts/build_memory_pagetree.py</code>、<code>scripts/run_pagetree_summaries.py</code>（checkpoint）、
+  <code>scripts/rollout_inspect.py</code>、<code>scripts/run_evals.py</code>、<code>benchmark/pagetree_ab_compare.py</code>、
+  <code>benchmark/hard_holdout_eval.py</code>（+JSON 输出）</li>
+</ul>
+<h3 id="api-13">新增 API 端点（13 个）</h3>
+<ul>
+<li>检索参数：/memories 增 view、visibility_rule；/memory/search 支持 reason 模式</li>
+<li>自动化：/automation/stats、/automation/pending、/automation/approve</li>
+<li>目标：/goals（GET/POST）、/goals/{id}、/goals/{id}/update</li>
+<li>技能：/skills、/skills/{name}；文档：/api/openapi.json</li>
+</ul>
+<h3 id="_5">新增环境变量（本会话）</h3>
+<ul>
+<li><code>TRINITY_AUTOMATION</code>（on 启用）、<code>TRINITY_AUTOMATION_ACTION</code>（防循环，引擎注入）、
+  <code>TRINITY_PAGETREE_HYBRID</code>（hybrid 页通道）、<code>TRINITY_LLM_ROUTING</code>（任务分级模型路由）、
+  <code>TRINITY_VISIBILITY_&lt;ROLE&gt;</code>（角色行级可见性）</li>
+</ul>
+<h3 id="7-73">新增测试（7 文件 / 73 用例）</h3>
+<ul>
+<li>test_pagetree(12) / test_automation(15) / test_views(9) / test_visibility(12) /
+  test_goals(7) / test_eval(11) / test_skills(7)</li>
+</ul>
+<h2 id="_6">五、自进化闭环（当前形态）</h2>
+<pre><code>目标引擎(acceptance) ──evolution 周期完成──▶ default_metrics(基准 JSON)
+      ▲                                          │
+      │ 达标→complete / 3轮无进展→blocked         ▼
+      │                                   benchmark 指标
+      │                                   500q AnswerAcc 0.752
+      │                                   holdout R@10 0.547
+      │                                          ▲
+      │                                          │ 新优化迭代
+      └── automation(事件) ◀── 维护链(eval 断言 10 项护栏) ◀── skills 经验沉淀
+</code></pre>
+<h2 id="_7">六、回滚矩阵</h2>
+<table>
+<thead>
+<tr>
+<th>层</th>
+<th>回滚方式</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>代码</td>
+<td><code>git checkout -- &lt;EXECUTION.md 26.4/25.4/24.4/23.4/22.4 列出的文件&gt;</code></td>
+</tr>
+<tr>
+<td>产物</td>
+<td>删 <code>~/.trinity/store/pagetree.json</code>（重建即恢复）、<code>~/.trinity/goals.json</code>、automation/ 目录</td>
+</tr>
+<tr>
+<td>数据</td>
+<td>记忆/审计链不受影响（全部新增功能默认关闭或显式启用）</td>
+</tr>
+<tr>
+<td>配置</td>
+<td>还原 <code>~/.trinity/views.yaml</code>、automation/rules.yaml（可删即回默认）</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_8">七、已知遗留与后续方向</h2>
+<ol>
+<li>reason judge 在多事实题（MS 全量池）仍有提升空间（Acc 0.188 vs 0.25 基线类目差异）；</li>
+<li>页树启发式页定位在近义改写上仍弱（R@10 0.179）——下一步"摘要向量化页级检索"；</li>
+<li>目标 g_93a63（holdout R@10≥0.60）等待突破；eval 断言可再扩（automation pending 健康等）；</li>
+<li>skills 经验沉淀可接入 automation 规则实现全自动；</li>
+<li>全量 pytest 基线待重测（新增 7 个测试文件后）。</li>
+</ol>
+<hr />
+<p><em>生成：2026-08-26 · 数据来源：EXECUTION.md 20-26 节、output/</em>.json、pytest 专项、代码盘点*</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
