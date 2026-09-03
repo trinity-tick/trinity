@@ -212,4 +212,10 @@ MIT — see [pyproject.toml](pyproject.toml).
 
 ---
 
+## 最新基准（2026-09-03，EXECUTION 466）
+
+- LongMemEval oracle 500 题：**R@1/3/5/10 = 1.000**（六类，两轮独立复现）
+- QA AnswerAcc：官方基线 0.560 → 提示路由 0.578 → **v2 锁定 0.642**（MS 0.391→0.617）
+- 明细/档案/实验纪律：docs/LEADERBOARD.md · docs/BENCHMARKS.md · dsh-ops/EXECUTION.md
+
 *Trinity: model changes, framework changes, memory doesn't.*

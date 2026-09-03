@@ -105,7 +105,7 @@ while ($true) {
 
     # ── 每周一 03:10-03:30：质量门禁 + 插件冒烟（2026-09-01）────────
     if ((Test-Path $Maintenance) -and $now.DayOfWeek -eq 'Monday' -and $now.Hour -eq 3 -and $now.Minute -ge 10 -and $now.Minute -lt 30 -and $lastWeekly -ne $today) {
-        Invoke-Script -Path $Maintenance -ArgsList @("-Tasks", "quality-gate,plugin-smoke,brain-report,module-classify") -Label "maintenance(quality-gate)" -TimeoutSec 1500  # 2026-09-01: +brain-report 周报
+        Invoke-Script -Path $Maintenance -ArgsList @("-Tasks", "quality-gate,plugin-smoke,brain-report,module-classify,eval-gate") -Label "maintenance(quality-gate)" -TimeoutSec 2400  # 2026-09-01: +brain-report 周报
         $lastWeekly = $today
     }
 

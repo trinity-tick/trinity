@@ -384,3 +384,35 @@
 
 ### 465.3 收尾
 - 临时目录清理；runner 零改动；EXECUTION 记录；提交推送 D 同步。
+
+## 466. 未来化优化全量执行（2026-09-03，EXECUTION 466）
+
+> 日期已跨日（09-03 上午收尾）。全部子项带实测证据；未达标项一律留档不采纳（沿用 463 纪律）。
+
+### 466.1 answer-position 诊断（六类 ×12-20 抽样，纯检索 49s）
+- **六类全部 top1=1.0 / ev<=5=1.0 / ev<=14=1.0**（答案会话首条消息即 rank1，top30 零漏）；
+- 结论：会话级召回无瓶颈；QA 短板在"消息内容级命中的具体答案句"与生成侧；
+  v2 MS 的 cap14 收益 = 补足会话内真正含答案的消息（rank 1 仅是会话命中）。
+
+### 466.2 TR 时间线通道 A/B（30 同题抽样，配对）
+- routed ref .367 vs 时间线视图（带日期消息前置+日期线索）**.400（+3.3pp，flips=7）** → 未达 +10pp 采纳阈值，留档为倾向信号（时间线排序需要真实日期排序而非列举，待数据层落地）。
+
+### 466.3 k=3 自洽投票 A/B（SS-P，30 题）
+- ref .533 vs k3 多数票 **.400（-13.3pp）** → 证伪：偏好类答案表述空间大，原文多数票不适用（若推广需语义投票/judge 层投票）。
+
+### 466.4 评测回归门禁（基建落地）
+- benchmark/eval_regression_gate.py：分层抽样 ~100 题 recall（ev<=5/14），与基线比较超阈 FAIL；
+- maintenance 新任务 eval-gate（周一链 quality-gate 后）；首跑 **GATE PASS rate5=1.0**，基线已存 gate_baseline.json。
+
+### 466.5 ops-bot 观察窗（第 1-2 轮）
+- 09-03 首轮暴露坑：ops-bot 记忆被同步链路统一加密后 topics 空（raw SQL 需解密——坑 #4 复现）→ opsbot_daily 补 decrypt_content；
+- 修复后第 2 轮正常：topics=[备份/数据库/策略/恢复/…] → 决策记忆 b8159188 上架；
+- 7 天无人值守观察窗正式启动（每日 03:00 opsbot-cycle 自动跑，brain-report 周报复核）。
+
+### 466.6 发布/外部项（如实标注）
+- docs/LEADERBOARD.md（榜单+纪律+历史档案指向）；README 基准口径指向 BENCHMARKS/LEADERBOARD；
+- LongMemEval-M 数据集本机缺失（下载未达）；BEAM 1M/10M 数据生成与跑分需长窗口（beam_benchmark 为 PG 1K-100K 压测，非 BEAM 数据集档）→ 外部窗口项；
+- gh CLI 未安装 → GitHub Release 页走网页发布（tag 已在远端）。
+
+### 466.7 收尾
+- 临时实验目录清理；EXECUTION/文档提交；推送 D 同步。

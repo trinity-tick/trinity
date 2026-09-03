@@ -55,7 +55,13 @@ def topics_of_agent():
     for (c,) in rows:
         txt = str(c or "")
         if txt.startswith("enc:v1:"):
-            continue
+            try:
+                from trinity.security.crypto import decrypt_content
+                txt = str(decrypt_content(txt) or "")
+            except Exception:
+                txt = ""
+            if txt.startswith("enc:v1:"):
+                continue
         for w in (jieba.cut(txt) if jieba else txt.split()):
             w = w.strip()
             if 2 <= len(w) <= 10 and w not in STOP and not w.isdigit() and not w.isascii():
