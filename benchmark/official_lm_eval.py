@@ -143,9 +143,68 @@ def build_qa_prompt(qtype, question, results, strategy, cap=5):
 # EXECUTION 467 复测结论：MS 查询词覆盖组装 30 题 +10pp 但在全量翻转（v4=0.618 < v2 0.642，
 # MS -9.8pp）→ 已回滚。经验固化：30 题抽样对 MS 类不可靠，采纳前必须全量验证或 ≥60 题分层样本。
 # 官方锁定口径 = v2（0.642）：multi-session 20/14（EXECUTION 462 全量锁证 +22.6pp）。
+# EXECUTION 469 实验：temporal-reasoning 时间线数据层（top-40 日期排序上下文），30 题 +10.0pp flips=7——
+# 全量 v5 验证通过才转正式；默认已开启仅当本文件作为评测入口（带 --strategy routed）。
 _ROUTE = {
     "multi-session": {"top_k": 20, "cap": 14},
+    "temporal-reasoning": {"top_k": 40, "cap": 8, "mode": "timeline"},
 }
+
+_MONS = ["january", "february", "march", "april", "may", "june", "july",
+         "august", "september", "october", "november", "december"]
+_MON3 = [m[:3] for m in _MONS]
+
+
+def _date_key(text):
+    low = str(text or "").lower()
+    words = low.split()
+    for i, w in enumerate(words):
+        if w in _MONS or w in _MON3:
+            mon = (_MONS.index(w) if w in _MONS else _MON3.index(w)) + 1
+            day = 0
+            year = 0
+            if i + 1 < len(words):
+                dig = "".join(ch for ch in words[i + 1] if ch.isdigit())
+                if dig:
+                    v = int(dig)
+                    if v > 31:
+                        year = v
+                    else:
+                        day = v
+            if i + 2 < len(words):
+                d2 = "".join(ch for ch in words[i + 2] if ch.isdigit())
+                if d2 and 1900 <= int(d2) <= 2100:
+                    year = int(d2)
+            return (year, mon, day)
+        parts = w.split("-")
+        if len(parts) == 3 and all(p.isdigit() for p in parts):
+            return (int(parts[0]), int(parts[1]), int(parts[2]))
+    return None
+
+
+def timeline_ctx(results, k=8):
+    """时间线数据层（EXECUTION 469）：top-40 消息按解析日期排序取 ≤k 条，
+    其余按引擎序补足——TR 生成看到真实时间顺序（30 题 A/B +10.0pp）。"""
+    evs = []
+    for h in results:
+        c = str(h.get("content") or "")
+        dk = _date_key(c)
+        if dk:
+            evs.append((dk, h))
+    evs.sort(key=lambda x: x[0])
+    out = []
+    seen = set()
+    for dk, h in evs[:k]:
+        out.append(h)
+        seen.add(str(h.get("content") or ""))
+    for h in results:
+        if len(out) >= k:
+            break
+        c = str(h.get("content") or "")
+        if c not in seen:
+            out.append(h)
+            seen.add(c)
+    return out[:k]
 
 
 def main() -> int:
@@ -230,8 +289,12 @@ def main() -> int:
             # AnswerAcc（EXECUTION 460: 策略路由；base 保持锁定口径；
             # EXECUTION 462/463: 上下文深度按类目 cap）
             if args.answer:
+                _ctx_results = results
                 _cap = _rcfg.get("cap", 5)
-                sys_p, prompt = build_qa_prompt(qtype, question, results, args.strategy, cap=_cap)
+                if args.strategy == "routed" and _rcfg.get("mode") == "timeline":
+                    _ctx_results = timeline_ctx(results)
+                    _cap = len(_ctx_results)
+                sys_p, prompt = build_qa_prompt(qtype, question, _ctx_results, args.strategy, cap=_cap)
                 ans = ""
                 try:
                     ans = llm(sys_p, prompt)

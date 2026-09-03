@@ -122,3 +122,5 @@ QA Acc:    81.6%
 | 深度上下文外推 v3 全量复测（EXECUTION 463：SS-P/KU 也走 cap14+top20；$0.75，1195s） | **0.626 < v2 0.642（-1.6pp）→ 回滚**：KU +1.3pp 稳健、SS-P -6.7pp/MS -3.0pp/TR -2.2pp 为全量噪声翻转——子集(+10/+6.7pp)不泛化，cap14 仅保留于 multi-session（v2 锁定口径） | lme_oracle_500_routed_v3_20260902.json（存档）；官方锁定 = **v2 0.642** |
 | 覆盖度组装 v4 全量复测（EXECUTION 467：MS 查询词覆盖贪心 top-30→8；$0.51，1265s） | **0.618 < v2 0.642（-2.4pp）→ 回滚**：30 题抽样 +10.0pp 未泛化（MS -9.8pp）——第三次子集-全量背离，纪律升级：MS 类抽样不可靠，采纳前必须全量或 ≥60 题分层 | lme_oracle_500_routed_v4_20260903.json（存档）；官方锁定 = **v2 0.642** |
 | content-ev 内容级诊断（EXECUTION 467，全量 500，无 LLM，276s；benchmark/content_ev_metric.py） | loc@5：SS-A .971/SS-U .789/KU .867/TR .462/MS .29/SS-P .00；best_cov：SS-P .36（不可单条定位，需合成）、MS .52（需聚合）——定位器价值集中于 TR/KU | content_ev_metric.py + EXECUTION 467 |
+
+| 时间线数据层 v5 全量复测（EXECUTION 469：TR 检索 top-40+日期排序时间线上下文；$0.68，1173s） | **AnswerAcc 0.642 → 0.644（+0.2pp，噪声带 ±0.4 内但 TR 机制方向首次全量为正）**：**TR .414→.436(+2.3pp)**、SS-P .467→.533(+6.7pp)；KU/MS/SS-U -1~-1.5pp（各 1-2 题翻转）；锁定 v5 | lme_oracle_500_routed_v5_20260903.json |
