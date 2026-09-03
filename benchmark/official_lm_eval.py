@@ -137,6 +137,16 @@ def build_qa_prompt(qtype, question, results, strategy, cap=5):
     return sys_p, user_p
 
 
+# EXECUTION 463: 按类目路由的检索/上下文配置（top_k=检索条数，cap=上下文条数上限）
+# 463 全量复测结论：SS-P/KU 的 cap14 外推在子集(+10pp/+6.7pp)不稳健——
+# 全量 v3=0.626 < v2 0.642（SS-P -6.7pp/MS -3.0pp 噪声翻转），已回滚；
+# 仅保留 multi-session 20/14（EXECUTION 462 全量锁证 +22.6pp）。
+# 官方锁定口径 = v2（0.642）。
+_ROUTE = {
+    "multi-session": {"top_k": 20, "cap": 14},
+}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=500)
@@ -204,9 +214,10 @@ def main() -> int:
                         ad.store_memory(**rec)
                     except Exception:
                         pass
-            # EXECUTION 462: routed 的 MS 检索扩到 top-20（答案消息常排 6-14 位，
-            # 子集 A/B：cap14 +20pp；Recall 口径不受影响——R@k 仍按 args.top_k 截断统计）
-            _search_k = max(args.top_k, 20) if (args.strategy == "routed" and qtype == "multi-session") else args.top_k
+            # EXECUTION 462/463: routed 按类目检索配置（MS 20 起）；Recall 口径不变——
+            # R@k 统计仍按 args.top_k 截断
+            _rcfg = _ROUTE.get(qtype, {}) if args.strategy == "routed" else {}
+            _search_k = max(args.top_k, _rcfg.get("top_k", args.top_k))
             results = ad.search_memories(query=question, top_k=_search_k)
             hit_sessions = {r.get("session_id") for r in results}
             for k in (1, 3, 5, 10):
@@ -216,9 +227,9 @@ def main() -> int:
                     if k in (1, 5, 10):
                         st["r%d" % k] += 1
             # AnswerAcc（EXECUTION 460: 策略路由；base 保持锁定口径；
-            # EXECUTION 462: routed-MS 上下文深度 cap=14——子集 A/B +20pp 证据）
+            # EXECUTION 462/463: 上下文深度按类目 cap）
             if args.answer:
-                _cap = 14 if (args.strategy == "routed" and qtype == "multi-session") else 5
+                _cap = _rcfg.get("cap", 5)
                 sys_p, prompt = build_qa_prompt(qtype, question, results, args.strategy, cap=_cap)
                 ans = ""
                 try:

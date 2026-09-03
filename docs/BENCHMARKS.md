@@ -119,3 +119,4 @@ QA Acc:    81.6%
 
 | MS 深度上下文 v2 全量 500 复测（EXECUTION 462：routed-MS 检索 top-20 + 上下文 14 条；其余口径同 460；$0.62，1144s） | **AnswerAcc 0.578 → 0.642 (+6.4pp)**：**MS .391→.617(+22.6pp)**、KU .808→.821、SS-P .433→.467、TR .406→.414、SS-U 不变；SS-A .679→.661（-1 题，judge 噪声）——真因=答案消息常排 6-14 位（cap14 子集 +20pp 全量复证） | .trinity/bench-official/lme_oracle_500_routed_v2_20260902.json |
 | MS 结构实验（EXECUTION 462，均已证伪留档） | 会话聚合 top4×2：-6.7pp；turn 级 ingest：-6.7pp（30 题同题）；cap10：±0 | ms_ab.log / ms_turn_ab.log / ms_depth_ab.log |
+| 深度上下文外推 v3 全量复测（EXECUTION 463：SS-P/KU 也走 cap14+top20；$0.75，1195s） | **0.626 < v2 0.642（-1.6pp）→ 回滚**：KU +1.3pp 稳健、SS-P -6.7pp/MS -3.0pp/TR -2.2pp 为全量噪声翻转——子集(+10/+6.7pp)不泛化，cap14 仅保留于 multi-session（v2 锁定口径） | lme_oracle_500_routed_v3_20260902.json（存档）；官方锁定 = **v2 0.642** |

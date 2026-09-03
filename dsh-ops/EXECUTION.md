@@ -333,3 +333,22 @@
 - 认知维度自评更新：95 → **96**（ARCHITECTURE 注记，MS 瓶颈突破）；
 - 临时实验目录清理；产物 .trinity/bench-official/lme_oracle_500_routed_v2_20260902.json；
 - 提交推送 D 同步。
+
+## 463. 深度上下文外推实验（2026-09-02 深夜）：子集赢、全量输 → 回滚锁定 v2
+
+### 463.1 子集扫描（30 题同题，cap5 vs cap14，共享 ingest，8.2 分钟）
+- single-session-assistant: .700 vs .667（-3.3pp）→ 不采纳
+- single-session-preference: .400 vs **.500（+10pp）** → 拟采纳
+- knowledge-update: .867 vs **.933（+6.7pp）** → 拟采纳
+- temporal-reasoning: .800 vs .767（-3.3pp）→ 不采纳
+
+### 463.2 全量 v3 复测（$0.75，1195s）——证伪
+- **AnswerAcc 0.626 < v2 0.642（-1.6pp）**：KU +1.3pp（稳健）、SS-P **-6.7pp**、MS -3.0pp、TR -2.2pp、SS-A/SS-U ±0
+- 结论：SS-P/KU 的 cap14 在 30 题子集（3 题级增益）不泛化——全量小类目翻转被噪声主导；
+  cap14+top20 只对 multi-session 有全量级证据（462，+22.6pp）。
+
+### 463.3 处置
+- _ROUTE 回滚为仅 multi-session 20/14（映射驱动重构保留，官方口径 = **v2 0.642**）；
+- BENCHMARKS 补 v3 存档行；临时目录清理；EXECUTION 记录；提交推送 D 同步。
+- 教训：小类目（30-56 题）子集 Δ 需按"翻转题数"估计噪声带（±2-3 题 ≈ ±5-10pp），
+  采纳阈值应提高到 >10pp 或直接全量验证。
