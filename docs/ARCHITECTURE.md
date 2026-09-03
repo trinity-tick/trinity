@@ -162,3 +162,6 @@ Amaya/Active Perception/Interoceptive/Mental Workspace/Blueprint/Active Inferenc
 | 社会 | 95% | **95%** | 0 | 第二 agent ops-bot 4 记忆自治 + 记忆市场真实成交 + ToM 8/8；仍是单机早期自治 → 持平不虚涨 |
 
 - 综合判断：机制侧增量已被"情境 6→9/语义视觉/第二 agent"吸收到对应维度；**最大短板仍为生成/认知（MS 0.391）与意识深水区（主观体验/深度行动）**。
+
+
+> EXECUTION 462 更新：认知 95 → **96**（MS 生成瓶颈突破：0.391 → **0.617**，深度上下文 cap14 全量锁证；SS-A −1.8pp 为 1 题 judge 噪声）；总 AnswerAcc 0.560 → 0.578 → **0.642**。

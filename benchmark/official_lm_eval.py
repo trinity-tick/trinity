@@ -89,11 +89,11 @@ def _date_clues(results):
     return "; ".join(seen[:40]) or "(none)"
 
 
-def build_qa_prompt(qtype, question, results, strategy):
+def build_qa_prompt(qtype, question, results, strategy, cap=5):
     """按题型路由生成提示（EXECUTION 460；策略经 458.1b A/B 验证：
     TR 用日期线索+时序（+13.3pp），MS/SS-P 用跨会话整合+会话标注（MS +6.7pp / SS-P +20pp），
-    其余题型保持 base 口径不变）。"""
-    hits = results[:5]
+    其余题型保持 base 口径不变）。cap：上下文条数上限（默认 5 = 锁定口径）。"""
+    hits = results[:cap]
     if strategy == "base":
         ctx = "\n\n".join("[%d] %s" % (i + 1, str(h.get("content", ""))[:600])
                             for i, h in enumerate(hits))
@@ -204,7 +204,10 @@ def main() -> int:
                         ad.store_memory(**rec)
                     except Exception:
                         pass
-            results = ad.search_memories(query=question, top_k=args.top_k)
+            # EXECUTION 462: routed 的 MS 检索扩到 top-20（答案消息常排 6-14 位，
+            # 子集 A/B：cap14 +20pp；Recall 口径不受影响——R@k 仍按 args.top_k 截断统计）
+            _search_k = max(args.top_k, 20) if (args.strategy == "routed" and qtype == "multi-session") else args.top_k
+            results = ad.search_memories(query=question, top_k=_search_k)
             hit_sessions = {r.get("session_id") for r in results}
             for k in (1, 3, 5, 10):
                 top = results[:k]
@@ -212,9 +215,11 @@ def main() -> int:
                     r_total[k] += 1
                     if k in (1, 5, 10):
                         st["r%d" % k] += 1
-            # AnswerAcc（EXECUTION 460: 策略路由；base 保持锁定口径）
+            # AnswerAcc（EXECUTION 460: 策略路由；base 保持锁定口径；
+            # EXECUTION 462: routed-MS 上下文深度 cap=14——子集 A/B +20pp 证据）
             if args.answer:
-                sys_p, prompt = build_qa_prompt(qtype, question, results, args.strategy)
+                _cap = 14 if (args.strategy == "routed" and qtype == "multi-session") else 5
+                sys_p, prompt = build_qa_prompt(qtype, question, results, args.strategy, cap=_cap)
                 ans = ""
                 try:
                     ans = llm(sys_p, prompt)

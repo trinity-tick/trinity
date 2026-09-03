@@ -116,3 +116,6 @@ QA Acc:    81.6%
 | runner 隔离修复 | longmemeval_official_runner.py 强制 sqlite 临时库 + WAL/sync=OFF（此前误连生产 PG：慢 10x + lme 类目污染 21,773 条 archived） | benchmark/longmemeval_official_runner.py |
 | 生成侧弱项策略 A/B（每类 30 题同题对照，LLM judge，~19min） | TR: base .667→**tr .800(+13.3pp)**/ms .767；MS: base .200→ms/tr .267(+6.7pp)；SS-P: base .267→**ms .467(+20pp)**；KU: base .800→**ms .867(+6.7pp)**（ssp 两段式负收益 -6.7~-23pp，已证伪弃用） | .trinity/bench-official/qa_strategy_*.json + benchmark/answer_eval_strategies.py |
 | 生成策略固化全量 500 复测（EXECUTION 460：routed 提示 TR 日期线索/MS+KU newer-wins/SS-P 偏好口吻；同数据集同 judge，$0.46，1349s） | **AnswerAcc 0.560 → 0.578 (+1.8pp)**：KU .731→**.808(+7.7pp)**、SS-P .367→**.433(+6.7pp)**、TR .399→.406(+0.8pp)、MS .391→.391(±0)、SS-A/SS-U 不变——无回退；子集 Δ 高于全量（小样本乐观偏差已如实记录） | .trinity/bench-official/lme_oracle_500_routed_20260902.json |
+
+| MS 深度上下文 v2 全量 500 复测（EXECUTION 462：routed-MS 检索 top-20 + 上下文 14 条；其余口径同 460；$0.62，1144s） | **AnswerAcc 0.578 → 0.642 (+6.4pp)**：**MS .391→.617(+22.6pp)**、KU .808→.821、SS-P .433→.467、TR .406→.414、SS-U 不变；SS-A .679→.661（-1 题，judge 噪声）——真因=答案消息常排 6-14 位（cap14 子集 +20pp 全量复证） | .trinity/bench-official/lme_oracle_500_routed_v2_20260902.json |
+| MS 结构实验（EXECUTION 462，均已证伪留档） | 会话聚合 top4×2：-6.7pp；turn 级 ingest：-6.7pp（30 题同题）；cap10：±0 | ms_ab.log / ms_turn_ab.log / ms_depth_ab.log |
