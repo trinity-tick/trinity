@@ -1,0 +1,13 @@
+{
+ "_comment": "ruff 棘轮基线（2026-09-29 外部审计修复）。错误数只许减不许增；修一处就把数字下调。判据见 scripts/lint_ratchet.py。",
+ "_config": "使用 pyproject.toml 的 [tool.ruff] 现配置（含 ignore 清单）",
+ "_why_ratchet": "当前配置全仓 130 个错误 —— 可立即强制；而解除 ignore 里的 F401/F811/F821/F841 会产生 2546 个（trinity/ 包内 1853 个），属需要先烧存量的独立决策。",
+ "_generated_by": "python scripts/lint_ratchet.py --write-baseline",
+ "_t74_note": "2026-10-06（t74/I14）**手动收紧**：_total 112 → 109、by_rule.E741 93 → 90（= 当前实测值）。理由：headroom=2 意味着“再新增 1-2 条违规仍是绿的” ⇒ 收到实测值后“再新增一条即红”成为事实。口径：CPython 3.14.5 + ruff 0.15.22，`python -m ruff check . --output-format json`（cwd=仓库根，**默认尊重 .gitignore**；若加 --no-respect-gitignore 口径不同，不得与 109 混用）。同轮真修：5 处 lambda 赋值（E731 抑制）改 def、1 处 E741 改名 ⇒ 未新增任何抑制、未改 pyproject.toml。",
+ "_total": 109,
+ "by_rule": {
+  "E703": 5,
+  "E731": 14,
+  "E741": 90
+ }
+}

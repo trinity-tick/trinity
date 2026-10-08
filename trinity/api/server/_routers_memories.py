@@ -1,0 +1,590 @@
+#!/usr/bin/env python3
+"""
+Trinity REST API Server — memory engine routes (/memories*, /personas/*, /graph/*).
+"""
+
+import os
+import logging
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Body, HTTPException, Query, Request
+
+from ._deps import (
+    _live_aggregator as get_aggregator,
+    _live_memory as get_memory,
+)
+from ._observability import record_retrieval
+try:
+    from trinity._swallow import swallow  # L1 静默失败治理（2026-09-13）
+except Exception:
+    def swallow(site: str, exc: Any = None, *, detail: str = "") -> None:
+        # 2026-09-13（659.40）：本块可能位于模块级 sys.path 操纵**之前**，
+        # 此时 from trinity._swallow import 会失败 → 埋点静默退化为空操作。
+        # 改为**首次调用时惰性重导入**：异常真正发生时 sys.path 早已就绪。
+        try:
+            from trinity._swallow import swallow as _real
+            globals()["swallow"] = _real
+            return _real(site, exc, detail=detail)
+        except Exception:
+            return None
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+
+@router.post("/memories")
+async def store_memory(
+    content: str = Body(..., description="Memory content text"),
+    persona_id: str = Body("default"),
+    session_id: Optional[str] = Body(None),
+    role: str = Body("user", description="Role: user/assistant/system"),
+    importance: float = Body(0.5, ge=0, le=1),
+    tags: Optional[List[str]] = Body(None),
+    category: str = Body("general"),
+    tenant_id: str = Body("default"),
+    agent_id: str = Body("default"),
+    ttl_seconds: Optional[int] = Body(None),
+    modality: str = Body("text"),
+    metadata: Optional[dict] = Body(None),
+    source_uri: Optional[str] = Body(None),
+):
+    """Store a memory entry with optional modality / metadata / source_uri."""
+    result = get_memory().ingest(
+        content=content, persona_id=persona_id, session_id=session_id,
+        role=role, importance=importance, tags=tags or [],
+        category=category, tenant_id=tenant_id, agent_id=agent_id,
+        ttl_seconds=ttl_seconds,
+        modality=modality, metadata=metadata, source_uri=source_uri,
+    )
+    # ── Mano-P 借鉴（2026-09-09）：写入后反向问句生成 + 写后自检 ──
+    # 开关均默认 off（TRINITY_QUERY_SYNTHESIS / TRINITY_WRITE_VERIFY）；
+    # 关闭时行为与改动前一致，异常一律吞掉，绝不影响写入结果。
+    try:
+        from trinity.memory.query_synthesis import maybe_synthesize_after_store
+
+        maybe_synthesize_after_store(
+            {"content": content, "agent_id": agent_id}, result)
+    except Exception:  # noqa: BLE001
+        swallow(__name__, None)
+    try:
+        from trinity.memory.write_verify import is_enabled as _wv_enabled
+        from trinity.memory.write_verify import maybe_verify_after_store
+
+        if _wv_enabled():
+            _mem = get_memory()
+
+            def _verify_search(q: str, k: int):
+                # t32（R-11）：**写入路径的冲突检测/自检检索 ⇒ 必须不记账**。
+                # 依据：SQLite 适配器 docstring 原文（`adapters/sqlite/_search.py:74-76`）——
+                #   「内部维护操作（如写路径的冲突检测检索）应传 `touch=False`，避免把
+                #    "写入时自碰"误记为真实访问（污染 access_count 语义）」。
+                # 这里走的是 `search_hybrid`（出口层统一记账）⇒ 对应的开关是 `account=False`。
+                # 危害方向是**不可逆**的那一侧：写入时记账会让**刚写入的行看起来被读过**，
+                # 而"被读过"一旦记账就回不到冷池口径（t17 的不可逆性论点）。
+                return _mem.search_hybrid(query=q, top_k=k, strategy="rrf", account=False)
+
+            _vq = metadata.get("verify_query") if isinstance(metadata, dict) else None
+            maybe_verify_after_store(
+                {"content": content, "verify_query": _vq},
+                result, searcher=_verify_search)
+    except Exception:  # noqa: BLE001
+        swallow(__name__, None)
+    return result
+
+
+@router.post("/memories/session", tags=["Memories"], summary="整段会话聚合写入为一条记忆")
+async def store_session_memory(
+    session_id: str = Body(..., description="会话 ID"),
+    turns: List[dict] = Body(..., description="对话轮次列表 [{speaker, text}, ...]"),
+    source_agent: str = Body("session"),
+    category: str = Body("episodic"),
+    importance: float = Body(0.7, ge=0, le=1),
+    tags: Optional[List[str]] = Body(None),
+    tenant_id: str = Body("default"),
+    agent_id: str = Body("default"),
+    metadata: Optional[dict] = Body(None),
+):
+    """将整段多轮对话聚合为**一条**记忆写入（引擎 + 共享聚合池双写）。
+
+    LoCoMo 实测结论（2026-08-14）：逐 turn 写入使记忆碎片化，
+    Recall@5 仅 0.14；按会话聚合为一条记忆后 Recall@5 提升到 0.88。
+    本端点把该最佳实践产品化：一次调用沉淀一个完整会话/事件。
+    """
+    if not turns:
+        raise HTTPException(status_code=400, detail="turns must not be empty")
+    if not session_id:
+        raise HTTPException(status_code=400, detail="session_id is required")
+
+    text = "\n".join(
+        f"[{t.get('speaker', 'user')}] {t.get('text', '')}" for t in turns
+    )
+    agg_metadata = {
+        "session_aggregate": True,
+        "num_turns": len(turns),
+        "source_agent": source_agent,
+        **(metadata or {}),
+    }
+
+    # 1) 引擎写入
+    result = get_memory().ingest(
+        content=text, persona_id="default", session_id=session_id,
+        role="system", importance=importance, tags=tags or [],
+        category=category, tenant_id=tenant_id, agent_id=agent_id,
+        metadata=agg_metadata,
+    )
+
+    # 2) 共享聚合池双写（跨 agent 可见）
+    try:
+        agg = get_aggregator()
+        agg.ingest(text, source_agent=source_agent, metadata=agg_metadata)
+    except Exception as exc:
+        logger.warning("session memory dual-write to aggregator failed (non-fatal): %s", exc)
+
+    return {
+        "session_id": session_id,
+        "num_turns": len(turns),
+        "aggregated": True,
+        "memory": result,
+    }
+
+
+@router.get("/memories")
+async def search_memories(
+    request: Request,
+    query: str = Query(..., description="Search query"),
+    top_k: int = Query(10),
+    persona_id: Optional[str] = Query(None),
+    tenant_id: Optional[str] = Query(None),
+    agent_id: Optional[str] = Query(None),
+    app_id: Optional[str] = Query(None),
+    session_id: Optional[str] = Query(None),
+    category: Optional[str] = Query(None),
+    modality: Optional[str] = Query(None, description="Filter by modality"),
+    include_docs: bool = Query(False, description="Include doc:* knowledge content (default False — 记忆/知识分层, 2026-08-24 R6 P0-①)"),
+    view: Optional[str] = Query(None, description="命名记忆视图（views.yaml，Budibase 借鉴 2026-08-26）"),
+    visibility_rule: Optional[str] = Query(None, description="行级可见性规则，如 category!='lme' AND importance>=0.5"),
+    reason_deep: bool = Query(False, description="reason 深度模式（mode=reason 时生效）：难查询召回更强，holdout R@10 0.547→0.663"),
+):
+    """Search memories with composite scope filtering (agent_id / app_id / session_id / category AND).
+
+    2026-08-24（R6 P0-①）：默认排除 doc:* 知识库内容（交互记忆检索面）；
+    include_docs=true 时包含（知识检索面）。
+    2026-08-26（Budibase 借鉴）：view（命名视图）与 visibility_rule（行级可见性）；
+    未显式传 visibility_rule 时自动应用 RBAC 角色规则（TRINITY_VISIBILITY_<ROLE> env）。
+    """
+    mem = get_memory()
+    if not visibility_rule:
+        visibility_rule = getattr(request.state, "rbac_visibility", None)
+    # 2026-09-10（体检 659 P1-4）：真实检索流量埋点（GET /memories 是被实际
+    # 大规模调用的检索路径，此前在 /metrics 里完全不可见）。
+    try:
+        record_retrieval(
+            "api:/memories",
+            query=query,
+            extra={"top_k": top_k, "include_docs": include_docs, "view": view},
+        )
+    except Exception:  # noqa: BLE001
+        swallow(__name__, None)
+    result = mem.search(query=query, top_k=top_k, persona_id=persona_id,
+                        tenant_id=tenant_id, agent_id=agent_id,
+                        app_id=app_id, session_id=session_id,
+                        category=category, modality=modality,
+                        include_docs=include_docs,
+                        view=view, visibility_rule=visibility_rule,
+                        reason_deep=reason_deep)
+    results = result.get("results", [])
+    # EXECUTION 511+564: context_router 后处理（C2p 前置，默认 off 防静默变更；
+    # env=on 或 ~/.trinity/state/context_router.on 状态文件存在即启用——免重启切换）
+    cr_enabled = os.environ.get("TRINITY_CONTEXT_ROUTER") == "on"
+    if not cr_enabled and results:
+        try:
+            from trinity.brain.context_router import state_file_enabled
+            cr_enabled = state_file_enabled()
+        except Exception:
+            cr_enabled = False
+    if cr_enabled and results:
+        try:
+            from trinity.brain.context_router import route_context
+            routed = 0
+            for h in results:
+                c = h.get("content") or ""
+                if len(c) > 2000 and not c.startswith("enc:v1:"):
+                    nc, meta = route_context(c, query, budget=1400)
+                    h["content"] = nc
+                    h["context_router"] = meta
+                    routed += 1
+        except Exception:
+            routed = -1
+    return {
+        "query": query,
+        "total": len(results),
+        "modality": modality,
+        "results": results,
+        "pushed_memories": result.get("pushed_memories", []),
+    }
+
+
+@router.post("/memories/age")
+async def age_memories():
+    """手动触发老化扫描，清理TTL 过期的记忆（软删除）。"""
+    mem = get_memory()
+    return mem.age()
+
+
+@router.get("/memories/stats")
+async def memory_stats():
+    """返回记忆统计（总数、过期数、Agent 分布、平均访问频率）。"""
+    mem = get_memory()
+    return mem.stats()
+
+
+@router.get("/memories/modalities")
+async def modality_stats():
+    """返回各模态记忆数量、存储占比统计。"""
+    mem = get_memory()
+    return mem.modality_stats()
+
+
+@router.post("/memories/{memory_id}/touch")
+async def touch_memory(memory_id: str):
+    """更新指定记忆的last_accessed_at 和access_count。"""
+    mem = get_memory()
+    ok = mem.touch(memory_id)
+    return {"memory_id": memory_id, "touched": ok}
+
+
+@router.get("/memories/{memory_id}/conflicts")
+async def get_memory_conflicts(memory_id: str):
+    """查看指定记忆的冲突链（同一 conflict_group_id 的所有版本）。"""
+    mem = get_memory()
+    return mem.get_conflicts(memory_id)
+
+
+@router.post("/memories/conflicts/resolve")
+async def resolve_conflict(request: dict):
+    """解决冲突：保留选定版本，软删除同一冲突组的其他版本。
+    Body:
+        conflict_group_id: 冲突组ID
+        keep_memory_id: 要保留的记忆 ID
+    """
+    mem = get_memory()
+    return mem.resolve_conflict(
+        conflict_group_id=request["conflict_group_id"],
+        keep_memory_id=request["keep_memory_id"],
+    )
+
+
+@router.get("/memories/dedup/stats")
+async def dedup_stats():
+    """返回去重统计信息（冲突组数、已解决数等）。"""
+    mem = get_memory()
+    return mem.dedup_stats()
+
+
+@router.post("/memories/search")
+async def ranked_search(request: dict):
+    """分层检索：支持三层排序管线的增强版搜索。
+    Body:
+        query: 搜索关键词（必填）。        top_k: 返回结果数（默认 10）。        persona_id: 可选，按角色筛选。        tenant_id: 可选，按租户筛选。        agent_id: 可选，按Agent 筛选。        agent_weight: 可选，覆盖调用文Agent 权重。        use_vector: 是否启用向量搜索（默认True）。        use_ranking: 是否启用三层排序（默认True）。
+    Returns:
+        results 中每条含 final_score 与layer_scores（semantic/time_decay/agent_weight）。    """
+    mem = get_memory()
+    query = request["query"]
+    top_k = request.get("top_k", 10)
+    use_vector = request.get("use_vector", True)
+    use_ranking = request.get("use_ranking", True)
+    return mem.search(
+        query=query,
+        top_k=top_k,
+        persona_id=request.get("persona_id"),
+        tenant_id=request.get("tenant_id"),
+        agent_id=request.get("agent_id"),
+        use_vector=use_vector,
+        agent_weight=request.get("agent_weight"),
+        ranked=use_ranking,
+    )
+
+
+@router.post("/memories/{memory_id}/links")
+async def create_memory_link(memory_id: str, request: dict):
+    """手动创建记忆关联链接。
+    Body:
+        target_id: 目标记忆 ID（必填）。        link_type: 链接类型，支持co_occurrence/semantic/causal/same_task（默认semantic）。        strength: 关联强度 0-1（默认0.5）。    """
+    mem = get_memory()
+    target_id = request.get("target_id", "")
+    link_type = request.get("link_type", "semantic")
+    strength = float(request.get("strength", 0.5))
+    if not target_id:
+        raise HTTPException(status_code=400, detail="target_id is required")
+    if hasattr(mem, "_adapter") and mem._adapter and hasattr(mem._adapter, "create_memory_link"):
+        return mem._adapter.create_memory_link(memory_id, target_id, link_type, strength)
+    raise HTTPException(status_code=501, detail="Not available without adapter")
+
+
+@router.get("/memories/{memory_id}/links")
+async def get_memory_links(memory_id: str, min_strength: float = 0.0):
+    """查看某记忆的完整关联网络（含双向链接）。"""
+    mem = get_memory()
+    if hasattr(mem, "_adapter") and mem._adapter and hasattr(mem._adapter, "get_all_links"):
+        return mem._adapter.get_all_links(memory_id)
+    raise HTTPException(status_code=501, detail="Not available without adapter")
+
+
+@router.delete("/memories/links/{link_id}")
+async def delete_memory_link(link_id: str):
+    """删除指定链接。"""
+    mem = get_memory()
+    if hasattr(mem, "_adapter") and mem._adapter and hasattr(mem._adapter, "delete_memory_link"):
+        ok = mem._adapter.delete_memory_link(link_id)
+        return {"link_id": link_id, "deleted": ok}
+    raise HTTPException(status_code=501, detail="Not available without adapter")
+
+
+@router.put("/memories/links/{link_id}/strength")
+async def adjust_link_strength(link_id: str, request: dict):
+    """调整链接强度。
+    Body:
+        action: 'strengthen' 或'weaken'（必填）。        delta: 调整幅度（默认0.1）。    """
+    mem = get_memory()
+    action = request.get("action", "strengthen")
+    delta = float(request.get("delta", 0.1))
+    if hasattr(mem, "_adapter") and mem._adapter:
+        if action == "strengthen" and hasattr(mem._adapter, "strengthen_link"):
+            return mem._adapter.strengthen_link(link_id, delta)
+        elif action == "weaken" and hasattr(mem._adapter, "weaken_link"):
+            return mem._adapter.weaken_link(link_id, delta)
+        else:
+            raise HTTPException(status_code=400, detail=f"Invalid action: {action}")
+    raise HTTPException(status_code=501, detail="Not available without adapter")
+
+
+@router.post("/graph/entities")
+async def upsert_entity(request: dict):
+    """创建或更新实体。
+    Body:
+        name: 实体名称（必填）。        type: 类型 (person/project/file/agent/task/concept/tag)。        properties: 附加属性JSON。    """
+    mem = get_memory()
+    name = request.get("name", "")
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+    etype = request.get("type", "concept")
+    props = request.get("properties", {})
+    if hasattr(mem, "_adapter") and mem._adapter and hasattr(mem._adapter, "upsert_entity"):
+        return mem._adapter.upsert_entity(name, etype, props)
+    raise HTTPException(status_code=501, detail="Not available without adapter")
+
+
+@router.get("/graph/entities/search")
+async def search_entities(
+    name: Optional[str] = Query(None),
+    type: Optional[str] = Query(None),
+    limit: int = Query(20),
+):
+    """搜索实体。"""
+    mem = get_memory()
+    if hasattr(mem, "_adapter") and mem._adapter and hasattr(mem._adapter, "search_entities"):
+        return mem._adapter.search_entities(name=name, etype=type, limit=limit)
+    raise HTTPException(status_code=501, detail="Not available without adapter")
+
+
+@router.get("/graph/entities/{entity_id}")
+async def get_entity(entity_id: str):
+    """查询实体详情（含关联关系）。"""
+    mem = get_memory()
+    if hasattr(mem, "_adapter") and mem._adapter and hasattr(mem._adapter, "get_entity"):
+        result = mem._adapter.get_entity(entity_id)
+        if result is None:
+            raise HTTPException(status_code=404, detail="Entity not found")
+        return result
+    raise HTTPException(status_code=501, detail="Not available without adapter")
+
+
+@router.post("/graph/relations")
+async def create_relation(request: dict):
+    """创建关系。
+    Body:
+        subject_id: 主体实体 ID（必填）。        predicate: 谓词（必填）。        object_id: 客体实体 ID（必填）。        properties: 附加属性JSON。
+        valid_from: 边生效时间（ISO8601，缺省=now；edge bi-temporal）。
+        valid_to: 边失效时间（ISO8601，缺省 None=仍有效）。
+    """
+    mem = get_memory()
+    sid = request.get("subject_id", "")
+    pred = request.get("predicate", "")
+    oid = request.get("object_id", "")
+    if not sid or not pred or not oid:
+        raise HTTPException(status_code=400, detail="subject_id, predicate, object_id are required")
+    props = request.get("properties", {})
+    valid_from = request.get("valid_from")
+    valid_to = request.get("valid_to")
+    if hasattr(mem, "_adapter") and mem._adapter and hasattr(mem._adapter, "create_relation"):
+        return mem._adapter.create_relation(
+            sid, pred, oid, props,
+            valid_from=valid_from, valid_to=valid_to,
+        )
+    raise HTTPException(status_code=501, detail="Not available without adapter")
+
+
+@router.get("/graph/relations")
+async def query_relations(
+    subject_id: Optional[str] = Query(None),
+    predicate: Optional[str] = Query(None),
+    object_id: Optional[str] = Query(None),
+    limit: int = Query(50),
+):
+    """查询关系。"""
+    mem = get_memory()
+    if hasattr(mem, "_adapter") and mem._adapter and hasattr(mem._adapter, "query_relations"):
+        return mem._adapter.query_relations(
+            subject_id=subject_id, predicate=predicate,
+            object_id=object_id, limit=limit,
+        )
+    raise HTTPException(status_code=501, detail="Not available without adapter")
+
+
+@router.get("/graph/relations/at")
+async def query_relations_at(
+    at_time: str = Query(..., description="ISO8601 时间点：返回该时点有效的边（edge bi-temporal）"),
+    subject_id: Optional[str] = Query(None),
+    predicate: Optional[str] = Query(None),
+    object_id: Optional[str] = Query(None),
+    limit: int = Query(50),
+):
+    """时点查询：返回指定时间点有效的边（valid_from <= at_time < valid_to）。
+
+    2026-08-24（P1-6，COMPARISON_VS_2026_SOTA_R7）：API 层补全 edge 级
+    bi-temporal 时点查询，对齐 Zep/Graphiti 时序知识图谱能力。
+    """
+    mem = get_memory()
+    if hasattr(mem, "_adapter") and mem._adapter and hasattr(mem._adapter, "query_relations_at"):
+        return mem._adapter.query_relations_at(
+            at_time=at_time,
+            subject_id=subject_id, predicate=predicate,
+            object_id=object_id, limit=limit,
+        )
+    raise HTTPException(status_code=501, detail="Not available without adapter")
+
+
+@router.get("/graph/traverse")
+async def traverse_graph(
+    start_id: str = Query(...),
+    max_hops: int = Query(3),
+):
+    """多跳遍历子图。"""
+    mem = get_memory()
+    if hasattr(mem, "_adapter") and mem._adapter and hasattr(mem._adapter, "traverse"):
+        return mem._adapter.traverse(start_id, max_hops=min(max_hops, 5))
+    raise HTTPException(status_code=501, detail="Not available without adapter")
+
+
+@router.get("/memories/{memory_id}")
+async def get_memory_by_id(memory_id: str):
+    """Get a single memory by ID."""
+    mem = get_memory()
+    result = None
+    try:
+        result = mem.get_memory(memory_id) if hasattr(mem, 'get_memory') else None
+    except Exception:
+        result = None
+    if result is None:
+        try:
+            result = mem._adapter.get_memory(memory_id)
+        except Exception as _e:
+            swallow(__name__, _e)
+    if result is None:
+        # 聚合池记忆（mem_vid_*/mem_wms_* 等）不在引擎库时给出明确 404 提示
+        raise HTTPException(status_code=404, detail="Memory not found (pool-only ids may not be fetchable here)")
+    # 2026-08-16 修复:embedding 是 bytes(2048维向量),JSON 无法序列化
+    # → base64 字符串化,避免 GET /memories/{id} 500 (utf-8 codec / not serializable)
+    if isinstance(result, dict) and isinstance(result.get("embedding"), (bytes, bytearray)):
+        import base64
+        result["embedding"] = base64.b64encode(bytes(result["embedding"])).decode("ascii")
+        result["embedding_encoding"] = "base64"
+    return result
+
+
+@router.delete("/memories/{memory_id}")
+async def delete_memory(memory_id: str, hard: bool = False, confirm: str = ""):
+    """Delete a memory. Default = soft-delete（可恢复，审计保留）。
+
+    2026-09-02（Fable 对照审计 P2-⑤⑦）：?hard=true&confirm=yes 走 GDPR
+    硬擦除通道——覆写销毁内容明文/密文（含版本链）+ status=gdpr_deleted，
+    行保留使 SHA-256 receipts 审计链并存；无 confirm=yes 直接 400 拒绝
+    （不可逆操作二次确认门禁）。
+    """
+    mem = get_memory()
+    if hard:
+        if confirm != "yes":
+            raise HTTPException(
+                status_code=400,
+                detail="hard purge requires confirm=yes (irreversible)",
+            )
+        result = {"purged": False, "memory_id": memory_id, "error": "unsupported"}
+        if hasattr(mem, 'purge_memory'):
+            result = mem.purge_memory(memory_id, confirm=True,
+                                      reason="api hard-delete",
+                                      agent_id="api")
+        try:
+            aggr = get_aggregator()
+            if hasattr(aggr, "_remove_from_pool"):
+                aggr._remove_from_pool(memory_id)
+        except Exception as _e:
+            swallow(__name__, _e)
+        try:
+            hr = getattr(mem, "_hybrid_retriever", None)
+            if hr is not None and getattr(hr, "_bm25", None) is not None:
+                hr._bm25.remove_document(memory_id)
+        except Exception as _e:
+            swallow(__name__, _e)
+        return result
+    deleted = False
+    if hasattr(mem, 'delete_memory'):
+        deleted = mem.delete_memory(memory_id)
+    # 修复(2026-08-14): 删除需三方同步——引擎软删 + 聚合池移除 + BM25 索引移除，
+    # 否则已删记忆仍会经聚合/BM25 通道被检索到（隐私泄漏）
+    try:
+        aggr = get_aggregator()
+        if hasattr(aggr, "_remove_from_pool"):
+            aggr._remove_from_pool(memory_id)
+    except Exception as _e:
+        swallow(__name__, _e)
+    try:
+        hr = getattr(mem, "_hybrid_retriever", None)
+        if hr is not None and getattr(hr, "_bm25", None) is not None:
+            hr._bm25.remove_document(memory_id)
+    except Exception as _e:
+        swallow(__name__, _e)
+    if deleted:
+        # RL 纠错即反馈（WS-A 任务 2）：显式删除 → negative（门默认 off；后台不拖慢）
+        try:
+            from trinity.correction_feedback import fire_background  # noqa: PLC0415
+            fire_background(memory_id, "delete", positive=False,
+                            source_query="api.delete",
+                            aggregator_factory=get_aggregator)
+        except Exception as _e:
+            swallow(__name__, _e)
+    return {"deleted": deleted, "memory_id": memory_id}
+
+
+@router.get("/memories/{memory_id}/versions")
+async def get_memory_versions(memory_id: str):
+    """Get version/audit chain."""
+    mem = get_memory()
+    if hasattr(mem, 'get_version_chain'):
+        return {"memory_id": memory_id, "versions": mem.get_version_chain(memory_id)}
+    return {"memory_id": memory_id, "versions": []}
+
+
+@router.get("/personas/{persona_id}/memories")
+async def get_persona_memories(
+    persona_id: str,
+    limit: int = Query(50, le=200),
+    agent_id: Optional[str] = Query(None),
+):
+    """Get persona memories with optional agent_id filter."""
+    mem = get_memory()
+    if hasattr(mem, 'get_persona_memories'):
+        return {"persona_id": persona_id, "agent_id": agent_id, "memories": mem.get_persona_memories(persona_id, agent_id=agent_id, limit=limit)}
+    raise HTTPException(status_code=501, detail="not available")
+
+

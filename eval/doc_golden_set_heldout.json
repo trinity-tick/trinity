@@ -1,0 +1,3853 @@
+{
+ "provenance": {
+  "built_by": "scripts/build_heldout_golden.py",
+  "built_at": "2026-10-05 20:31:48",
+  "persona": "trinity-docs",
+  "source": "memories_doc2query_holdout —— doc2query **留出**问题（建索引时用其余问题，测试用这一条 ⇒ 索引从未见过它）",
+  "why_task_shaped": "生成时明确要求避免复述正文专有名词 ⇒ 相对 doc_golden_set_auto（query 由正文第二长句派生、天然偏袒词法）**词法泄漏更少**；用于检验『零依赖 BM25 胜生产混合检索』是否只是题集构造的产物",
+  "corpus": "persona_id='trinity-docs'（与 doc_retrieval_eval 的语料同源）",
+  "metric": "文档级 R@k（target = metadata.source_file 基名）",
+  "holdout_rows_scanned": 550,
+  "unresolved_by_reason": {
+   "duplicate_query": 2
+  }
+ },
+ "items": [
+  {
+   "id": "hq000",
+   "type": "heldout-task",
+   "query": "同一个话题在多个数据通道同时出现说明什么？",
+   "target": "KNOWLEDGE_WEEKLY_2026-10-03.md",
+   "source_memory_id": "mem_38b93f89ccf941f1"
+  },
+  {
+   "id": "hq001",
+   "type": "heldout-task",
+   "query": "怎么评估系统执行动作的可靠性和成功率？",
+   "target": "KNOWLEDGE_WEEKLY_2026-10-03.md",
+   "source_memory_id": "mem_8c79f55752db4433"
+  },
+  {
+   "id": "hq002",
+   "type": "heldout-task",
+   "query": "怎样判断一个跨多个通道同时出现的主题是否值得关注？",
+   "target": "KNOWLEDGE_WEEKLY_2026-10-02.md",
+   "source_memory_id": "mem_79b2f8d2bc4e4c39"
+  },
+  {
+   "id": "hq003",
+   "type": "heldout-task",
+   "query": "有没有办法快速评估不同检索策略的前十条命中情况？",
+   "target": "EXTERNAL_VERIFICATION.md",
+   "source_memory_id": "mem_0a2eb70db0d84694"
+  },
+  {
+   "id": "hq004",
+   "type": "heldout-task",
+   "query": "想复现某次检索评测的结论，需要核对哪些来源和校验信息？",
+   "target": "EXTERNAL_VERIFICATION.md",
+   "source_memory_id": "mem_c719680f92dd4659"
+  },
+  {
+   "id": "hq005",
+   "type": "heldout-task",
+   "query": "有没有办法快速跑完一轮多方案检索基准测试？",
+   "target": "EXTERNAL_VERIFICATION.md",
+   "source_memory_id": "mem_83beeca8ad934f62"
+  },
+  {
+   "id": "hq006",
+   "type": "heldout-task",
+   "query": "纯检索评测不调用大模型时单次大概要花多久？",
+   "target": "EXTERNAL_VERIFICATION.md",
+   "source_memory_id": "mem_9c399e620f9b4900"
+  },
+  {
+   "id": "hq007",
+   "type": "heldout-task",
+   "query": "有没有办法快速评估不同召回策略的排序质量？",
+   "target": "EXTERNAL_VERIFICATION.md",
+   "source_memory_id": "mem_8432ab0f939548c5"
+  },
+  {
+   "id": "hq008",
+   "type": "heldout-task",
+   "query": "怎么复现一次只花一分钟的检索效果对比实验？",
+   "target": "EXTERNAL_VERIFICATION.md",
+   "source_memory_id": "mem_6d956e0a4b8e4c98"
+  },
+  {
+   "id": "hq009",
+   "type": "heldout-task",
+   "query": "如何比较两种检索配置在平均返回条数上的差异？",
+   "target": "EXTERNAL_VERIFICATION.md",
+   "source_memory_id": "mem_a27a24d355e648bd"
+  },
+  {
+   "id": "hq010",
+   "type": "heldout-task",
+   "query": "有没有不调用大模型、纯检索的对比实验方案？",
+   "target": "EXTERNAL_VERIFICATION.md",
+   "source_memory_id": "mem_6d70476927704678"
+  },
+  {
+   "id": "hq011",
+   "type": "heldout-task",
+   "query": "评测产物里没写检索模式时，怎么推断当时用的是哪种？",
+   "target": "EXTERNAL_VERIFICATION.md",
+   "source_memory_id": "mem_024c788011ef4bfc"
+  },
+  {
+   "id": "hq012",
+   "type": "heldout-task",
+   "query": "如何验证某次评测命令与历史记录是否完全相同？",
+   "target": "EXTERNAL_VERIFICATION.md",
+   "source_memory_id": "mem_83f1cd7218a14994"
+  },
+  {
+   "id": "hq013",
+   "type": "heldout-task",
+   "query": "怎么确认某次评测结果与之前是同一份产物、无需重复计费？",
+   "target": "EXTERNAL_VERIFICATION.md",
+   "source_memory_id": "mem_48924c3b1dc14bda"
+  },
+  {
+   "id": "hq014",
+   "type": "heldout-task",
+   "query": "外部人员如何验证评测产物没被改动过？",
+   "target": "EXTERNAL_VERIFICATION.md",
+   "source_memory_id": "mem_899e44f742f84fea"
+  },
+  {
+   "id": "hq015",
+   "type": "heldout-task",
+   "query": "评测产物被输出目录忽略后，怎么保证外部方能拿到并校验？",
+   "target": "EXTERNAL_VERIFICATION.md",
+   "source_memory_id": "mem_95ae5d84fef24e6d"
+  },
+  {
+   "id": "hq016",
+   "type": "heldout-task",
+   "query": "如何确认两份评测指标其实来自同一次运行？",
+   "target": "EXTERNAL_VERIFICATION.md",
+   "source_memory_id": "mem_088b61349175407f"
+  },
+  {
+   "id": "hq017",
+   "type": "heldout-task",
+   "query": "跑一次小规模评测大概要花多少时间和费用？",
+   "target": "EXTERNAL_VERIFICATION.md",
+   "source_memory_id": "mem_567444beb47d4d12"
+  },
+  {
+   "id": "hq018",
+   "type": "heldout-task",
+   "query": "怎样验证一次评测运行的结果文件是否完整且未被篡改？",
+   "target": "EXTERNAL_VERIFICATION.md",
+   "source_memory_id": "mem_2d52f3137ec1479d"
+  },
+  {
+   "id": "hq019",
+   "type": "heldout-task",
+   "query": "如何核对两次评测是否使用了同一份数据产物？",
+   "target": "EXTERNAL_VERIFICATION.md",
+   "source_memory_id": "mem_8a4914c27092480f"
+  },
+  {
+   "id": "hq020",
+   "type": "heldout-task",
+   "query": "我想给记忆写入加一个开关，开启后需要人工审批才能正式入库，怎么做？",
+   "target": "WRITE_CONFIRM_GATE.md",
+   "source_memory_id": "mem_17313bb2c5cc46b6"
+  },
+  {
+   "id": "hq021",
+   "type": "heldout-task",
+   "query": "怎么借鉴其他产品的长期记忆方案来优化写入流程？",
+   "target": "WRITE_CONFIRM_GATE.md",
+   "source_memory_id": "mem_df027ad3499a441f"
+  },
+  {
+   "id": "hq022",
+   "type": "heldout-task",
+   "query": "仓储管理系统升级方案的前期知识准备该怎么做？",
+   "target": "wms_solution.md",
+   "source_memory_id": "mem_20f9b5734af94398"
+  },
+  {
+   "id": "hq023",
+   "type": "heldout-task",
+   "query": "如何把多来源的知识和实战经验整合成一套重构方案？",
+   "target": "wms_refactor_plan.md",
+   "source_memory_id": "mem_eaf335f798234539"
+  },
+  {
+   "id": "hq024",
+   "type": "heldout-task",
+   "query": "怎么规划一个面向未来几年的仓储管理系统完美化目标？",
+   "target": "wms_perfect_blueprint.md",
+   "source_memory_id": "mem_efcae89ddbd04d74"
+  },
+  {
+   "id": "hq025",
+   "type": "heldout-task",
+   "query": "做物流系统调研时，怎样快速汇总不同角度的资料形成结论？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "mem_1814e1c7c6994cc0"
+  },
+  {
+   "id": "hq026",
+   "type": "heldout-task",
+   "query": "如何把公开研究案例映射到自己系统的薄弱环节并排出优先级？",
+   "target": "WEAKNESS_OPTIMIZATION_PLAN_20260913.md",
+   "source_memory_id": "mem_ca1a9df0ea264a45"
+  },
+  {
+   "id": "hq027",
+   "type": "heldout-task",
+   "query": "如何根据用户的操作轨迹生成动态更新的个人画像？",
+   "target": "USER_PROFILE_20260908.md",
+   "source_memory_id": "mem_5b0dd6ecedb543e7"
+  },
+  {
+   "id": "hq028",
+   "type": "heldout-task",
+   "query": "怎么判断一个技术方案离真正产品化还有多远？",
+   "target": "TRINITY_VALUE_UPDATE_20260817.md",
+   "source_memory_id": "mem_e8f324677f584611"
+  },
+  {
+   "id": "hq029",
+   "type": "heldout-task",
+   "query": "怎样把评测方法本身做成项目区别于竞品的亮点？",
+   "target": "TRINITY_VALUE_UPDATE_20260817.md",
+   "source_memory_id": "mem_ea8b7301938e4462"
+  },
+  {
+   "id": "hq030",
+   "type": "heldout-task",
+   "query": "引用评测分数时应该以什么文件作为唯一权威来源？",
+   "target": "TRINITY_VALUE_UPDATE_20260817.md",
+   "source_memory_id": "mem_dcb063569fd9406f"
+  },
+  {
+   "id": "hq031",
+   "type": "heldout-task",
+   "query": "小样本实验里出现异常高比例时，如何区分是真实效果还是采样噪声？",
+   "target": "TRINITY_VALUE_UPDATE_20260817.md",
+   "source_memory_id": "mem_f08d420fd935441d"
+  },
+  {
+   "id": "hq032",
+   "type": "heldout-task",
+   "query": "有哪些经过严格验证、非营销性质的确定性优化手段？",
+   "target": "TRINITY_VALUE_UPDATE_20260817.md",
+   "source_memory_id": "mem_c61a062da08a42b0"
+  },
+  {
+   "id": "hq033",
+   "type": "heldout-task",
+   "query": "如何判断某个评测数字是否可信、有没有原始产物支撑？",
+   "target": "TRINITY_VALUE_UPDATE_20260817.md",
+   "source_memory_id": "mem_22f4559354ca444d"
+  },
+  {
+   "id": "hq034",
+   "type": "heldout-task",
+   "query": "如何基于基线评估文档重估各项评分并给出新结论？",
+   "target": "TRINITY_VALUE_UPDATE_20260817.md",
+   "source_memory_id": "mem_3d3bf385dc8c47b6"
+  },
+  {
+   "id": "hq035",
+   "type": "heldout-task",
+   "query": "如何用分项打分和总分变化来复盘一段时间内的项目成长？",
+   "target": "TRINITY_VALUE_REVIEW.md",
+   "source_memory_id": "mem_654e74d3b6174072"
+  },
+  {
+   "id": "hq036",
+   "type": "heldout-task",
+   "query": "如何让真实运行的智能体真正用上我的记忆服务？",
+   "target": "TRINITY_VALUE_REVIEW.md",
+   "source_memory_id": "mem_555b6681496b47ac"
+  },
+  {
+   "id": "hq037",
+   "type": "heldout-task",
+   "query": "如何管理大规模数据集和配套基准结果以便后续复用？",
+   "target": "TRINITY_VALUE_REVIEW.md",
+   "source_memory_id": "mem_23f66a0e0b2f4073"
+  },
+  {
+   "id": "hq038",
+   "type": "heldout-task",
+   "query": "怎么把操作规则和行业对标资料沉淀成可复用的资产？",
+   "target": "TRINITY_VALUE_REVIEW.md",
+   "source_memory_id": "mem_345d1a440fe44144"
+  },
+  {
+   "id": "hq039",
+   "type": "heldout-task",
+   "query": "怎么防止用户输入的内容破坏数据库查询？",
+   "target": "TRINITY_VALUE_REVIEW.md",
+   "source_memory_id": "mem_33c4a9cc8e714f9d"
+  },
+  {
+   "id": "hq040",
+   "type": "heldout-task",
+   "query": "如何评估运维稳定性带来的间接业务价值？",
+   "target": "TRINITY_VALUE_REVIEW.md",
+   "source_memory_id": "mem_fce830946bbf4ad2"
+  },
+  {
+   "id": "hq041",
+   "type": "heldout-task",
+   "query": "如何验证一套检索方案在不同数据集上是否稳定可复现？",
+   "target": "TRINITY_VALUE_REVIEW.md",
+   "source_memory_id": "mem_85471c9f972b416d"
+  },
+  {
+   "id": "hq042",
+   "type": "heldout-task",
+   "query": "如何把行业领域知识和采集内容整合进统一记忆资产？",
+   "target": "TRINITY_VALUE_REVIEW.md",
+   "source_memory_id": "mem_46bd4f76cc9d4465"
+  },
+  {
+   "id": "hq043",
+   "type": "heldout-task",
+   "query": "怎么盘点一个项目里各类资产（脚本、基准、知识源等）的规模？",
+   "target": "TRINITY_VALUE_REVIEW.md",
+   "source_memory_id": "mem_439ef7926beb4556"
+  },
+  {
+   "id": "hq044",
+   "type": "heldout-task",
+   "query": "为什么大多数记忆 API 做不到自我进化的闭环？",
+   "target": "TRINITY_VALUE_REVIEW.md",
+   "source_memory_id": "mem_ba3d6efc984140ab"
+  },
+  {
+   "id": "hq045",
+   "type": "heldout-task",
+   "query": "一套带自检和审计机制的记忆系统下一步该优先做什么？",
+   "target": "TRINITY_VALUE_ASSESSMENT.md",
+   "source_memory_id": "mem_05a6c32410764af8"
+  },
+  {
+   "id": "hq046",
+   "type": "heldout-task",
+   "query": "对外宣传的安全能力与实测结果不一致时该怎么处理？",
+   "target": "TRINITY_VALUE_ASSESSMENT.md",
+   "source_memory_id": "mem_6e3c45a8087b43ba"
+  },
+  {
+   "id": "hq047",
+   "type": "heldout-task",
+   "query": "如何让智能体的记忆可以持久保存、随时召回并持续进化？",
+   "target": "TRINITY_SYSTEM_OVERVIEW.md",
+   "source_memory_id": "mem_bb0ef03aeb894fe1"
+  },
+  {
+   "id": "hq048",
+   "type": "heldout-task",
+   "query": "怎么避免被单一厂商锁定、方便迁移整套数据？",
+   "target": "TRINITY_SYSTEM_OVERVIEW.md",
+   "source_memory_id": "mem_a3af9012658c4354"
+  },
+  {
+   "id": "hq049",
+   "type": "heldout-task",
+   "query": "用户要求导出或删除自己的个人数据时该怎么处理？",
+   "target": "TRINITY_SYSTEM_OVERVIEW.md",
+   "source_memory_id": "mem_87468b1e203e4788"
+  },
+  {
+   "id": "hq050",
+   "type": "heldout-task",
+   "query": "合规审计时怎么让第三方独立验证某条记录的完整性？",
+   "target": "TRINITY_SYSTEM_OVERVIEW.md",
+   "source_memory_id": "mem_30c6702849044bf2"
+  },
+  {
+   "id": "hq051",
+   "type": "heldout-task",
+   "query": "数据库治理任务的目标库是哪个，怎么连？",
+   "target": "TRINITY_SYSTEM_OVERVIEW.md",
+   "source_memory_id": "mem_bb5429e67343463f"
+  },
+  {
+   "id": "hq052",
+   "type": "heldout-task",
+   "query": "怎么搭建一个兼容多种协议的服务端接口层？",
+   "target": "TRINITY_SYSTEM_OVERVIEW.md",
+   "source_memory_id": "mem_765e6a572a844bd3"
+  },
+  {
+   "id": "hq053",
+   "type": "heldout-task",
+   "query": "怎么把数据从写入到使用再到清理的全过程管起来？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "mem_2af7342e23da4a28"
+  },
+  {
+   "id": "hq054",
+   "type": "heldout-task",
+   "query": "怎么给不同智能体分配额度并防止资源被滥用？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "mem_b6a5c7933e324b00"
+  },
+  {
+   "id": "hq055",
+   "type": "heldout-task",
+   "query": "怎么给不断更新的知识建立历史版本并做归档管理？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "mem_053197f49cac4f6b"
+  },
+  {
+   "id": "hq056",
+   "type": "heldout-task",
+   "query": "有没有办法让过期的知识自动触发更新而不影响检索使用？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "mem_bc14f61ff97d4519"
+  },
+  {
+   "id": "hq057",
+   "type": "heldout-task",
+   "query": "如何统计一段时间内自动化事件的处理成功率？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "mem_81eabddaa4664374"
+  },
+  {
+   "id": "hq058",
+   "type": "heldout-task",
+   "query": "多轮迭代中如何跟踪完成与受阻状态及评分？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "mem_fc039d7616b34d57"
+  },
+  {
+   "id": "hq059",
+   "type": "heldout-task",
+   "query": "本地开发环境怎么统一管理多个不同端口的服务启动？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "mem_dea1bf9edc7d4c1e"
+  },
+  {
+   "id": "hq060",
+   "type": "heldout-task",
+   "query": "如何确认代码测试全部通过且工作区没有未提交改动？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "mem_5c04a1a0ed224434"
+  },
+  {
+   "id": "hq061",
+   "type": "heldout-task",
+   "query": "如何把定时、重试、审批状态机串成完整流程？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "mem_5add1938bba145cd"
+  },
+  {
+   "id": "hq062",
+   "type": "heldout-task",
+   "query": "记忆数据在落盘时如何加密并保证审计可追溯？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "mem_73290ad382ee4652"
+  },
+  {
+   "id": "hq063",
+   "type": "heldout-task",
+   "query": "怎么记录和登记系统安全边界的例外情况？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "mem_70b4dd133a9e4d9d"
+  },
+  {
+   "id": "hq064",
+   "type": "heldout-task",
+   "query": "有哪些高杠杆的后续实验方向可以优先推进？",
+   "target": "TRINITY_STATUS_20260827.md",
+   "source_memory_id": "mem_7c4c40c20eea4c13"
+  },
+  {
+   "id": "hq065",
+   "type": "heldout-task",
+   "query": "文档都准备好了但还没对外发布，接下来该执行哪些动作？",
+   "target": "TRINITY_STATUS_20260827.md",
+   "source_memory_id": "mem_63b25927e8814fe0"
+  },
+  {
+   "id": "hq066",
+   "type": "heldout-task",
+   "query": "一个中等规模记忆系统的代码量和测试覆盖大概什么水平？",
+   "target": "TRINITY_STATUS_20260827.md",
+   "source_memory_id": "mem_4cdbb97fc41c40fc"
+  },
+  {
+   "id": "hq067",
+   "type": "heldout-task",
+   "query": "怎么评估当前存储方案的实际机密性风险？",
+   "target": "TRINITY_STATUS_20260827.md",
+   "source_memory_id": "mem_742bde8ec7934163"
+  },
+  {
+   "id": "hq068",
+   "type": "heldout-task",
+   "query": "面向企业的记忆服务在一年到两年内可以探索哪些垂直深耕方向？",
+   "target": "TRINITY_MASTER_SUMMARY_20260821.md",
+   "source_memory_id": "mem_3f9be78930dc4c54"
+  },
+  {
+   "id": "hq069",
+   "type": "heldout-task",
+   "query": "事件表和会话表里的时间字段单位不一致该怎么处理？",
+   "target": "TRINITY_MASTER_SUMMARY_20260821.md",
+   "source_memory_id": "mem_ba1ed707810c43a1"
+  },
+  {
+   "id": "hq070",
+   "type": "heldout-task",
+   "query": "后台进程卡死了有没有办法自动检测并重启？",
+   "target": "TRINITY_MASTER_SUMMARY_20260821.md",
+   "source_memory_id": "mem_0f4563f4317e4abc"
+  },
+  {
+   "id": "hq071",
+   "type": "heldout-task",
+   "query": "同一测试标准下各记忆方案的得分差距有多大",
+   "target": "TRINITY_MASTER_SUMMARY_20260821.md",
+   "source_memory_id": "mem_111b155726af41c5"
+  },
+  {
+   "id": "hq072",
+   "type": "heldout-task",
+   "query": "如何搭建一个端到端的问答评测流程并对比基线？",
+   "target": "TRINITY_MASTER_SUMMARY_20260821.md",
+   "source_memory_id": "mem_d275f4ef8595418a"
+  },
+  {
+   "id": "hq073",
+   "type": "heldout-task",
+   "query": "阅读理解类任务上记忆模型的准确率如何？",
+   "target": "TRINITY_MASTER_SUMMARY_20260821.md",
+   "source_memory_id": "mem_a74fd605fca240da"
+  },
+  {
+   "id": "hq074",
+   "type": "heldout-task",
+   "query": "怎么统计自动生成的摘要类内容一共有多少条？",
+   "target": "TRINITY_MASTER_SUMMARY_20260821.md",
+   "source_memory_id": "mem_8c04be7b2b4c4102"
+  },
+  {
+   "id": "hq075",
+   "type": "heldout-task",
+   "query": "怎么在一台机器上同时跑多个容器化服务并暴露不同端口？",
+   "target": "TRINITY_MASTER_SUMMARY_20260821.md",
+   "source_memory_id": "mem_71161fa9072b46ce"
+  },
+  {
+   "id": "hq076",
+   "type": "heldout-task",
+   "query": "怎么设计一套评测机制来持续跟踪系统能力？",
+   "target": "TRINITY_HOLOGRAPHIC_SELFCHECK.md",
+   "source_memory_id": "mem_97e469913ca840c2"
+  },
+  {
+   "id": "hq077",
+   "type": "heldout-task",
+   "query": "怎么在加密默认开启后检测生产环境是否仍有明文残留？",
+   "target": "TRINITY_HOLOGRAPHIC_SELFCHECK.md",
+   "source_memory_id": "mem_f6e659cf7dd6421e"
+  },
+  {
+   "id": "hq078",
+   "type": "heldout-task",
+   "query": "发现文档里的安全声明有误后，应该怎么登记和纠正？",
+   "target": "TRINITY_HOLOGRAPHIC_SELFCHECK.md",
+   "source_memory_id": "mem_1c55cbf8e89b45e6"
+  },
+  {
+   "id": "hq079",
+   "type": "heldout-task",
+   "query": "在制定产品聚焦策略时，应该排除哪些不擅长的路线？",
+   "target": "TRINITY_FUTURE_DIRECTION_20260821.md",
+   "source_memory_id": "mem_d95a74297cda4462"
+  },
+  {
+   "id": "hq080",
+   "type": "heldout-task",
+   "query": "怎么根据阶段性成果决定是收缩还是继续扩张？",
+   "target": "TRINITY_FUTURE_DIRECTION_20260821.md",
+   "source_memory_id": "mem_9e92b7ac89cd4296"
+  },
+  {
+   "id": "hq081",
+   "type": "heldout-task",
+   "query": "多个智能体之间怎样共享记忆并做好身份与权限治理？",
+   "target": "TRINITY_FUTURE_DIRECTION_20260821.md",
+   "source_memory_id": "mem_89685183a1004c23"
+  },
+  {
+   "id": "hq082",
+   "type": "heldout-task",
+   "query": "怎么同时验证开源社区热度和早期付费客户的真实需求？",
+   "target": "TRINITY_FUTURE_DIRECTION_20260821.md",
+   "source_memory_id": "mem_186f2774ef5f44c6"
+  },
+  {
+   "id": "hq083",
+   "type": "heldout-task",
+   "query": "怎么把一个内部接口整理成对外可查的文档并自动补全缺失字段？",
+   "target": "TRINITY_FUTURE_DIRECTION_20260821.md",
+   "source_memory_id": "mem_cad87321deeb4957"
+  },
+  {
+   "id": "hq084",
+   "type": "heldout-task",
+   "query": "企业级多智能体架构中，记忆共享机制通常怎么落地？",
+   "target": "TRINITY_FUTURE_DIRECTION_20260821.md",
+   "source_memory_id": "mem_6661266038874176"
+  },
+  {
+   "id": "hq085",
+   "type": "heldout-task",
+   "query": "有没有支持图文音视频统一存储和检索的智能体架构？",
+   "target": "TRINITY_FUTURE_DIRECTION_20260821.md",
+   "source_memory_id": "mem_dde669f90df442a1"
+  },
+  {
+   "id": "hq086",
+   "type": "heldout-task",
+   "query": "怎么让智能体在受信任的治理框架下大规模落地？",
+   "target": "TRINITY_FUTURE_DIRECTION_20260821.md",
+   "source_memory_id": "mem_903e26ec6fc548ca"
+  },
+  {
+   "id": "hq087",
+   "type": "heldout-task",
+   "query": "有没有一种记忆架构能同时兼顾短期、情景、语义和流程知识？",
+   "target": "TRINITY_FUTURE_DIRECTION_20260821.md",
+   "source_memory_id": "mem_60231603329146d3"
+  },
+  {
+   "id": "hq088",
+   "type": "heldout-task",
+   "query": "为什么记忆能力从可选变成了企业系统的必选项？",
+   "target": "TRINITY_FUTURE_DIRECTION_20260821.md",
+   "source_memory_id": "mem_c3c670649e4444e7"
+  },
+  {
+   "id": "hq089",
+   "type": "heldout-task",
+   "query": "企业想自建带时间维度的知识记忆平台该从哪入手？",
+   "target": "TRINITY_FUTURE_DIRECTION_20260821.md",
+   "source_memory_id": "mem_f300accd7c24483b"
+  },
+  {
+   "id": "hq090",
+   "type": "heldout-task",
+   "query": "新增测试文件后，全量测试基线该怎么重新跑一遍？",
+   "target": "TRINITY_EVOLUTION_SUMMARY.md",
+   "source_memory_id": "mem_91f7f7c0479c4fb0"
+  },
+  {
+   "id": "hq091",
+   "type": "heldout-task",
+   "query": "目标管理和技能模块的测试如何拆分？",
+   "target": "TRINITY_EVOLUTION_SUMMARY.md",
+   "source_memory_id": "mem_d46289bca9e84af1"
+  },
+  {
+   "id": "hq092",
+   "type": "heldout-task",
+   "query": "如何按用户角色限制其能看到的数据行？",
+   "target": "TRINITY_EVOLUTION_SUMMARY.md",
+   "source_memory_id": "mem_219e3c8653c94dec"
+  },
+  {
+   "id": "hq093",
+   "type": "heldout-task",
+   "query": "在哪里能拿到完整的接口文档定义文件？",
+   "target": "TRINITY_EVOLUTION_SUMMARY.md",
+   "source_memory_id": "mem_305af23dca1d4c96"
+  },
+  {
+   "id": "hq094",
+   "type": "heldout-task",
+   "query": "如何对比两种页面树方案的 A/B 效果并做难例留出评估？",
+   "target": "TRINITY_EVOLUTION_SUMMARY.md",
+   "source_memory_id": "mem_06919bb993af438b"
+  },
+  {
+   "id": "hq095",
+   "type": "heldout-task",
+   "query": "怎么安排每日定时任务来维护知识库和备份数据？",
+   "target": "TRINITY_EVOLUTION_SUMMARY.md",
+   "source_memory_id": "mem_3853c949a1d44fe9"
+  },
+  {
+   "id": "hq096",
+   "type": "heldout-task",
+   "query": "怎样根据任务类型自动选择合适的模型来处理？",
+   "target": "TRINITY_EVOLUTION_SUMMARY.md",
+   "source_memory_id": "mem_2e865d31ca43489e"
+  },
+  {
+   "id": "hq097",
+   "type": "heldout-task",
+   "query": "多个租户共用一套记忆库时，如何保证检索结果不会串到别人的数据？",
+   "target": "TRINITY_EVOLUTION_SUMMARY.md",
+   "source_memory_id": "mem_3326087f64bc4e47"
+  },
+  {
+   "id": "hq098",
+   "type": "heldout-task",
+   "query": "如何判断问答系统的瓶颈在检索还是生成环节？",
+   "target": "TRINITY_EVAL_STATUS_AND_COMPARISON_20260817.md",
+   "source_memory_id": "mem_29876ac390bf43ba"
+  },
+  {
+   "id": "hq099",
+   "type": "heldout-task",
+   "query": "向量检索和关键词检索在召回效果上差距有多大？",
+   "target": "TRINITY_EVAL_STATUS_AND_COMPARISON_20260817.md",
+   "source_memory_id": "mem_eb1d6ebd22014d3a"
+  },
+  {
+   "id": "hq100",
+   "type": "heldout-task",
+   "query": "用规则模板做用户画像为什么行不通？",
+   "target": "TRINITY_EVAL_STATUS_AND_COMPARISON_20260817.md",
+   "source_memory_id": "mem_c57f8b7065ce4c47"
+  },
+  {
+   "id": "hq101",
+   "type": "heldout-task",
+   "query": "怎么按问题类型自动选择最优处理策略？",
+   "target": "TRINITY_EVAL_STATUS_AND_COMPARISON_20260817.md",
+   "source_memory_id": "mem_7b40450f4d064df2"
+  },
+  {
+   "id": "hq102",
+   "type": "heldout-task",
+   "query": "全量问答准确率的预估区间大概是多少？",
+   "target": "TRINITY_EVAL_STATUS_AND_COMPARISON_20260817.md",
+   "source_memory_id": "mem_c4315289b6434342"
+  },
+  {
+   "id": "hq103",
+   "type": "heldout-task",
+   "query": "怎么核对评测报告里的分数是否可信、有没有原始数据支撑？",
+   "target": "TRINITY_EVAL_STATUS_AND_COMPARISON_20260817.md",
+   "source_memory_id": "mem_0cd76388e7c141b1"
+  },
+  {
+   "id": "hq104",
+   "type": "heldout-task",
+   "query": "怎么给自托管产品加上托管控制台和计费能力来变现？",
+   "target": "TRINITY_DEEP_EVALUATION.md",
+   "source_memory_id": "mem_5b86fe697a994eff"
+  },
+  {
+   "id": "hq105",
+   "type": "heldout-task",
+   "query": "单机数据库写锁冲突有什么治理和监控办法？",
+   "target": "TRINITY_DEEP_EVALUATION.md",
+   "source_memory_id": "mem_4c2818b78f244f49"
+  },
+  {
+   "id": "hq106",
+   "type": "heldout-task",
+   "query": "怎么判断文档噪声比例是否在可接受范围内？",
+   "target": "TRINITY_DEEP_EVALUATION.md",
+   "source_memory_id": "mem_1c5c5d18134a4021"
+  },
+  {
+   "id": "hq107",
+   "type": "heldout-task",
+   "query": "模型接口如何做到既返回规范 JSON 又按需调节思考深度？",
+   "target": "TRINITY_DEEP_EVALUATION.md",
+   "source_memory_id": "mem_c324d14deabb4f37"
+  },
+  {
+   "id": "hq108",
+   "type": "heldout-task",
+   "query": "有哪些安全能力被过度宣传，实际存在明确边界限制？",
+   "target": "TRINITY_DEEP_EVALUATION.md",
+   "source_memory_id": "mem_357d486e7495495c"
+  },
+  {
+   "id": "hq109",
+   "type": "heldout-task",
+   "query": "如何让系统在存储压力大时自动切换只读模式？",
+   "target": "TRINITY_DEEP_EVALUATION.md",
+   "source_memory_id": "mem_f98c2dff3bf641a3"
+  },
+  {
+   "id": "hq110",
+   "type": "heldout-task",
+   "query": "如何验证审计记录和回执之间的对应关系？",
+   "target": "TRINITY_DEEP_EVALUATION.md",
+   "source_memory_id": "mem_2e7218c76a0441fc"
+  },
+  {
+   "id": "hq111",
+   "type": "heldout-task",
+   "query": "同一套评测数据，不同评判标准下分数差距有多大？",
+   "target": "TRINITY_DEEP_EVALUATION.md",
+   "source_memory_id": "mem_88a250920c2c4392"
+  },
+  {
+   "id": "hq112",
+   "type": "heldout-task",
+   "query": "怎么让返回的记忆附带证据、置信度和核验提示？",
+   "target": "TRINITY_DEEP_EVALUATION.md",
+   "source_memory_id": "mem_dc7bea6ff7b34d29"
+  },
+  {
+   "id": "hq113",
+   "type": "heldout-task",
+   "query": "从技术、数据、工程、可信度、商业化、生态六个维度怎么给记忆系统打分？",
+   "target": "TRINITY_DEEP_EVALUATION.md",
+   "source_memory_id": "mem_702e6897bb1444d6"
+  },
+  {
+   "id": "hq114",
+   "type": "heldout-task",
+   "query": "怎么规划分阶段可退出的创业或产品落地路径？",
+   "target": "TRINITY_COMMERCIAL_PLAN_V5_20260818.md",
+   "source_memory_id": "mem_3031256de34944cc"
+  },
+  {
+   "id": "hq115",
+   "type": "heldout-task",
+   "query": "一个技术项目想复制同类成功产品的成长路径，应该按什么顺序落地？",
+   "target": "TRINITY_COMMERCIAL_PLAN_V4_20260818.md",
+   "source_memory_id": "mem_8e90d0f2424549fa"
+  },
+  {
+   "id": "hq116",
+   "type": "heldout-task",
+   "query": "如何为开源产品设计分阶段的用户增长与变现指标？",
+   "target": "TRINITY_COMMERCIAL_PLAN_V4_20260818.md",
+   "source_memory_id": "mem_84985bd8a21c4f3f"
+  },
+  {
+   "id": "hq117",
+   "type": "heldout-task",
+   "query": "产品增长到什么信号出现后，才适合从借力第三方平台转向自建托管？",
+   "target": "TRINITY_COMMERCIAL_PLAN_V4_20260818.md",
+   "source_memory_id": "mem_1df05137ed0d42a6"
+  },
+  {
+   "id": "hq118",
+   "type": "heldout-task",
+   "query": "怎么规划一年到两年的生态和融资节奏？",
+   "target": "TRINITY_COMMERCIAL_PLAN_V4_20260818.md",
+   "source_memory_id": "mem_b7946c51358b4848"
+  },
+  {
+   "id": "hq119",
+   "type": "heldout-task",
+   "query": "中小型软件商想给客户做私有化知识库，商业模式怎么规划？",
+   "target": "TRINITY_COMMERCIAL_PLAN_V4_20260818.md",
+   "source_memory_id": "mem_c2bde4912f93401d"
+  },
+  {
+   "id": "hq120",
+   "type": "heldout-task",
+   "query": "缺少海外团队时应该先聚焦哪个市场？",
+   "target": "TRINITY_COMMERCIAL_PLAN_V4_20260818.md",
+   "source_memory_id": "mem_ddb7acba03584702"
+  },
+  {
+   "id": "hq121",
+   "type": "heldout-task",
+   "query": "如何为开源项目设定分阶段的增长与商业化目标？",
+   "target": "TRINITY_COMMERCIAL_PLAN_V3_20260818.md",
+   "source_memory_id": "mem_5004aa38c6a0442f"
+  },
+  {
+   "id": "hq122",
+   "type": "heldout-task",
+   "query": "项目后期如何转向托管服务并考虑融资？",
+   "target": "TRINITY_COMMERCIAL_PLAN_V3_20260818.md",
+   "source_memory_id": "mem_8d368a89db584b14"
+  },
+  {
+   "id": "hq123",
+   "type": "heldout-task",
+   "query": "如何让 AI 产品具备长期记忆、检索和治理能力而不依赖外部云？",
+   "target": "TRINITY_COMMERCIAL_PLAN_V3_20260818.md",
+   "source_memory_id": "mem_55892be9e1524cc3"
+  },
+  {
+   "id": "hq124",
+   "type": "heldout-task",
+   "query": "演示案例降级为次要角色后，第一客户该怎么重新定义？",
+   "target": "TRINITY_COMMERCIAL_PLAN_V3_20260818.md",
+   "source_memory_id": "mem_a15a193eceed4980"
+  },
+  {
+   "id": "hq125",
+   "type": "heldout-task",
+   "query": "在早期阶段，如何根据投入程度来决定关键节点的密度和频率？",
+   "target": "TRINITY_COMMERCIAL_PLAN_V2_20260818.md",
+   "source_memory_id": "mem_1ba809957cf54055"
+  },
+  {
+   "id": "hq126",
+   "type": "heldout-task",
+   "query": "怎么把交付范围和定价提前用合同固定下来？",
+   "target": "TRINITY_COMMERCIAL_PLAN_V2_20260818.md",
+   "source_memory_id": "mem_be80497d1eaf4346"
+  },
+  {
+   "id": "hq127",
+   "type": "heldout-task",
+   "query": "怎么把客户数量、收入和渠道目标拆解到具体月份？",
+   "target": "TRINITY_COMMERCIAL_PLAN_V2_20260818.md",
+   "source_memory_id": "mem_d1467985f0c045f8"
+  },
+  {
+   "id": "hq128",
+   "type": "heldout-task",
+   "query": "产品成熟后该选择融资还是上线托管服务来扩张？",
+   "target": "TRINITY_COMMERCIAL_PLAN_V2_20260818.md",
+   "source_memory_id": "mem_f020bf1249674231"
+  },
+  {
+   "id": "hq129",
+   "type": "heldout-task",
+   "query": "如何把开源信任和行业打样结合成可落地的商业策略？",
+   "target": "TRINITY_COMMERCIAL_PLAN_V2_20260818.md",
+   "source_memory_id": "mem_63bbcb6a6f0a4a43"
+  },
+  {
+   "id": "hq130",
+   "type": "heldout-task",
+   "query": "我想把方案落地，第一步需要确认哪些关键选择？",
+   "target": "TRINITY_COMMERCIAL_PLAN_20260817.md",
+   "source_memory_id": "mem_0825e44381654940"
+  },
+  {
+   "id": "hq131",
+   "type": "heldout-task",
+   "query": "团队执行容易分散，如何用阶段目标控制投入节奏？",
+   "target": "TRINITY_COMMERCIAL_PLAN_20260817.md",
+   "source_memory_id": "mem_ba853e5e4af7480f"
+  },
+  {
+   "id": "hq132",
+   "type": "heldout-task",
+   "query": "两年内做到什么程度才值得去拿风险投资，有没有可参考的融资节奏？",
+   "target": "TRINITY_COMMERCIAL_PLAN_20260817.md",
+   "source_memory_id": "mem_bde83fae064d4d23"
+  },
+  {
+   "id": "hq133",
+   "type": "heldout-task",
+   "query": "怎么在不实际执行的情况下试跑某个定时任务脚本？",
+   "target": "TRINITY_BRAIN_SCORE_20260913.md",
+   "source_memory_id": "mem_6117cb2aebbf4d08"
+  },
+  {
+   "id": "hq134",
+   "type": "heldout-task",
+   "query": "怎么避免用无法自动运行的标准来评估系统的内部状态？",
+   "target": "TRINITY_BRAIN_SCORE_20260913.md",
+   "source_memory_id": "mem_4bfb3971692341be"
+  },
+  {
+   "id": "hq135",
+   "type": "heldout-task",
+   "query": "怎么判断数据加密检索方案是否适合当前场景？",
+   "target": "TRINITY_BRAIN_SCORE_20260913.md",
+   "source_memory_id": "mem_9af247802b98491f"
+  },
+  {
+   "id": "hq136",
+   "type": "heldout-task",
+   "query": "长文本规模扩大后怎么衡量性能衰减和成本变化？",
+   "target": "TRINITY_BRAIN_SCORE_20260913.md",
+   "source_memory_id": "mem_ef4f30daf63e4174"
+  },
+  {
+   "id": "hq137",
+   "type": "heldout-task",
+   "query": "哪些结论只能作为研究兴趣而无法对外宣传？",
+   "target": "TRINITY_BRAIN_SCORE_20260913.md",
+   "source_memory_id": "mem_5a134658436c4079"
+  },
+  {
+   "id": "hq138",
+   "type": "heldout-task",
+   "query": "如何给记忆系统加上元认知监控和情感状态调节机制？",
+   "target": "TRINITY_BRAIN_SCORE_20260913.md",
+   "source_memory_id": "mem_30630fc91e7a44ab"
+  },
+  {
+   "id": "hq139",
+   "type": "heldout-task",
+   "query": "评测时怎么避免语料泄漏并保证留出集纪律？",
+   "target": "TRINITY_BRAIN_SCORE_20260913.md",
+   "source_memory_id": "mem_8a2c4a672c8748f0"
+  },
+  {
+   "id": "hq140",
+   "type": "heldout-task",
+   "query": "怎样把评估失败信号接入健康检查并触发退出？",
+   "target": "TRINITY_BRAIN_SCORE_20260913.md",
+   "source_memory_id": "mem_1dca0237f20a4a2b"
+  },
+  {
+   "id": "hq141",
+   "type": "heldout-task",
+   "query": "怎样判断一个AI系统是否具备自主性，以及它处于哪个自主等级？",
+   "target": "TRINITY_BRAIN_SCORE_20260913.md",
+   "source_memory_id": "mem_7f8fbb914d8a41a8"
+  },
+  {
+   "id": "hq142",
+   "type": "heldout-task",
+   "query": "给一个复杂系统做外部对标评分时，怎么标注数据可信度？",
+   "target": "TRINITY_BRAIN_SCORE_20260913.md",
+   "source_memory_id": "mem_5fb5a98b49fb4056"
+  },
+  {
+   "id": "hq143",
+   "type": "heldout-task",
+   "query": "文档和许可都准备好了但还没对外发布，下一步做什么？",
+   "target": "TRINITY_ARCHITECTURE_GUIDE.md",
+   "source_memory_id": "mem_44362ee4e8de4c98"
+  },
+  {
+   "id": "hq144",
+   "type": "heldout-task",
+   "query": "怎么保证系统长期运行不退化并自动完成备份自愈？",
+   "target": "TRINITY_ARCHITECTURE_GUIDE.md",
+   "source_memory_id": "mem_db2f494b8aa54677"
+  },
+  {
+   "id": "hq145",
+   "type": "heldout-task",
+   "query": "怎么证明系统里的操作记录没有被篡改过？",
+   "target": "TRINITY_ARCHITECTURE_GUIDE.md",
+   "source_memory_id": "mem_26062d2e920c4d97"
+  },
+  {
+   "id": "hq146",
+   "type": "heldout-task",
+   "query": "如何用一组断言来确认修复方案真的有效？",
+   "target": "TRINITY_ARCHITECTURE_GUIDE.md",
+   "source_memory_id": "mem_28db943a8a74484d"
+  },
+  {
+   "id": "hq147",
+   "type": "heldout-task",
+   "query": "评测完成后怎样对比不同结果并评估目标引擎表现？",
+   "target": "TRINITY_ARCHITECTURE_GUIDE.md",
+   "source_memory_id": "mem_858f69a1f58f4d8b"
+  },
+  {
+   "id": "hq148",
+   "type": "heldout-task",
+   "query": "数据库日常巡检里怎么监控日志锁并做自检和备份保留？",
+   "target": "TRINITY_ARCHITECTURE_GUIDE.md",
+   "source_memory_id": "mem_22dd77d343604984"
+  },
+  {
+   "id": "hq149",
+   "type": "heldout-task",
+   "query": "如何让检索结果附带数据源健康状态信息？",
+   "target": "TRINITY_ARCHITECTURE_GUIDE.md",
+   "source_memory_id": "mem_b1703a3f250544ae"
+  },
+  {
+   "id": "hq150",
+   "type": "heldout-task",
+   "query": "怎么设计一套带版本链和生命周期管理的存储流程？",
+   "target": "TRINITY_ARCHITECTURE_GUIDE.md",
+   "source_memory_id": "mem_0e74983bceff472f"
+  },
+  {
+   "id": "hq151",
+   "type": "heldout-task",
+   "query": "怎样配置定时维护任务并连接镜像数据库？",
+   "target": "TRINITY_ARCHITECTURE_GUIDE.md",
+   "source_memory_id": "mem_f14d6c7dd0af47f0"
+  },
+  {
+   "id": "hq152",
+   "type": "heldout-task",
+   "query": "如何为安全边界和已废弃的说法建立统一登记口径？",
+   "target": "TRINITY_ARCHITECTURE_GUIDE.md",
+   "source_memory_id": "mem_71cf7e0846944d6d"
+  },
+  {
+   "id": "hq153",
+   "type": "heldout-task",
+   "query": "引用历史测试通过数量时需要注意哪些口径问题？",
+   "target": "TESTING.md",
+   "source_memory_id": "mem_6d0194094def4fbf"
+  },
+  {
+   "id": "hq154",
+   "type": "heldout-task",
+   "query": "如何核对任务清单与实际运行记录是否匹配？",
+   "target": "TASK_MANIFEST_20260908.md",
+   "source_memory_id": "mem_0ffb0946e2eb469d"
+  },
+  {
+   "id": "hq155",
+   "type": "heldout-task",
+   "query": "生产环境上线前，如何验证索引预热和并发改造是否达标？",
+   "target": "STRESS_TEST_REPORT_20260815_PRODDB.md",
+   "source_memory_id": "mem_468888593edc491e"
+  },
+  {
+   "id": "hq156",
+   "type": "heldout-task",
+   "query": "哪些数据库路径默认启用了加密，哪些没有生效？",
+   "target": "STORAGE_ENCRYPTION_20260815.md",
+   "source_memory_id": "mem_028c6051547b4aba"
+  },
+  {
+   "id": "hq157",
+   "type": "heldout-task",
+   "query": "对外说明加密状态时应该以哪份文档的口径为准？",
+   "target": "STORAGE_ENCRYPTION_20260815.md",
+   "source_memory_id": "mem_b2d9cb4537074a54"
+  },
+  {
+   "id": "hq158",
+   "type": "heldout-task",
+   "query": "如何评估一个长程记忆系统的实际运行效果？",
+   "target": "STATUS_20260907.md",
+   "source_memory_id": "mem_705b5d9e353d477e"
+  },
+  {
+   "id": "hq159",
+   "type": "heldout-task",
+   "query": "想找个支持 Python 3.10 以上、能单独安装的记忆组件，有推荐吗？",
+   "target": "standalone-usage.md",
+   "source_memory_id": "mem_99cea9ead18a4765"
+  },
+  {
+   "id": "hq160",
+   "type": "heldout-task",
+   "query": "怎么统计一段时间内重构提交的数量和最终构建状态？",
+   "target": "smartcos_selfopt_final.md",
+   "source_memory_id": "mem_87086d662d99492e"
+  },
+  {
+   "id": "hq161",
+   "type": "heldout-task",
+   "query": "需要一份把优化脚本集成进现有系统的操作指南，有吗？",
+   "target": "smartcos_integration.md",
+   "source_memory_id": "mem_141a69c81c4c442c"
+  },
+  {
+   "id": "hq162",
+   "type": "heldout-task",
+   "query": "数据库或接口挂掉时，如何自动把告警发到指定 webhook？",
+   "target": "SLO.md",
+   "source_memory_id": "mem_127517e63fdd469c"
+  },
+  {
+   "id": "hq163",
+   "type": "heldout-task",
+   "query": "备份要保留多久才能满足数据恢复目标？",
+   "target": "SLO.md",
+   "source_memory_id": "mem_6d4cfa910f4e43f4"
+  },
+  {
+   "id": "hq164",
+   "type": "heldout-task",
+   "query": "怎么为服务资源用量和检索成本制定可观测的目标基线？",
+   "target": "SLO.md",
+   "source_memory_id": "mem_04a499e3f70f4ea7"
+  },
+  {
+   "id": "hq165",
+   "type": "heldout-task",
+   "query": "容器启动时的健康探针需要满足什么条件才算通过？",
+   "target": "SLO.md",
+   "source_memory_id": "mem_662d1f9e5ddc4850"
+  },
+  {
+   "id": "hq166",
+   "type": "heldout-task",
+   "query": "接口响应时间该按内部处理还是完整请求来算？",
+   "target": "SLO.md",
+   "source_memory_id": "mem_ed10b2b77c624991"
+  },
+  {
+   "id": "hq167",
+   "type": "heldout-task",
+   "query": "有没有一个半天就能跑完、用来验证方案可行性的最小测试？",
+   "target": "SERVER_MULTI_NODE_SYNC_DETAILED.md",
+   "source_memory_id": "mem_998e4a71dd394f14"
+  },
+  {
+   "id": "hq168",
+   "type": "heldout-task",
+   "query": "不同通信协议应该怎么分层选型，先做哪个后做哪个？",
+   "target": "SERVER_MULTI_NODE_SYNC_DETAILED.md",
+   "source_memory_id": "mem_c49ee8356be24981"
+  },
+  {
+   "id": "hq169",
+   "type": "heldout-task",
+   "query": "怎样监控数据库连接数和磁盘使用并及时发出告警？",
+   "target": "SERVER_MULTI_NODE_SYNC_DETAILED.md",
+   "source_memory_id": "mem_df3cc47c7bb24ff8"
+  },
+  {
+   "id": "hq170",
+   "type": "heldout-task",
+   "query": "服务器上如何做数据库导出加卷快照并保留两周？",
+   "target": "SERVER_MULTI_NODE_SYNC_DETAILED.md",
+   "source_memory_id": "mem_1b719aa4c7834376"
+  },
+  {
+   "id": "hq171",
+   "type": "heldout-task",
+   "query": "怎么限制某个内部端口只能在内网访问",
+   "target": "SERVER_MULTI_NODE_SYNC_DETAILED.md",
+   "source_memory_id": "mem_1c47d9717eab428d"
+  },
+  {
+   "id": "hq172",
+   "type": "heldout-task",
+   "query": "不同智能体通信时该选哪种协议来对接工具或彼此？",
+   "target": "SERVER_MULTI_NODE_SYNC_DETAILED.md",
+   "source_memory_id": "mem_fb8191ef14fb4b76"
+  },
+  {
+   "id": "hq173",
+   "type": "heldout-task",
+   "query": "多个终端各自维护记忆，如何统一写入服务器并做跨机检索？",
+   "target": "SERVER_MULTI_NODE_SYNC.md",
+   "source_memory_id": "mem_4f33c702a93f46b4"
+  },
+  {
+   "id": "hq174",
+   "type": "heldout-task",
+   "query": "如何开启异步语义提取且不影响主流程性能？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_51d228e82f3d4b8c"
+  },
+  {
+   "id": "hq175",
+   "type": "heldout-task",
+   "query": "单机数据库容量到瓶颈了有哪些应对方案？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_5645b5d9623d4642"
+  },
+  {
+   "id": "hq176",
+   "type": "heldout-task",
+   "query": "怎样在有限内存下安排模型推理的降级策略？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_d13a69b5120a4a88"
+  },
+  {
+   "id": "hq177",
+   "type": "heldout-task",
+   "query": "怎么判断有没有遗漏未生成向量的活跃条目？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_884d5fbbe90c4ebf"
+  },
+  {
+   "id": "hq178",
+   "type": "heldout-task",
+   "query": "跑一次全量向量重算大概要多久？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_8bfb869afaf44b4d"
+  },
+  {
+   "id": "hq179",
+   "type": "heldout-task",
+   "query": "有没有不依赖外部服务的本地向量化兜底方案？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_be744b2be53f4a4b"
+  },
+  {
+   "id": "hq180",
+   "type": "heldout-task",
+   "query": "怎样把文本编码成1024维的归一化向量？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_a610731fc8f0456e"
+  },
+  {
+   "id": "hq181",
+   "type": "heldout-task",
+   "query": "怎样降低大模型问答评测中因波动导致的翻转率？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_93680c32df7b4286"
+  },
+  {
+   "id": "hq182",
+   "type": "heldout-task",
+   "query": "如何解决嵌入引擎因模型缺失而自动降级的问题？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_9645179fa91d4834"
+  },
+  {
+   "id": "hq183",
+   "type": "heldout-task",
+   "query": "单机数据库容量到顶后有哪些扩展方案？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_5962768ea1a7461b"
+  },
+  {
+   "id": "hq184",
+   "type": "heldout-task",
+   "query": "记忆质量不足时该靠时间积累还是硬件升级解决？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_b0642f1a6fdd474b"
+  },
+  {
+   "id": "hq185",
+   "type": "heldout-task",
+   "query": "打包后的应用缺少源码导致无法二次开发怎么办？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_a9cc48b3feda4a29"
+  },
+  {
+   "id": "hq186",
+   "type": "heldout-task",
+   "query": "怎么让记忆写入、衰减和备份实现全自动闭环？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_3a764e5a96ef4ecf"
+  },
+  {
+   "id": "hq187",
+   "type": "heldout-task",
+   "query": "如果暂时没有明显改进候选，自进化还要继续推进吗？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_f900a9d714b04cf8"
+  },
+  {
+   "id": "hq188",
+   "type": "heldout-task",
+   "query": "怎么验证修复后完整调用链路能正常工作并返回预期结果？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_9271b5cd67fd4572"
+  },
+  {
+   "id": "hq189",
+   "type": "heldout-task",
+   "query": "部署后接口返回结果没变化，如何排查并让改动立即上线？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_060081acf1094fa4"
+  },
+  {
+   "id": "hq190",
+   "type": "heldout-task",
+   "query": "怎样验证一次查询返回的证据数量和策略都符合预期？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_c919f5d300b24bba"
+  },
+  {
+   "id": "hq191",
+   "type": "heldout-task",
+   "query": "怎样在诊断工具里描述检索失败的具体原因？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_dd99e63aba3e4e42"
+  },
+  {
+   "id": "hq192",
+   "type": "heldout-task",
+   "query": "怎样确认某个检索实例是否真的启用了多通道融合？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_c1eed26478e14434"
+  },
+  {
+   "id": "hq193",
+   "type": "heldout-task",
+   "query": "怎样检查线上推理链路实际调用的是带正文的检索方法？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_f5f0676177274bc7"
+  },
+  {
+   "id": "hq194",
+   "type": "heldout-task",
+   "query": "如何给命中的摘要加标记并调整它在证据中的位置？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_6e91797aa84241f9"
+  },
+  {
+   "id": "hq195",
+   "type": "heldout-task",
+   "query": "怎样提升汇总记忆在检索结果中的权重和位置？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_513da2323c6c452e"
+  },
+  {
+   "id": "hq196",
+   "type": "heldout-task",
+   "query": "有没有办法把每日生成的记忆摘要提升为优先召回来源？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_b2812a770d614018"
+  },
+  {
+   "id": "hq197",
+   "type": "heldout-task",
+   "query": "私有评测集长期不更新会有什么影响？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_637fcd028587439b"
+  },
+  {
+   "id": "hq198",
+   "type": "heldout-task",
+   "query": "怎样在插入前先检查内容是否已存在并复用旧标识？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_c22302723423495d"
+  },
+  {
+   "id": "hq199",
+   "type": "heldout-task",
+   "query": "怎样把测试范围从评测入口扩展到核心业务模块？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_3574e0f2eaf84818"
+  },
+  {
+   "id": "hq200",
+   "type": "heldout-task",
+   "query": "怎样让审计可证明性报告清楚说明哪些是旧版遗留、哪些是真篡改？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_3c562846335b4b12"
+  },
+  {
+   "id": "hq201",
+   "type": "heldout-task",
+   "query": "怎样按投入产出比排出记忆系统下一步的改进优先级？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_7c929fc92b6c4491"
+  },
+  {
+   "id": "hq202",
+   "type": "heldout-task",
+   "query": "怎么从架构、可靠性、测试等角度综合判断项目质量？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_e798204d16f245e7"
+  },
+  {
+   "id": "hq203",
+   "type": "heldout-task",
+   "query": "核心代码没有自动化测试，回归风险该怎么评估？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_2844c10a89844801"
+  },
+  {
+   "id": "hq204",
+   "type": "heldout-task",
+   "query": "安全能力在正式生产库上到底哪些默认开启、哪些需要单独配置？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_7095540b7c9c43bb"
+  },
+  {
+   "id": "hq205",
+   "type": "heldout-task",
+   "query": "如何保证分层记忆的自动链路完整并按周期持续运行？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_ded24ff00c4243bc"
+  },
+  {
+   "id": "hq206",
+   "type": "heldout-task",
+   "query": "维护流程里做演练模式时要注意哪些传递问题？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_10a6b31844774709"
+  },
+  {
+   "id": "hq207",
+   "type": "heldout-task",
+   "query": "想提升某类原始数据转成语义知识的比例，该从哪一侧入手？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_61879bb4015f436b"
+  },
+  {
+   "id": "hq208",
+   "type": "heldout-task",
+   "query": "如何同时保留清理前的备份和清理后的导出记录？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_559d18060a184dbd"
+  },
+  {
+   "id": "hq209",
+   "type": "heldout-task",
+   "query": "想优化数据库体积，应该优先清理内容还是关联表？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_35d3d268c4f84444"
+  },
+  {
+   "id": "hq210",
+   "type": "heldout-task",
+   "query": "删掉旧数据之前要不要先做备份，删完还能恢复吗？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_9854fece864948f1"
+  },
+  {
+   "id": "hq211",
+   "type": "heldout-task",
+   "query": "没有GPU的情况下，向量检索能力受限该怎么应对？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_df371836f8b449f9"
+  },
+  {
+   "id": "hq212",
+   "type": "heldout-task",
+   "query": "怎样用多维度评分表来定位系统的短板和改进方向？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_57f1389af0544167"
+  },
+  {
+   "id": "hq213",
+   "type": "heldout-task",
+   "query": "没有显卡导致向量检索能力跟不上，该怎么规划？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_c54dd16f584d4a18"
+  },
+  {
+   "id": "hq214",
+   "type": "heldout-task",
+   "query": "记忆系统怎么做增删改查这类基本操作？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_a13f9baac4f84171"
+  },
+  {
+   "id": "hq215",
+   "type": "heldout-task",
+   "query": "如何做到记忆服务基本不需要人工干预就能稳定运行？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_70523601c78143b7"
+  },
+  {
+   "id": "hq216",
+   "type": "heldout-task",
+   "query": "如何让记忆系统在运行中不断自我进化而不影响线上服务？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_93bf35ebf3a94b31"
+  },
+  {
+   "id": "hq217",
+   "type": "heldout-task",
+   "query": "怎样实现记忆库自动备份、巩固和健康监控的无人运维？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_7b2b870d56f2483f"
+  },
+  {
+   "id": "hq218",
+   "type": "heldout-task",
+   "query": "怎么优化记忆系统的存储效率并保留完整审计链路？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_c668d5b0099c45a6"
+  },
+  {
+   "id": "hq219",
+   "type": "heldout-task",
+   "query": "怎样用线上指标和A/B实验让检索策略自动迭代优化？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_eacb2440260b4c17"
+  },
+  {
+   "id": "hq220",
+   "type": "heldout-task",
+   "query": "写入放大偏高和缓存没命中分别是什么原因造成的？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_49ba352aa10c4642"
+  },
+  {
+   "id": "hq221",
+   "type": "heldout-task",
+   "query": "如何让记忆自动衰减并分层管理？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_4b8191eb61284313"
+  },
+  {
+   "id": "hq222",
+   "type": "heldout-task",
+   "query": "复查时该盯哪几个指标来判断运行是否健康？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_4f37ec13457548d5"
+  },
+  {
+   "id": "hq223",
+   "type": "heldout-task",
+   "query": "想让多个自动化脚本按固定周期依次执行，有什么方案？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_473b5a698e594d85"
+  },
+  {
+   "id": "hq224",
+   "type": "heldout-task",
+   "query": "下一阶段提升系统表现的关键因素是什么？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_d36966f239974e8f"
+  },
+  {
+   "id": "hq225",
+   "type": "heldout-task",
+   "query": "一个已经稳定运行并完成多轮自进化的系统，下一步优化重点是什么？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_39d39a454ae94776"
+  },
+  {
+   "id": "hq226",
+   "type": "heldout-task",
+   "query": "怎么给记忆检索设置证据数量上限以控制成本？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_a56f05f8b3444c7a"
+  },
+  {
+   "id": "hq227",
+   "type": "heldout-task",
+   "query": "怎样区分活跃、归档和已合并的记忆数据？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_1b236d7f1ad04d31"
+  },
+  {
+   "id": "hq228",
+   "type": "heldout-task",
+   "query": "怎么简化排序权重还能保持效果不下降？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_572ca280115b4b50"
+  },
+  {
+   "id": "hq229",
+   "type": "heldout-task",
+   "query": "什么情况下才值得把检索系统改造成需要专用模型和索引重写的项目？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_6647050bacf244b5"
+  },
+  {
+   "id": "hq230",
+   "type": "heldout-task",
+   "query": "向量和关键词融合排序时，附加的图结构信息是否真的有用？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_23b182f130b44dde"
+  },
+  {
+   "id": "hq231",
+   "type": "heldout-task",
+   "query": "如何把向量、关键词和图谱检索结果融合成统一排序？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_f3f6982c486e4396"
+  },
+  {
+   "id": "hq232",
+   "type": "heldout-task",
+   "query": "想找评测长对话记忆能力的公开基准和当前最好成绩。",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_77b0499927c241e5"
+  },
+  {
+   "id": "hq233",
+   "type": "heldout-task",
+   "query": "怎么验证代码编译、测试和服务健康都正常？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_d24359f4039c47d4"
+  },
+  {
+   "id": "hq234",
+   "type": "heldout-task",
+   "query": "如何总结出一套可复用且诚实收敛的自进化方法？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_3a994d09bcc24aa3"
+  },
+  {
+   "id": "hq235",
+   "type": "heldout-task",
+   "query": "怎么把关键决策沉淀成可检索的长期记忆条目？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_9c698b45c8074330"
+  },
+  {
+   "id": "hq236",
+   "type": "heldout-task",
+   "query": "多轮会话关联的扩展效果怎么验证？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_6edcbc53c7c142e8"
+  },
+  {
+   "id": "hq237",
+   "type": "heldout-task",
+   "query": "如何查看系统积累了多少份用户行为特征画像？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_ae645cf66e32484e"
+  },
+  {
+   "id": "hq238",
+   "type": "heldout-task",
+   "query": "哪些文件的代码规模在优化后出现了明显增长？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_59f9d827c61c478e"
+  },
+  {
+   "id": "hq239",
+   "type": "heldout-task",
+   "query": "小规模私有评测集上，优化前后各检索指标分别表现如何？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_7026e3d431394efb"
+  },
+  {
+   "id": "hq240",
+   "type": "heldout-task",
+   "query": "怎么给自动优化加一个统计显著性门槛，防止把噪声当成提升？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_dd7099cf6b284cc6"
+  },
+  {
+   "id": "hq241",
+   "type": "heldout-task",
+   "query": "如何用开关加指标对比的方式验证一次结构改动是否有效？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_60e38ba4827742c8"
+  },
+  {
+   "id": "hq242",
+   "type": "heldout-task",
+   "query": "哪些任务类型的检索准确率接近满分，哪些明显偏低？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "mem_f5a4f85e349c4512"
+  },
+  {
+   "id": "hq243",
+   "type": "heldout-task",
+   "query": "人格评估结论从实体改成功能对齐后怎么解释？",
+   "target": "SELF_CONSCIOUSNESS_FRONTIER_MAP.md",
+   "source_memory_id": "mem_6d4d9ee2c2344399"
+  },
+  {
+   "id": "hq244",
+   "type": "heldout-task",
+   "query": "有没有带多重安全护栏、默认只做演练的批量删除脚本可用？",
+   "target": "SECURITY_BOUNDARIES.md",
+   "source_memory_id": "mem_a7ff790b74514176"
+  },
+  {
+   "id": "hq245",
+   "type": "heldout-task",
+   "query": "怎样用测试防止废弃表被误删或重新启用？",
+   "target": "SECURITY_BOUNDARIES.md",
+   "source_memory_id": "mem_2e2c69d45aa24958"
+  },
+  {
+   "id": "hq246",
+   "type": "heldout-task",
+   "query": "怎么用棘轮机制守住明文数据的占比不再上升？",
+   "target": "SECURITY_BOUNDARIES.md",
+   "source_memory_id": "mem_44f12ca4545b47c7"
+  },
+  {
+   "id": "hq247",
+   "type": "heldout-task",
+   "query": "如何记录一项决策的结果和代价以便日后复核？",
+   "target": "SECURITY_BOUNDARIES.md",
+   "source_memory_id": "mem_bfd3571961ef4763"
+  },
+  {
+   "id": "hq248",
+   "type": "heldout-task",
+   "query": "对外说明存储安全能力时，怎样避免把可配置开关说成已加密？",
+   "target": "SECURITY_BOUNDARIES.md",
+   "source_memory_id": "mem_0b4a615c15c04be3"
+  },
+  {
+   "id": "hq249",
+   "type": "heldout-task",
+   "query": "有没有办法让复核结论只针对当前数据而不评价整个系统？",
+   "target": "REVIEW_SELF_20260914.md",
+   "source_memory_id": "mem_365f9c96dbe14331"
+  },
+  {
+   "id": "hq250",
+   "type": "heldout-task",
+   "query": "系统里哪些环节需要先标记为待处理而不立即整改？",
+   "target": "RETIRED_MECHANISMS_20260913.md",
+   "source_memory_id": "mem_d5a9700757184c4a"
+  },
+  {
+   "id": "hq251",
+   "type": "heldout-task",
+   "query": "如何检查文本文件的换行符和字节序标记是否规范？",
+   "target": "READYZ_STATE_SPRAWL_DCSA_20260927.md",
+   "source_memory_id": "mem_2c15340cec734233"
+  },
+  {
+   "id": "hq252",
+   "type": "heldout-task",
+   "query": "看护者日志里哪一行能确认任务请求已被消费？",
+   "target": "READYZ_STATE_SPRAWL_DCSA_20260927.md",
+   "source_memory_id": "mem_0840f4a2acd044e4"
+  },
+  {
+   "id": "hq253",
+   "type": "heldout-task",
+   "query": "怎么给项目加一道检查，防止脚本文件丢失开头的特殊标记？",
+   "target": "READYZ_STATE_SPRAWL_DCSA_20260927.md",
+   "source_memory_id": "mem_cf19cf081db94b96"
+  },
+  {
+   "id": "hq254",
+   "type": "heldout-task",
+   "query": "程序报错信息误导排查方向时，应该怎样拆分错误类型？",
+   "target": "READYZ_STATE_SPRAWL_DCSA_20260927.md",
+   "source_memory_id": "mem_5e10b57dc09243b2"
+  },
+  {
+   "id": "hq255",
+   "type": "heldout-task",
+   "query": "怎么验证脚本文件编码和行尾格式是否合规？",
+   "target": "READYZ_STATE_SPRAWL_DCSA_20260927.md",
+   "source_memory_id": "mem_420f13679e5a4c89"
+  },
+  {
+   "id": "hq256",
+   "type": "heldout-task",
+   "query": "如何确认一个监控进程在指定时间窗口内没有发生重启且状态正常？",
+   "target": "READYZ_STATE_SPRAWL_DCSA_20260927.md",
+   "source_memory_id": "mem_14ae1eeeb5ec4a7b"
+  },
+  {
+   "id": "hq257",
+   "type": "heldout-task",
+   "query": "主流程在什么条件下才启用受限枚举且不伪造进程列表？",
+   "target": "READYZ_STATE_SPRAWL_DCSA_20260927.md",
+   "source_memory_id": "mem_20799e7559744e22"
+  },
+  {
+   "id": "hq258",
+   "type": "heldout-task",
+   "query": "采集入库的内容为什么搜不到明文，是加密导致的吗？",
+   "target": "READYZ_STATE_SPRAWL_DCSA_20260927.md",
+   "source_memory_id": "mem_f7b49ee7e1f648dc"
+  },
+  {
+   "id": "hq259",
+   "type": "heldout-task",
+   "query": "当前会话里哪些写入操作会被沙箱限制？",
+   "target": "READYZ_STATE_SPRAWL_DCSA_20260927.md",
+   "source_memory_id": "mem_4fe609bc07124ab3"
+  },
+  {
+   "id": "hq260",
+   "type": "heldout-task",
+   "query": "项目内的执行记录和全局知识库之间该怎么分工？",
+   "target": "READYZ_STATE_SPRAWL_DCSA_20260927.md",
+   "source_memory_id": "mem_528422bc10c6408d"
+  },
+  {
+   "id": "hq261",
+   "type": "heldout-task",
+   "query": "如何判断某个测试流程是否真的完成了全部验证？",
+   "target": "READYZ_STATE_SPRAWL_DCSA_20260927.md",
+   "source_memory_id": "mem_73691d3c04cb4344"
+  },
+  {
+   "id": "hq262",
+   "type": "heldout-task",
+   "query": "什么情况下需要换一个不受限的终端来跑重任务？",
+   "target": "READYZ_STATE_SPRAWL_DCSA_20260927.md",
+   "source_memory_id": "mem_204a4905787f428c"
+  },
+  {
+   "id": "hq263",
+   "type": "heldout-task",
+   "query": "如何判断一份测试失败证据是不是已经过时？",
+   "target": "READYZ_STATE_SPRAWL_DCSA_20260927.md",
+   "source_memory_id": "mem_8237363e59a1440e"
+  },
+  {
+   "id": "hq264",
+   "type": "heldout-task",
+   "query": "重新生成配置文件后怎么确认只有预期内容变化？",
+   "target": "READYZ_STATE_SPRAWL_DCSA_20260927.md",
+   "source_memory_id": "mem_e96ea65d88e74028"
+  },
+  {
+   "id": "hq265",
+   "type": "heldout-task",
+   "query": "在无法用版本控制回滚的情况下改动编码敏感文件有什么风险？",
+   "target": "READYZ_STATE_SPRAWL_DCSA_20260927.md",
+   "source_memory_id": "mem_6106ca83c64d44ea"
+  },
+  {
+   "id": "hq266",
+   "type": "heldout-task",
+   "query": "怎么验证同一章节内容不会同时出现在主档和归档里？",
+   "target": "READYZ_STATE_SPRAWL_DCSA_20260927.md",
+   "source_memory_id": "mem_e1f1eb2d37ee4f00"
+  },
+  {
+   "id": "hq267",
+   "type": "heldout-task",
+   "query": "自动化脚本只输出命令不替人做判断时，人工项该怎么处理？",
+   "target": "READYZ_STATE_SPRAWL_DCSA_20260927.md",
+   "source_memory_id": "mem_6eb8fbaecc4e40a9"
+  },
+  {
+   "id": "hq268",
+   "type": "heldout-task",
+   "query": "如何统计并展示只出现在文本说明中的孤立文件数量？",
+   "target": "READYZ_STATE_SPRAWL_DCSA_20260927.md",
+   "source_memory_id": "mem_f173c5ca5c3b4ba5"
+  },
+  {
+   "id": "hq269",
+   "type": "heldout-task",
+   "query": "检查单里怎么同步新增的判定档位避免被当成失败？",
+   "target": "READYZ_STATE_SPRAWL_DCSA_20260927.md",
+   "source_memory_id": "mem_a117ae6422a94d51"
+  },
+  {
+   "id": "hq270",
+   "type": "heldout-task",
+   "query": "日志里两轮间隔比预期长很多，导致误报，有什么办法减少这种假警报？",
+   "target": "READYZ_STATE_SPRAWL_DCSA_20260927.md",
+   "source_memory_id": "mem_3f220622f8554b4f"
+  },
+  {
+   "id": "hq271",
+   "type": "heldout-task",
+   "query": "如何判断当前进程是否处于沙箱限制并需要换普通终端？",
+   "target": "READYZ_STATE_SPRAWL_DCSA_20260927.md",
+   "source_memory_id": "mem_4954939c858142a5"
+  },
+  {
+   "id": "hq272",
+   "type": "heldout-task",
+   "query": "请求处理路径里怎么用检查手段确保不再出现改表结构的语句？",
+   "target": "READYZ_STATE_SPRAWL_DCSA_20260927.md",
+   "source_memory_id": "mem_b9fb34754a294b2b"
+  },
+  {
+   "id": "hq273",
+   "type": "heldout-task",
+   "query": "怎样检查系统自述中已知缺口的数量是否归零？",
+   "target": "READYZ_STATE_SPRAWL_DCSA_20260927.md",
+   "source_memory_id": "mem_1eae69c4520a4f9c"
+  },
+  {
+   "id": "hq274",
+   "type": "heldout-task",
+   "query": "执行改进建议时如何做到不发布只留记录？",
+   "target": "READYZ_STATE_SPRAWL_DCSA_20260927.md",
+   "source_memory_id": "mem_6be057417acf4240"
+  },
+  {
+   "id": "hq275",
+   "type": "heldout-task",
+   "query": "如何验证记忆市场协议是否已经可用？",
+   "target": "PLANNING_REVIEW_20260815.md",
+   "source_memory_id": "mem_a9d05e280a0447af"
+  },
+  {
+   "id": "hq276",
+   "type": "heldout-task",
+   "query": "面向隐私合规要求，记忆存储加密和审计功能做到什么程度了？",
+   "target": "PLANNING_REVIEW_20260815.md",
+   "source_memory_id": "mem_a5d9cf68190546b6"
+  },
+  {
+   "id": "hq277",
+   "type": "heldout-task",
+   "query": "页级打分时怎么根据词跨簇分布给不同权重？",
+   "target": "PAGETREE.md",
+   "source_memory_id": "mem_36024bf38b9645e8"
+  },
+  {
+   "id": "hq278",
+   "type": "heldout-task",
+   "query": "混合检索模式下拿不到完整文本，应该改走哪条通道？",
+   "target": "MIGRATION_GUIDE.md",
+   "source_memory_id": "mem_c9202a8ab36f4057"
+  },
+  {
+   "id": "hq279",
+   "type": "heldout-task",
+   "query": "怎么通过脚本把一台机器上的数据备份并恢复到另一台？",
+   "target": "MIGRATION_GUIDE.md",
+   "source_memory_id": "mem_aab2d605254c489b"
+  },
+  {
+   "id": "hq280",
+   "type": "heldout-task",
+   "query": "为什么逐条写入记忆的召回效果远不如整段聚合写入？",
+   "target": "MIGRATION_GUIDE.md",
+   "source_memory_id": "mem_c92e808dbf284980"
+  },
+  {
+   "id": "hq281",
+   "type": "heldout-task",
+   "query": "怎么查看某条记忆的历史修改记录和版本变化？",
+   "target": "MIGRATION_GUIDE.md",
+   "source_memory_id": "mem_a338b352628048c7"
+  },
+  {
+   "id": "hq282",
+   "type": "heldout-task",
+   "query": "如何设计一套自动巡检线索的决策流程？",
+   "target": "KNOWLEDGE_WEEKLY_2026-09-18.md",
+   "source_memory_id": "mem_416c8f7c3c7a4ef2"
+  },
+  {
+   "id": "hq283",
+   "type": "heldout-task",
+   "query": "写入链路和会话追踪方面还有哪些优化点要做？",
+   "target": "JOINT_CAPABILITY_MAP_20260814.md",
+   "source_memory_id": "mem_21593f5688a14b6c"
+  },
+  {
+   "id": "hq284",
+   "type": "heldout-task",
+   "query": "当前会话里权限提升不可用，想改配置该怎么办？",
+   "target": "JOINT_CAPABILITY_MAP_20260814.md",
+   "source_memory_id": "mem_b25fa12384fb4da6"
+  },
+  {
+   "id": "hq285",
+   "type": "heldout-task",
+   "query": "如何检查后台监控与遥测容器是否在持续运行？",
+   "target": "JOINT_CAPABILITY_MAP_20260814.md",
+   "source_memory_id": "mem_a66acb87cf60488b"
+  },
+  {
+   "id": "hq286",
+   "type": "heldout-task",
+   "query": "会话级别的事件遥测该用什么现成组件来接入？",
+   "target": "JOINT_CAPABILITY_MAP_20260814.md",
+   "source_memory_id": "mem_631e3384820748c7"
+  },
+  {
+   "id": "hq287",
+   "type": "heldout-task",
+   "query": "如何把五步循环的自动化流程接入支持断点续跑的任务框架？",
+   "target": "JOINT_CAPABILITY_MAP_20260814.md",
+   "source_memory_id": "mem_f9abdbc6fb08408a"
+  },
+  {
+   "id": "hq288",
+   "type": "heldout-task",
+   "query": "怎么统一管理多个脚本共用的账号密码等敏感配置？",
+   "target": "JOINT_CAPABILITY_MAP_20260814.md",
+   "source_memory_id": "mem_5db747ffa3444e71"
+  },
+  {
+   "id": "hq289",
+   "type": "heldout-task",
+   "query": "如何更新已有记忆同时保留冲突版本并让版本号递增？",
+   "target": "JOINT_CAPABILITY_MAP_20260814.md",
+   "source_memory_id": "mem_18c5742563cc498a"
+  },
+  {
+   "id": "hq290",
+   "type": "heldout-task",
+   "query": "多个子任务并行时怎么调度、汇报进度并汇总结果？",
+   "target": "JOINT_CAPABILITY_MAP_20260814.md",
+   "source_memory_id": "mem_2d4d07ea6e3e4145"
+  },
+  {
+   "id": "hq291",
+   "type": "heldout-task",
+   "query": "怎样把外部工具服务接入成可调用的原生工具？",
+   "target": "JOINT_CAPABILITY_MAP_20260814.md",
+   "source_memory_id": "mem_b9df80417e26476c"
+  },
+  {
+   "id": "hq292",
+   "type": "heldout-task",
+   "query": "怎么把会话事件接入可观测性平台做监控？",
+   "target": "JOINT_CAPABILITY_MAP_20260814.md",
+   "source_memory_id": "mem_fb0322b9d265449d"
+  },
+  {
+   "id": "hq293",
+   "type": "heldout-task",
+   "query": "回退逻辑触发后，怎么在报告里写清分母和占比？",
+   "target": "jev-ecosystem-brainification-20260927.md",
+   "source_memory_id": "mem_a5a8659943eb4288"
+  },
+  {
+   "id": "hq294",
+   "type": "heldout-task",
+   "query": "比较两种阈值口径时怎么做同题集双跑验证？",
+   "target": "jev-ecosystem-brainification-20260927.md",
+   "source_memory_id": "mem_5737bb5d2d61441b"
+  },
+  {
+   "id": "hq295",
+   "type": "heldout-task",
+   "query": "想了解某个模型自动模式的阈值标定方法，有资料吗？",
+   "target": "jev-borrowings.md",
+   "source_memory_id": "mem_ec31a358b7f041c7"
+  },
+  {
+   "id": "hq296",
+   "type": "heldout-task",
+   "query": "如何把某个实验特性改为默认关闭、仅手动开启？",
+   "target": "jev-borrowings.md",
+   "source_memory_id": "mem_494643d69f8540b5"
+  },
+  {
+   "id": "hq297",
+   "type": "heldout-task",
+   "query": "怎样判断一个排序模型能否迁移到新的语料分布上？",
+   "target": "jev-borrowings.md",
+   "source_memory_id": "mem_e8f63c9587e54569"
+  },
+  {
+   "id": "hq298",
+   "type": "heldout-task",
+   "query": "如何判断检索结果是否真的匹配了目标标识？",
+   "target": "jev-borrowings.md",
+   "source_memory_id": "mem_a62d700e1b884e1f"
+  },
+  {
+   "id": "hq299",
+   "type": "heldout-task",
+   "query": "如何通过环境变量或删除文件来撤销一次配置变更？",
+   "target": "jev-borrowings.md",
+   "source_memory_id": "mem_c30220d5327d407b"
+  },
+  {
+   "id": "hq300",
+   "type": "heldout-task",
+   "query": "实测发现某置信度指标方向相反时，融合策略该怎么改？",
+   "target": "jev-borrowings.md",
+   "source_memory_id": "mem_6720c4fb98b946c9"
+  },
+  {
+   "id": "hq301",
+   "type": "heldout-task",
+   "query": "如何统计一批决策日志里的样本量和校准指标？",
+   "target": "jev-borrowings.md",
+   "source_memory_id": "mem_b154e97827e94b53"
+  },
+  {
+   "id": "hq302",
+   "type": "heldout-task",
+   "query": "切换默认概率来源时，怎么保证缺失情况下系统不会出错？",
+   "target": "jev-borrowings.md",
+   "source_memory_id": "mem_1adcc56f27f24b6a"
+  },
+  {
+   "id": "hq303",
+   "type": "heldout-task",
+   "query": "要不要为了补采数据再花时间重跑一轮评估？",
+   "target": "jev-borrowings.md",
+   "source_memory_id": "mem_5b3ed0e145204c04"
+  },
+  {
+   "id": "hq304",
+   "type": "heldout-task",
+   "query": "怎么防止后续改动把不该参与排序的模块接进排序路径？",
+   "target": "jev-borrowings.md",
+   "source_memory_id": "mem_e0ed11ae38304c6a"
+  },
+  {
+   "id": "hq305",
+   "type": "heldout-task",
+   "query": "特征映射落盘后，档位概率和切分边界存在哪里？",
+   "target": "jev-borrowings.md",
+   "source_memory_id": "mem_7beb648228db4c3b"
+  },
+  {
+   "id": "hq306",
+   "type": "heldout-task",
+   "query": "怎么用分位切箱的方式比较不同候选信号在高风险档的命中率？",
+   "target": "jev-borrowings.md",
+   "source_memory_id": "mem_98b995fbd6884a14"
+  },
+  {
+   "id": "hq307",
+   "type": "heldout-task",
+   "query": "怎么判断模型的高置信度是过度自信还是真的准确？",
+   "target": "jev-borrowings.md",
+   "source_memory_id": "mem_799dffe5aee84399"
+  },
+  {
+   "id": "hq308",
+   "type": "heldout-task",
+   "query": "怎样用历史决策记录评估门控策略的概率是否可靠？",
+   "target": "jev-borrowings.md",
+   "source_memory_id": "mem_630caee0b6b54599"
+  },
+  {
+   "id": "hq309",
+   "type": "heldout-task",
+   "query": "校准流程中如何区分历史标注和标准答案标注并分别记录？",
+   "target": "jev-borrowings.md",
+   "source_memory_id": "mem_60e4942dd2cd4e1f"
+  },
+  {
+   "id": "hq310",
+   "type": "heldout-task",
+   "query": "如何设计实验来验证一个配置项是否只是空操作？",
+   "target": "jev-borrowings.md",
+   "source_memory_id": "mem_7b7680cad9da4cc4"
+  },
+  {
+   "id": "hq311",
+   "type": "heldout-task",
+   "query": "更换评估标准后，同一模型的命中率为何会出现大幅虚高？",
+   "target": "jev-borrowings.md",
+   "source_memory_id": "mem_6f89e8323b2f4a15"
+  },
+  {
+   "id": "hq312",
+   "type": "heldout-task",
+   "query": "如何根据证据强弱对检索结果做分级处理？",
+   "target": "jev-borrowings.md",
+   "source_memory_id": "mem_2c9166947e964d4d"
+  },
+  {
+   "id": "hq313",
+   "type": "heldout-task",
+   "query": "评估模型置信度时，日志样本本身可能有什么问题？",
+   "target": "v8.2.md",
+   "source_memory_id": "mem_2a6c5f3a25f14538"
+  },
+  {
+   "id": "hq314",
+   "type": "heldout-task",
+   "query": "项目未来的演进方向和商业化计划在哪里看？",
+   "target": "index.md",
+   "source_memory_id": "mem_e25640863140417c"
+  },
+  {
+   "id": "hq315",
+   "type": "heldout-task",
+   "query": "如何验证一次评测输出文件是否完整可信并定位其来源？",
+   "target": "EXTERNAL_VERIFICATION.md",
+   "source_memory_id": "mem_074ffec42a2b44d8"
+  },
+  {
+   "id": "hq316",
+   "type": "heldout-task",
+   "query": "怎么根据已有输出文件反推出当初执行的命令？",
+   "target": "EXTERNAL_VERIFICATION.md",
+   "source_memory_id": "mem_7fe5280d9fdf422d"
+  },
+  {
+   "id": "hq317",
+   "type": "heldout-task",
+   "query": "如何验证一次评测运行是否达到冒烟测试级别？",
+   "target": "EXTERNAL_VERIFICATION.md",
+   "source_memory_id": "mem_82034bfcd1104d17"
+  },
+  {
+   "id": "hq318",
+   "type": "heldout-task",
+   "query": "如何用哈希值校验每次实验产物是否一致？",
+   "target": "EXTERNAL_VERIFICATION.md",
+   "source_memory_id": "mem_41db6748203d4b10"
+  },
+  {
+   "id": "hq319",
+   "type": "heldout-task",
+   "query": "如何设计一套让外部方自行校验数据真实性的流程？",
+   "target": "EXTERNAL_VERIFICATION.md",
+   "source_memory_id": "mem_2be2a6d7465548ad"
+  },
+  {
+   "id": "hq320",
+   "type": "heldout-task",
+   "query": "加密字段的查询结果怎么在出口统一还原？",
+   "target": "ENC_KEYWORD_AUDIT_20260909.md",
+   "source_memory_id": "mem_168a85afc71d419c"
+  },
+  {
+   "id": "hq321",
+   "type": "heldout-task",
+   "query": "怎么撤销一个关于人格实体的错误判断并补上证据？",
+   "target": "CONSCIOUSNESS_SCORE_RETIREMENT.md",
+   "source_memory_id": "mem_acaa94c339e94a87"
+  },
+  {
+   "id": "hq322",
+   "type": "heldout-task",
+   "query": "如何确认某项能力评估结果是最新跑出来的，而不是过期数据？",
+   "target": "CONSCIOUSNESS_SCORE_RETIREMENT.md",
+   "source_memory_id": "mem_527ba097287c4c10"
+  },
+  {
+   "id": "hq323",
+   "type": "heldout-task",
+   "query": "为什么自我或意识类的命名容易让读者把主张当成事实？",
+   "target": "CONSCIOUSNESS_SCORE_RETIREMENT.md",
+   "source_memory_id": "mem_93ee770361a444ec"
+  },
+  {
+   "id": "hq324",
+   "type": "heldout-task",
+   "query": "怎么定位某个架构设计文档的存储位置？",
+   "target": "COMPLIANCE_REPORT_2026-09-27.md",
+   "source_memory_id": "mem_1a6de8c0401a4c22"
+  },
+  {
+   "id": "hq325",
+   "type": "heldout-task",
+   "query": "记忆系统对外宣称的安全能力该以什么文档为准？",
+   "target": "COMPLIANCE_GDPR_20260815.md",
+   "source_memory_id": "mem_76d7127ec08e4e8b"
+  },
+  {
+   "id": "hq326",
+   "type": "heldout-task",
+   "query": "框架自动生成的接口规范文件怎么访问？",
+   "target": "AUTOMATION.md",
+   "source_memory_id": "mem_33477f4e32b647b0"
+  },
+  {
+   "id": "hq327",
+   "type": "heldout-task",
+   "query": "接口文档里查不到审批相关端点，是还没实现吗？",
+   "target": "AUTOMATION.md",
+   "source_memory_id": "mem_1f7e74d94b354a36"
+  },
+  {
+   "id": "hq328",
+   "type": "heldout-task",
+   "query": "怎样检测智能体身份漂移并在异常时自动重建？",
+   "target": "TRINITY_STATUS_20260815_V2.md",
+   "source_memory_id": "mem_2a81d3e8bc5d4914"
+  },
+  {
+   "id": "hq329",
+   "type": "heldout-task",
+   "query": "怎么用容器化方式把接口、数据库和面板一起跑起来？",
+   "target": "FEATURE_OVERVIEW_20260815.md",
+   "source_memory_id": "mem_e220d5f04b5b4c26"
+  },
+  {
+   "id": "hq330",
+   "type": "heldout-task",
+   "query": "怎样检测记忆投毒和后门并保证审计完整性？",
+   "target": "FEATURE_OVERVIEW_20260815.md",
+   "source_memory_id": "mem_745cef93eb874432"
+  },
+  {
+   "id": "hq331",
+   "type": "heldout-task",
+   "query": "如何修正产品文档中与真实运行情况不符的描述？",
+   "target": "COMPARISON_BEFORE_AFTER_R7_R8.md",
+   "source_memory_id": "mem_a4add4e5bacc4b14"
+  },
+  {
+   "id": "hq332",
+   "type": "heldout-task",
+   "query": "怎么对比新旧版本之间默认行为的差异？",
+   "target": "COMPARISON_BEFORE_AFTER_R7_R8.md",
+   "source_memory_id": "mem_90bf91cd7a8e4d66"
+  },
+  {
+   "id": "hq333",
+   "type": "heldout-task",
+   "query": "评测结论的可信度边界应该怎么向用户交代？",
+   "target": "COMPARISON_BEFORE_AFTER_FULL.md",
+   "source_memory_id": "mem_492ca7628c254447"
+  },
+  {
+   "id": "hq334",
+   "type": "heldout-task",
+   "query": "用户要求导出个人数据时怎么保证不泄露密文？",
+   "target": "COMPARISON_BEFORE_AFTER_FULL.md",
+   "source_memory_id": "mem_068f1647c1774684"
+  },
+  {
+   "id": "hq335",
+   "type": "heldout-task",
+   "query": "如何通过前缀管理提升提示缓存的命中率？",
+   "target": "CLOSURE_AND_OPTIMIZATION_20260824.md",
+   "source_memory_id": "mem_8486d0a4abe44a50"
+  },
+  {
+   "id": "hq336",
+   "type": "heldout-task",
+   "query": "面对多个待办事项，怎么划分优先级并给出落地顺序建议？",
+   "target": "WRITE_CONFIRM_GATE.md",
+   "source_memory_id": "60a9e74b-8a87-4a61-9af9-ecc00cfac2cc"
+  },
+  {
+   "id": "hq337",
+   "type": "heldout-task",
+   "query": "怎样通过命令行工具对已保存的信息做版本回退？",
+   "target": "WRITE_CONFIRM_GATE.md",
+   "source_memory_id": "e57beee4-1051-49cc-98f5-838b7abb8be8"
+  },
+  {
+   "id": "hq338",
+   "type": "heldout-task",
+   "query": "多个仓库的库存如何统一管理并就近发货？",
+   "target": "wms_solution.md",
+   "source_memory_id": "c9ee99a8-d010-4244-87bb-38fb31f0b79b"
+  },
+  {
+   "id": "hq339",
+   "type": "heldout-task",
+   "query": "仓储平台底层如何实现弹性扩容和容灾能力？",
+   "target": "wms_solution.md",
+   "source_memory_id": "d4fe26ac-a668-4373-ae71-fae573d2fe4e"
+  },
+  {
+   "id": "hq340",
+   "type": "heldout-task",
+   "query": "为什么渐进式改造比全部推翻重做更适合现有业务？",
+   "target": "wms_refactor_plan.md",
+   "source_memory_id": "07c82039-b215-4654-ac4b-cd3c946d838f"
+  },
+  {
+   "id": "hq341",
+   "type": "heldout-task",
+   "query": "供应商管理库存模式下怎么自动触发补货和结算？",
+   "target": "wms_perfect_blueprint.md",
+   "source_memory_id": "68d78ba4-057a-42f5-b5f2-5665aea363e2"
+  },
+  {
+   "id": "hq342",
+   "type": "heldout-task",
+   "query": "如何从人工盘点升级为数字化看板管理？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "271f7815-17f7-4d6c-ae59-b933e7bb2144"
+  },
+  {
+   "id": "hq343",
+   "type": "heldout-task",
+   "query": "如何把温控设备采集的数据对接到企业现有管理系统？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "2fb36d63-28cd-49e5-b470-65041e6c3754"
+  },
+  {
+   "id": "hq344",
+   "type": "heldout-task",
+   "query": "大促发货出现异常时，有哪些降级或人工兜底方案？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "e99084d2-6d0c-4925-8127-a64887c9aced"
+  },
+  {
+   "id": "hq345",
+   "type": "heldout-task",
+   "query": "怎样设计操作界面才能不打断工人的行走路线？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "e19dde8e-dc80-40be-aad0-591aea67a550"
+  },
+  {
+   "id": "hq346",
+   "type": "heldout-task",
+   "query": "库存管理中怎样确定何时补货和补多少？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "cb3ead82-c6fa-4748-b917-c53a9a463508"
+  },
+  {
+   "id": "hq347",
+   "type": "heldout-task",
+   "query": "货位标签和箱贴的模板如何统一配置和打印？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "c7b4f678-8834-44fd-ba92-06fa5b8958dd"
+  },
+  {
+   "id": "hq348",
+   "type": "heldout-task",
+   "query": "仓库之间和装卸口怎么联动定位来安排发货？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "d20a88f9-7189-45d4-b8c4-55fe1fa21d8d"
+  },
+  {
+   "id": "hq349",
+   "type": "heldout-task",
+   "query": "同一仓库里多个货主怎么区分各自的货物归属？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "ab6c56b1-8c04-490d-bbf1-649954ad923a"
+  },
+  {
+   "id": "hq350",
+   "type": "heldout-task",
+   "query": "退货从接收到重新入库的完整逆向处理链路怎么搭建？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "b22c571f-d66b-4821-9c45-7feb3f35bcff"
+  },
+  {
+   "id": "hq351",
+   "type": "heldout-task",
+   "query": "怎样安排补货才能不影响正常拣货作业？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "260939ac-653d-4518-87f9-30ff961d2a40"
+  },
+  {
+   "id": "hq352",
+   "type": "heldout-task",
+   "query": "怎么对接承运商接口实现发货和轨迹同步？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "0864fef8-4258-4047-b60a-b5fcdd309682"
+  },
+  {
+   "id": "hq353",
+   "type": "heldout-task",
+   "query": "有什么办法能降低发货错误率？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "eacff1f2-0e0b-48e1-8e05-183b92a66d9b"
+  },
+  {
+   "id": "hq354",
+   "type": "heldout-task",
+   "query": "怎样根据订单量和商品种类结构来决定拣货模式",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "130feacb-e322-44a9-aace-15e82c7fbb6a"
+  },
+  {
+   "id": "hq355",
+   "type": "heldout-task",
+   "query": "订单在收货时就能满足的情况下该怎么安排发货？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "355ce78d-917b-4843-9f38-e75b618db970"
+  },
+  {
+   "id": "hq356",
+   "type": "heldout-task",
+   "query": "怎样设计发货复核步骤来降低错发风险",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "c7fa3acf-f53c-4710-87c9-75dd267eca4b"
+  },
+  {
+   "id": "hq357",
+   "type": "heldout-task",
+   "query": "有哪些盘点方式可以按作业区域优先安排执行？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "e006cd7e-d6e0-4d8b-81cb-6c2dc182c080"
+  },
+  {
+   "id": "hq358",
+   "type": "heldout-task",
+   "query": "电商发货如何同时实现效期追溯和序列号校验？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "b101dc4d-aec1-43c8-a1e2-18fd7cecb885"
+  },
+  {
+   "id": "hq359",
+   "type": "heldout-task",
+   "query": "有没有按使用量付费的仓储自动化方案？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "5a375316-0f2e-4ec9-bc38-b2e423d14dc0"
+  },
+  {
+   "id": "hq360",
+   "type": "heldout-task",
+   "query": "需要开放接口对接多个平台的仓储SaaS有哪些？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "b7526650-4601-4f1f-b9c6-ff1aa5886682"
+  },
+  {
+   "id": "hq361",
+   "type": "heldout-task",
+   "query": "怎样在仓库上线前提前发现设计缺陷并持续优化运营？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "f8752bc3-69a8-4810-b34b-defb77999029"
+  },
+  {
+   "id": "hq362",
+   "type": "heldout-task",
+   "query": "第三方仓储服务中如何把操作费和增值费自动算清楚？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "e856fecb-453e-4f6d-9e15-500cb9cb3849"
+  },
+  {
+   "id": "hq363",
+   "type": "heldout-task",
+   "query": "仓储管理软件未来的技术演进方向是什么？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "61b0b21a-6c50-4282-afd2-ae0f01c81a25"
+  },
+  {
+   "id": "hq364",
+   "type": "heldout-task",
+   "query": "生命科学领域仓库如何做批次效期与审计追踪",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "5338ccf0-0a38-4626-8aae-7923dc8ba8a2"
+  },
+  {
+   "id": "hq365",
+   "type": "heldout-task",
+   "query": "全渠道业务模式下适合用哪类仓储管理解决方案？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "de5981cf-6dcb-4824-b97a-feb6bf47091e"
+  },
+  {
+   "id": "hq366",
+   "type": "heldout-task",
+   "query": "直播卖货爆单场景下高并发架构该怎么整体规划？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "a2a8cae2-835c-4284-ba27-3a4de9b9c151"
+  },
+  {
+   "id": "hq367",
+   "type": "heldout-task",
+   "query": "从审核订单到执行拣货，正确的操作顺序是什么？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "823c2872-a228-4bbe-85b8-94c9192e2961"
+  },
+  {
+   "id": "hq368",
+   "type": "heldout-task",
+   "query": "如何排查代码已更新但用户看到的还是旧版本的问题？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "5e91e6fa-3859-4ea3-8bf1-5ff08f5416b4"
+  },
+  {
+   "id": "hq369",
+   "type": "heldout-task",
+   "query": "仓储项目构建时如何确认类型检查和打包都没问题？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "b3bdc5aa-a32d-4311-baa4-a4a3de6f37c9"
+  },
+  {
+   "id": "hq370",
+   "type": "heldout-task",
+   "query": "想提升库存准确率，条码和射频识别分别适合哪些作业场景？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "cfcce456-0d57-4357-9a43-547a68a14d25"
+  },
+  {
+   "id": "hq371",
+   "type": "heldout-task",
+   "query": "想优化仓库布局，有哪些存储策略可以参考？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "92f60ba2-7fa7-4bfd-b654-0e917daac759"
+  },
+  {
+   "id": "hq372",
+   "type": "heldout-task",
+   "query": "怎样让仓储业务的规则和流程可配置化？",
+   "target": "wms_knowledge.md",
+   "source_memory_id": "ea4e3a25-d5e6-498f-88e7-1e7f13ecf2a7"
+  },
+  {
+   "id": "hq373",
+   "type": "heldout-task",
+   "query": "移动端仓储作业如何覆盖从入库到复核的扫码全流程？",
+   "target": "wms_flow_pages.md",
+   "source_memory_id": "12313279-be3b-4843-80f2-01dfa48583ec"
+  },
+  {
+   "id": "hq374",
+   "type": "heldout-task",
+   "query": "有没有适合仓储运营的报表看板设计方案？",
+   "target": "wms_flow_pages.md",
+   "source_memory_id": "99142860-f206-4874-b85c-1219534e34a9"
+  },
+  {
+   "id": "hq375",
+   "type": "heldout-task",
+   "query": "怎样设计从盘点计划到差异调整的完整流程",
+   "target": "wms_flow_pages.md",
+   "source_memory_id": "4f51e25e-dc6d-401e-ae05-8ac6ff5ec6ad"
+  },
+  {
+   "id": "hq376",
+   "type": "heldout-task",
+   "query": "在哪里查看订单发货后的运输和签收进度？",
+   "target": "wms_flow_pages.md",
+   "source_memory_id": "24c7b2d2-be3f-4c69-8593-32cca7fe8865"
+  },
+  {
+   "id": "hq377",
+   "type": "heldout-task",
+   "query": "怎么设计一套从找货到复核的完整出库拣选流程？",
+   "target": "wms_flow_pages.md",
+   "source_memory_id": "bcc0d90f-4c6f-418e-9820-23972efc6013"
+  },
+  {
+   "id": "hq378",
+   "type": "heldout-task",
+   "query": "怎样在首页集中查看当天需要完成的任务和异常提醒？",
+   "target": "wms_flow_pages.md",
+   "source_memory_id": "6a5b80d7-454c-411b-b260-f1dd3e874159"
+  },
+  {
+   "id": "hq379",
+   "type": "heldout-task",
+   "query": "批量拣货任务从生成到结束要经历哪些阶段？",
+   "target": "wms_flow_pages.md",
+   "source_memory_id": "47bedea4-adde-462b-8ff3-c821a01d6f0d"
+  },
+  {
+   "id": "hq380",
+   "type": "heldout-task",
+   "query": "跨仓库调货后，两边库存怎么保持一致？",
+   "target": "wms_flow_pages.md",
+   "source_memory_id": "ebdadc91-d17c-495a-8d1c-ccd8f95482c9"
+  },
+  {
+   "id": "hq381",
+   "type": "heldout-task",
+   "query": "如何对退货或回收流程做分级处理？",
+   "target": "wms_execution_check_v3.md",
+   "source_memory_id": "5226378e-9a9e-4315-b347-22e63046dd5e"
+  },
+  {
+   "id": "hq382",
+   "type": "heldout-task",
+   "query": "怎样整理一份可追溯的系统巡检结果文档？",
+   "target": "wms_execution_check_v3.md",
+   "source_memory_id": "f2e50514-9a4c-4d30-8b5a-5e091427ce6e"
+  },
+  {
+   "id": "hq383",
+   "type": "heldout-task",
+   "query": "如何确认查询结果中不再包含多余的调试信息？",
+   "target": "wms_execution_check.md",
+   "source_memory_id": "e6d678b4-63e7-45e7-9265-aa999b6300bf"
+  },
+  {
+   "id": "hq384",
+   "type": "heldout-task",
+   "query": "待办事项里哪些属于下一执行步的范围？",
+   "target": "WEB_BORROW_BACKLOG_20260907.md",
+   "source_memory_id": "a9ef75dd-deda-46e2-bcd8-13468980ae40"
+  },
+  {
+   "id": "hq385",
+   "type": "heldout-task",
+   "query": "怎么确定当前阶段哪些任务已经就位、哪些还没开始？",
+   "target": "WEAKNESS_OPTIMIZATION_PLAN_20260913.md",
+   "source_memory_id": "01f89f8d-5cf3-4ec0-90c8-5bc2454dd4ce"
+  },
+  {
+   "id": "hq386",
+   "type": "heldout-task",
+   "query": "代码里更新访问时间的逻辑还没改，迁移前要注意什么？",
+   "target": "WEAKNESS_OPTIMIZATION_PLAN_20260913.md",
+   "source_memory_id": "887cbb98-c4f2-41ae-90ae-5cc105a8afdf"
+  },
+  {
+   "id": "hq387",
+   "type": "heldout-task",
+   "query": "如何把长期路线图拆成小步快跑的执行节奏？",
+   "target": "USER_PROFILE_20260908.md",
+   "source_memory_id": "f1a3b2e6-18bb-4800-a910-16a091a371fd"
+  },
+  {
+   "id": "hq388",
+   "type": "heldout-task",
+   "query": "长时间运行的评测任务中途卡住，有什么分批重跑的方案？",
+   "target": "TUNE_OBSERVATION_20260828.md",
+   "source_memory_id": "e7b5d52f-74c3-46cf-a4d7-d30b2284b1e2"
+  },
+  {
+   "id": "hq389",
+   "type": "heldout-task",
+   "query": "如何证明海量操作记录每一条都未被篡改？",
+   "target": "TRINITY_VALUE_REVIEW.md",
+   "source_memory_id": "9e35b5a3-6d40-4417-b014-7cf480efce3b"
+  },
+  {
+   "id": "hq390",
+   "type": "heldout-task",
+   "query": "怎样用自检和证据链标准衡量知识库的成熟度？",
+   "target": "TRINITY_VALUE_ASSESSMENT.md",
+   "source_memory_id": "98114915-ce42-4339-baf1-39ef862c9a12"
+  },
+  {
+   "id": "hq391",
+   "type": "heldout-task",
+   "query": "备份数据默认保留多久，如何配置自动恢复策略？",
+   "target": "TRINITY_SYSTEM_OVERVIEW.md",
+   "source_memory_id": "188b1ccf-29be-4135-a712-ed1ce059a0e6"
+  },
+  {
+   "id": "hq392",
+   "type": "heldout-task",
+   "query": "怎么用图扩散方式找到间接关联信息？",
+   "target": "TRINITY_SYSTEM_OVERVIEW.md",
+   "source_memory_id": "31913a3d-4ae0-4dcd-a43b-b57ff3e94ccd"
+  },
+  {
+   "id": "hq393",
+   "type": "heldout-task",
+   "query": "如何按信息类型过滤后再返回匹配结果？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "959539da-1263-4e6a-b1ff-f3e73c766103"
+  },
+  {
+   "id": "hq394",
+   "type": "heldout-task",
+   "query": "怎么建立从基准到最终判定的完整验证链路？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "17850ed3-08a6-4bec-9b0e-199a1ad6169c"
+  },
+  {
+   "id": "hq395",
+   "type": "heldout-task",
+   "query": "怎么限制每个智能体最多能接多少任务来防止资源被占满？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "b22aa5da-4d73-4d9e-8479-09fdfb133d28"
+  },
+  {
+   "id": "hq396",
+   "type": "heldout-task",
+   "query": "如何规划定时任务来持续监控服务状态并自我修复？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "9137be27-13e5-4eab-9be5-152a5d39ca3f"
+  },
+  {
+   "id": "hq397",
+   "type": "heldout-task",
+   "query": "如何验证一个反馈优化流程在真实场景下是否有效运转？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "5bd2f83e-510f-41dd-b30b-0314307b1396"
+  },
+  {
+   "id": "hq398",
+   "type": "heldout-task",
+   "query": "如何为长期保存的记忆建立版本追溯和归档流程？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "5a49d798-98cb-42b0-92d7-5bcacd6dff77"
+  },
+  {
+   "id": "hq399",
+   "type": "heldout-task",
+   "query": "如何根据历史运行记录评估当前进展并决定下一步？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "835cc58c-407a-49b9-b7ae-4d88d81e7e66"
+  },
+  {
+   "id": "hq400",
+   "type": "heldout-task",
+   "query": "如何统计和验证自动化流程的实际运行效果？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "b8456d39-8f0e-4782-a1b7-1e31cf5ca07d"
+  },
+  {
+   "id": "hq401",
+   "type": "heldout-task",
+   "query": "日常巡检脚本需要包含哪些检查项？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "0a505628-fbb2-4ecc-86b1-47652e03ea92"
+  },
+  {
+   "id": "hq402",
+   "type": "heldout-task",
+   "query": "本地部署的检索服务接口地址和参数格式是什么？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "60e64cd1-1e11-49d1-8ac2-1d118ff5a995"
+  },
+  {
+   "id": "hq403",
+   "type": "heldout-task",
+   "query": "本机地址和端口怎么在浏览器中直接访问？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "124a9e22-85b3-4a28-9cf8-4cc6e4bebe2a"
+  },
+  {
+   "id": "hq404",
+   "type": "heldout-task",
+   "query": "怎样在命令行里做相似度查询并控制输出条数？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "980a266f-bc43-4cff-abef-1bc4266df636"
+  },
+  {
+   "id": "hq405",
+   "type": "heldout-task",
+   "query": "本地部署的程序怎么检查它有没有启动成功？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "403169b5-8432-442d-a86e-98eea3eb9d15"
+  },
+  {
+   "id": "hq406",
+   "type": "heldout-task",
+   "query": "如何实现跨来源数据的统一展示？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "d2141584-ebd2-4ac5-8e68-9c6c59f45da8"
+  },
+  {
+   "id": "hq407",
+   "type": "heldout-task",
+   "query": "怎样把大量文件和结构化数据整合成一个可查询的知识库？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "2ef7a087-11a7-4558-b434-f408fb95291f"
+  },
+  {
+   "id": "hq408",
+   "type": "heldout-task",
+   "query": "如何让智能体订阅任务变化并在完成后通知？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "dd2135bb-4753-47c4-8e0a-6339cecc548c"
+  },
+  {
+   "id": "hq409",
+   "type": "heldout-task",
+   "query": "我想把日常记录按主题分类并支持快速检索，该怎么做？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "e775b664-f999-450a-89a0-6e66c4e128f5"
+  },
+  {
+   "id": "hq410",
+   "type": "heldout-task",
+   "query": "如何为智能体的记忆系统设计版本管理和审计追踪？",
+   "target": "TRINITY_SUMMARY_20260827.md",
+   "source_memory_id": "b06ee80b-c9fb-48b2-b5cf-4602bc7eeaa5"
+  },
+  {
+   "id": "hq411",
+   "type": "heldout-task",
+   "query": "怎么把技术能力转化为可衡量的业务价值？",
+   "target": "TRINITY_STATUS_20260827.md",
+   "source_memory_id": "210c216b-6206-4960-948a-685ecc4720b3"
+  },
+  {
+   "id": "hq412",
+   "type": "heldout-task",
+   "query": "如何实现记忆内容的冲突自动合并与操作审计追踪？",
+   "target": "TRINITY_STATUS_20260827.md",
+   "source_memory_id": "f23a00c6-f504-49f3-b736-14f91d4e7e74"
+  },
+  {
+   "id": "hq413",
+   "type": "heldout-task",
+   "query": "第三方排行榜这类发布生态为什么被排除在外？",
+   "target": "TRINITY_REVIEW_2026Q4.md",
+   "source_memory_id": "c57fcf54-9da7-4c4e-9b0b-dfcd1bc0dee8"
+  },
+  {
+   "id": "hq414",
+   "type": "heldout-task",
+   "query": "遇到能力瓶颈时怎么判断是现象层限制还是底层问题？",
+   "target": "TRINITY_REVIEW_2026Q4.md",
+   "source_memory_id": "346173de-4706-4287-9c4c-e8e4265b62d0"
+  },
+  {
+   "id": "hq415",
+   "type": "heldout-task",
+   "query": "怎么在记忆里同时表达事件时间和记录时间两种时序关系？",
+   "target": "TRINITY_NETWORK_EVALUATION_2026.md",
+   "source_memory_id": "9bf9bd4a-086f-4f2c-aaa3-9b5d336cdc9b"
+  },
+  {
+   "id": "hq416",
+   "type": "heldout-task",
+   "query": "后台进程卡死了怎么自动检测并重启？",
+   "target": "TRINITY_MASTER_SUMMARY_20260821.md",
+   "source_memory_id": "5ce9179e-1d23-4612-86ef-6f89625792d7"
+  },
+  {
+   "id": "hq417",
+   "type": "heldout-task",
+   "query": "如何判断一个记忆系统在问答基准上是否领先？",
+   "target": "TRINITY_MASTER_SUMMARY_20260821.md",
+   "source_memory_id": "72e862b7-796d-4dc0-a7d0-fc07792b0dfa"
+  },
+  {
+   "id": "hq418",
+   "type": "heldout-task",
+   "query": "怎么评估一个知识库的内容质量和实用价值？",
+   "target": "TRINITY_KNOWLEDGE_VALUE.md",
+   "source_memory_id": "3b10deb5-975d-4b5d-9593-b684ee3eafab"
+  },
+  {
+   "id": "hq419",
+   "type": "heldout-task",
+   "query": "怎样用实测数据来衡量知识生成功能的产出效果？",
+   "target": "TRINITY_KNOWLEDGE_VALUE.md",
+   "source_memory_id": "db47d844-f610-4946-8a95-98b233e42be9"
+  },
+  {
+   "id": "hq420",
+   "type": "heldout-task",
+   "query": "单用户场景下如何确认主观体验类问题是否真实存在？",
+   "target": "TRINITY_HOLOGRAPHIC_SELFCHECK.md",
+   "source_memory_id": "ae27946b-d1a3-4212-9682-e78aafb00a46"
+  },
+  {
+   "id": "hq421",
+   "type": "heldout-task",
+   "query": "怎么评估一套智能体记忆系统对用户和研究的综合价值？",
+   "target": "TRINITY_HOLOGRAPHIC_SELFCHECK.md",
+   "source_memory_id": "d93c7a59-8ff5-499e-8e9b-2f86aa3a6a98"
+  },
+  {
+   "id": "hq422",
+   "type": "heldout-task",
+   "query": "通用记忆中间件在大厂自研趋势下还有哪些生存机会？",
+   "target": "TRINITY_FUTURE_DIRECTION_20260821.md",
+   "source_memory_id": "42be61b0-294e-450e-815f-3809dea2e212"
+  },
+  {
+   "id": "hq423",
+   "type": "heldout-task",
+   "query": "目标管理和技能模块的测试用例怎么拆分？",
+   "target": "TRINITY_EVOLUTION_SUMMARY.md",
+   "source_memory_id": "88242991-a20f-4cb9-b38c-aad1e365b5d2"
+  },
+  {
+   "id": "hq424",
+   "type": "heldout-task",
+   "query": "怎么控制不同角色只能看到自己权限内的数据？",
+   "target": "TRINITY_EVOLUTION_SUMMARY.md",
+   "source_memory_id": "106208b8-83b9-45e2-a95e-9c518e4d22ab"
+  },
+  {
+   "id": "hq425",
+   "type": "heldout-task",
+   "query": "混合检索和纯向量检索在召回率上差距有多大？",
+   "target": "TRINITY_EVAL_STATUS_AND_COMPARISON_20260817.md",
+   "source_memory_id": "b5928121-6334-44a7-a7ce-c5d407eb2429"
+  },
+  {
+   "id": "hq426",
+   "type": "heldout-task",
+   "query": "如何验证审计记录完整且可追溯？",
+   "target": "TRINITY_DEEP_EVALUATION.md",
+   "source_memory_id": "49ffb719-6978-40fd-9535-e49f570ba38c"
+  },
+  {
+   "id": "hq427",
+   "type": "heldout-task",
+   "query": "怎样在压缩记忆前拦截注入攻击并保留审计证据？",
+   "target": "TRINITY_DEEP_EVALUATION.md",
+   "source_memory_id": "e2188851-ced2-4a9f-846d-b628d4fdc79d"
+  },
+  {
+   "id": "hq428",
+   "type": "heldout-task",
+   "query": "如何为操作生成可追溯的回执凭证？",
+   "target": "TRINITY_DEEP_EVALUATION.md",
+   "source_memory_id": "20e4f509-462b-467c-a53c-b26e4c6a5e2a"
+  },
+  {
+   "id": "hq429",
+   "type": "heldout-task",
+   "query": "在控制成本的前提下，哪些技术路线不值得继续投入？",
+   "target": "TRINITY_COMPETITIVE_MATRIX_20260827.md",
+   "source_memory_id": "3c34010e-ffdd-426d-b13d-a59ca1a87026"
+  },
+  {
+   "id": "hq430",
+   "type": "heldout-task",
+   "query": "合规交付流程怎么产品化并规划到下一阶段？",
+   "target": "TRINITY_COMPETITIVE_MATRIX_20260827.md",
+   "source_memory_id": "0e50345c-016d-4f04-aa43-5e6b69a9b6a1"
+  },
+  {
+   "id": "hq431",
+   "type": "heldout-task",
+   "query": "怎样用不到一千元和每周二十小时以内的时间做冷启动？",
+   "target": "TRINITY_COMMERCIAL_PLAN_V5_20260818.md",
+   "source_memory_id": "3c6796ef-b448-4d75-92c2-eb7a9c5ea849"
+  },
+  {
+   "id": "hq432",
+   "type": "heldout-task",
+   "query": "如何在早期阶段用少量目标客户快速获得商业信号？",
+   "target": "TRINITY_COMMERCIAL_PLAN_V5_20260818.md",
+   "source_memory_id": "11542cea-afc4-4fec-adcb-f01b1cc99b2b"
+  },
+  {
+   "id": "hq433",
+   "type": "heldout-task",
+   "query": "怎么避免把成败押在单一变量上，同时保留退出空间？",
+   "target": "TRINITY_COMMERCIAL_PLAN_V5_20260818.md",
+   "source_memory_id": "4bab454b-1d8c-49af-b374-d7cfbe564181"
+  },
+  {
+   "id": "hq434",
+   "type": "heldout-task",
+   "query": "冷启动阶段，如何平衡公开推广和垂直合作伙伴拓展的节奏？",
+   "target": "TRINITY_COMMERCIAL_PLAN_V3_20260818.md",
+   "source_memory_id": "6185701b-7746-4f23-b46e-4894498703a4"
+  },
+  {
+   "id": "hq435",
+   "type": "heldout-task",
+   "query": "怎么把产品发布、社区热度和商业验证排进阶段计划？",
+   "target": "TRINITY_COMMERCIAL_PLAN_V3_20260818.md",
+   "source_memory_id": "c2f0e439-d67f-48f9-9e9c-16f88b6bd4c5"
+  },
+  {
+   "id": "hq436",
+   "type": "heldout-task",
+   "query": "如何为技术产品设计从试用转化到付费的里程碑？",
+   "target": "TRINITY_COMMERCIAL_PLAN_20260817.md",
+   "source_memory_id": "a3b83b5d-ae7e-44b4-b7db-02468d746e4e"
+  },
+  {
+   "id": "hq437",
+   "type": "heldout-task",
+   "query": "有没有办法对记忆系统的问答质量做诚实、可证伪的评测？",
+   "target": "TRINITY_COMMERCIAL_PLAN_20260817.md",
+   "source_memory_id": "479fd274-7ab4-4a60-86cb-fede34ec281f"
+  },
+  {
+   "id": "hq438",
+   "type": "heldout-task",
+   "query": "如何证明数据删除后四个副本都彻底清除了？",
+   "target": "TRINITY_BRAIN_SCORE_20260913.md",
+   "source_memory_id": "0c055716-f125-4d6a-bb8c-1e282841da54"
+  },
+  {
+   "id": "hq439",
+   "type": "heldout-task",
+   "query": "一个迭代周期结束后，靠什么机制触发下一轮目标评估？",
+   "target": "TRINITY_ARCHITECTURE_GUIDE.md",
+   "source_memory_id": "35a852c6-df4e-4574-ae77-10a1f609ca8e"
+  },
+  {
+   "id": "hq440",
+   "type": "heldout-task",
+   "query": "凌晨三点自动触发的例行维护任务清单和流程是怎样的？",
+   "target": "TRINITY_ARCHITECTURE_GUIDE.md",
+   "source_memory_id": "d0c87f99-a0e5-4910-9d9d-367d83014a17"
+  },
+  {
+   "id": "hq441",
+   "type": "heldout-task",
+   "query": "怎么判断检索结果的数据源是否健康可用？",
+   "target": "TRINITY_ARCHITECTURE_GUIDE.md",
+   "source_memory_id": "4b2060b3-319a-4dc9-aa48-2732ca311a03"
+  },
+  {
+   "id": "hq442",
+   "type": "heldout-task",
+   "query": "数据写入后怎么触发后续自动化并管理生命周期？",
+   "target": "TRINITY_ARCHITECTURE_GUIDE.md",
+   "source_memory_id": "eebd3932-6130-46ab-9a61-b4c43081eaa8"
+  },
+  {
+   "id": "hq443",
+   "type": "heldout-task",
+   "query": "怎么设计定时自愈和每日维护的守护进程？",
+   "target": "TRINITY_ARCHITECTURE_GUIDE.md",
+   "source_memory_id": "813d92fc-0b2b-46d5-9d1d-ca03f2178a07"
+  },
+  {
+   "id": "hq444",
+   "type": "heldout-task",
+   "query": "如何梳理一个复杂体系的组成、运行逻辑与最终收益之间的关系？",
+   "target": "TRINITY_ARCHITECTURE_GUIDE.md",
+   "source_memory_id": "c591d78c-8cec-4c89-a095-c7867f75e7e4"
+  },
+  {
+   "id": "hq445",
+   "type": "heldout-task",
+   "query": "如何让系统在运行中自动演化并生成新策略",
+   "target": "TASK_MANIFEST_20260908.md",
+   "source_memory_id": "95b022cb-c906-4486-bcf0-9af153f00f6c"
+  },
+  {
+   "id": "hq446",
+   "type": "heldout-task",
+   "query": "数据压缩一般用什么方式实现？",
+   "target": "TASK_MANIFEST_20260908.md",
+   "source_memory_id": "15bab332-d9fc-40aa-9235-1d44c22f6240"
+  },
+  {
+   "id": "hq447",
+   "type": "heldout-task",
+   "query": "哪些组件负责记忆的日常运维和审计追踪？",
+   "target": "TASK_MANIFEST_20260908.md",
+   "source_memory_id": "20d23de5-fb61-4af5-924d-14d44909854b"
+  },
+  {
+   "id": "hq448",
+   "type": "heldout-task",
+   "query": "如何把数据库监控和感知归档串成一条日调度流水线？",
+   "target": "TASK_MANIFEST_20260908.md",
+   "source_memory_id": "14b642fd-9fd2-4027-9ca9-7a0f96c8dffc"
+  },
+  {
+   "id": "hq449",
+   "type": "heldout-task",
+   "query": "认知评估系统一般包含哪些核心功能模块？",
+   "target": "TASK_MANIFEST_20260908.md",
+   "source_memory_id": "f8b26565-d348-485e-8cfc-3aff3d8ad8c3"
+  },
+  {
+   "id": "hq450",
+   "type": "heldout-task",
+   "query": "怎样把任务清单和日志记录关联起来做执行审计？",
+   "target": "TASK_MANIFEST_20260908.md",
+   "source_memory_id": "ac655aed-3b01-4cba-abc9-a1f6843433d3"
+  },
+  {
+   "id": "hq451",
+   "type": "heldout-task",
+   "query": "如何根据一小时实测数据估算全天写入量？",
+   "target": "STRESS_TEST_REPORT_20260815_PRODDB.md",
+   "source_memory_id": "607a8b6b-3115-4369-8a64-dc1f8030677f"
+  },
+  {
+   "id": "hq452",
+   "type": "heldout-task",
+   "query": "有没有办法证明系统在小时级运行中完全没有错误和锁冲突",
+   "target": "STRESS_TEST_REPORT_20260815_PRODDB.md",
+   "source_memory_id": "f7e5093d-e941-4c44-a92c-8e750fa606c5"
+  },
+  {
+   "id": "hq453",
+   "type": "heldout-task",
+   "query": "如何判断加密对高并发写入的吞吐影响是否可接受？",
+   "target": "STRESS_TEST_REPORT_20260815_PRODDB.md",
+   "source_memory_id": "6dd33597-704a-444c-90ea-cdd1dce8cb06"
+  },
+  {
+   "id": "hq454",
+   "type": "heldout-task",
+   "query": "连接池在长时间高负载下如何确认不会耗尽或漂移？",
+   "target": "STRESS_TEST_REPORT_20260815_PRODDB.md",
+   "source_memory_id": "b81eb5e8-dee7-4cf2-8938-e829b555ae19"
+  },
+  {
+   "id": "hq455",
+   "type": "heldout-task",
+   "query": "如何验证数据库复制操作已经全部改成更安全的备份方案了？",
+   "target": "STRESS_TEST_REPORT_20260815_PRODDB.md",
+   "source_memory_id": "519729f1-9875-4e87-b72b-6b15036fac62"
+  },
+  {
+   "id": "hq456",
+   "type": "heldout-task",
+   "query": "大模型信息抽取太慢导致接口阻塞该怎么优化",
+   "target": "STRESS_TEST_REPORT_20260815_PRODDB.md",
+   "source_memory_id": "159b6861-0388-43d7-89d0-59cf69e092d7"
+  },
+  {
+   "id": "hq457",
+   "type": "heldout-task",
+   "query": "怎样做数据库快照才能保证索引和日志一致？",
+   "target": "STRESS_TEST_REPORT_20260815_PRODDB.md",
+   "source_memory_id": "86e1da22-6c05-4e88-9520-6f6801fdc11d"
+  },
+  {
+   "id": "hq458",
+   "type": "heldout-task",
+   "query": "如何验证日志截断与检查点配合是否正常？",
+   "target": "STRESS_TEST_REPORT_20260815_PRODDB.md",
+   "source_memory_id": "fc360057-f7b3-4dab-99d7-84ede3d280e1"
+  },
+  {
+   "id": "hq459",
+   "type": "heldout-task",
+   "query": "数据库做被动检查点时并发读会不会报错或卡住？",
+   "target": "STRESS_TEST_REPORT_20260815_PRODDB.md",
+   "source_memory_id": "3f3e7af6-2741-401b-856d-7fd47218737f"
+  },
+  {
+   "id": "hq460",
+   "type": "heldout-task",
+   "query": "如何设计压力测试来模拟极端并发写同一存储的情况？",
+   "target": "STRESS_TEST_REPORT_20260815_PRODDB.md",
+   "source_memory_id": "cf8d7fe5-b7fa-4922-ac85-e77a5d2357c8"
+  },
+  {
+   "id": "hq461",
+   "type": "heldout-task",
+   "query": "隔离复测后 API 延迟能否恢复到稳定状态？",
+   "target": "STRESS_TEST_REPORT_20260815_PRODDB.md",
+   "source_memory_id": "a347db05-062a-41ca-974f-5ce67a80755f"
+  },
+  {
+   "id": "hq462",
+   "type": "heldout-task",
+   "query": "想给持久化层加一组故障注入用例，应该覆盖哪些恢复场景？",
+   "target": "STRESS_TEST_REPORT_20260815_PRODDB.md",
+   "source_memory_id": "2eb482ac-bb7d-498d-b4d7-dc9c1759e20b"
+  },
+  {
+   "id": "hq463",
+   "type": "heldout-task",
+   "query": "全流程耗时主要落在哪一侧，占比多少？",
+   "target": "STRESS_TEST_REPORT_20260815_PRODDB.md",
+   "source_memory_id": "58b9570e-9764-4762-a7b9-ec9705abd6ce"
+  },
+  {
+   "id": "hq464",
+   "type": "heldout-task",
+   "query": "想对比两种实现方案性能时，怎样保证结论可信？",
+   "target": "STRESS_TEST_REPORT_20260815_PRODDB.md",
+   "source_memory_id": "4f84ae2a-6d47-48c8-b8fa-1c49c46b817f"
+  },
+  {
+   "id": "hq465",
+   "type": "heldout-task",
+   "query": "单连接压测下怎样提升每秒查询数并验证优化效果？",
+   "target": "STRESS_TEST_REPORT_20260815_PRODDB.md",
+   "source_memory_id": "d14ce927-5dbd-46fa-b18b-8266732cbfeb"
+  },
+  {
+   "id": "hq466",
+   "type": "heldout-task",
+   "query": "有哪些查询方法需要改成走只读连接来提升并发？",
+   "target": "STRESS_TEST_REPORT_20260815_PRODDB.md",
+   "source_memory_id": "1650495f-e5b3-40df-b068-5278831e947c"
+  },
+  {
+   "id": "hq467",
+   "type": "heldout-task",
+   "query": "如何用标记位判断后台索引是否已经构建完成？",
+   "target": "STRESS_TEST_REPORT_20260815_PRODDB.md",
+   "source_memory_id": "5273cee2-304d-4aa3-a83a-f8074b3d7c37"
+  },
+  {
+   "id": "hq468",
+   "type": "heldout-task",
+   "query": "怎样在不影响线上数据的前提下做高并发写入压测？",
+   "target": "STRESS_TEST_REPORT_20260815_PRODDB.md",
+   "source_memory_id": "39edb340-abd2-4bb1-bc0b-03e32990f701"
+  },
+  {
+   "id": "hq469",
+   "type": "heldout-task",
+   "query": "数据清洗时缺失值让统计函数报错有什么通用修复思路",
+   "target": "STRESS_TEST_REPORT_20260815_PRODDB.md",
+   "source_memory_id": "e6b5f3ee-ad6c-4de9-92f4-969b4d97907f"
+  },
+  {
+   "id": "hq470",
+   "type": "heldout-task",
+   "query": "给只读检索路径加白名单豁免限流的具体做法是什么",
+   "target": "STRESS_TEST_REPORT_20260815_PRODDB.md",
+   "source_memory_id": "e092434d-f11b-4d8f-a6e4-2ce7df72fd0f"
+  },
+  {
+   "id": "hq471",
+   "type": "heldout-task",
+   "query": "压测多轮后怎么验证完全没有错误发生？",
+   "target": "STRESS_TEST_REPORT_20260815.md",
+   "source_memory_id": "3e2bf109-381e-4476-8954-121de137b2ee"
+  },
+  {
+   "id": "hq472",
+   "type": "heldout-task",
+   "query": "想对比不同并发规模下读写混合的性能差异，该怎么设计？",
+   "target": "STRESS_TEST_REPORT_20260815.md",
+   "source_memory_id": "a6c1270f-d626-4197-a8d0-6709cced74c9"
+  },
+  {
+   "id": "hq473",
+   "type": "heldout-task",
+   "query": "如何测试版本链、更新和批量读取路径下的解密逻辑？",
+   "target": "STORAGE_ENCRYPTION_20260815.md",
+   "source_memory_id": "137f1c4c-92ea-4180-9401-2fb78e4858e1"
+  },
+  {
+   "id": "hq474",
+   "type": "heldout-task",
+   "query": "怎么通过命令行验证某个系统组件是否工作正常？",
+   "target": "STORAGE_ENCRYPTION_20260815.md",
+   "source_memory_id": "ce745126-3e5b-447f-9b53-77d4cc004fdd"
+  },
+  {
+   "id": "hq475",
+   "type": "heldout-task",
+   "query": "加密解密带来的性能开销会影响批量写入吗？",
+   "target": "STORAGE_ENCRYPTION_20260815.md",
+   "source_memory_id": "b521a8ab-08ec-41c9-ab58-ebc034bd9c39"
+  },
+  {
+   "id": "hq476",
+   "type": "heldout-task",
+   "query": "怎么设计去重机制才能不受加密状态影响？",
+   "target": "STORAGE_ENCRYPTION_20260815.md",
+   "source_memory_id": "9e0fa620-9b7d-4dd5-a282-d57a85b226a6"
+  },
+  {
+   "id": "hq477",
+   "type": "heldout-task",
+   "query": "标签和分类这些元数据需要加密吗，会影响查询过滤吗？",
+   "target": "STORAGE_ENCRYPTION_20260815.md",
+   "source_memory_id": "3a96b842-b8d2-4eda-8ba2-5d3e5e655634"
+  },
+  {
+   "id": "hq478",
+   "type": "heldout-task",
+   "query": "如果要轮换加密密钥，需要做哪些额外操作？",
+   "target": "STORAGE_ENCRYPTION_20260815.md",
+   "source_memory_id": "614463a7-421e-4eaf-9e55-4963bfb3bfbb"
+  },
+  {
+   "id": "hq479",
+   "type": "heldout-task",
+   "query": "如何在PowerShell里为某个进程设置一个十六进制格式的密钥变量？",
+   "target": "STORAGE_ENCRYPTION_20260815.md",
+   "source_memory_id": "2302ee5b-e39b-4832-be80-78ba71da0613"
+  },
+  {
+   "id": "hq480",
+   "type": "heldout-task",
+   "query": "如何用命令行设置变量来启用存储层的加密写入？",
+   "target": "STORAGE_ENCRYPTION_20260815.md",
+   "source_memory_id": "ff352a01-baea-44a6-8b98-af392bc90889"
+  },
+  {
+   "id": "hq481",
+   "type": "heldout-task",
+   "query": "如何用命令行工具生成并存储访问令牌？",
+   "target": "STORAGE_ENCRYPTION_20260815.md",
+   "source_memory_id": "8dea1fe6-0f67-4b37-a4c1-757d08dfd6c3"
+  },
+  {
+   "id": "hq482",
+   "type": "heldout-task",
+   "query": "本地存储敏感记录时，怎么兼顾加密安全与检索功能？",
+   "target": "STORAGE_ENCRYPTION_20260815.md",
+   "source_memory_id": "6d9add7e-43fd-4f0b-b6d2-783f65b5f518"
+  },
+  {
+   "id": "hq483",
+   "type": "heldout-task",
+   "query": "评测结果里少量样本解析失败，怎么排查判定提取问题？",
+   "target": "STATUS_20260907.md",
+   "source_memory_id": "61f7972d-fb59-4c2a-ab32-c1709d76e6de"
+  },
+  {
+   "id": "hq484",
+   "type": "heldout-task",
+   "query": "如何判断一个知识管理工具的核心能力是否完整？",
+   "target": "STATUS_20260907.md",
+   "source_memory_id": "8282bf1e-5626-453c-aa65-3d7478913aec"
+  },
+  {
+   "id": "hq485",
+   "type": "heldout-task",
+   "query": "磁盘空间和数据库日志占用正常时，怎么快速查看剩余容量？",
+   "target": "STATUS_20260907.md",
+   "source_memory_id": "b95028fa-f2c7-4fcf-a665-cfc33973dd91"
+  },
+  {
+   "id": "hq486",
+   "type": "heldout-task",
+   "query": "评测会话生成的系统快照里通常包含哪些信息？",
+   "target": "STATUS_20260907.md",
+   "source_memory_id": "2089076a-1225-4374-b4c2-3fb176fc4c6e"
+  },
+  {
+   "id": "hq487",
+   "type": "heldout-task",
+   "query": "本机做的稳定性加固措施对独立部署是否同样有效？",
+   "target": "standalone-usage.md",
+   "source_memory_id": "68306009-c99d-4948-947d-15bbab4aa704"
+  },
+  {
+   "id": "hq488",
+   "type": "heldout-task",
+   "query": "开发时想改代码立即生效，应该用什么安装方式？",
+   "target": "standalone-usage.md",
+   "source_memory_id": "eb05f496-f277-433a-8881-d514481f2b4a"
+  },
+  {
+   "id": "hq489",
+   "type": "heldout-task",
+   "query": "如何把某个记忆工具移植到任意 Python 环境并保持功能完整？",
+   "target": "standalone-usage.md",
+   "source_memory_id": "cb217ec8-91f0-4fa7-bd34-5e53769b95ef"
+  },
+  {
+   "id": "hq490",
+   "type": "heldout-task",
+   "query": "构建零错误、用例零失败的结果通常出现在什么修复流程之后？",
+   "target": "smartcos_techdebt_dbtags.md",
+   "source_memory_id": "a3d3b2de-ee6b-4fed-9f9a-0ffa33849441"
+  },
+  {
+   "id": "hq491",
+   "type": "heldout-task",
+   "query": "怎么用静态分析工具检查后端重构是否引入问题？",
+   "target": "smartcos_selfopt_report.md",
+   "source_memory_id": "13e9720a-57df-4198-a8a3-d920b9bfa519"
+  },
+  {
+   "id": "hq492",
+   "type": "heldout-task",
+   "query": "如何记录和说明那些在改动之前就已经存在的已知问题？",
+   "target": "smartcos_review_guide.md",
+   "source_memory_id": "cd0ecb86-01a7-4fae-85cf-7e97bef8dd95"
+  },
+  {
+   "id": "hq493",
+   "type": "heldout-task",
+   "query": "如何针对某次提交做反向操作而不破坏其他内容？",
+   "target": "smartcos_review_guide.md",
+   "source_memory_id": "a1a49df2-f8d1-4375-b5b5-9c5ebb7e6be2"
+  },
+  {
+   "id": "hq494",
+   "type": "heldout-task",
+   "query": "全量回归跑了多少轮，各层测试结果分别如何？",
+   "target": "smartcos_review_guide.md",
+   "source_memory_id": "10c0bf0f-2079-4475-9d39-ee4a8ebbdc30"
+  },
+  {
+   "id": "hq495",
+   "type": "heldout-task",
+   "query": "怎样快速回滚一批已经合并的重构提交？",
+   "target": "smartcos_review_guide.md",
+   "source_memory_id": "64cd53b1-a2a6-4cda-84a3-c6c7abcf0906"
+  },
+  {
+   "id": "hq496",
+   "type": "heldout-task",
+   "query": "如何判断哪些优化点能带来差异化竞争力？",
+   "target": "smartcos_optimization.md",
+   "source_memory_id": "e73a3496-a056-4f9c-b13d-2d68d4db41e7"
+  },
+  {
+   "id": "hq497",
+   "type": "heldout-task",
+   "query": "怎样让系统同时满足数据安全与合规审计要求？",
+   "target": "smartcos_optimization.md",
+   "source_memory_id": "2b86ee65-dcf6-48cf-8750-e5eef670fbf0"
+  },
+  {
+   "id": "hq498",
+   "type": "heldout-task",
+   "query": "如何提升多仓库存利用率并缩短订单履约时效？",
+   "target": "smartcos_optimization.md",
+   "source_memory_id": "3022715a-1de6-489b-af51-a0b55dfa185a"
+  },
+  {
+   "id": "hq499",
+   "type": "heldout-task",
+   "query": "如何提前制定旺季用工预案并动态调整人员配置？",
+   "target": "smartcos_optimization.md",
+   "source_memory_id": "fca700a8-c158-47d2-a60e-9a2fc65ed429"
+  },
+  {
+   "id": "hq500",
+   "type": "heldout-task",
+   "query": "怎么为不同货主设置差异化的定价方案并自动执行？",
+   "target": "smartcos_optimization.md",
+   "source_memory_id": "d5ea8abe-0b02-4cbf-b3e8-a5e34d7f8600"
+  },
+  {
+   "id": "hq501",
+   "type": "heldout-task",
+   "query": "热点商品库存扣减冲突严重时有什么优化方案？",
+   "target": "smartcos_optimization.md",
+   "source_memory_id": "4c24de05-ad41-423c-bc28-8665e9bf702e"
+  },
+  {
+   "id": "hq502",
+   "type": "heldout-task",
+   "query": "前端改了代码但线上没生效是什么原因？",
+   "target": "smartcos_optimization.md",
+   "source_memory_id": "94c4a24b-c896-4ca5-9bb0-28d909ae06c4"
+  },
+  {
+   "id": "hq503",
+   "type": "heldout-task",
+   "query": "怎么确定经济订货批量来优化补货成本？",
+   "target": "smartcos_integration.md",
+   "source_memory_id": "5d5b1f2d-55a7-4077-b398-5a29cc21b8a4"
+  },
+  {
+   "id": "hq504",
+   "type": "heldout-task",
+   "query": "怎么提升系统性能并加入缓存机制？",
+   "target": "smartcos_integration.md",
+   "source_memory_id": "30393fd9-ef1b-4eb7-8add-0743ce6bcaf9"
+  },
+  {
+   "id": "hq505",
+   "type": "heldout-task",
+   "query": "如何把单机脚本迁移成独立库存服务模块？",
+   "target": "smartcos_integration.md",
+   "source_memory_id": "9f265438-ce12-46af-846f-5f410cc6d67c"
+  },
+  {
+   "id": "hq506",
+   "type": "heldout-task",
+   "query": "怎样验证库存预占和超卖拦截逻辑是否正确？",
+   "target": "smartcos_integration.md",
+   "source_memory_id": "5e94b5d3-ceb4-4950-a3f2-377d35176288"
+  },
+  {
+   "id": "hq507",
+   "type": "heldout-task",
+   "query": "健康状态没有降级时应该标记成什么等级？",
+   "target": "SLO.md",
+   "source_memory_id": "d9cc3108-15d3-4486-8cd0-8fa6343a5bc3"
+  },
+  {
+   "id": "hq508",
+   "type": "heldout-task",
+   "query": "怎样为系统设定可衡量的可用性指标？",
+   "target": "SLO.md",
+   "source_memory_id": "94e013c7-2759-4152-a96b-44b40701751f"
+  },
+  {
+   "id": "hq509",
+   "type": "heldout-task",
+   "query": "如何精简表结构却仍保留关键字段的业务含义？",
+   "target": "SKILLS_INVENTORY_20260911.md",
+   "source_memory_id": "31548f47-ec47-40f8-aacf-91e971098296"
+  },
+  {
+   "id": "hq510",
+   "type": "heldout-task",
+   "query": "如何设计一套能自我演进的团队认知协作机制？",
+   "target": "SESSION_RECAP_20260827.md",
+   "source_memory_id": "f8df0fab-adcf-4eaa-9a05-303ed690d258"
+  },
+  {
+   "id": "hq511",
+   "type": "heldout-task",
+   "query": "多智能体实战和联邦同步这类后期目标该怎么安排？",
+   "target": "SESSION_RECAP_20260827.md",
+   "source_memory_id": "fdb8c035-0b38-4224-adb8-02ccea26f441"
+  },
+  {
+   "id": "hq512",
+   "type": "heldout-task",
+   "query": "如何用一张全景图展示系统能力与关键指标？",
+   "target": "SESSION_RECAP_20260827.md",
+   "source_memory_id": "bb0ab0f0-533c-4550-9706-c426f4cfbe63"
+  },
+  {
+   "id": "hq513",
+   "type": "heldout-task",
+   "query": "查询扩展功能上线后怎么验证它没有带来性能退化？",
+   "target": "SESSION_BACKFILL_20260914.md",
+   "source_memory_id": "e4102a47-c7b0-4950-b0c9-f18889906d63"
+  },
+  {
+   "id": "hq514",
+   "type": "heldout-task",
+   "query": "怎样区分数据缺失是真实缺口还是统计方法造成的假象？",
+   "target": "SESSION_BACKFILL_20260914.md",
+   "source_memory_id": "54c91347-af56-473f-b43b-e84babf4888f"
+  },
+  {
+   "id": "hq515",
+   "type": "heldout-task",
+   "query": "不同通信协议该分几期接入、主通道选哪个？",
+   "target": "SERVER_MULTI_NODE_SYNC_DETAILED.md",
+   "source_memory_id": "51dfc57c-78ad-4100-9a02-efdd3f7dc9d1"
+  },
+  {
+   "id": "hq516",
+   "type": "heldout-task",
+   "query": "怎么限制某个内部服务只能在内网访问？",
+   "target": "SERVER_MULTI_NODE_SYNC_DETAILED.md",
+   "source_memory_id": "c528c3c9-6190-415f-a084-2ca35b91b5be"
+  },
+  {
+   "id": "hq517",
+   "type": "heldout-task",
+   "query": "怎么给内网服务加上反向代理和 HTTPS 访问？",
+   "target": "SERVER_MULTI_NODE_SYNC.md",
+   "source_memory_id": "9c5c3496-1186-4cb3-92a5-5ebdf22bb4c8"
+  },
+  {
+   "id": "hq518",
+   "type": "heldout-task",
+   "query": "面对冲突策略和符号推理接线，怎么安排评估与取舍？",
+   "target": "SEMANTICA_VS_TRINITY_20260911.md",
+   "source_memory_id": "a8a8fed3-4b62-47e7-bbb5-692571879b2c"
+  },
+  {
+   "id": "hq519",
+   "type": "heldout-task",
+   "query": "怎么把调研结论对应到项目路线图里的具体优先级条目？",
+   "target": "SEMANTICA_VS_TRINITY_20260911.md",
+   "source_memory_id": "d8b34cb4-b34f-4cff-96f1-0fc94cc73ddb"
+  },
+  {
+   "id": "hq520",
+   "type": "heldout-task",
+   "query": "怎样为记忆系统设计信誉、订单簿和交易市场机制？",
+   "target": "SEMANTICA_VS_TRINITY_20260911.md",
+   "source_memory_id": "bb2bda8b-c1cb-48e7-8856-42ec43620965"
+  },
+  {
+   "id": "hq521",
+   "type": "heldout-task",
+   "query": "引入某套科学计算依赖会带来什么维护风险？",
+   "target": "SEMANTICA_VS_TRINITY_20260911.md",
+   "source_memory_id": "d2fed3a0-f0a9-4d4f-a160-5ca155f86045"
+  },
+  {
+   "id": "hq522",
+   "type": "heldout-task",
+   "query": "如何避免在缺乏消费方的情况下过度设计语义结构？",
+   "target": "SEMANTICA_VS_TRINITY_20260911.md",
+   "source_memory_id": "b6c2284b-bb17-4669-8ff3-3e41ccf2c051"
+  },
+  {
+   "id": "hq523",
+   "type": "heldout-task",
+   "query": "检索系统向量维度提升后效果能好多少",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "6d9c5440-4588-4ff3-b399-aef49e888752"
+  },
+  {
+   "id": "hq524",
+   "type": "heldout-task",
+   "query": "怎么设计三层回退机制，让某一层失效时业务不中断？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "0c137d29-1896-431f-8474-dff44fbeda97"
+  },
+  {
+   "id": "hq525",
+   "type": "heldout-task",
+   "query": "重启后语义查询的融合结果异常该怎么排查？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "00ac761e-774e-4076-bff2-47145158a407"
+  },
+  {
+   "id": "hq526",
+   "type": "heldout-task",
+   "query": "怎么判断是否存在没有向量表示的活跃数据？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "630ad602-3080-4746-bd11-95d4caf20ef1"
+  },
+  {
+   "id": "hq527",
+   "type": "heldout-task",
+   "query": "为什么改完向量模型后必须重启接口服务才能起作用？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "dbc8c95b-c526-4e5c-8e0c-5b5cbdbe0254"
+  },
+  {
+   "id": "hq528",
+   "type": "heldout-task",
+   "query": "如何评估向量维度提升对语义检索质量带来的实际收益",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "26c3b1e5-6432-44a3-aae3-b3fbc0375ceb"
+  },
+  {
+   "id": "hq529",
+   "type": "heldout-task",
+   "query": "面对多个已知缺陷，应该优先修哪几个？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "a652ec11-b4ac-4d71-a9b2-915f36c63783"
+  },
+  {
+   "id": "hq530",
+   "type": "heldout-task",
+   "query": "怎么解决现有向量维度太低导致效果不佳的问题？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "505b34f3-25ac-43b3-94e0-7978a8338ab7"
+  },
+  {
+   "id": "hq531",
+   "type": "heldout-task",
+   "query": "怎样验证参数调整后既能空跑也能真实跑通？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "f19a49a6-b75d-40a1-aa3d-338a41f75359"
+  },
+  {
+   "id": "hq532",
+   "type": "heldout-task",
+   "query": "怎么验证重启后新代码已经在生产环境生效了？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "4bd280d8-7f9d-4913-a5dd-d8d14df68ebd"
+  },
+  {
+   "id": "hq533",
+   "type": "heldout-task",
+   "query": "如何让算法迭代的最终效果体现在真实用户请求上？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "1f29881f-254a-4101-9ba7-b2fd3a46cacc"
+  },
+  {
+   "id": "hq534",
+   "type": "heldout-task",
+   "query": "怎样改造诊断脚本里的原因分析函数以支持混合搜索？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "9dc76139-4a0f-4279-84d7-fde56f137650"
+  },
+  {
+   "id": "hq535",
+   "type": "heldout-task",
+   "query": "如何让偏好与知识检索主动调用已生成的摘要信息？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "e2506fc6-76f0-49e0-b1cb-8ab6aae72fa2"
+  },
+  {
+   "id": "hq536",
+   "type": "heldout-task",
+   "query": "系统里存在只写不读的周期性输出，如何排查并修复这种断链？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "2b36d4e8-ffed-4eb7-abe7-0601bf71bc7f"
+  },
+  {
+   "id": "hq537",
+   "type": "heldout-task",
+   "query": "如何设计一套按天加按周分层执行的自动整理流程？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "43389bb9-301b-4ee2-b586-743722fc84c5"
+  },
+  {
+   "id": "hq538",
+   "type": "heldout-task",
+   "query": "怎么按行号精确重建被误删的配置清单和分支？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "20c613ac-fb86-4747-8334-1160bc714c46"
+  },
+  {
+   "id": "hq539",
+   "type": "heldout-task",
+   "query": "统一写入导致无法筛选时，跳过处理是不是更合理？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "099c11e2-1bd8-4948-8382-7f0e63c60400"
+  },
+  {
+   "id": "hq540",
+   "type": "heldout-task",
+   "query": "如何用指标基线、变体提议和配对实验来自动验证并采纳优化？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "afc865c4-f4ec-4c90-829c-1a409df3a352"
+  },
+  {
+   "id": "hq541",
+   "type": "heldout-task",
+   "query": "写入放大偏高但缓存没生效，该从哪里排查？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "4a65590d-720b-4f2d-8088-3359ba255ca0"
+  },
+  {
+   "id": "hq542",
+   "type": "heldout-task",
+   "query": "如何搭建一套自动循环加守护进程的稳定运行机制？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "b5d0f23d-e8dc-4444-ab58-7889f552803a"
+  },
+  {
+   "id": "hq543",
+   "type": "heldout-task",
+   "query": "有没有标准能说明现在可以不再做进一步调整？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "3f8350eb-75f5-4115-ad21-90b6ee30bc94"
+  },
+  {
+   "id": "hq544",
+   "type": "heldout-task",
+   "query": "怎样控制证据预算并巩固关键时间信息？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "393af392-2f3a-4108-8fb1-4fc8ab94e959"
+  },
+  {
+   "id": "hq545",
+   "type": "heldout-task",
+   "query": "归档和活跃状态的记录分别有多少条？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "acf6f686-f6c7-4473-9608-c22580f3d153"
+  },
+  {
+   "id": "hq546",
+   "type": "heldout-task",
+   "query": "调整检索参数后指标完全没变化，说明这个模块起了什么作用？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "4d621553-9d1c-4859-b42f-cd0c5644ab48"
+  },
+  {
+   "id": "hq547",
+   "type": "heldout-task",
+   "query": "怎么把向量、关键词和图谱检索结果融合成一个排序列表？",
+   "target": "SELF_EVOLUTION_DESIGN.md",
+   "source_memory_id": "657d2385-0741-431d-a666-810222a6c041"
+  }
+ ]
+}

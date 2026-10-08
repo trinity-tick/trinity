@@ -1,0 +1,21 @@
+{
+  "_comment": "防回胀行数预算（单一数据源）。被 trinity/tests/test_structure_refactor_20260909.py 与 scripts/structure_gate.py 共同读取，避免两处口径漂移。",
+  "_policy": "超过预算时优先拆分/迁出（参考 docs/refactor-plan-20260909.md 的 mixin 拆分思路），而不是上调数字。",
+  "budgets": {
+    "trinity/adapters/postgresql.py": 2700,
+    "trinity/adapters/_pg_conn_retry.py": 200,
+    "trinity/adapters/_pg_graph.py": 400,
+    "trinity/adapters/_pg_audit.py": 400,
+    "trinity/adapters/_pg_search.py": 400,
+    "trinity/adapters/_pg_gdpr.py": 400,
+  "trinity/adapters/_pg_conflicts.py": 200,
+    "trinity/core/client/_search.py": 1400,
+    "trinity/core/client/_hybrid_index.py": 400,
+    "trinity/core/client/_hybrid_stages.py": 400,
+    "trinity/core/client/_hybrid_search.py": 1400,
+    "trinity/audit/prov_export.py": 800,
+    "trinity/audit/constraints.py": 600,
+    "trinity/audit/bitemporal.py": 800,
+    "trinity/api/server/_routers_prov.py": 400
+  }
+}

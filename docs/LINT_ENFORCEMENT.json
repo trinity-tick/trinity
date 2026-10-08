@@ -1,0 +1,456 @@
+{
+  "_comment": "静态检查执行状态登记（2026-09-29 外部审计修复）。把『配置了但从不执行』这件事实写成机器可校验的契约：tests/unit/test_lint_enforcement_parity.py 会重新从 pyproject.toml / .github/workflows / 当前解释器推导事实并与本文件比对 —— 任何一边变了而没同步，测试即红。",
+  "_why_a_register": [
+    "本仓的静态检查缺口不是『没配』而是『配了但没人执行』—— 属于本仓反复记录的死法「存在但不生效」在工程纪律上的复制。",
+    "外部审计实测：ruff 在 pyproject.toml 已配置（含一份 ignore 清单），但 9 个 workflow 里 0 个执行它；mypy 当时无配置、无 CI 步骤（**但已装在服务同款解释器里** —— 即『装了但从不执行』，比『完全不存在』更贴切，本行已按实测更正）。",
+    "不直接『解除 ignore 就完事』的理由已被量化：当前配置全仓 112 个错误（可立即强制），",
+    "而解除 ignore 里的 F401/F811/F821/F841 会变成 2535 个（trinity/ 包内 1841 个）。在未烧掉存量前启用它们，只会造出一个恒红的门禁 —— 本仓准则：恒红的门禁会被忽略。"
+  ],
+  "serving_interpreter": {
+    "_why": "2026-10-06（测试归因轮 T1）：`installed_in_serving_interpreter` 说的是**服务同款解释器**里装没装，而原判据是用**当前**解释器推导的 ⇒ 同一条判据在系统 3.14 上绿、在 `.venv` 的 3.11 上假红（实测 `derived=False` / 登记 `True`）。判据已改为按本字段的路径**子进程实探**；本字段就是那个锚点。",
+    "path": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python314\\python.exe",
+    "version": "3.14.5",
+    "probe_command": "python -c \"import importlib.util as u;print(u.find_spec('ruff') is not None, u.find_spec('mypy') is not None)\"",
+    "probe_result_20261006": "True True（ruff 0.15.22 / mypy 2.3.0）",
+    "_note": "跑测试用的 `.venv`（CPython 3.11.15）**不是**服务同款解释器，两者安装状态不同是**预期**而不是漂移。"
+  },
+  "ruff": {
+    "configured": true,
+    "config_path": "pyproject.toml",
+    "installed_in_serving_interpreter": true,
+    "installed_version": "0.15.22",
+    "ci_invocations": 1,
+    "ci_invocation_files": [
+      "ci.yml"
+    ],
+    "enforcement": "ratchet",
+    "ratchet_script": "scripts/lint_ratchet.py",
+    "ratchet_baseline": "docs/LINT_BASELINE.json",
+    "current_error_total": 109,
+    "_remeasured_20261007": {
+      "_what": "t76（I16）复测并同步：本字段与棘轮基线 `docs/LINT_BASELINE.json::_total` **必须相等**（tests/unit/test_lint_enforcement_parity.py:151-156 会比对，不一致即红）。本轮把 4 处**既有** `E731` 抑制指令真修成 `def` 之后，二者同步为 **109**。",
+      "measured_at": "2026-10-07（本地时区 +08:00）",
+      "interpreter": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python314\\python.exe（Python 3.14.5）",
+      "ruff_version": "0.15.22",
+      "command": "& $PY314 scripts/lint_ratchet.py --json ⇒ {\"ok\": true, \"detail\": \"total=109 基线=109 规则=3 基线规则=3；Top: E741×90, E731×14, E703×5\"}（底层调用：`ruff check . --output-format json`，cwd=仓库根，**默认尊重 .gitignore**；另一口径 `--no-respect-gitignore` 会得到完全不同的数字，**不得混用**）",
+      "repeatability": "连跑 3 次逐字一致（ok=true）",
+      "_previous_value": 112,
+      "_direction": "**只降不升**：112 → 109（headroom 保持 0：任何新违规立刻红）"
+    },
+    "ignored_rules_all": [
+      "E401",
+      "E402",
+      "E701",
+      "E702",
+      "E712",
+      "F401",
+      "F402",
+      "F541",
+      "F811",
+      "F821",
+      "F841"
+    ],
+    "ignored_high_signal_rules": [
+      "F401",
+      "F811",
+      "F821",
+      "F841"
+    ],
+    "measured_cost_of_unignoring_high_signal": {
+      "repo_total": 2535,
+      "package_trinity_total": 1841,
+      "by_rule_repo": {
+        "F401": 2277,
+        "F841": 180,
+        "F811": 61,
+        "F821": 17
+      },
+      "measured_with": "ruff 0.15.22 --isolated --select F401,F811,F821,F841 --statistics --no-cache",
+      "_delta_from_earlier_measurement": "F821 由 33 → **17**（本轮把其中 13 处缺 typing 导入 + 4 处可复用 helper 的修掉了；trinity/ 包内 F821 由 17 → **5**，剩下 5 处是仅注解用的前向引用）。故 repo_total 2546 → 2535、trinity 1853 → 1841。",
+      "_remeasured_20261006": {
+        "_what": "2026-10-06（测试归因轮 T1）用**同一条命令、同一个 ruff 版本**复测，作为时点快照记录。上面 repo_total / package_trinity_total / by_rule_repo 是**当时**的测量值，本块**不改写**它们（历史数字不是当前事实，二者都要能看见）。",
+        "command": "ruff --isolated --select F401,F811,F821,F841 --statistics --no-cache （全仓）；同命令加 `trinity/` 目标复测包内",
+        "ruff_version": "0.15.22",
+        "interpreter": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python314\\python.exe (3.14.5)",
+        "repo_total": 2540,
+        "package_trinity_total": 1788,
+        "by_rule_repo": {
+          "F401": 2270,
+          "F841": 188,
+          "F811": 61,
+          "F821": 21
+        },
+        "_diff_vs_registered": "repo_total 2535 → 2540（+5）、trinity 1841 → 1788（−53）、F401 2277 → 2270、F841 180 → 188、F821 17 → 21。**方向不一致（有增有减）正是「移动的树」的特征**（本会话期间仓内还有并发写入者），故按 `_measurement_caveat_moving_tree` 只登记快照与口径，不改写历史值。",
+        "_consequence": "该字段**不参与任何断言**（parity 判据只核对 `current_error_total` 与棘轮基线），故它漂移不会造成假红/假绿；但要引用它时必须写明是哪一天量的。"
+      }
+    },
+    "declared_in_dev_extras": true
+  },
+  "mypy": {
+    "configured": false,
+    "config_path": null,
+    "installed_in_serving_interpreter": true,
+    "installed_version": "2.3.0",
+    "ci_invocations": 1,
+    "ci_invocation_files": [
+      "ci.yml"
+    ],
+    "enforcement": "ratchet",
+    "ratchet_script": "scripts/mypy_ratchet.py",
+    "ratchet_baseline": "docs/MYPY_BASELINE.json",
+    "current_error_total": 767,
+    "typed_marker_present": true,
+    "burned_scopes": {
+      "_note": "已显著降低或清零的 scope（结构性锁见 tests/unit/test_mypy_clean_scopes.py）。",
+      "trinity/agents/aggregator/": {
+        "was": 263,
+        "now": 83,
+        "how": "第三处同型结构：11 个 mixin 共用声明基类 `_base.py::_AggregatorMixinBase`。实测 `self._pool` 一个名字占 65 处、`self._tracer` 32 处、`self._lock` 25 处，40 个 `self.` 共享名字合计约 250 处。运行时零影响（全在 `if TYPE_CHECKING:` 内）。",
+        "not_dead_code": "**该包不是死代码**（曾有一轮结论容易被误读成死的）：它被 `api/server/_deps.py`（API 依赖 get_aggregator）、`mcp/tools/memory_tools.py`（**MCP 写入路径的双写**）、`engine_worker.py`、`agents/auto_discovery.py`、`agents/agent_brain.py`、`agents/bridge.py`，以及 `retrieval/hybrid_retriever.py`（**权重 0.15 的 aggregator 召回通道**）使用。故本包的静态卫生有实际意义。",
+        "typo_check": "**声明前逐个核对过名字确实被定义**（本仓有 12 处 attr-defined 不是 `self.` 访问，如 `_chroma_client`/`embed`/`metadata`/`decide`/`get`/`tolist` —— 那是别的对象的类型问题，声明进基类既无效又掩盖缺陷，故保留为错误）。核对时**抓到过核查脚本自身的盲点**：第一版正则不允许注解，把 `self._pool: Dict[...] = {}` 漏掉、误报「_pool 包内从未定义」（而它正是 65 处的那个名字）；修好正则后确认 40 个名字全部有定义、无拼写错误。**2026-10-06（复评 F5）更新：原列表里的 `verify_merge_safety` 已从计数中移除** —— 那个名字曾在 `trinity/agents/aggregator/_ingest.py:218` 被调用但**全仓从未定义过**（`git log --all -S \"def verify_merge_safety\"` 无记录），每次合并抛 AttributeError 被 DEBUG 级吞掉，属**假绿**；本次已删除该调用并改为显式一次性 WARNING 宣告。实测 `mypy trinity/agents/aggregator/` 中 `verify_merge_safety` 命中 **0** 条 ⇒ 13 处减为 12 处。",
+        "pitfall_found": "**导入位置**：`aggregator/__init__.py` 的 `_PersistMixin` 定义在第 225 行，而其余 mixin 的导入在第 534 行 —— 把 `_base` 的导入插到「最后一条相对导入之后」就落到了类定义**之后**，导入该包时 `NameError: name '_AggregatorMixinBase' is not defined`。**`py_compile` 与多数静态检查都发现不了**（语法合法、只是名字还没绑定），只有真正 import 才炸。已加判据 `test_基类导入必须位于类定义之前`（负向实测：把导入移到文件末尾 ⇒ 立刻红）。",
+        "verified_by": "聚合器**自带 self-test 30/30 通过**；相关判据集 225 passed / 1 skipped；结构性判据 12 passed。"
+      },
+      "trinity/core/client/": {
+        "was": 415,
+        "now": 98,
+        "how": "同一打法（见 sqlite）：15 个**根** mixin 共用声明基类 `_base.py::_ClientMixinBase`。实测该目录的 attr-defined 里 **`self._adapter` 一个名字就占 247 处**，连同另外 31 个 `self.` 访问的共享名字共约 324 处。运行时零影响（全在 `if TYPE_CHECKING:` 内）；实测 MRO 未变、`Trinity()` 正常构造、活体路径判据 412 passed / 1 skipped。",
+        "pitfall_found": "**按属性名聚合会把 `self.X` 与 `other.X` 混为一谈**。本目录实测有 4 处属于后者：`_rc.get(...)`（2 处）、`extractor.extract(...)`、`something.FACTS` —— 它们是**别的对象**的类型问题。若把这些名字也声明进基类，**既不能消除那些错误、又会用声明掩盖真实缺陷**（例如把拼写错误当成合法属性）。故基类只列 `self.` 访问过的名字，这 4 处**保留为错误**。已加专门判据 test_客户端基类不得声明非self访问的名字（负向实测：把 `extract` 漏进基类 ⇒ 立刻红）。",
+        "honest_limitation": "`_adapter` 声明为 `Any`（真实类型是 `Optional[Union[SQLiteAdapter, PostgreSQLAdapter]]`）。代价：mypy **不再检查**「某适配器方法在该后端上是否存在」，而这正是 A 根因里抓到过的一类真实缺陷（`_hybrid_search.py` 调 `self._adapter.vector_search(...)`，而 `SQLiteAdapter` 没有该方法 ⇒ SQLite 上每次走 except）。改成精确 Union 应能暴露这一类，但新增错误数未实测 —— 留给下一步评估。",
+        "verified_by": "tests/unit/test_mypy_clean_scopes.py 三条结构性判据（15 个根 mixin 必须继承基类 / 基类不得含运行时代码 / 不得声明非 self 名字）；活体路径判据 412 passed。"
+      },
+      "trinity/retrieval/": {
+        "was": 41,
+        "now": 0,
+        "how": "10 个 `swallow` 回退签名对齐 + evidence_gate 12 处 + 其余标注/no-redef 21 处；全部通过添加或收窄**真实标注**完成，**没有一处新 type: ignore**。并且顺手移除了 5 处被 `--warn-unused-ignores` 判为 [unused-ignore] 的**裸 type: ignore**（其中 2 处是本轮改写签名时留下的残留，3 处是既有）—— 抑制了却什么都没抑制，那种注释今天无害、明天会静默吞掉该行真正的新错误。",
+        "verified_by": "mypy trinity/retrieval/ --warn-unused-ignores ⇒ 0 错误；tests/unit/test_mypy_clean_scopes.py 三条判据（零错误 / 基线不含 retrieval / 无裸 ignore）；负向实测：把加了标注的 `df: Dict[str, int]` 还原成 `df = {}` ⇒ 判据立刻红。"
+      },
+      "trinity/adapters/sqlite/": {
+        "was": 204,
+        "now": 77,
+        "how": "加了共享声明基类 `_base.py::_SQLiteMixinBase`：11 个 mixin 互相访问的约 20 个共享属性（`_conn` 一个占 85 处）此前**静态不可见**，造成 **170 个 attr-defined**；基类把这些名字声明一次即消掉。**运行时零影响** —— 所有声明都在 `if TYPE_CHECKING:` 内（不产生类属性、不参与 MRO 解析），实测 MRO 未变、`store_memory`/`set_embedding` 正常。attr-defined 170 → 14。",
+        "hazard_found": "把 `_conn` 如实标为 `Optional[sqlite3.Connection]` 之后，mypy 立刻报出 **32 处 `union-attr`**：即原来连『属性是否存在』都看不见，**存在性错误掩盖了可空性错误**。其中一处是真实缺陷并已复现+修复：`_BatchMixin._flush_batch()` 的 except 分支里裸调 `self._conn.rollback()`，未连接时会**二次抛错**、逃出 `_flush_batch()` 并因此逃出 `disconnect()`（实测 `AttributeError: 'NoneType' object has no attribute 'rollback'`）⇒ 判据 tests/unit/test_sqlite_flush_batch_none_path.py，fail-before 实测 1 failed ↔ 修复后 3 passed。",
+        "remaining_union_attr_triage": "余下 31 处经逐个分诊是**调用契约假设**（方法只在已连接时可达，例如 `_create_tables()` 由 connect() 调用），**不是可达缺陷**；但它们分布在 try/except、disconnect 路径与 diagnostics 三类位置，各处的『正确行为』不同 ⇒ **不做一刀切替换**（在 except 里把 `self._conn` 换成会抛错的访问器并不构成改善），留作有依据的存量。",
+        "verified_by": "tests/unit/test_mypy_clean_scopes.py 的两条结构性判据（11 个 mixin 必须继承 `_SQLiteMixinBase` / 基类不得含运行时代码）；负向实测见 hazard_found。"
+      },
+      "trinity/（整批注解修复，非单一目录）": {
+        "was": "assignment 370",
+        "now": "assignment 167",
+        "how": "见 burned_systemic_patterns.annotation_lies_about_None —— 该模式横跨 37 个文件，不能按目录归属。"
+      },
+      "trinity/adapters/（PG mixin 家族）": {
+        "was": 173,
+        "now": 106,
+        "how": "第四处同型结构：`PostgreSQLAdapter(_PgSearchMixin, _PgGraphMixin, _PgAuditMixin, _PgGdprMixin, _PgTouchMixin, StorageAdapter)` 的 5 个 mixin 共用声明基类 `_pg_base.py::_PgMixinBase`。实测 PG 侧 `self._get_conn` 被访问 23 处、`self._connected` 19 处。**该包 attr-defined 173 → 106；全包 914 → 842。**",
+        "pitfall_found": "**接线脚本的插入锚点只认 `from .xxx import`（点前缀），而这几个文件用的是绝对导入** ⇒ 锚点回退到位置 0，import 被插到**文件最开头**、切进了 docstring（`from ._pg_base import _PgMixinBase# -*- coding: utf-8 -*-`），4 个文件的 coding 声明被注释掉、`_pg_search.py` 语法错误。修法是**只动我自己插入的那一行**（不做 `git checkout`）—— 因为 `git ls-files` 实测这些文件在真实索引里是**未跟踪**的，而 `_pg_gdpr.py` 相对分支头显示「整个文件被删除」正是这个原因（161 行 = 全长），**不是内容被毁**。已加判据锁住「import 恰好 1 个、且在 class 之前、首行不为空」。",
+        "verified_by": "5 个回退文件的相对分支差异各为 2 行（import + 类基类）；MRO 实测 `PostgreSQLAdapter → 5 个 PG mixin → _PgMixinBase → StorageAdapter`；相关判据集 269 passed / 8 skipped；结构性判据 17 passed。"
+      },
+      "trinity/agents/aggregator/（Round 19 补漏）": {
+        "was": 83,
+        "now": 57,
+        "how": "**补我自己第 15 轮的漏项**：当时基类只声明了 38/40 个共享名字，漏掉 `_topic_index` 与 `_agent_index`（在 `_init.py:59-60` 赋值的字典）。那正好对应 20 处 attr-defined。全包随之 914 → 894（再叠加 PG 后为 842）。",
+        "root_cause_of_my_omission": "我那个「声明前逐个核对名字是否已被定义」的脚本**正则误报**：`_stats.py:288` 的局部赋值 `_topic_index = self._topic_index` 被它当成了「已有 def/赋值」⇒ 我便没往基类里放。**这是我自己的工具第二次误导我**（第一次是同一脚本漏掉带注解赋值 `self._pool: Dict[...] = {}`）。",
+        "guard_added": "新判据 `test_聚合器基类必须覆盖全部共享名字`：**直接从源码取 `self.` 访问名**并与基类声明做差集，不再依赖那个易误报的脚本；并显式断言 `_topic_index`/`_agent_index` 在基类里。",
+        "verified_by": "聚合器自带 self-test **30/30 passed**；包内错误 83 → 57。"
+      }
+    },
+    "_remeasured_burned_scopes_20261006": {
+      "_what": "2026-10-06（测试归因轮 T1）复核 `burned_scopes` 的登记数字与实测是否一致。**上面的 was/now 一个字都没改** —— 它们是各轮的历史进度记录，按 `_measurement_caveat_moving_tree` 不具当前事实的地位。本块给出同日、同口径的实测快照，供读者看到差异。",
+      "command": "python -m mypy <scope> --follow-imports=silent --ignore-missing-imports --no-error-summary --show-error-codes",
+      "interpreter": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python314\\python.exe（mypy 2.3.0，与 `installed_version` 一致）",
+      "measured": {
+        "trinity/agents/aggregator/": {"registered_latest_now": 57, "measured": 55},
+        "trinity/retrieval/": {"registered_now": 0, "measured": 0},
+        "trinity/adapters/sqlite/": {"registered_now": 77, "measured": 56},
+        "trinity/adapters/": {"registered_now": 106, "measured": 76},
+        "trinity/core/client/": {"registered_now": 98, "measured": 49},
+        "trinity/（整包）": {"registered_baseline_total": 767, "measured": 766}
+      },
+      "_reading": "① 任务书点名的 `trinity/agents/aggregator/ now=83/57`：**83 与 57 都是历史值**（83 = 加 Round 19 补漏基类**之前**、57 = 之后），同日实测 **55**，差 −2 属移动树的漂移，**未改写**；② 其余 scope 一律**低于**登记值（−21/−30/−49），方向是收敛、不是回归；③ 整包 766 与棘轮基线 767 的关系见 `scripts/mypy_ratchet.py --json`（实测 OK：total=766 ≤ 767）。",
+      "_why_not_rewrite": "改写 `now` 会把「某一轮的进度」变成「某一轮的进度 + 今天的漂移」，两类信息混在同一个数字里，之后再也分不清。若需要「当前事实」，权威来源是 `scripts/mypy_ratchet.py --json`（对整包作棘轮）与本块的复测命令，而不是 `burned_scopes[*].now`。",
+      "by_code_aggregator_measured": {
+        "assignment": 15,
+        "attr-defined": 11,
+        "index": 8,
+        "operator": 5,
+        "has-type": 4,
+        "arg-type": 2,
+        "call-overload": 2,
+        "misc": 2,
+        "union-attr": 1,
+        "name-defined": 1,
+        "no-redef": 1,
+        "call-arg": 1,
+        "list-item": 1,
+        "var-annotated": 1
+      }
+    },
+    "_ratchet_status_20261006": {
+      "_what": "2026-10-06（测试归因轮 T1）实跑 `scripts/mypy_ratchet.py --json` 的结果快照。**本字段不改基线**，只记录事实。",
+      "command": "python scripts/mypy_ratchet.py --json（服务同款解释器 3.14.5 / mypy 2.3.0）",
+      "result": "ok=false，total=785 > 基线 767（增长 assignment 159→160、arg-type 78→82、union-attr 75→79、var-annotated 72→73、operator 67→69、misc 31→34）",
+      "already_red_before_this_round": "是。`_sync_note` 已记 2026-10-01 实测 771 > 767 ⇒ **棘轮在本轮之前就是红的**，本轮没有把它变绿也没有把它合法化（**未抬高基线**）。",
+      "attribution": "本轮 t1 只改了 2 个 trinity/ 下的 .py：`trinity/api/server/__init__.py`（新增 1 个 import + 注释，并把 `contextlib.suppress(Exception)` 改为 `contextlib.suppress(asyncio.CancelledError)`）与 `trinity/core/client/_layer_infer.py`（补 `Any` 导入与注解）。实测 `mypy trinity/api/server/__init__.py trinity/core/client/_layer_infer.py` = **2 个错误，均在 `__init__.py:83`（`Cannot assign to a type` / `Incompatible types in assignment`），与本轮改动无关的既存项**；`_layer_infer.py` 为 0。其余 +16 增长落在本轮从未触碰的文件上 ⇒ 与本轮并发写入者（其他子任务正在改同一棵树）同源。",
+      "_consequence": "「棘轮红」这件事本身**不能**用来判本轮回归；判回归要看**分码增量落在哪些文件**。建议后续把 by_file_top20 纳入棘轮输出（当前 `--json` 只给 by_code），否则永远无法把增长归因到人。"
+    },
+    "measured_cost_by_scope_20260929": {
+      "_note": "本轮把登记里那句『需逐个目录实测』兑现了。命令：python -m mypy <scope> --follow-imports=silent --ignore-missing-imports --no-error-summary --show-error-codes",
+      "_why_whole_package": "实测**整包比部分子目录还快**（34.9s vs core/client 的 151.1s）—— 整包让 mypy 的缓存更有效，且覆盖面最大（子目录会漏掉跨包问题）⇒ 棘轮 scope 取整包。",
+      "trinity/retrieval/": {
+        "seconds": 10.3,
+        "errors_before": 41,
+        "errors_after": 0
+      },
+      "trinity/adapters/sqlite/": {
+        "seconds": 9.4,
+        "errors_before": 204,
+        "errors_after": 77
+      },
+      "trinity/brain/": {
+        "seconds": 16.9,
+        "errors": 252
+      },
+      "trinity/core/client/": {
+        "seconds": 151.1,
+        "errors_before": 415,
+        "errors_after": 98
+      },
+      "trinity/agents/aggregator/": {
+        "seconds": 20.1,
+        "errors_before": 263,
+        "errors_after": 83
+      },
+      "trinity/": {
+        "seconds": 6.4,
+        "errors_before": 2165,
+        "errors_after": 801
+      }
+    },
+    "measured_top_codes_20260929": {
+      "assignment": 160,
+      "attr-defined": 107,
+      "arg-type": 78,
+      "union-attr": 75,
+      "var-annotated": 72,
+      "operator": 67,
+      "misc": 38,
+      "index": 31
+    },
+    "measured_sample": {
+      "command": "python -m mypy trinity/core/client/_bm25.py --ignore-missing-imports --no-error-summary",
+      "note": "**该条旧测量的结论已被本轮修正**：『单模块也要 >120s』是因为**没有**加 `--follow-imports=silent`；加上之后整包只要 34.9s（缓存热 6.5s）。『只对新增模块启用不成立』这一点仍然成立（导入图连通），但『代价不可承受』不成立。",
+      "implication": "已按登记原本建议的路径落地：逐目录实测 → 取整包为 scope → 棘轮扩面（不允许增长）。剩余 2,165 个错误是本轮**未清偿的存量**，已如实记在 _debt。"
+    },
+    "burned_systemic_patterns": {
+      "_note": "已**整批烧掉**的系统性模式（与 systemic_pattern_measured_not_yet_burned 相对）。",
+      "annotation_lies_about_None": {
+        "what": "`def f(x: T = None)` —— 参数注解写了非 Optional 的类型，默认值却是 None，即**注解在说谎**。mypy 报为 `[assignment] Incompatible default for parameter`。",
+        "was": 204,
+        "now": 0,
+        "scope_before": "37 个文件 / 203 个站点",
+        "how": "整批 203 处改齐成 `Optional[T]`（纯类型层，注解不影响运行时）。用 scripts/fix_optional_defaults.py 的括号感知替换（支持泛型里的逗号、自动补 Optional 导入）。",
+        "why_it_was_not_done_earlier": "它藏在 `assignment` 这个大类里（370 处），**没有按消息形态分诊过**就不会发现其中 204 处是同一个模式。分诊一次即整批可修。",
+        "key_lesson": "**这个模式必须按「契约链」整组改，逐站点改会反噬。** 实测（pilot）：只把抽象方法 `StorageAdapter.write_audit_log` 的参数放宽成 Optional，8 处 `[assignment]` 修好了却**冒出 6 个新错误** —— 实现方 `_PgAuditMixin` / `SQLiteAdapter` 仍声明窄类型，于是 「Definition of write_audit_log in base class _PgAuditMixin is incompatible」与 4 处「Argument memory_id has incompatible type None; expected str」一起出现，全包净收益只有 **−2**。把**同一条契约链**（抽象 + 两个实现）一起改齐后，同批净收益 **−29**。⇒ 整批一次改齐 ⇒ 全包 **1,395 → 1,188（−207）**、无 LSP 反噬。",
+        "side_effect_honest": "放宽之后 mypy 才看得见一些原本被「注解谎言」掩盖的信号：`union-attr` **+5**、`var-annotated` **+1**。这 6 处是**新暴露的真实问题**，不是回归；它们此前不可见的原因正是注解在说谎。",
+        "evidence_that_callers_really_pass_None": [
+          "trinity/brain/action_loop.py:100",
+          "trinity/brain/predictive_loop.py:112",
+          "trinity/brain/stale_revocation.py:74",
+          "trinity/adapters/postgresql.py:1946",
+          "trinity/adapters/postgresql.py:1976"
+        ],
+        "gate": "scripts/optional_default_audit.py（**硬零**，AST 扫 `trinity/`）+ CI 步骤 + tests/unit/test_optional_default_audit.py（6 条判据，含负向）。为何要独立门禁：mypy 的总数棘轮**挡不住**「新增一处、同时修掉另一处」，硬零挡得住。",
+        "verified_by": "脚本与 AST 扫描均为 0；相关判据集 415 passed / 2 skipped（覆盖 sdk/client/retrieval/embedding/engine/second_brain/agent/search/ingest/audit）。"
+      },
+      "swallow_fallback_signature": {
+        "what": "248 个文件里 `try: from trinity._swallow import swallow / except: def swallow(*_a, **_k)` —— 回退与真身**签名不一致**，mypy 报 `[misc] All conditional function variants must have identical signatures`。占 `misc` 的 **86%**、占全部剩余存量的 **20%**。",
+        "was": 237,
+        "now": 0,
+        "scope_before": "236 个文件",
+        "how": "把回退签名改成与真身**逐字一致** (`def swallow(site: str, exc: Any = None, *, detail: str = \"\") -> None:`)，并把内部转发 `return _real(*_a, **_k)` → `return _real(site, exc, detail=detail)`；缺 `Any` 导入的文件自动补上。只有 **2 种**回退体（235 惰性重导入 / 2 纯 return None）⇒ 变换完全机械。实测全包 **1,188 → 951（−237）**。",
+        "safety_proof_measured": "**安全性是实测的，不是假设的**：全部 **699** 个 `swallow(...)` 调用点都是**恰好 2 个位置参数**（`swallow(__name__, exc)`），与真身签名**零不兼容** ⇒ 回退不可能收到真身收不到的东西。换句话说，假如有哪个调用点不兼容，它在**真身导入成功时本来就**是坏的。",
+        "why_it_was_deferred": "此前几轮我把它标为『需要用户决定是否值得那个 248 文件的大 diff』。本轮先做了**消息形态分诊**，确认它就是 `misc` 的 86%，且变换只有 2 种形态、安全性可实测 ⇒ 从『大而模糊』变成『大而机械且已证明安全』。",
+        "gate": "tests/unit/test_swallow_fallback_contract.py（3 条判据）+ CI 步骤 scripts/swallow_contract_audit.py。",
+        "gate_design_note": "**光看 mypy 不够**：签名一致只是静态性质，回退体**运行时是否真能用**没人验过 —— 回退只在『真身导入失败』时才走到，正常导入根本不执行它。故判据除结构外，还会**真的把真身导入弄失败**（拦 `builtins.__import__`），让回退被定义出来再调用它（2 位置参数 / +detail / 只给 site 三种调法）。",
+        "verified_by": "全包 mypy **1,188 → 951**；该错误归零；249 个含新签名的文件 `py_compile` 全过；237 个模块导入扫描通过（229 OK；8 个失败项 5 个是扫描脚本自身的 `__`↔`/` 命名 bug、3 个是既有的第三方 `mcp.server.fastmcp` 缺失，均与本改无关）；契约判据 3 passed，负向实测：还原一个文件的签名 ⇒ 立刻红。",
+        "estimate_refined_by_measurement": "留档时我给的估算是「246 处错误 / 248 文件 / 948 调用点」；本轮**实测**为 「237 处错误 / 236 个需要改的文件（另 12 个已合规，共 248 个含该结构）/ 699 个调用点」。差异原因是当时按正则粗数、未区分「有 append 点」与「签名真不一致」。**以实测为准**；此处保留两个数字是为了让后续读者能看到估算被修正过，而不是被悄悄替换。"
+      },
+      "union_attr_is_three_classes_not_one": {
+        "what": "`union-attr` **不是一类东西**。114 处分诊后是三类，只有第一类是真缺陷。**数它有多少毫无意义 —— 必须读代码**。",
+        "was": 114,
+        "now": 79,
+        "classes": {
+          "real_guard_bypass (11)": {
+            "_what": "**真实缺陷**：函数在顶部写了 `conn = self._conn` + `if not conn: return`，但后面几行又直接用 `self._conn.execute(...)` —— **守卫被绕过、等于没守**。`close()` 会把 `self._conn` 设回 None，并发关闭时那几行会抛 AttributeError: 'NoneType' object has no attribute 'execute'。",
+            "_where": "adapters/sqlite/_diagnostics.py（10 处，全在同一个 dict 字面量里）、_audit.py（1 处）、_crud.py（1 处）",
+            "_fix": "改用**已经受过守卫的局部** `conn.<attr>`。语义等价（连接非 None 时二者同一对象），且**真的堵上了洞**（守卫从现在起保护这些行）。",
+            "_how_found": "对每个报错点，向上看同函数里**是否已存在「捕获 + 守卫」的局部** —— 有，就是这一类。"
+          },
+          "narrowing_leak (14)": {
+            "_what": "**我自己写的文件**里的收窄泄漏：同一段 `x = d.get(k) if isinstance(d.get(k), dict) else {}` 重复 7 次；而 `Dict[str, Any].get()` 返回 `Optional[Any]`，mypy **无法对 `Any` 完全收窄** ⇒ 三元表达式类型泄漏成 `Any | dict[Any, Any] | None`，于是每个后续 `x.get(...)` 都报错。",
+            "_where": "brain/metacognition_arbiter.py（14 处）",
+            "_fix": "引入**全序收窄**助手 `_sub(d, key) -> Dict[str, Any]`（两个分支都返回 Dict），既消错又消除 7 处重复。",
+            "_behaviour": "等价：只是把 `isinstance` 收窄写成一个总返回 dict 的函数。判据 21 passed。"
+          },
+          "flag_guard_invariant (10)": {
+            "_what": "**不是潜在崩溃，是 mypy 的局限**：代码写 `if self._use_sqlite:` 然后 `conn = self._db_conn; conn.execute(...)`。mypy 无法把『标志为真』与『属性非 None』关联起来 —— 但该不变式**由构造顺序保证**：`__init__:151-152` 先赋 `_db_conn` 再置 `_use_sqlite = True`；`close():170-171` 反向撤销。",
+            "_where": "session_recorder.py（10 处）",
+            "_fix": "把守卫写成 `if self._use_sqlite and self._db_conn is not None:`。可达状态下**行为完全相同**；破损不变式状态下旧代码抛 AttributeError 崩溃、新代码走 `else` 即 **JSON 回退** —— 正是 `close()` 自己的 docstring 承诺的语义（「调用此方法后，记录器将回退到 JSON 模式」）。",
+            "_false_alarm_risk": "**若把它当成真崩溃，就是误报**。这一类只能靠读代码区分，而这正说明『按错误码计数』不足以判断缺陷。"
+          }
+        },
+        "remaining": "还剩 79 处：`Connection | None` 40（同类 flag-guard 不变式，分布在 adapters/sqlite/_schema.py 14、memory/memory_agent.py 10、adapters/vectile.py 6、engine_worker.py 4、memory/consolidator.py 4 等）、`TextIO | Any` 7、`Any | dict | None` 6、`Any | None` 5、其余为杂项。下一步按同样的三类口径逐个分诊，**不按数量目标硬修**。",
+        "verified_by": "全包 mypy **951 → 914**；`union-attr` **114 → 79**；session_recorder.py 的连接守卫类 10 → **0**（该文件仅剩 2 处属别的类别：no-redef / index）；仲裁者判据 21 passed；相关判据集 **270 passed / 5 skipped**。"
+      },
+      "arg_type_hid_a_real_functional_bug": {
+        "what": "`arg-type` **异质、无单一主导模式**（108 处），但分诊样本时发现一处**真功能缺陷**：`TemporalAnchor.from_access_log` 的第三个参数叫 `iana_tz: str = \"UTC\"`，而两个提前返回分支写的是 `cls(agent_id=agent_id, timezone=timezone)` —— 这里的 `timezone` 指的是模块顶部 `from datetime import timezone` **那个类**。⇒ **`iana_tz` 在 2/3 条返回路径上是「死参数」**：调用方以为传了时区，实际字段拿到的是 `<class 'datetime.timezone'>`。",
+        "reproduced_before_fix": [
+          "from_access_log('agent', [], 'Asia/Shanghai').timezone -> <class 'datetime.timezone'>",
+          "from_access_log('agent', ['bad-ts'], 'Europe/Paris').timezone -> <class 'datetime.timezone'>",
+          "from_access_log('agent', ['2026-09-29T10:00:00+08:00'], 'Asia/Tokyo').timezone -> 'Asia/Tokyo'（主路径正确）"
+        ],
+        "fixed": "两行改为 `timezone=iana_tz`。修复后探针 **4/4 路径全部保住传入时区**；该文件 arg-type 2 → 0。",
+        "gate": "tests/unit/test_temporal_anchor_timezone.py（3 条判据）。负向实测：把 bug 放回去 ⇒ **3 failed**；恢复 ⇒ 3 passed。",
+        "why_no_general_gate": "「死参数」这一类**无法用语法级门禁接受**：实测全仓 275 处（带默认值的 199 处），其中大量是**合法的接口一致性签名**（如 `adapters/base.py` 的抽象方法、`__exit__(exc_type, exc_val, exc_tb)`）。更关键的是：**`ruff check --select ARG` 刻意跳过带默认值的参数**（视其为「可选」）—— 实测它在修复**前后都报 `All checks passed!`**，即这类缺陷对标准 linter **不可见**。⇒ 结论：**mypy 的棘轮就是这一类缺陷的有效检测器**（这次正是 `[arg-type]` 唯一指出来的一处），故不另设嘈杂门禁，而是把已发现的这一个钉死。",
+        "value_note": "这条把 mypy 棘轮的价值从「类型卫生」提升到「**发现真功能缺陷**」：被静默忽略的用户输入（时区）是靠类型不一致暴露出来的。"
+      },
+      "disclosure_gap_on_full_routing": {
+        "what": "本轮**完成度审计**发现：`breakdown.vector_channel` 在 **light** 路由上存在（`lexical:SQLiteAdapter.search_memories`），在 **full** 路由上**缺失**（只有计数 `vector: 3`）。该字段存在的理由正是消除「向量通道是**嵌入**还是**词法**」的歧义 —— 它偏偏在**真正做融合的路径**上缺席。",
+        "fixed": "`_hybrid_search.py` 的 full 路径补上同一披露。**行数中性**：先合并一行注释（文本一字不丢）再新增该行，保持 **1399/1400** 预算（该文件余量仅 1 行）。",
+        "gate": "tests/unit/test_vector_channel_disclosure_all_routings.py（4 条判据）。**用进程内调用**判定 —— 活体进程内存里是启动时的代码，文件改了没重启时活体响应看不到修复。负向实测：删掉 full 披露 ⇒ **1 failed**。",
+        "audit_self_correction": "这条 FAIL 是审计**发现的真问题**；而同一轮审计的另外 3 处 FAIL **都是审计自己的检查写错了**（详见 `_completion_audit_20260929`）。"
+      },
+      "cached_embed_batch_returned_a_type_violating_list": {
+        "what": "`CachedEmbeddingEngine.embed_batch` 声明返回 `List[np.ndarray]`，实现却是「未命中处先 `append(None)` 占位、随后用 `zip(uncached_indices, batch_vecs)` 覆盖」。**`zip` 在数量不符时会提前截断** ——内层批量接口若返回的向量数少于请求数（批量 API 的正常失败模式），剩下的占位就**保持 None**，于是一个声明为 `List[np.ndarray]` 的列表里混进了 None。",
+        "impact": "调用方会在 `.shape` / `np.stack` 上以**难以定位**的方式崩，或静默降级 ——正是本次审计反复针对的「声明与实际不符」。",
+        "fixed": "槽位如实标为 `List[Optional[np.ndarray]]`，并在边界上**显式**检查未填充槽位 ⇒ 抛出带下标的 RuntimeError。（**补零是更糟的选择**：零向量是「看起来合法」的嵌入，会静默污染检索 ⇒ 必须响亮失败而不是伪造数据。）",
+        "gate": "tests/unit/test_cached_embed_batch_no_none.py（3 条判据，含一个「内层故意截断」的假引擎）。负向实测：还原成 `return results` ⇒ **1 failed**。",
+        "verified_by": "相关判据集 145 passed / 1 skipped；全包 mypy 828 → 821。"
+      },
+      "unannotated_locals_contradicting_the_return_annotation": {
+        "what": "`value_encoder.batch_estimate` 的**返回注解本来就是** `List[Optional[Dict[str, Any]]]`（没错），但函数内的 `results = []` **没有局部注解**，mypy 从后续 append 推成非 Optional ⇒ 4 处 `arg-type`。**说谎的是局部变量，不是契约。**",
+        "fixed": "给局部加上与返回注解一致的注解（1 行修 4 处，语义不变）。同类：`coze_bridge.py` 的 `result = {\"memory\": [], ...}` 是无注解字典字面量，被 `result[\"memory\"] = intent_result.get(\"results\", [])` 的 `Any` 推成并集 ⇒ `len(result[\"memory\"])` 报错（运行时并非 None）⇒ 显式注解为 `Dict[str, Any]`。",
+        "measured": "value_encoder 4 → 0；coze_bridge 1 → 0；consolidation 4 → 1；全包 840 → 828。",
+        "extra_fix": "`memory/consolidation.py` 两处 `cosine_similarity(...)` 的守卫写在**属性表达式**上（`if mem_list[i].embedding and mem_list[j].embedding:`），mypy 无法跨语句收窄 ⇒ 把值**捕获到局部**再守卫（与 Round 18 的连接守卫同一打法，顺带消除重复读取）。",
+        "arg_type_triage_conclusion": "`arg-type` **异质、无主导模式**（`float` 8 / `append` 7 / `relate` 6 / `_norm_entry` 5 / …）。但按「可疑度」排序后**两次**从样本里挖到真缺陷（Round 20 的 `iana_tz` 死参数、本轮的这个）⇒ 逐站点读代码是值得的，只是不能指望『一个模式整批修』。另：**6 处「传字面 None」里 5 处是刻意的占位模式**（先占位后按位覆盖），属 mypy 噪声，已在判据里说明，不当作缺陷。"
+      },
+      "cb49_selftest_relied_on_an_implicit_precondition": {
+        "what": "`engine_core._collect_guardian_cb49_50` 里 `RelationalVersioning.add_fact()` 返回 `str | None`（去重拒绝时为 None），而那些 id 被**直接**传给 `relate` / `get_version_history` / `dict.get`（都要求 `str`）⇒ 10 处 arg-type。",
+        "verdict": "**不是生产缺陷**：正常路径下被使用的 id 都非 None；唯一为 None 的 `f_dup` 已在 `:602` 断言且从不外传。但**这个自测是脆弱的** —— 去重行为一旦变化，它会以 `TypeError: expected str, got NoneType` 在调用深处崩，而不是清晰的断言失败。",
+        "fixed": "把前置条件写成**显式断言**（3 处 `assert`）。通过路径上语义不变，失败时从「难定位的 TypeError」变成「清晰的断言」。实测 `arg-type` 101 → 89，全包 821 → 814；CB49 自测仍 **ALL_PASS**。"
+      },
+      "annotation_truth_has_two_directions": {
+        "what": "同一句「声明与实际不符」，**修法方向可能相反** —— 本轮同时遇到两种，说明**不能机械地一律加 Optional、也不能一律去掉**，必须读实现。",
+        "narrow_one": {
+          "_case": "`trinity/core/client/_helpers.py::_find_trinity_store() -> Optional[str]`",
+          "_truth": "**两条返回路径都返回 str**（env 命中就返回；否则 `makedirs(home_store)` 后返回它），从不返回 None ⇒ 注解**多了一个假的 Optional**。",
+          "_propagation": "这个谎言**向下游传播**：两处 `os.path.join(_find_trinity_store(), ...)`（`memory/persona.py:101`、`modules/memory_replay_trainer.py:245`）被迫按「可能是 None」处理 ⇒ arg-type。还会逼**未来**的调用方处理一个永不出现的 None。",
+          "_fix": "注解改为 `-> str`（说真话）。**一处修两处。**",
+          "_evidence": "直接调用实测返回 `'C:\\\\Users\\\\Administrator\\\\.trinity\\\\store'`（str，且 isdir=True）"
+        },
+        "widen_one": {
+          "_case": "`trinity/skills/facade.py::_norm_entry(name: str, ...)`",
+          "_truth": "实现是 `str(name or \"\")` —— **明确处理 None**；调用点传 `r.get(\"name\") or r.get(\"signature\") or r.get(\"skill_id\")`，三键全缺时正是 None ⇒ 注解**比实现更严格**。",
+          "_fix": "注解放宽为 `Optional[str]`（同样说真话）。**一处修 5 处。**"
+        },
+        "also": "`trinity/kgraph/graph.py`：`seen: set[str] = set()` 而实际 `add((name, etype))` 元组 ⇒ 注解写错，改为 `set[tuple[str, str]]`。",
+        "measured": "全包 814 → **806**（arg-type 89 → 81；`facade.py` 5 → 0）。",
+        "gate": "tests/unit/test_annotation_truth_20260929.py（5 条判据）—— **同一文件锁住两个相反方向**，并附注「两处都属声明与实际不符，但修法方向相反」这条教训。",
+        "verified_by": "相关判据集 182 passed / 1 skipped；新判据 5 passed。"
+      },
+      "one_local_name_two_meanings": {
+        "what": "`AsyncMemoryPipeline` 的两条消费者循环里，**同一个局部名 `remaining` 被赋予两种含义**：\n内层循环里是**剩余秒数**（`remaining = deadline - time.time()`，float），\n循环之后又被赋成**捞出的事项列表**（`remaining = self._drain_queue()`）。",
+        "why_mypy_flagged_it": "mypy 按变量的**首次赋值**定类型（float），于是 `_process_batch(remaining)` / `_async_process_batch(remaining)` 报 arg-type。",
+        "is_it_a_runtime_bug": "**否** —— 报告那一行时 `remaining` 已被重新赋成列表（Python 动态类型）。但它是**真实的维护陷阱**：任何重排/编辑（把 drain 提到内层循环之上、或新增一处按秒数使用 `remaining`）都会变成**真崩溃**，而这类缺陷**没有任何运行时症状**，静态检查里也只表现为一处 arg-type 噪声。",
+        "fixed": "各具其名：`budget_s`（剩余秒数）/ `leftover`（捞出的项），同步与异步两条循环都改。语义不变、行数中性。",
+        "gate": "tests/unit/test_pipeline_local_name_hygiene.py（3 条判据）—— 直接从源码确认两个名字都在、且 `remaining` **不再作为代码出现**（只允许留在解释性注释里）。负向实测：把名字改回复用 ⇒ **2 failed**。",
+        "why_a_gate_is_worth_it": "回潮的诱惑很大（改回一个名字更省事），而回潮后**看不见任何症状** —— 正是「恒红的门禁会被忽略」的反面：**无感的缺陷需要显式判据**。"
+      },
+      "heterogeneous_dict_inferred_as_dict_str_float": {
+        "what": "`engine_governance` 里 `result = {\"continuity_preserved\": True, ..., \"drift_magnitude\": 0.0}` —— 字典**本来就是异质的**（bool 标志 + float 幅度），但 mypy 按**数值塔**把 bool 与 float 并成 `float` ⇒ 推成 `dict[str, float]` ⇒ `result[\"memory_poisoning\"]` 成了 float，而 `ContinuityState.drift_detected` 要 bool ⇒ arg-type。",
+        "fixed": "显式注解为 `Dict[str, Any]`（说真话：它确实是异质字典）。**并补上缺失的 `Dict` 导入** —— 与 Round 21 是同一个坑：函数内局部变量的注解运行时不求值（`py_compile` 抓不到），但 mypy 会报 `Name not defined`，那一处会**抵消**刚修好的一处。",
+        "measured": "全包 806 → **801**（pipeline 2 处 → 0；governance 1 处 → 0）。",
+        "verified_by": "相关判据集 24 passed / 1 skipped；pipeline 名字卫生判据 3 passed（负向 2 failed）。"
+      },
+      "conditionally_assigned_attr_inferred_none": {
+        "what": "实例属性在 `__init__` 里先赋 `None`（或只在某些分支赋值），mypy 按**首次赋值**推断为\n`None`，于是后续 `self._x.method(...)` 全报 `\"None\" has no attribute \"method\"`。",
+        "measured": "`attr-defined` 共 107 个，其中**绝大多数**是这一形态。已修样本：\n`trinity/vector_index/index.py` 的 `self._index`（faiss 索引 / `IndexIDMap2` 包装体 /\nnumpy 兜底对象三选一）⇒ 注解 `Any` 后该文件 attr-defined **6 → 3**，全包 792 → **789**。",
+        "remaining_hot_files": {
+          "trinity/embeddings/engine.py": "7 处（`_model`/`_onnx_session` 等按后端三选一的属性）",
+          "trinity/core/cache.py": "6 处",
+          "trinity/modules/second_brain/engine_core.py": "6 处",
+          "trinity/vms/backends/postgres_backend.py": "6 处",
+          "trinity/agents/aggregator/_factory.py": "6 处"
+        },
+        "how_to_fix_honestly": "给**确实是多类型**的属性加 `: Any`（这是**说真话**，因为一个属性真的可能\n是 faiss 索引或 numpy 数组或模型对象）；**不要**给全部属性无差别涂 `Any` ——\n那等于放弃类型，与本轮「声明即事实」的原则相反。"
+      }
+    },
+    "_A_clause_direct_verification_20260929": {
+      "_why": "完成度审计 v2 已 14/14，但 (A) 的两条**字面条款**（「存储层单一权威」与「嵌入/索引**冻结**」）此前是**间接**核验的。Round 20 补了直接测量。",
+      "single_storage_authority": {
+        "verdict": "PASS",
+        "measured": "客户端构造出 `SQLiteAdapter`，单一权威路径 `C:\\Users\\Administrator\\.trinity\\store\\trinity_store.db`；PG 为镜像。"
+      },
+      "embedding_freeze": {
+        "verdict": "PASS",
+        "measured": "活跃记忆嵌入覆盖 **100%**（24,270/24,270）；回填已与 `if \"postgres\" in _tname` 解耦，任何具备 `set_embedding` 的适配器都会回填。"
+      },
+      "index_freeze": {
+        "verdict": "**OPEN — 需决策**",
+        "measured": "① `use_ann = False` ⇒ **ANN 索引在当前配置下是关闭的**，向量通道因此走词法通道（这一点已在 `breakdown.vector_channel` 如实披露为 `lexical:SQLiteAdapter.search_memories`）；② 持久化索引与记忆池不一致（实测 `idx=13 pool=19337`）——**但加载器会丢弃并重建，且打出明确日志**（`vector index row count mismatch ... — discard, will rebuild`），**属自愈行为、不是静默失败**。",
+        "why_not_fixed_by_me": "开启 ANN 会**改变生产检索行为**（向量通道从词法切到嵌入），且需要为 19,337 行做一次全量索引重建（实测大库耗时以分钟计）。这属于**产品/部署决策**，且直接触及目标里「不改动生产数据库、不重启服务」的边界 ⇒ **不由我单方面决定**。已把两个选项与代价写清，等指示。",
+        "options": {
+          "keep_off": "保持 `use_ann=False`：检索走词法（现状），延迟低；向量通道的披露字段已如实说明，不存在『宣称用嵌入实为词法』的静默问题。",
+          "turn_on": "开启 ANN：需全量重建 19,337 行的索引（分钟级），并在 A/B 上重新验证召回质量与 p50 延迟（我在 Round 13 的 A/B 记录里已量过：词法 vs pgvector 平均 Jaccard 0.353、rank-1 相同 2/6；自检索 R@10 22/23 vs 20/23，n=23 不显著；p50 3918ms → 6656ms 即 1.7×）⇒ **从既有证据看，开启 ANN 的收益不明确、代价是 1.7× 延迟**，故我的建议是保持现状，但决定权在你。"
+        }
+      }
+    },
+    "_measurement_caveat_moving_tree": {
+      "_why": "本仓的自动循环（`TrinityAutoStartLoop` / `TrinityLoopGuard` / `TrinityMemoryGuard`）在会话期间**持续改动工作区**（实测 `git status` 有约 1,020 个未提交文件），故 mypy 计数是在**移动的树**上测的：同轮内 `assignment`/`attr-defined`/`union-attr` 等类目的数字也会小幅漂移（例如本轮它们合计 −12，并非全部来自我的改动）。",
+      "_implication": "① 基线是**当时**事实，不是绝对量；② 我的提交只 `git add` 我自己改的文件，不会把循环的改动带进提交；③ 报告里凡引用计数，都应理解为「该次测量的快照」。"
+    },
+    "structural_causes_fixed": [
+      "① mixin 共享名字静态不可见（4 个声明基类；−390）",
+      "② 注解说谎（`Optional[X] = None` 却从不返回 None；204 处 → 0）",
+      "③ swallow 回退签名（237 处 → 0）",
+      "④ 连接守卫被绕过（11 处真缺陷 + 守卫可见化）",
+      "⑤ **条件赋值的实例属性被推断为 `None`**（本轮新识别；`attr-defined` 的主要来源）"
+    ],
+    "arg_type_triage_addendum": {
+      "trinity/brain/decision.py": "6 处 `float(x)` 而 `x` 为 `Any | None` —— **AST 核实全部位于 `try` 内**\n（`:792` 起、`:816` 的 `except` 兜住；另两处在 `:392`/`:406` 各自的 try 内）\n⇒ **不是运行时缺陷**。按第 ⑤ 条（不得按数量硬修）**不动**这条已标定的\n概率校准路径，仅登记分诊结论。"
+    },
+    "_sync_note": "2026-10-01（外部审计）：登记值原为 768，而棘轮基线 `docs/MYPY_BASELINE.json::_total=767` ⇒ 两者不一致，被 `tests/unit/test_lint_enforcement_parity.py` 判红（两个文件 mtime 均为 2026-09-29，早于本轮）。**本字段的含义是'棘轮冻结的那个数'**，故同步为 767。⚠️ 但 `scripts/mypy_ratchet.py` **实测当前为 771**（增长 attr-defined +2 / misc +1 / call-overload +1）⇒ **棘轮仍红**，且**我没有抬高基线**（抬高＝把未定性的回归合法化）。该 +4 的归属仍未定，见修复记录 §39.3。"
+  },
+  "_debt": [
+    {
+      "item": "mypy 存量 789 个类型错误（棘轮；五处结构性成因 + 多方向分诊）",
+      "impact": "存量由 2,165 降到 **789**（−1,376）。棘轮价值两层：① 类型卫生；② **发现真缺陷 / 真陷阱**（`iana_tz` 死参数、`embed_batch` 类型违约、同名两义、守卫假阳性、契约声明与实现相反）。",
+      "unblock": "剩余 789：`assignment` 160、`attr-defined` 107（**第 ⑤ 个结构性成因，见 `burned_systemic_patterns.conditionally_assigned_attr_inferred_none`**）、`arg-type` 78、`union-attr` 75、`var-annotated` 72。**方法论（十一条）**：① 消息形态分诊；② 成因分诊；③ **判守卫必须用 AST**；④ 结构性成因杠杆最高（已修五处）；⑤ 不得按数量硬修；⑥ **响亮失败优于伪造数据**；⑦ **「声明与实际不符」有两个方向**；⑧ **一个局部名两种含义**是独立缺陷类；⑨ **「路径存在」≠「路径可用」**；⑩ **「修了一处」≠「修了这一类」**；⑪ **提交前必须确认门禁结果**，并区分**真增长与假增长**（前者改代码、后者更新基线）。",
+      "status": "部分解决：棘轮 + 四处结构性成因 + 多类系统性模式 + 完成度审计"
+    },
+    {
+      "item": "ruff ignore 清单静默了四条高信号规则",
+      "impact": "F401 未用导入 / F811 重定义 / F821 未定义名 / F841 未用变量 —— 正是最容易引入静默缺陷的四类。实测解除后全仓 2535 个、trinity/ 包内 1841 个。**其中 F821 已由本轮从 33 降到 17**（trinity/ 内 17→5）：F821 不可自动修且就是真实缺陷类，已作为首个烧存量目标推进。",
+      "unblock": "分两步：先用 `ruff check --select F401 --fix` 批量清掉可自动修复的部分并复跑全量测试，再逐条把规则从 ignore 移除并下调 docs/LINT_BASELINE.json。F821 已基本处理完（剩 5 处仅注解用前向引用）；F401（2277 处，纯风格）需逐文件判断，代价最大。"
+    }
+  ],
+  "_related_facts_measured_same_round": {
+    "repo_python_files": 3106,
+    "repo_loc": 580516,
+    "trinity_package_files": 683,
+    "trinity_package_loc": 182633,
+    "ci_workflow_count": 9,
+    "note": "规模数字用于说明『为何解除 ignore 需分批』；由外部审计以 Python 实测（PowerShell 的 Get-Content/Measure-Object 会因编码与跳空行低估约 18%）。"
+  },
+  "_completion_audit_20260929": {
+    "_what": "Round 20 按 goal 政策做的完成度审计：对 A/B/C/D 逐条用**新鲜测量**取证，不复述叙述。审计 v1 得 9 PASS / 4 FAIL，逐条查证后：**4 处 FAIL 全部是我的检查问题**（不是系统问题），其中 1 处牵出一个**真缺口**（见 disclosure_gap_on_full_routing）。",
+    "_corrections_to_my_own_checks": {
+      "status=degraded": "**不是故障**：`engine_error` 为 null、组件全部 healthy、`degradation.health` 六项全 true。真实原因是 `cognitive_eval: stale 62.2h > 36h (PASS=True)` —— **过期产物**的新鲜度，由定时评测刷新（该循环在本环境因非管理员无法运行）。已改为「断言引擎与通道健康 + **报告**该原因」，而不是断言 `status == ok`。",
+      "breakdown.bm25=None": "**路由相关，不是回归**：该查询走了 `routing: light`（`channels: [fts]`），light 路由的 breakdown 本来就没有 bm25 键；走 **full** 路由时 `bm25=3`。检查已改为在 full 路由上断言。",
+      "metacognition.decision=None": "**字段位置错**：仲裁者输出在**顶层 `metacognition_verdict`**（可答 → `verify`@0.64；不可答 → `abstain`@0.24）。检查已改用该字段。",
+      "superseded x1": "**结构字段名**：命中的是 `SCORES.json` 的 `superseded_claims` 清单本身（9 条黑名单，带 `exempt_markers`）。权威检查器是 `scripts/scores_gate.py`（已 PASS，扫描面 16 个文档），不该用子串计数。"
+    },
+    "_result_v2": "13 PASS / 1 FAIL（该 FAIL 即 `disclosure_gap_on_full_routing`，本轮已修并加判据）。",
+    "_lesson": "**审计自己也会错**：4 处 FAIL 里 3 处是我把字段名/路由写错。凡「审计发现」在下结论前必须先看**原始响应结构**，而不是照自己记忆里的字段名断言。"
+  }
+}

@@ -1,0 +1,1664 @@
+{
+ "provenance": {
+  "built_by": "scripts/build_section_golden.py",
+  "built_at": "2026-10-06 08:58:19",
+  "persona": "trinity-docs",
+  "generation_input": "**文档结构**（metadata.section 章节标题列表），**不是正文**",
+  "why": "换生成输入的复现：已有题集的 query 由 doc2query 留出问题（生成自**正文**）构成；本题集只用标题列表生成 ⇒ 生成输入不同",
+  "NOT_fully_independent": "查询仍源自被评测文档自身 ⇒ **词法偏袒无法根除**；真正的独立复现需人工撰写或外部来源的查询集",
+  "corpus": "persona_id='trinity-docs'（与 doc_retrieval_eval 同语料）",
+  "metric": "文档级 R@k（target = metadata.source_file 基名）"
+ },
+ "items": [
+  {
+   "id": "sec0000",
+   "type": "section-task",
+   "query": "当接口调用失败时，我该如何理解返回的异常信息并排查问题？",
+   "target": "API_REFERENCE.md"
+  },
+  {
+   "id": "sec0001",
+   "type": "section-task",
+   "query": "我想知道这套系统当前哪些模块是真正在运行、哪些只是保留或已经冻结的，以及划分标准是什么。",
+   "target": "ARCHITECTURE.md"
+  },
+  {
+   "id": "sec0002",
+   "type": "section-task",
+   "query": "在保留可验证凭证的前提下，怎样安全地清理历史审计数据？",
+   "target": "ARCHIVE_POLICY_20260907.md"
+  },
+  {
+   "id": "sec0003",
+   "type": "section-task",
+   "query": "我想了解这套流程的具体执行规则以及首次运行的时间安排",
+   "target": "ARCHIVING.md"
+  },
+  {
+   "id": "sec0004",
+   "type": "section-task",
+   "query": "怎么在本地设备上跑模型推理，但只给草稿级别的临时权限？",
+   "target": "AUTHORIZATION_REQUESTS.md"
+  },
+  {
+   "id": "sec0005",
+   "type": "section-task",
+   "query": "怎么让系统按照我预先设定的规则自动执行一连串操作？",
+   "target": "AUTOMATION.md"
+  },
+  {
+   "id": "sec0006",
+   "type": "section-task",
+   "query": "系统自动迭代后，我该盯哪些指标才能确认它没跑偏？",
+   "target": "AUTO_EVOLVE_OBSERVATION.md"
+  },
+  {
+   "id": "sec0007",
+   "type": "section-task",
+   "query": "我想知道一个系统升级后到底强了多少，该怎么全面评估？",
+   "target": "BEFORE_AFTER_COMPARISON_20260829.md"
+  },
+  {
+   "id": "sec0008",
+   "type": "section-task",
+   "query": "我想了解这套系统在标准测试集上的整体表现和各项得分情况",
+   "target": "BENCHMARKS.md"
+  },
+  {
+   "id": "sec0009",
+   "type": "section-task",
+   "query": "我想知道怎么把之前跑过的评测结果重新跑一遍，并确认输出文件都齐全",
+   "target": "BENCHMARK_GUIDE.md"
+  },
+  {
+   "id": "sec0010",
+   "type": "section-task",
+   "query": "我想了解 Trinity 在长上下文记忆评测中的最新表现数据，该去哪里看？",
+   "target": "BENCHMARK_OFFICIAL_20260827.md"
+  },
+  {
+   "id": "sec0011",
+   "type": "section-task",
+   "query": "我想知道一个智能系统从启动到关闭会经历哪些阶段",
+   "target": "BEST_PRACTICES.md"
+  },
+  {
+   "id": "sec0012",
+   "type": "section-task",
+   "query": "我想了解当前整体环境的基本情况和背景说明",
+   "target": "BRAINIFICATION_VS_NETWORK_20260908.md"
+  },
+  {
+   "id": "sec0013",
+   "type": "section-task",
+   "query": "我想知道这套系统当前实际表现到底怎么样，有没有真实数据支撑评估结论？",
+   "target": "BRAIN_ASSESSMENT_20260911.md"
+  },
+  {
+   "id": "sec0014",
+   "type": "section-task",
+   "query": "我想知道之前那份评估里哪些结论后来被实测推翻了，以及真正还残留的问题是什么",
+   "target": "BRAIN_ASSESSMENT_V2_20260911.md"
+  },
+  {
+   "id": "sec0015",
+   "type": "section-task",
+   "query": "我们现在的系统离真正像人脑那样运作还差哪些关键能力？",
+   "target": "BRAIN_GAP_20260908.md"
+  },
+  {
+   "id": "sec0016",
+   "type": "section-task",
+   "query": "我想知道当前系统离真正像人脑一样自主思考还差多远，有没有实测数据支撑？",
+   "target": "BRAIN_GAP_20260913.md"
+  },
+  {
+   "id": "sec0017",
+   "type": "section-task",
+   "query": "我想了解系统启动前的准备说明以及当前执行进度和后续还需完成哪些工作",
+   "target": "BRAIN_GAP_STATUS.md"
+  },
+  {
+   "id": "sec0018",
+   "type": "section-task",
+   "query": "如何为一次底层数据存放方式的重构准备关键依据，并理清它和已有改进方案的关系？",
+   "target": "BRAIN_PRINCIPLES_REFACTOR.md"
+  },
+  {
+   "id": "sec0019",
+   "type": "section-task",
+   "query": "我想了解如何从时间、权重、容量和索引等角度优化神经网络的学习与记忆机制",
+   "target": "BRAIN_PRINCIPLES_SURVEY.md"
+  },
+  {
+   "id": "sec0020",
+   "type": "section-task",
+   "query": "怎么在不改动现有行为的前提下，一步步排查并定位某个性能问题？",
+   "target": "C1P_TWOSTAGE_PLAN.md"
+  },
+  {
+   "id": "sec0021",
+   "type": "section-task",
+   "query": "一个刚开源、几乎没人关注的项目，怎么判断它到底有没有实际价值？",
+   "target": "CAPABILITY_MAP_20260814.md"
+  },
+  {
+   "id": "sec0022",
+   "type": "section-task",
+   "query": "我想了解这套系统当前哪些环节已经真正跑通、哪些还卡着没解决",
+   "target": "CLOSED_LOOP_STATUS_20260913.md"
+  },
+  {
+   "id": "sec0023",
+   "type": "section-task",
+   "query": "如何判断当前项目里哪些问题已经彻底解决、哪些还悬而未决？",
+   "target": "CLOSURE_AND_OPTIMIZATION_20260824.md"
+  },
+  {
+   "id": "sec0024",
+   "type": "section-task",
+   "query": "我想知道某个模块实际是怎么跑起来的，以及项目根目录该怎么整理，还有哪些后续可做的事？",
+   "target": "CODE_STRUCTURE_AUDIT_20260815.md"
+  },
+  {
+   "id": "sec0025",
+   "type": "section-task",
+   "query": "这个版本相比之前到底多了哪些新东西，整体表现怎么样？",
+   "target": "COMPARISON_BEFORE_AFTER_FULL.md"
+  },
+  {
+   "id": "sec0026",
+   "type": "section-task",
+   "query": "我想知道这次改动到底带来了哪些实际提升，有没有一份完整的对比说明？",
+   "target": "COMPARISON_BEFORE_AFTER_R7_R8.md"
+  },
+  {
+   "id": "sec0027",
+   "type": "section-task",
+   "query": "如何让智能体记住对话内容并在需要时准确回忆？",
+   "target": "COMPARISON_VS_2026_SOTA.md"
+  },
+  {
+   "id": "sec0028",
+   "type": "section-task",
+   "query": "我想知道当前系统在事实记忆和上下文处理方面还有哪些短板，以及下一步该怎么优化？",
+   "target": "COMPARISON_VS_2026_SOTA_R2.md"
+  },
+  {
+   "id": "sec0029",
+   "type": "section-task",
+   "query": "我想了解最新一轮调研中，我们的系统与当前最优方案相比还有哪些关键差距，以及具体该怎么补齐。",
+   "target": "COMPARISON_VS_2026_SOTA_R3.md"
+  },
+  {
+   "id": "sec0030",
+   "type": "section-task",
+   "query": "我想了解最新一轮对比中出现了哪些新变化，以及最终该选哪个方案？",
+   "target": "COMPARISON_VS_2026_SOTA_R4.md"
+  },
+  {
+   "id": "sec0031",
+   "type": "section-task",
+   "query": "我们现在的系统跟今年最新的同类方案相比，还有哪些值得补上的功能？",
+   "target": "COMPARISON_VS_2026_SOTA_R5.md"
+  },
+  {
+   "id": "sec0032",
+   "type": "section-task",
+   "query": "现在还有哪些新出的技术路线值得纳入考虑？",
+   "target": "COMPARISON_VS_2026_SOTA_R6.md"
+  },
+  {
+   "id": "sec0033",
+   "type": "section-task",
+   "query": "我想知道当前系统在记忆、知识库和智能体编排方面与主流方案相比处于什么水平，有哪些短板和可改进项？",
+   "target": "COMPARISON_VS_2026_SOTA_R7.md"
+  },
+  {
+   "id": "sec0034",
+   "type": "section-task",
+   "query": "我想了解怎么让智能体记住之前聊过的内容并长期保持连贯",
+   "target": "COMPARISON_VS_2026_SOTA_R8.md"
+  },
+  {
+   "id": "sec0035",
+   "type": "section-task",
+   "query": "我想确认某个检索引擎在真实使用中是否会出现性能悄悄变差却毫无提示的问题",
+   "target": "COMPARISON_VS_2026_SOTA_R9.md"
+  },
+  {
+   "id": "sec0036",
+   "type": "section-task",
+   "query": "我想知道系统里有哪些个人数据、分别存放在哪里，该怎么查？",
+   "target": "COMPLIANCE_GDPR_20260815.md"
+  },
+  {
+   "id": "sec0037",
+   "type": "section-task",
+   "query": "怎么判断系统该不该去查资料，以及查完以后怎么记住并自动执行？",
+   "target": "COMPLIANCE_REPORT_2026-08-27.md"
+  },
+  {
+   "id": "sec0038",
+   "type": "section-task",
+   "query": "怎样让系统根据最近一段时间的使用记录自动判断该不该去查资料？",
+   "target": "COMPLIANCE_REPORT_2026-09-10.md"
+  },
+  {
+   "id": "sec0039",
+   "type": "section-task",
+   "query": "我该怎么判断一个智能助手给出的回答是否靠谱，并且让它记住之前聊过的内容？",
+   "target": "COMPLIANCE_REPORT_2026-09-14.md"
+  },
+  {
+   "id": "sec0040",
+   "type": "section-task",
+   "query": "如何判断当前情况是否需要触发信息查找操作？",
+   "target": "COMPLIANCE_REPORT_2026-09-27.md"
+  },
+  {
+   "id": "sec0041",
+   "type": "section-task",
+   "query": "我该怎么判断什么时候需要去查资料而不是直接回答？",
+   "target": "COMPLIANCE_REPORT_2026-10-01.md"
+  },
+  {
+   "id": "sec0042",
+   "type": "section-task",
+   "query": "我该怎么判断什么时候该去查资料、什么时候直接回答？",
+   "target": "COMPLIANCE_REPORT_2026-10-02.md"
+  },
+  {
+   "id": "sec0043",
+   "type": "section-task",
+   "query": "怎么判断当前问题需不需要去查外部资料？",
+   "target": "COMPLIANCE_REPORT_2026-10-03.md"
+  },
+  {
+   "id": "sec0044",
+   "type": "section-task",
+   "query": "我该怎么判断什么时候需要去查资料而不是直接回答？",
+   "target": "COMPLIANCE_REPORT_2026-10-04.md"
+  },
+  {
+   "id": "sec0045",
+   "type": "section-task",
+   "query": "如何判断一次查询到底该不该走检索流程？",
+   "target": "COMPLIANCE_REPORT_2026-10-05.md"
+  },
+  {
+   "id": "sec0046",
+   "type": "section-task",
+   "query": "我该怎么判断什么时候需要去查资料，而不是直接回答？",
+   "target": "COMPLIANCE_REPORT_2026-10-06.md"
+  },
+  {
+   "id": "sec0047",
+   "type": "section-task",
+   "query": "我想知道怎么判断一个系统是否具备自我意识，以及有没有现成的评估方法？",
+   "target": "CONSCIOUSNESS_SCORE_RETIREMENT.md"
+  },
+  {
+   "id": "sec0048",
+   "type": "section-task",
+   "query": "怎么让聊天助手记住我们之前聊过的所有内容？",
+   "target": "CROSS_WINDOW.md"
+  },
+  {
+   "id": "sec0049",
+   "type": "section-task",
+   "query": "今天到底改了什么、有没有效果，能给我一个简明的交代吗？",
+   "target": "DAY_REPORT_20260913.md"
+  },
+  {
+   "id": "sec0050",
+   "type": "section-task",
+   "query": "我在动手清理系统里那些长期没被用到的配置之前，需要先确认哪些绝对不能碰、哪些必须满足什么条件才能删？",
+   "target": "DEAD_CONFIG_INVENTORY_20260913.md"
+  },
+  {
+   "id": "sec0051",
+   "type": "section-task",
+   "query": "我想知道怎么判断那些被彻底停用的功能到底该不该恢复，有没有逐条评估的结论？",
+   "target": "DEAD_SWITCH_VERDICTS_20260913.md"
+  },
+  {
+   "id": "sec0052",
+   "type": "section-task",
+   "query": "怎么在动手修改数据库之前确认自己连的是正确的环境？",
+   "target": "DEPLOYMENT_TOPOLOGY_20260818.md"
+  },
+  {
+   "id": "sec0053",
+   "type": "section-task",
+   "query": "我接下来几周应该优先推进哪些确定能落地的事情？",
+   "target": "DEVELOPMENT_PLAN_2026Q4.md"
+  },
+  {
+   "id": "sec0054",
+   "type": "section-task",
+   "query": "我想把多份文档合并成一个知识库，具体该怎么操作？",
+   "target": "DOC_FUSION_20260815.md"
+  },
+  {
+   "id": "sec0055",
+   "type": "section-task",
+   "query": "我想了解如何把两种不同的处理方式整合到同一个系统里，以及有什么推荐做法？",
+   "target": "DSH_INTEGRATION_STATUS_20260815.md"
+  },
+  {
+   "id": "sec0056",
+   "type": "section-task",
+   "query": "如何根据代码执行路径判断某个问题是否真的被触发，并决定后续怎么处理？",
+   "target": "ENC_KEYWORD_AUDIT_20260909.md"
+  },
+  {
+   "id": "sec0057",
+   "type": "section-task",
+   "query": "我想了解如何查看和配置系统运行所需的环境变量清单",
+   "target": "ENV_REGISTRY.md"
+  },
+  {
+   "id": "sec0058",
+   "type": "section-task",
+   "query": "这份材料里哪些性能数字是可以对外公开引用的，哪些不能？",
+   "target": "EVAL_CREDIBILITY.md"
+  },
+  {
+   "id": "sec0059",
+   "type": "section-task",
+   "query": "我想了解当前季度有哪些评测资源可用，以及它们各自的状态和后续安排是什么？",
+   "target": "EVAL_REGISTRY_2026Q4.md"
+  },
+  {
+   "id": "sec0060",
+   "type": "section-task",
+   "query": "我想知道这轮里已经打过标签的自我评估部分，需要满足哪些硬性条件，以及对应的证据等级是怎么划分的？",
+   "target": "EVIDENCE_LEVELS_20260913.md"
+  },
+  {
+   "id": "sec0061",
+   "type": "section-task",
+   "query": "我想了解这套系统整体是怎么设计和组织的",
+   "target": "EVOLUTION.md"
+  },
+  {
+   "id": "sec0062",
+   "type": "section-task",
+   "query": "如何让智能体系统具备自我迭代和持续进化的能力？",
+   "target": "EVOLUTION_DIRECTIONS_20260827.md"
+  },
+  {
+   "id": "sec0063",
+   "type": "section-task",
+   "query": "如何在不改变现有行为的前提下，对高频调用路径做一次抽样检查并记录意图？",
+   "target": "EXCEPT_PASS_AUDIT_20260908.md"
+  },
+  {
+   "id": "sec0064",
+   "type": "section-task",
+   "query": "我想了解这次改动涉及哪些文件以及它们当前处于什么状态",
+   "target": "EXECUTION_626_DIFF_20260908.md"
+  },
+  {
+   "id": "sec0065",
+   "type": "section-task",
+   "query": "怎么判断系统里哪些自我评估指标已经达标、哪些还需要处理？",
+   "target": "EXEC_H0_H1_20260913.md"
+  },
+  {
+   "id": "sec0066",
+   "type": "section-task",
+   "query": "哪些方案已经明确不做了，哪些只是暂时搁置？",
+   "target": "EXPERIMENTS_CLOSED_20260908.md"
+  },
+  {
+   "id": "sec0067",
+   "type": "section-task",
+   "query": "我想先弄清楚哪些结果可以直接拿来用，哪些只能作为参考，应该从哪里开始看？",
+   "target": "EXTERNAL_VERIFICATION.md"
+  },
+  {
+   "id": "sec0068",
+   "type": "section-task",
+   "query": "我想了解这个系统目前实际具备哪些能力，成熟度如何？",
+   "target": "FEATURE_OVERVIEW_20260815.md"
+  },
+  {
+   "id": "sec0069",
+   "type": "section-task",
+   "query": "如何让模型根据实际反馈自动调整自己的判断，而不是一直用固定规则？",
+   "target": "FEEDBACK_CLOSURE_DESIGN_20260907.md"
+  },
+  {
+   "id": "sec0070",
+   "type": "section-task",
+   "query": "我想了解怎么给系统设定一个初始状态并据此判断后续变化是否异常",
+   "target": "FORGETTING_BASELINE_20260827.md"
+  },
+  {
+   "id": "sec0071",
+   "type": "section-task",
+   "query": "我想把长期记忆能力集成到现有的智能体框架里，应该怎么接？",
+   "target": "FRAMEWORK_INTEGRATION.md"
+  },
+  {
+   "id": "sec0072",
+   "type": "section-task",
+   "query": "我想知道这份文档开头部分说明了什么内容，以及那个自动生成的状态文件记录了哪些信息。",
+   "target": "FROZEN_STATUS.md"
+  },
+  {
+   "id": "sec0073",
+   "type": "section-task",
+   "query": "我想了解这套系统如何保证数据安全并持续自我优化，以及它未来打算怎么发展？",
+   "target": "FUNCTION_SUMMARY_20260814.md"
+  },
+  {
+   "id": "sec0074",
+   "type": "section-task",
+   "query": "我想了解这套系统在合并后如何管理用户身份和运行周期，以及怎样才算验收通过？",
+   "target": "FUSION_PLAN_20260814.md"
+  },
+  {
+   "id": "sec0075",
+   "type": "section-task",
+   "query": "我们团队技术底子不错但外界不知道，接下来一年该怎么分步走才能既被认可又能做成产品并持续扩大？",
+   "target": "FUTURE_PLAN_20260815.md"
+  },
+  {
+   "id": "sec0076",
+   "type": "section-task",
+   "query": "我想知道怎么让不同AI系统之间共享和迁移记忆，避免被单一平台锁定",
+   "target": "FUTURE_PLAN_V2_20260815.md"
+  },
+  {
+   "id": "sec0077",
+   "type": "section-task",
+   "query": "我想知道怎么利用现有数据快速做出一个能自动回答业务问题并生成日报的智能助手",
+   "target": "FUTURE_PROJECTS.md"
+  },
+  {
+   "id": "sec0078",
+   "type": "section-task",
+   "query": "我想在资源有限的情况下重新规划产品方向，应该从哪里开始梳理？",
+   "target": "FUTURE_ROADMAP_V2.md"
+  },
+  {
+   "id": "sec0079",
+   "type": "section-task",
+   "query": "我想知道这个项目接下来分几个阶段推进，每个阶段大概要多久、风险高不高",
+   "target": "FUTURE_ROADMAP_V3.md"
+  },
+  {
+   "id": "sec0080",
+   "type": "section-task",
+   "query": "我想了解这个项目未来几年的整体发展方向和落地节奏是怎么安排的",
+   "target": "FUTURE_VISION_20260815.md"
+  },
+  {
+   "id": "sec0081",
+   "type": "section-task",
+   "query": "我想搞清楚为什么同一批题目在不同运行条件下结果会差这么多，问题到底出在哪儿？",
+   "target": "GAP_ANALYSIS_LONGMEVAL.md"
+  },
+  {
+   "id": "sec0082",
+   "type": "section-task",
+   "query": "我想确认当前各项任务分别推进到什么程度了，哪些已经完成、哪些还在进行中？",
+   "target": "GOAL_STATUS_20260914_R37.md"
+  },
+  {
+   "id": "sec0083",
+   "type": "section-task",
+   "query": "我想知道这次改动里哪些方案真正通过了验证，哪些被拦下或回退了？",
+   "target": "GOAL_STATUS_FINAL_20260914.md"
+  },
+  {
+   "id": "sec0084",
+   "type": "section-task",
+   "query": "系统里出现数据对不上但查不出被改过的痕迹，该怎么排查和处置？",
+   "target": "INCIDENT_AUDIT_CHAIN_20260913.md"
+  },
+  {
+   "id": "sec0085",
+   "type": "section-task",
+   "query": "我想了解这套系统目前实际能做什么、各部分成熟度如何",
+   "target": "JOINT_CAPABILITY_MAP_20260814.md"
+  },
+  {
+   "id": "sec0086",
+   "type": "section-task",
+   "query": "怎么用代码一步步搭建并保存一个可以查询品牌关联信息的关系网络？",
+   "target": "KGRAPH_USAGE.md"
+  },
+  {
+   "id": "sec0087",
+   "type": "section-task",
+   "query": "我想了解最近一周有哪些值得关注的知识更新和重要决定",
+   "target": "KNOWLEDGE_WEEKLY_2026-08-27.md"
+  },
+  {
+   "id": "sec0088",
+   "type": "section-task",
+   "query": "我想了解最近一周内有哪些值得关注的知识更新和动态",
+   "target": "KNOWLEDGE_WEEKLY_2026-09-10.md"
+  },
+  {
+   "id": "sec0089",
+   "type": "section-task",
+   "query": "我想了解最近一周团队里有哪些值得关注的新知识或动态？",
+   "target": "KNOWLEDGE_WEEKLY_2026-09-14.md"
+  },
+  {
+   "id": "sec0090",
+   "type": "section-task",
+   "query": "我想了解如何系统地整理和沉淀团队每周积累的经验与信息，有什么方法可以参考？",
+   "target": "KNOWLEDGE_WEEKLY_2026-09-15.md"
+  },
+  {
+   "id": "sec0091",
+   "type": "section-task",
+   "query": "我想了解最近一周内与知识相关的重要动态和更新，应该看什么？",
+   "target": "KNOWLEDGE_WEEKLY_2026-09-16.md"
+  },
+  {
+   "id": "sec0092",
+   "type": "section-task",
+   "query": "如何让系统在多个可选方案中自动选出最合适的那个？",
+   "target": "KNOWLEDGE_WEEKLY_2026-09-18.md"
+  },
+  {
+   "id": "sec0093",
+   "type": "section-task",
+   "query": "我想了解如何系统地整理和分享专业知识，应该怎么做？",
+   "target": "KNOWLEDGE_WEEKLY_2026-10-01.md"
+  },
+  {
+   "id": "sec0094",
+   "type": "section-task",
+   "query": "我想了解如何系统地整理和分享团队内部的经验与信息，应该怎么做？",
+   "target": "KNOWLEDGE_WEEKLY_2026-10-02.md"
+  },
+  {
+   "id": "sec0095",
+   "type": "section-task",
+   "query": "怎样把零散的信息整理成一套可以反复查阅的资料？",
+   "target": "KNOWLEDGE_WEEKLY_2026-10-03.md"
+  },
+  {
+   "id": "sec0096",
+   "type": "section-task",
+   "query": "我想了解如何系统地整理和保存工作中积累的经验和资料，应该怎么做？",
+   "target": "KNOWLEDGE_WEEKLY_2026-10-05.md"
+  },
+  {
+   "id": "sec0097",
+   "type": "section-task",
+   "query": "我想了解如何系统地整理和保存各类知识内容",
+   "target": "KNOWLEDGE_WEEKLY_2026-10-06.md"
+  },
+  {
+   "id": "sec0098",
+   "type": "section-task",
+   "query": "我想在本地用显卡微调一个小规模大模型，应该怎么操作？",
+   "target": "L1_TRAINING_RUNBOOK.md"
+  },
+  {
+   "id": "sec0099",
+   "type": "section-task",
+   "query": "如何让系统在长期运行中按预期记住或忘记用户偏好并支持失败重试？",
+   "target": "LATEST_20260908.md"
+  },
+  {
+   "id": "sec0100",
+   "type": "section-task",
+   "query": "我想了解怎么查看某个系统在特定日期更新的执行性能排名情况？",
+   "target": "LEADERBOARD.md"
+  },
+  {
+   "id": "sec0101",
+   "type": "section-task",
+   "query": "怎么在本地模型不可用时自动切换到备用方案并确认切换成功？",
+   "target": "LOCAL_INFERENCE_GUIDE.md"
+  },
+  {
+   "id": "sec0102",
+   "type": "section-task",
+   "query": "我想了解你们系统在长对话记忆评测中的真实表现和评测方法",
+   "target": "LongMemEval_S_REPORT_20260816.md"
+  },
+  {
+   "id": "sec0103",
+   "type": "section-task",
+   "query": "我想把这套工具部署到远程服务器上，并加上身份验证，该选哪种连接方式？",
+   "target": "MCP_ECOSYSTEM_GUIDE.md"
+  },
+  {
+   "id": "sec0104",
+   "type": "section-task",
+   "query": "我想把自己的服务提交到几个主流的第三方平台，具体该怎么操作？",
+   "target": "MCP_MARKETPLACE_QUICKFILL_20260824.md"
+  },
+  {
+   "id": "sec0105",
+   "type": "section-task",
+   "query": "我想把一个Python工具包发布到公共仓库并接入AI助手生态，需要做哪些准备和检查？",
+   "target": "MCP_RELEASE_CHECKLIST_20260815.md"
+  },
+  {
+   "id": "sec0106",
+   "type": "section-task",
+   "query": "我想了解目前系统里已经接入了哪些外部工具服务，以及后续可以怎么改进？",
+   "target": "MCP_STATUS_20260815.md"
+  },
+  {
+   "id": "sec0107",
+   "type": "section-task",
+   "query": "怎么判断一个流程只是在空转而没有实际结果？",
+   "target": "MECHANISM_ADJUDICATION_20260914.md"
+  },
+  {
+   "id": "sec0108",
+   "type": "section-task",
+   "query": "怎么判断一个流程是不是空转不产出结果？",
+   "target": "MECHANISM_ADJUDICATION_EO_20260914.md"
+  },
+  {
+   "id": "sec0109",
+   "type": "section-task",
+   "query": "怎么确认新加的机制在真实链路里确实生效，而不是只在测试环境跑通？",
+   "target": "MECH_FLOW_20260914.md"
+  },
+  {
+   "id": "sec0110",
+   "type": "section-task",
+   "query": "如何让一个常驻代理在运行中保持自我状态并安全地对外提供服务？",
+   "target": "MEMORY_BLOCKS_CONTRACT.md"
+  },
+  {
+   "id": "sec0111",
+   "type": "section-task",
+   "query": "我想了解如何在去中心化记忆交易平台上发布出售信息的操作流程",
+   "target": "MEMORY_MARKET_PROTOCOL.md"
+  },
+  {
+   "id": "sec0112",
+   "type": "section-task",
+   "query": "我想了解系统里保存的信息整体情况怎么样，以及其中有多少是真正有用、整理得比较规范的？",
+   "target": "MEMORY_QUALITY_AUDIT.md"
+  },
+  {
+   "id": "sec0113",
+   "type": "section-task",
+   "query": "我想验证某个记忆系统给出的成绩单是否真实可信，该怎么做？",
+   "target": "MEMORY_REVIEW_TOOLKIT.md"
+  },
+  {
+   "id": "sec0114",
+   "type": "section-task",
+   "query": "我想了解这套改动具体怎么落地、会产生哪些文件，以及出问题后如何恢复？",
+   "target": "META_STRATEGY_LOOP_20260908.md"
+  },
+  {
+   "id": "sec0115",
+   "type": "section-task",
+   "query": "我想知道当前系统还有哪些没补上的关键漏洞，以及该不该单独立项去修",
+   "target": "MIDTERM_MECHANISM_DESIGN_20260907.md"
+  },
+  {
+   "id": "sec0116",
+   "type": "section-task",
+   "query": "怎么把现有系统里的对话记忆和助手数据完整搬到另一个平台？",
+   "target": "MIGRATION_GUIDE.md"
+  },
+  {
+   "id": "sec0117",
+   "type": "section-task",
+   "query": "怎么比较两个生成模型在同一批题目上的表现并判断评分标准是否一致？",
+   "target": "MODEL_AB_VERIFICATION_20260818.md"
+  },
+  {
+   "id": "sec0118",
+   "type": "section-task",
+   "query": "我想知道哪些代码模块已经没人用了，可以安全地删掉或归档，应该从哪里开始处理？",
+   "target": "MODULES_GUIDE.md"
+  },
+  {
+   "id": "sec0119",
+   "type": "section-task",
+   "query": "如何判断某个问题是不是由微软相关因素引起的？",
+   "target": "MS_DIAGNOSIS_20260829.md"
+  },
+  {
+   "id": "sec0120",
+   "type": "section-task",
+   "query": "我想了解这套网络方案在最新时间点的整体表现和优缺点，该看哪份材料？",
+   "target": "NETWORK_EVAL_FINAL_20260829.md"
+  },
+  {
+   "id": "sec0121",
+   "type": "section-task",
+   "query": "我想了解不同向量检索方案在效果和速度上有什么差别，该怎么选？",
+   "target": "NEW_MODULES.md"
+  },
+  {
+   "id": "sec0122",
+   "type": "section-task",
+   "query": "目前已经完成了哪些部分，接下来还需要做哪些事情？",
+   "target": "OPENSOURCE_READINESS_20260908.md"
+  },
+  {
+   "id": "sec0123",
+   "type": "section-task",
+   "query": "这套系统平时都靠哪些部分协同运转，每天凌晨三点会自动执行什么？",
+   "target": "OPERATIONS.md"
+  },
+  {
+   "id": "sec0124",
+   "type": "section-task",
+   "query": "如何为一次自动化运维机器人的观察窗口做复盘准备？",
+   "target": "OPSBOT_REVIEW_0909.md"
+  },
+  {
+   "id": "sec0125",
+   "type": "section-task",
+   "query": "我想了解这份文档开头部分说明了什么背景信息",
+   "target": "OPSBOT_REVIEW_0909_preview.md"
+  },
+  {
+   "id": "sec0126",
+   "type": "section-task",
+   "query": "我想了解系统当前运行状态和关键指标，并回顾最近一次运维复盘中发现的问题与后续建议。",
+   "target": "OPSBOT_REVIEW_20260907.md"
+  },
+  {
+   "id": "sec0127",
+   "type": "section-task",
+   "query": "我想了解系统启动前的说明和最近一周的自动运行情况总结",
+   "target": "OPSBOT_WEEKLY_REPORT.md"
+  },
+  {
+   "id": "sec0128",
+   "type": "section-task",
+   "query": "怎么区分两种不同的信息查找方式，避免把它们搞混？",
+   "target": "OPS_NOTES_20260815.md"
+  },
+  {
+   "id": "sec0129",
+   "type": "section-task",
+   "query": "我想知道这套系统在什么场景下该走图检索、什么场景下走普通检索，怎么判断？",
+   "target": "OPTIMIZATION_AGI_2026.md"
+  },
+  {
+   "id": "sec0130",
+   "type": "section-task",
+   "query": "我想快速了解某篇文献的核心观点，并判断它对我们现有系统有什么可借鉴之处",
+   "target": "OPTIMIZATION_ALIEN_MIND_20260909.md"
+  },
+  {
+   "id": "sec0131",
+   "type": "section-task",
+   "query": "我手头已经做出来但还没真正用起来的东西有哪些，能怎么盘活？",
+   "target": "OPTIMIZATION_ANALYSIS_ROUND5.md"
+  },
+  {
+   "id": "sec0132",
+   "type": "section-task",
+   "query": "我想知道怎么判断检索结果里混进了不相关的噪声，以及这对系统影响有多大",
+   "target": "OPTIMIZATION_ANALYSIS_ROUND6.md"
+  },
+  {
+   "id": "sec0133",
+   "type": "section-task",
+   "query": "我想了解不同智能体开发工具之间如何共享和复用对话记忆，目前有哪些通用做法？",
+   "target": "OPTIMIZATION_ANALYSIS_ROUND7.md"
+  },
+  {
+   "id": "sec0134",
+   "type": "section-task",
+   "query": "我想知道在正式大规模推广前，应该先做哪些小范围验证工作？",
+   "target": "OPTIMIZATION_DIRECTIONS_20260815.md"
+  },
+  {
+   "id": "sec0135",
+   "type": "section-task",
+   "query": "我想知道这套系统在长对话记忆评测里，哪些优化真正有效、哪些方向已经被验证走不通，避免重复踩坑。",
+   "target": "OPTIMIZATION_FROM_LMEME_20260816.md"
+  },
+  {
+   "id": "sec0136",
+   "type": "section-task",
+   "query": "我们打算怎么把当前效果不好的地方补起来，并排出一个分阶段的改进方案？",
+   "target": "OPTIMIZATION_PLAN_20260817.md"
+  },
+  {
+   "id": "sec0137",
+   "type": "section-task",
+   "query": "在不正式上线的前提下，怎样安排后续的优化和验证工作？",
+   "target": "OPTIMIZATION_PLAN_NOPUBLISH_20260906.md"
+  },
+  {
+   "id": "sec0138",
+   "type": "section-task",
+   "query": "怎么判断这套系统在查询速度、开销、效果和日常维护上是否值得继续用？",
+   "target": "OPTIMIZATION_REPORT_20260827.md"
+  },
+  {
+   "id": "sec0139",
+   "type": "section-task",
+   "query": "我想知道系统里有哪些没人调用的代码模块，以及它们最近一次检查是什么时候？",
+   "target": "ORPHAN_MODULES_INDEX.md"
+  },
+  {
+   "id": "sec0140",
+   "type": "section-task",
+   "query": "这套系统是怎么运作的，遇到问题又该怎么退回去？",
+   "target": "PAGETREE.md"
+  },
+  {
+   "id": "sec0141",
+   "type": "section-task",
+   "query": "怎么确认系统给出的结果不是自己说了算，而是有独立依据的？",
+   "target": "PARTNER_VERIFICATION.md"
+  },
+  {
+   "id": "sec0142",
+   "type": "section-task",
+   "query": "我想了解这套系统默认开启哪些功能、哪些需要手动打开，以及怎么调整这些设置",
+   "target": "PERCEPTION_PRIVACY_POLICY.md"
+  },
+  {
+   "id": "sec0143",
+   "type": "section-task",
+   "query": "我想了解系统优化之后最新的运行速度表现如何",
+   "target": "PERF_NOTES_20260815.md"
+  },
+  {
+   "id": "sec0144",
+   "type": "section-task",
+   "query": "这个执行组件在系统里到底承担什么角色，跑起来实际表现如何？",
+   "target": "PERF_REGRESSION_P0_20260906.md"
+  },
+  {
+   "id": "sec0145",
+   "type": "section-task",
+   "query": "我想把现有系统平滑迁移到新版本，有哪些分阶段的实施方式和注意事项？",
+   "target": "PG_SWITCH_GUIDE_20260829.md"
+  },
+  {
+   "id": "sec0146",
+   "type": "section-task",
+   "query": "这个阶段具体要完成哪些事项，以及整体进度如何收尾？",
+   "target": "PHASE2_SUMMARY_20260827.md"
+  },
+  {
+   "id": "sec0147",
+   "type": "section-task",
+   "query": "如何让系统在正式环境里安全地自动修改自己的核心代码？",
+   "target": "PHASE3_DESIGN_CORE_SELF_EDIT.md"
+  },
+  {
+   "id": "sec0148",
+   "type": "section-task",
+   "query": "这份规划目前整体完成到什么程度了？",
+   "target": "PLANNING_REVIEW_20260815.md"
+  },
+  {
+   "id": "sec0149",
+   "type": "section-task",
+   "query": "我想知道为什么不能对外宣称我们的方案比现有公开方案更准确，依据是什么？",
+   "target": "POSITIONING_20260911.md"
+  },
+  {
+   "id": "sec0150",
+   "type": "section-task",
+   "query": "如何确保我的数据只保存在自己指定的区域内？",
+   "target": "PRIVACY.md"
+  },
+  {
+   "id": "sec0151",
+   "type": "section-task",
+   "query": "如何确认一次大规模数据质量治理是否真正达到了预期效果？",
+   "target": "PRODUCTION_ACCEPTANCE_REPORT_20260818.md"
+  },
+  {
+   "id": "sec0152",
+   "type": "section-task",
+   "query": "我想快速了解一个新产品该怎么定位并规划后续落地步骤",
+   "target": "PRODUCTIZATION_20260816.md"
+  },
+  {
+   "id": "sec0153",
+   "type": "section-task",
+   "query": "如何把对话内容自动转成可检索的结构化知识并控制成本？",
+   "target": "PROPOSITION_V2_DESIGN.md"
+  },
+  {
+   "id": "sec0154",
+   "type": "section-task",
+   "query": "我想了解这个项目当前的整体进展和最终结论是什么？",
+   "target": "QA_GENERATION_FRONTIER_MAP.md"
+  },
+  {
+   "id": "sec0155",
+   "type": "section-task",
+   "query": "我想快速把一套检索增强生成能力接进现有项目，该从哪开始？",
+   "target": "QUICKSTART_20260829.md"
+  },
+  {
+   "id": "sec0156",
+   "type": "section-task",
+   "query": "我想快速把记忆功能集成到自己的应用里，应该从哪里开始？",
+   "target": "QUICKSTART_GATEWAY.md"
+  },
+  {
+   "id": "sec0157",
+   "type": "section-task",
+   "query": "如何为检索增强生成系统挑选合适的文本切分方式？",
+   "target": "RAG_ENGINEERING_RESEARCH_20260824.md"
+  },
+  {
+   "id": "sec0158",
+   "type": "section-task",
+   "query": "我想了解怎样调用这个服务并处理它返回的结果，能给我一些示例吗？",
+   "target": "RAG_SERVICE_20260827.md"
+  },
+  {
+   "id": "sec0159",
+   "type": "section-task",
+   "query": "怎么快速把一整套带界面和接口的服务在本地跑起来？",
+   "target": "README_20260812_180406_198.md"
+  },
+  {
+   "id": "sec0160",
+   "type": "section-task",
+   "query": "线上健康检查一直返回不可用，我该怎么定位并修复根因？\",",
+   "target": "READYZ_STATE_SPRAWL_DCSA_20260927.md"
+  },
+  {
+   "id": "sec0161",
+   "type": "section-task",
+   "query": "我想知道某个方案实际跑出来的结果和当初定的目标差了多少，哪些没做到？",
+   "target": "REFACTOR_BEFORE_AFTER.md"
+  },
+  {
+   "id": "sec0162",
+   "type": "section-task",
+   "query": "这次代码重构之后，怎么确认原有功能没有被改坏，还有哪些地方可能出问题？",
+   "target": "REFACTOR_FULL_REVIEW.md"
+  },
+  {
+   "id": "sec0163",
+   "type": "section-task",
+   "query": "怎么判断现有系统该不该做一次大规模整理，以及从哪一步开始动手？",
+   "target": "REFACTOR_PLAN.md"
+  },
+  {
+   "id": "sec0164",
+   "type": "section-task",
+   "query": "我想知道哪些模块已经确定要下线，哪些还需要继续观察，以及各自的数量和依据是什么。",
+   "target": "REGISTRY_CONSUMER_LEDGER_20260914.md"
+  },
+  {
+   "id": "sec0165",
+   "type": "section-task",
+   "query": "这次更新到底改了什么，还有哪些没做完？",
+   "target": "RELEASE_NOTES_458.md"
+  },
+  {
+   "id": "sec0166",
+   "type": "section-task",
+   "query": "如何规划明年整体工作的推进节奏和重点方向？",
+   "target": "REMEDIATION_PLAN_20260829.md"
+  },
+  {
+   "id": "sec0167",
+   "type": "section-task",
+   "query": "怎么判断哪些问题这轮已经处理完、哪些是故意留着不动的？",
+   "target": "REPO_HYGIENE_AUDIT_20260908.md"
+  },
+  {
+   "id": "sec0168",
+   "type": "section-task",
+   "query": "现有记忆评测方法有哪些不可忽视的缺陷，会导致结果不可信？",
+   "target": "RESEARCH_ROUND8_SUMMARY.md"
+  },
+  {
+   "id": "sec0169",
+   "type": "section-task",
+   "query": "如何识别并处理系统中那些持续运行却没有任何实际产出的模块？",
+   "target": "RETIRED_MECHANISMS_20260913.md"
+  },
+  {
+   "id": "sec0170",
+   "type": "section-task",
+   "query": "我想了解某个系统或项目在特定日期被正式停止使用时的完整记录和依据是什么",
+   "target": "RETIREMENT_DOSSIER_20260913.md"
+  },
+  {
+   "id": "sec0171",
+   "type": "section-task",
+   "query": "线上检索服务响应慢，想确认当前延迟表现和瓶颈在哪里",
+   "target": "RETRIEVAL_KNOWN_LIMITS.md"
+  },
+  {
+   "id": "sec0172",
+   "type": "section-task",
+   "query": "我想确认这套记忆系统在多次评测中是否都通过了验证，以及整体结果如何。",
+   "target": "REVIEW_SELF_20260914.md"
+  },
+  {
+   "id": "sec0173",
+   "type": "section-task",
+   "query": "这个项目从最初发布到现在经历了哪些关键版本和架构变化？",
+   "target": "ROADMAP.md"
+  },
+  {
+   "id": "sec0174",
+   "type": "section-task",
+   "query": "我想知道这个项目从启动到未来半年的整体推进节奏是怎么安排的",
+   "target": "ROADMAP_20260908.md"
+  },
+  {
+   "id": "sec0175",
+   "type": "section-task",
+   "query": "我想知道最新一轮测试的具体结果和最终结论是什么",
+   "target": "ROUND5_TURN_COMBINED_20260817.md"
+  },
+  {
+   "id": "sec0176",
+   "type": "section-task",
+   "query": "我想了解如何让智能体在环境中自主探索并主动发现新目标，有哪些不同的实现方式？",
+   "target": "RUNNER_MAP.md"
+  },
+  {
+   "id": "sec0177",
+   "type": "section-task",
+   "query": "我想了解这套系统目前哪些功能已经能自动跑起来，哪些还需要人工介入，以及它们分别归谁管。",
+   "target": "RUNTIME_MATRIX_20260909.md"
+  },
+  {
+   "id": "sec0178",
+   "type": "section-task",
+   "query": "我想了解在单机数据库上处理十万行数据时，不同并发查询方案的实际性能表现如何",
+   "target": "SCALE_REPORT_20260909.md"
+  },
+  {
+   "id": "sec0179",
+   "type": "section-task",
+   "query": "怎么用官方同款提示词来测试记忆系统的问答表现？",
+   "target": "SCORES_20260908.md"
+  },
+  {
+   "id": "sec0180",
+   "type": "section-task",
+   "query": "我想了解如何从整体上规划一套能层层拦截风险的防护机制，该从哪些原则和结构入手？",
+   "target": "SECURITY.md"
+  },
+  {
+   "id": "sec0181",
+   "type": "section-task",
+   "query": "我们到底要不要给数据库里的敏感内容做加密，最后是怎么定的？",
+   "target": "SECURITY_BOUNDARIES.md"
+  },
+  {
+   "id": "sec0182",
+   "type": "section-task",
+   "query": "我想了解怎么把各种方案对应到具体执行步骤，并知道哪些条件才能解锁更高分数，同时看清当前自我意识研究的前沿进展",
+   "target": "SELF_CONSCIOUSNESS_FRONTIER_MAP.md"
+  },
+  {
+   "id": "sec0183",
+   "type": "section-task",
+   "query": "怎样让系统在无人看管的情况下自动完成代码合并并保证安全？",
+   "target": "SELF_EDIT_PIPELINE_20260828.md"
+  },
+  {
+   "id": "sec0184",
+   "type": "section-task",
+   "query": "我想让系统自己发现改进点并自动验证效果，该怎么搭建这套流程？",
+   "target": "SELF_EVOLUTION_DESIGN.md"
+  },
+  {
+   "id": "sec0185",
+   "type": "section-task",
+   "query": "我想评估两个系统在语义能力上的差异，并判断哪些模块值得迁移过来，该看哪份材料？",
+   "target": "SEMANTICA_VS_TRINITY_20260911.md"
+  },
+  {
+   "id": "sec0186",
+   "type": "section-task",
+   "query": "我想让几台电脑上的记忆数据能自动汇总到服务器，该怎么设计整体方案？",
+   "target": "SERVER_MULTI_NODE_SYNC.md"
+  },
+  {
+   "id": "sec0187",
+   "type": "section-task",
+   "query": "我想在多台机器之间实时同步记忆数据，应该怎么搭建和部署整套系统？",
+   "target": "SERVER_MULTI_NODE_SYNC_DETAILED.md"
+  },
+  {
+   "id": "sec0188",
+   "type": "section-task",
+   "query": "我想知道上一轮任务里哪些改动被拦下、哪些通过了，以及后续还要补什么？",
+   "target": "SESSION_BACKFILL_20260914.md"
+  },
+  {
+   "id": "sec0189",
+   "type": "section-task",
+   "query": "我想了解最近一次技术讨论的整体过程和关键结论，该从哪里看起？",
+   "target": "SESSION_RECAP_20260827.md"
+  },
+  {
+   "id": "sec0190",
+   "type": "section-task",
+   "query": "我想了解当前系统里各项技能能力的分布和重复情况，有没有一份盘点总结？",
+   "target": "SKILLS_INVENTORY_20260911.md"
+  },
+  {
+   "id": "sec0191",
+   "type": "section-task",
+   "query": "我想了解如何为系统设定并管理服务等级目标，以及相关的错误预算和告警机制",
+   "target": "SLO.md"
+  },
+  {
+   "id": "sec0192",
+   "type": "section-task",
+   "query": "我想了解这套系统当前整体运行状况和可用功能有哪些",
+   "target": "STATUS_20260907.md"
+  },
+  {
+   "id": "sec0193",
+   "type": "section-task",
+   "query": "我想给系统里的数据加上加密保护，应该怎么配置和启用？",
+   "target": "STORAGE_ENCRYPTION_20260815.md"
+  },
+  {
+   "id": "sec0194",
+   "type": "section-task",
+   "query": "怎样设计不同参数组合的性能测试来对比系统改进效果？",
+   "target": "STRESS_TEST_REPORT_20260815.md"
+  },
+  {
+   "id": "sec0195",
+   "type": "section-task",
+   "query": "怎么验证系统在多人同时读写时不会崩溃或变慢？",
+   "target": "STRESS_TEST_REPORT_20260815_PRODDB.md"
+  },
+  {
+   "id": "sec0196",
+   "type": "section-task",
+   "query": "现在有哪些任务正在跑，哪些在排队等着被安排？",
+   "target": "TASK_MANIFEST_20260908.md"
+  },
+  {
+   "id": "sec0197",
+   "type": "section-task",
+   "query": "如何统一不同测试环境下的执行标准？",
+   "target": "TESTING.md"
+  },
+  {
+   "id": "sec0198",
+   "type": "section-task",
+   "query": "这套系统整体是怎么设计的，各个模块之间如何协同工作？",
+   "target": "TRINITY_ARCHITECTURE_GUIDE.md"
+  },
+  {
+   "id": "sec0199",
+   "type": "section-task",
+   "query": "我想知道当前系统在认知能力上跟主流方案比到底处于什么水平，以及接下来该优先做什么。",
+   "target": "TRINITY_BRAIN_SCORE_20260913.md"
+  },
+  {
+   "id": "sec0200",
+   "type": "section-task",
+   "query": "这个系统目前实际具备哪些能力，哪些事情它做不了或做不好？",
+   "target": "TRINITY_CAPABILITY_MAP_20260913.md"
+  },
+  {
+   "id": "sec0201",
+   "type": "section-task",
+   "query": "我想知道一个项目从启动到赚钱最短的路线该怎么走，以及每一步能拿到什么结果",
+   "target": "TRINITY_COMMERCIAL_PLAN_20260817.md"
+  },
+  {
+   "id": "sec0202",
+   "type": "section-task",
+   "query": "我想了解一套兼顾本地部署和开源信任的商业方案该怎么设计？",
+   "target": "TRINITY_COMMERCIAL_PLAN_V2_20260818.md"
+  },
+  {
+   "id": "sec0203",
+   "type": "section-task",
+   "query": "我们想调整产品定位，把目标客户从特定行业转向更通用的需求，该怎么做？",
+   "target": "TRINITY_COMMERCIAL_PLAN_V3_20260818.md"
+  },
+  {
+   "id": "sec0204",
+   "type": "section-task",
+   "query": "我想知道怎样借鉴别人已经跑通的商业打法来重新规划自己项目的整体路线图",
+   "target": "TRINITY_COMMERCIAL_PLAN_V4_20260818.md"
+  },
+  {
+   "id": "sec0205",
+   "type": "section-task",
+   "query": "我想找一套成功率最高、能分阶段验证并控制风险的商业落地方案，该怎么做？",
+   "target": "TRINITY_COMMERCIAL_PLAN_V5_20260818.md"
+  },
+  {
+   "id": "sec0206",
+   "type": "section-task",
+   "query": "我想了解我们产品跟市面上其他方案比到底差在哪、强在哪，有没有一份完整的对比清单？",
+   "target": "TRINITY_COMPETITIVE_MATRIX_20260827.md"
+  },
+  {
+   "id": "sec0207",
+   "type": "section-task",
+   "query": "我想了解某个技术系统在各方面的表现和评分，有没有全面的评估报告？",
+   "target": "TRINITY_DEEP_EVALUATION.md"
+  },
+  {
+   "id": "sec0208",
+   "type": "section-task",
+   "query": "想了解某个评测系统目前实际跑到了什么水平，以及不同技术路线之间该怎么选？",
+   "target": "TRINITY_EVAL_STATUS_AND_COMPARISON_20260817.md"
+  },
+  {
+   "id": "sec0209",
+   "type": "section-task",
+   "query": "这套系统经过几轮外部方案借鉴后，整体效果提升了多少？",
+   "target": "TRINITY_EVOLUTION_SUMMARY.md"
+  },
+  {
+   "id": "sec0210",
+   "type": "section-task",
+   "query": "我想了解这次排查后系统目前实际运行得怎么样？",
+   "target": "TRINITY_FULL_AUDIT_20260815.md"
+  },
+  {
+   "id": "sec0211",
+   "type": "section-task",
+   "query": "我们公司接下来两年在AI记忆方向应该怎么分阶段推进和取舍？",
+   "target": "TRINITY_FUTURE_DIRECTION_20260821.md"
+  },
+  {
+   "id": "sec0212",
+   "type": "section-task",
+   "query": "我想了解这套系统在真实环境下的运行表现和性能数据",
+   "target": "TRINITY_HOLOGRAPHIC_SELFCHECK.md"
+  },
+  {
+   "id": "sec0213",
+   "type": "section-task",
+   "query": "我想了解这套系统当前积累的知识整体构成和各类内容占比是怎样的？",
+   "target": "TRINITY_KNOWLEDGE_VALUE.md"
+  },
+  {
+   "id": "sec0214",
+   "type": "section-task",
+   "query": "这套系统现在整体运行状况和各项能力表现怎么样？",
+   "target": "TRINITY_MASTER_SUMMARY_20260821.md"
+  },
+  {
+   "id": "sec0215",
+   "type": "section-task",
+   "query": "我想了解这套网络方案在2026年整体表现如何，值不值得采用？",
+   "target": "TRINITY_NETWORK_EVALUATION_2026.md"
+  },
+  {
+   "id": "sec0216",
+   "type": "section-task",
+   "query": "我想了解当前系统在多个维度上的实际运行表现如何",
+   "target": "TRINITY_REVIEW_2026Q4.md"
+  },
+  {
+   "id": "sec0217",
+   "type": "section-task",
+   "query": "我想了解当前各项工作的实际完成情况以及后续需要处理哪些小问题？",
+   "target": "TRINITY_REVIEW_VS_V2_20260815.md"
+  },
+  {
+   "id": "sec0218",
+   "type": "section-task",
+   "query": "这个系统目前到底能做什么、做得怎么样，有没有一份完整的现状说明？",
+   "target": "TRINITY_STATUS_20260815_V2.md"
+  },
+  {
+   "id": "sec0219",
+   "type": "section-task",
+   "query": "我想了解一个全在线系统当前的整体运行状况和实际表现，该从哪里看起？",
+   "target": "TRINITY_STATUS_20260827.md"
+  },
+  {
+   "id": "sec0220",
+   "type": "section-task",
+   "query": "我想了解目前实际测试的结果，并比较不同版本方案的完成情况，再看看行业里其他做法，最后给出判断。",
+   "target": "TRINITY_STATUS_VS_V2_FINAL_20260815.md"
+  },
+  {
+   "id": "sec0221",
+   "type": "section-task",
+   "query": "这份文档最终得出了什么结论，并且当前实测情况与最优方案相比表现如何？",
+   "target": "TRINITY_SUMMARY_20260815.md"
+  },
+  {
+   "id": "sec0222",
+   "type": "section-task",
+   "query": "这套系统能帮不同角色解决哪些实际问题？",
+   "target": "TRINITY_SUMMARY_20260827.md"
+  },
+  {
+   "id": "sec0223",
+   "type": "section-task",
+   "query": "这套系统整体是怎么搭起来的，各部分分别负责什么？",
+   "target": "TRINITY_SYSTEM_OVERVIEW.md"
+  },
+  {
+   "id": "sec0224",
+   "type": "section-task",
+   "query": "我想知道这套系统经过实际测试后，各层的检查结果怎么样？",
+   "target": "TRINITY_VALUE_ASSESSMENT.md"
+  },
+  {
+   "id": "sec0225",
+   "type": "section-task",
+   "query": "我想了解这套系统目前整体值多少钱、哪些部分最值得保留",
+   "target": "TRINITY_VALUE_REVIEW.md"
+  },
+  {
+   "id": "sec0226",
+   "type": "section-task",
+   "query": "这套系统最近的评测优化带来了哪些实际价值提升？",
+   "target": "TRINITY_VALUE_UPDATE_20260817.md"
+  },
+  {
+   "id": "sec0227",
+   "type": "section-task",
+   "query": "我想知道系统当前性能基准是多少，以及每天该盯哪些指标、用什么命令检查、超过多少算异常，还有官方复测怎么安排？",
+   "target": "TUNE_OBSERVATION_20260828.md"
+  },
+  {
+   "id": "sec0228",
+   "type": "section-task",
+   "query": "我想了解一个长期积累了大量行为记录的人，他平时有哪些稳定的行为规律和知识背景？",
+   "target": "USER_PROFILE_20260908.md"
+  },
+  {
+   "id": "sec0229",
+   "type": "section-task",
+   "query": "怎么判断一个标识符该不该被当作版本号处理？",
+   "target": "VERSION_POLICY.md"
+  },
+  {
+   "id": "sec0230",
+   "type": "section-task",
+   "query": "我想知道系统为什么检索得到内容却用不起来，以及怎么改进",
+   "target": "WEAKNESS_OPTIMIZATION_PLAN_20260913.md"
+  },
+  {
+   "id": "sec0231",
+   "type": "section-task",
+   "query": "如何判断哪些网络优化点该优先处理，哪些可以暂缓？",
+   "target": "WEB_BORROW_BACKLOG_20260907.md"
+  },
+  {
+   "id": "sec0232",
+   "type": "section-task",
+   "query": "我想把两个现有系统接起来，让它们能共享记忆并分阶段落地，该怎么做？",
+   "target": "WMS_INTEGRATION_PLAN.md"
+  },
+  {
+   "id": "sec0233",
+   "type": "section-task",
+   "query": "如何避免系统在未经我同意的情况下擅自保存对话内容？",
+   "target": "WRITE_CONFIRM_GATE.md"
+  },
+  {
+   "id": "sec0234",
+   "type": "section-task",
+   "query": "如何为技术文档撰写开头的引言部分？",
+   "target": "_sitemap.generated.md"
+  },
+  {
+   "id": "sec0235",
+   "type": "section-task",
+   "query": "怎么让系统在运行前自动检查并修复可能出现的死循环问题？",
+   "target": "anti_loop_self_check.md"
+  },
+  {
+   "id": "sec0236",
+   "type": "section-task",
+   "query": "我想了解系统里被多个模块共用的底层部分是怎么保持稳定不被随意改动的？",
+   "target": "brain_dependencies.md"
+  },
+  {
+   "id": "sec0237",
+   "type": "section-task",
+   "query": "我想知道这套系统实际交付了哪些功能，以及它们是否都经过真实测试。",
+   "target": "brainification-execution-20260909.md"
+  },
+  {
+   "id": "sec0238",
+   "type": "section-task",
+   "query": "我想知道这次系统检查后到底发现了哪些问题，以及哪些已经修好并实际验证过了？",
+   "target": "closed-loop-audit-20260909.md"
+  },
+  {
+   "id": "sec0239",
+   "type": "section-task",
+   "query": "我想给这个项目提交代码，应该先了解哪些准备工作和流程？",
+   "target": "contributing.md"
+  },
+  {
+   "id": "sec0240",
+   "type": "section-task",
+   "query": "怎么让多个团队共用一套数据库还能各自独立管理数据？",
+   "target": "deployment.md"
+  },
+  {
+   "id": "sec0241",
+   "type": "section-task",
+   "query": "我该怎么把这个工具装到自己的电脑上并开始用？",
+   "target": "getting-started.md"
+  },
+  {
+   "id": "sec0242",
+   "type": "section-task",
+   "query": "我想快速上手这个工具，应该从哪里开始？",
+   "target": "index.md"
+  },
+  {
+   "id": "sec0243",
+   "type": "section-task",
+   "query": "我该怎么判断现在能不能把某个新功能默认打开？",
+   "target": "jev-borrowings.md"
+  },
+  {
+   "id": "sec0244",
+   "type": "section-task",
+   "query": "我想搞清楚一个网上重名的技术名词到底指哪几样东西，各自边界在哪",
+   "target": "jev-ecosystem-brainification-20260927.md"
+  },
+  {
+   "id": "sec0245",
+   "type": "section-task",
+   "query": "我想把另一个项目的设计思路迁移到现有系统里，应该怎么落地并验证效果？",
+   "target": "mano-p-borrow-20260909.md"
+  },
+  {
+   "id": "sec0246",
+   "type": "section-task",
+   "query": "怎么把本地工具接入到不同 AI 编程助手并确认连接成功？",
+   "target": "mcp-clients.md"
+  },
+  {
+   "id": "sec0247",
+   "type": "section-task",
+   "query": "怎样让不同客户的数据在同一个系统里互不干扰？",
+   "target": "multi-tenant.md"
+  },
+  {
+   "id": "sec0248",
+   "type": "section-task",
+   "query": "怎样让系统同时记住图片、声音和文字，并能根据任意一种找到其他类型的内容？",
+   "target": "multimodal.md"
+  },
+  {
+   "id": "sec0249",
+   "type": "section-task",
+   "query": "我想了解这次改动具体参考了哪些外部方案，以及为什么只选了其中几条来落地。",
+   "target": "openviking-borrow-20260910.md"
+  },
+  {
+   "id": "sec0250",
+   "type": "section-task",
+   "query": "怎么确认某个功能是真的在被使用，而不是只在注册表里挂着？",
+   "target": "openviking-borrow-round2-20260910.md"
+  },
+  {
+   "id": "sec0251",
+   "type": "section-task",
+   "query": "怎么让之前判断技能数量为零的错误结论得到纠正？",
+   "target": "openviking-borrow-round3-20260910.md"
+  },
+  {
+   "id": "sec0252",
+   "type": "section-task",
+   "query": "系统上线后怎么确认之前修的那些问题真的生效了？",
+   "target": "openviking-borrow-round4-20260910.md"
+  },
+  {
+   "id": "sec0253",
+   "type": "section-task",
+   "query": "怎么把一个体积过大的数据库适配器类逐步拆分成更小的模块？",
+   "target": "refactor-plan-20260909.md"
+  },
+  {
+   "id": "sec0254",
+   "type": "section-task",
+   "query": "我想了解这套系统整体怎么用，应该按什么顺序调用各个部分？",
+   "target": "retrieval-map.md"
+  },
+  {
+   "id": "sec0255",
+   "type": "section-task",
+   "query": "如何把防止库存超卖和智能波次规划这些优化功能接入到现有仓储系统里？",
+   "target": "smartcos_integration.md"
+  },
+  {
+   "id": "sec0256",
+   "type": "section-task",
+   "query": "我们现在的仓储系统有哪些地方需要升级，升级后能带来什么好处？",
+   "target": "smartcos_optimization.md"
+  },
+  {
+   "id": "sec0257",
+   "type": "section-task",
+   "query": "我想确认这次仓库管理系统改造的提交是否都符合审查要求，以及怎么核对和回退",
+   "target": "smartcos_review_guide.md"
+  },
+  {
+   "id": "sec0258",
+   "type": "section-task",
+   "query": "仓储管理系统如何通过多轮自我优化实现缺陷修复与测试体系搭建？",
+   "target": "smartcos_selfopt_final.md"
+  },
+  {
+   "id": "sec0259",
+   "type": "section-task",
+   "query": "如何让系统自动发现并修复运行中的问题，同时给出后续改进建议？",
+   "target": "smartcos_selfopt_report.md"
+  },
+  {
+   "id": "sec0260",
+   "type": "section-task",
+   "query": "我想知道系统里哪些数据模型还没加上数据库标签，以及后续怎么统一处理",
+   "target": "smartcos_techdebt_dbtags.md"
+  },
+  {
+   "id": "sec0261",
+   "type": "section-task",
+   "query": "我想了解系统检测出问题后是怎么决定处理优先级的？",
+   "target": "smartcos_techdebt_purejson.md"
+  },
+  {
+   "id": "sec0262",
+   "type": "section-task",
+   "query": "我想把这个工具单独部署到另一台机器上，不依赖原来的平台，应该怎么操作？",
+   "target": "standalone-usage.md"
+  },
+  {
+   "id": "sec0263",
+   "type": "section-task",
+   "query": "这份文档里有哪些明确不建议采用的做法和场景？",
+   "target": "v8.2.md"
+  },
+  {
+   "id": "sec0264",
+   "type": "section-task",
+   "query": "我想了解这个系统当前的整体运行状况和各项检查结果是否正常",
+   "target": "wms_execution_check.md"
+  },
+  {
+   "id": "sec0265",
+   "type": "section-task",
+   "query": "系统升级后还有哪些问题没解决，整体修了多少？",
+   "target": "wms_execution_check_v3.md"
+  },
+  {
+   "id": "sec0266",
+   "type": "section-task",
+   "query": "我想了解这套系统整体是怎么运转并形成闭环的",
+   "target": "wms_five_dimension_design.md"
+  },
+  {
+   "id": "sec0267",
+   "type": "section-task",
+   "query": "我想了解这套仓储系统目前已经支持哪些硬件设备，以及整体完成到什么程度了",
+   "target": "wms_five_dimension_summary.md"
+  },
+  {
+   "id": "sec0268",
+   "type": "section-task",
+   "query": "我想了解仓库管理系统从收货到发货的完整操作流程和各个功能页面是怎么配合的",
+   "target": "wms_flow_pages.md"
+  },
+  {
+   "id": "sec0269",
+   "type": "section-task",
+   "query": "我们现在的系统和最初设计相比，还有哪些功能没做出来？",
+   "target": "wms_gap_analysis_v2.md"
+  },
+  {
+   "id": "sec0270",
+   "type": "section-task",
+   "query": "我想了解仓库管理系统到底是什么、能解决哪些业务问题",
+   "target": "wms_knowledge.md"
+  },
+  {
+   "id": "sec0271",
+   "type": "section-task",
+   "query": "我想了解如何把现有仓储系统全面升级到理想状态，具体该从哪些方面入手？",
+   "target": "wms_perfect_blueprint.md"
+  },
+  {
+   "id": "sec0272",
+   "type": "section-task",
+   "query": "我想了解这个仓储系统目前的整体开发进度和完成情况",
+   "target": "wms_progress_report.md"
+  },
+  {
+   "id": "sec0273",
+   "type": "section-task",
+   "query": "我们想在不影响日常业务的前提下，把老旧的仓储系统逐步换成新架构，该怎么做？",
+   "target": "wms_refactor_plan.md"
+  },
+  {
+   "id": "sec0274",
+   "type": "section-task",
+   "query": "我们想规划一套面向未来的仓储管理系统，应该从哪些方面入手？",
+   "target": "wms_solution.md"
+  }
+ ]
+}

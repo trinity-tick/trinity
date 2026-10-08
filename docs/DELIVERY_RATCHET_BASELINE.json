@@ -1,0 +1,26 @@
+{
+ "_comment": "投递/消费棘轮基线（t88/B4·A5-04；t97b 冻结口径）。指标 = 窗口内**未被投递**的记忆占比（万分比，**分母固定为基线时刻 active**）；只许下调，判据见 scripts/delivery_ratchet.py。",
+ "_metric": "undelivered_bp = round(10000 × (denominator_active − distinct_delivered_in_window) / denominator_active)",
+ "_caliber": "注入侧（opening_surface_deliveries.jsonl）+ 受众库 SQLite 只读 status='active'；与会话侧(pull)账本**禁止相加**",
+ "_why_ratio": "条数会随语料增长而上升（新记忆天生未投递）⇒ 会误伤；万分比把语料增长约掉。",
+ "_caliber_change_20261007": {
+  "from": "分母 = 当前 active；窗长 = 24h",
+  "to": "分母 = **基线时刻 active 28394**（冻结）；窗长 = **168.0h**（冻结）",
+  "why": "① 分母自己会长：语料 2026-10-07 单日 active **+179** ⇒ 投递不变也会推高比值（~+1bp/周）；② 24h 窗只覆盖投递账本 ~18% ⇒ **窗口一滑 distinct 就抖**：13 个相邻锚点（每 10 分钟）实测 distinct ∈ [34,45]、undelivered_bp ∈ [9984,9988]（±2bp），而 7 天窗 distinct=124 ⇒ 抖动被压掉。⇒ 旧口径会把「窗滑/语料增长」读成「投递退化」。",
+  "note": "t97b: full6 首次发火(9987>9986) => 定性为口径问题(分母自长 + 24h 窗滑动抖动) => 冻结分母 28394 / 窗长 168h",
+  "old_caliber_value_kept_for_reference": 9986,
+  "triggered_by": "full6 里本棘轮首次发火：9987 > 9986（+1）⇒ 定性后改口径，**未把红改成不红而不留痕**"
+ },
+ "_falsification": "把 opening 的 top_k 调成 1（或等价地让每条投递只含 1 个 id）⇒ 本棘轮必红",
+ "_measured_at": "2026-10-07 23:32:18",
+ "undelivered_bp": 9956,
+ "measured": {
+  "active_memories": 28448,
+  "denominator_active": 28394,
+  "distinct_delivered": 124,
+  "delivery_calls": 270,
+  "undelivered_bp_at_current_active": 9956,
+  "window_hours": 168.0,
+  "anchor": "file"
+ }
+}

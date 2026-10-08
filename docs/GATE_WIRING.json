@@ -1,0 +1,256 @@
+{
+ "_comment": "门禁接线登记（2026-09-29 外部审计修复）。把『带棘轮语义的脚本有多少真的在 CI 里跑』写成机器可校验的契约：tests/unit/test_gate_wiring_coverage.py 会重新从 scripts/ 与 .github/workflows/ 推导事实并与本文件比对。",
+ "_why": [
+  "外部审计实测：带棘轮语义的脚本远多于被 CI 调用的数量；被漏掉的包括 scripts/structure_gate.py（即修好的「静默失败棘轮」所在的门禁，修完在 CI 里依然无人跑）。",
+  "判据形态与 docs/PYTEST_SCOPE.json / docs/LINT_ENFORCEMENT.json 同源：**登记 + 绊线**。",
+  "2026-09-29 第二轮：把 19 个 unassessed 全部转为**有测量支撑**的分类 —— 先静态探测写入能力（有写入的一律不盲跑），再对无写入者实跑记录退出码与耗时。"
+ ],
+ "_status_enum": [
+  "ci_wired",
+  "requires_live_store",
+  "manual_by_design",
+  "has_write_path",
+  "has_write_path_no_flag",
+  "runs_red",
+  "unassessed"
+ ],
+ "_must_be_wired": [
+  "structure_gate.py",
+ "thread_pin_gate.py",
+  "direct_pg_writers_audit.py",
+  "scores_gate.py",
+  "lint_ratchet.py",
+  "retrieval_wiring_audit.py",
+  "memory_utilization_audit.py",
+  "fake_green_audit.py",
+  "env_audit.py",
+  "noop_guard_audit.py",
+  "execution_number_collisions.py",
+  "feature_prob_gate.py",
+  "verdict_labels.py"
+ ],
+ "_must_be_wired_reason": "已确认 CI 安全（无写入路径、本地实测 exit 0）且直接守护审计根因的门禁。把它们从 ci.yml 摘掉而只把登记改成 unwired ⇒ 测试即红。",
+ "_method": {
+  "write_path_detection": "源码正则（write_text / json.dump / open(,'w') / --write / --emit / --out / --fix）",
+  "never_blind_run_writers": "检测到写入能力者**不实跑**，只问 --help 以记录可用 flag",
+  "read_only_run": "无写入能力者实跑一次，超时 180s，记录 rc 与耗时",
+  "evidence_files": "D:\\DSH官网\\gate_triage.json（静态分类）、gate_ci_probe.json（实跑结果）",
+  "readonly_verification": "以 `--json` 运行，并在**前后**取 `git status --porcelain` 集合做差集：差集非空即说明该脚本改动了仓库文件 ⇒ 不接线。同时要求 exit 0。证据：D:\\DSH官网\\gate_readonly_probe.json"
+ },
+ "_generated": "2026-09-29（外部审计第三轮：9 个 has_write_path 全部实证分诊，其中 5 个转为 ci_wired）",
+ "_total_ratchet_scripts": 54,
+ "_wired_count": 27,
+ "_unwired_count": 27,
+ "_unassessed_count": 0,
+ "_newly_wired_this_round": [
+  "execution_number_collisions.py",
+  "feature_prob_gate.py",
+  "noop_guard_audit.py",
+  "verdict_labels.py",
+  "sqlite_decrypt_site_audit.py"
+ ],
+ "ci_wired": [
+  "adapter_contract_audit.py",
+  "child_stdio_face_audit.py",
+   "citation_check.py",
+ "critical_paths_gate.py",
+  "direct_pg_writers_audit.py",
+  "env_audit.py",
+  "evidence_encoding_audit.py",
+  "execution_number_collisions.py",
+  "fake_green_audit.py",
+  "feature_prob_gate.py",
+  "lint_ratchet.py",
+  "mechanism_consumer_audit.py",
+  "memory_utilization_audit.py",
+  "mypy_ratchet.py",
+  "noop_guard_audit.py",
+  "optional_default_audit.py",
+  "ps1_bom_gate.py",
+  "rationale_audit.py",
+ "registry_freshness_gate.py",
+  "retrieval_wiring_audit.py",
+  "scores_gate.py",
+  "silent_skip_audit.py",
+  "structure_gate.py",
+    "thread_pin_gate.py",
+  "undefined_global_audit.py",
+  "verdict_labels.py",
+  "sqlite_decrypt_site_audit.py"
+ ],
+ "unwired": [
+  {
+   "script": "acceptance_run_963.py",
+   "status": "requires_live_store",
+   "reason": "需真库 / 活体服务 / LLM，CI 上不稳定或不可用。"
+  },
+  {
+   "script": "blood_flow_status.py",
+   "status": "manual_by_design",
+   "reason": "生成器 / 基线重算 / 人工归因工具，按需手动跑。"
+  },
+  {
+   "script": "capability_effectiveness.py",
+   "status": "requires_live_store",
+   "reason": "需真库 / 活体服务 / LLM，CI 上不稳定或不可用。"
+  },
+  {
+   "script": "checklist_run.py",
+   "status": "requires_live_store",
+   "reason": "需真库 / 活体服务 / LLM，CI 上不稳定或不可用。"
+  },
+  {
+   "script": "cognitive_eval.py",
+   "status": "requires_live_store",
+   "reason": "需真库 / 活体服务 / LLM，CI 上不稳定或不可用。"
+  },
+  {
+   "script": "criterion_hygiene.py",
+   "status": "has_write_path_no_flag",
+   "reason": "静态检测到写入路径（2 处）且**没有**只读/报告 flag ⇒ 不能贸然接进 CI（可能改写基线从而掩盖违规）。需人工确认安全调用形态。",
+   "write_markers": [
+    "io\\.open\\([^)]*['\\\"][wa]",
+    "open\\([^)]*['\\\"][wa]\\+?['\\\"]"
+   ]
+  },
+  {
+   "script": "doc_claims_check.py",
+   "status": "requires_live_store",
+   "reason": "需真库 / 活体服务 / LLM，CI 上不稳定或不可用。"
+  },
+  {
+   "script": "doc_retrieval_eval.py",
+   "status": "requires_live_store",
+   "reason": "需真库 / 活体服务 / LLM，CI 上不稳定或不可用。"
+  },
+  {
+   "script": "doc_truth_gate.py",
+   "status": "runs_red",
+   "reason": "无写入路径、已实跑：exit=1、耗时 45.1s ⇒ **本地就是红的**。需先查清是环境原因还是真违规，再谈接入 CI。",
+   "observed": [
+    "[FAIL] memory_utilization_audit.py --ratc 文档写的签名没出现：利用率未变差 / SKIP(窗口) … 样本不足",
+    "[SKIP]（不静默通过）service_restart_gated.py（本门不核对·已登记：闸门里**绝不跑** —— 它会重启常驻服务（§930 那条路只许人工/调度器走））；checklist_run.py（本门",
+    "doc_truth: 逐行核对 12 行，失败 2 行"
+   ]
+  },
+  {
+   "script": "execution_toc.py",
+   "status": "manual_by_design",
+   "reason": "生成器 / 基线重算 / 人工归因工具，按需手动跑。"
+  },
+  {
+   "script": "export_agents_md.py",
+   "status": "manual_by_design",
+   "reason": "生成器 / 基线重算 / 人工归因工具，按需手动跑。"
+  },
+  {
+   "script": "gate_set.py",
+   "status": "manual_by_design",
+   "reason": "它不是单一审计而是**门禁运行器**（--json-out 需要参数），本身不产出判据；且我的初版分诊把它误判为有 --json 只读模式。按设计由人工/编排调用，不单独接 CI。"
+  },
+  {
+   "script": "left_content_audit.py",
+   "status": "requires_live_store",
+   "reason": "需真库 / 活体服务 / LLM，CI 上不稳定或不可用。"
+  },
+  {
+   "script": "longrange_summary_coverage.py",
+   "status": "has_write_path_no_flag",
+   "reason": "静态检测到写入路径（4 处）且**没有**只读/报告 flag ⇒ 不能贸然接进 CI（可能改写基线从而掩盖违规）。需人工确认安全调用形态。",
+   "write_markers": [
+    "--out\\b",
+    "io\\.open\\([^)]*['\\\"][wa]",
+    "json\\.dump\\(",
+    "open\\([^)]*['\\\"][wa]\\+?['\\\"]"
+   ]
+  },
+  {
+   "script": "loop_health.py",
+   "status": "requires_live_store",
+   "reason": "需真库 / 活体服务 / LLM，CI 上不稳定或不可用。"
+  },
+  {
+   "script": "organ_freeze_gate.py",
+   "status": "runs_red",
+   "reason": "以 --json 运行未改动仓库文件，但 **exit=1**（实测耗时 0.2s）⇒ 本地就是红的，需先查清是环境原因还是真违规，再谈接入 CI。",
+   "observed_tail": "有说明\"     },     {       \"check\": \"freeze:ratchet\",       \"ok\": true,       \"detail\": \"with_consumer=50(基线48) uncovered=35(基线65)\"     }   ],   \"failed\": 1 } [采样时"
+  },
+  {
+   "script": "plaintext_ratio_audit.py",
+   "status": "requires_live_store",
+   "reason": "需真库 / 活体服务 / LLM，CI 上不稳定或不可用。"
+  },
+  {
+   "script": "plaintext_spike_attribute.py",
+   "status": "requires_live_store",
+   "reason": "需真库 / 活体服务 / LLM，CI 上不稳定或不可用。"
+  },
+  {
+   "script": "registry_consumer_baseline_refresh.py",
+   "status": "manual_by_design",
+   "reason": "生成器 / 基线重算 / 人工归因工具，按需手动跑。"
+  },
+  {
+   "script": "script_compile_gate.py",
+   "status": "has_write_path_no_flag",
+   "reason": "静态检测到写入路径（4 处）且**没有**只读/报告 flag ⇒ 不能贸然接进 CI（可能改写基线从而掩盖违规）。需人工确认安全调用形态。",
+   "write_markers": [
+    "--write-baseline",
+    "--write\\b",
+    "json\\.dump\\(",
+    "open\\([^)]*['\\\"][wa]\\+?['\\\"]"
+   ]
+  },
+  {
+   "script": "supervisor_leg_status.py",
+   "status": "requires_live_store",
+   "reason": "需真库 / 活体服务 / LLM，CI 上不稳定或不可用。"
+  },
+  {
+   "script": "temp_leak_audit.py",
+   "status": "runs_red",
+   "reason": "以 --json 运行未改动仓库文件，但 **exit=1**（实测耗时 10.2s）⇒ 本地就是红的，需先查清是环境原因还是真违规，再谈接入 CI。",
+   "observed_tail": "{\"total\": 22, \"advisory_total\": 87} "
+  },
+  {
+   "script": "wiring_triage.py",
+   "status": "manual_by_design",
+   "reason": "生成器 / 基线重算 / 人工归因工具，按需手动跑。"
+  },
+  {
+   "script": "ann_rebuild_inline.py",
+   "status": "requires_live_store",
+   "reason": "需生产库 + 嵌入引擎（load_pool/create_engine/faiss），且会写索引文件与 .bak 备份；CI 无活体库与模型 ⇒ 不可 CI 化。分类依据：脚本 docstring（2026-10-03 等价工具说明）。"
+  },
+  {
+   "script": "coverage_proxy_sqlite.py",
+   "status": "requires_live_store",
+   "reason": "从生产 SQLite 的 audit_log 读取 details.memory_ids 统计覆盖下界；CI 无该库 ⇒ 不可 CI 化。分类依据：脚本 docstring（2026-10-02）。"
+  },
+  {
+   "script": "startup_mem_trace.py",
+   "status": "manual_by_design",
+   "reason": "常驻服务启动期内存时序取证，由 API 启动路径在活体进程内自动调用（TRINITY_MEM_TRACE 默认 on）；按设计不在 CI 跑。分类依据：脚本 docstring 的用法段。"
+  },
+  {
+   "script": "delivery_ratchet.py",
+   "status": "requires_live_store",
+   "reason": "判据依赖**活体证据**：注入侧投递账本 `~/.trinity/state/opening_surface_deliveries.jsonl` + 受众库 SQLite（只读 `status='active'` 计数）。CI 无这两样 ⇒ 本脚本 **fail-closed 返回 2（UNTESTABLE，不静默当通过）** ⇒ 不可 CI 化。本地/编排按需跑：`--json` 只读复算；`--write-baseline` 只在确实改善后**下调**（提高会被拒绝，rc=1）。指标与口径见 scripts/delivery_ratchet.py 与 docs/DELIVERY_RATCHET_BASELINE.json（t88/B4·A5-04）。"
+  }
+ ],
+ "_newly_wired_third_round": [
+  "child_stdio_face_audit.py",
+  "evidence_encoding_audit.py",
+  "ps1_bom_gate.py",
+  "rationale_audit.py",
+  "silent_skip_audit.py"
+ ],
+ "_ci_invoked_contract_gates": {
+  "_why": "**这些不是棘轮门禁，故不在 ci_wired 里** —— ci_wired 的定义经判据锁定为「**棘轮语义**脚本中 CI 会跑的那些」（实测 45 个棘轮脚本、22 个已接线）。本字段记录**硬零契约门禁**：它们同样被 CI 每次执行，只是判定方式是「违反即失败」而非「不许增长」。",
+  "_why_added": "2026-09-29：我一度把 gen_gate_wiring.py 的发现口径改成「CI 以命令形式调用即算已接线」，结果把这两个脚本塞进了 ci_wired，**被 tests/unit/test_gate_wiring_coverage.py 判为不一致** ——它按棘轮口径独立推导，发现「登记但实测没有」。正确做法是恢复定义、另设字段显式记录，而不是改判据去迁就我的分类。",
+  "_scripts": {
+   "swallow_contract_audit.py": "248 个 `swallow` 回退必须与真身**同签名**（本轮新增，硬零）",
+   "run_all_self_tests.py": "跑各组件的自带 self-test（CI 调用；非棘轮语义）"
+  }
+ }
+}
