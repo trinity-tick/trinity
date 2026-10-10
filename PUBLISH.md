@@ -12,7 +12,7 @@
 在浏览器中打开 https://github.com/new
 
 - **Repository name**: `trinity`
-- **Description**: `Trinity — A Triune Architecture for AGI Long-Term Memory (122 modules, 50-tier guardian chain, 47 retrieval channels)`
+- **Description**: `Trinity — a local-first autobiographical memory layer for AI agents: hybrid retrieval, audit trail, and a memory market.`
 - **Visibility**: Public
 - **Do NOT** initialize with README, .gitignore, or license
 
@@ -50,8 +50,6 @@ Trinity v6.37.0 — 第一个正式发布版本。
 
 ### 核心能力
 - 122 模块内存引擎（Exabase, Hindsight, Zikkaron, SelfMem）
-- 50 级守护链（L1-L50，含推理漂移检测）
-- 47 路检索通道（渐进级联：0.05ms P50）
 - 多租户隔离（persona_id/session_id/tenant_id）
 
 ### 接口
@@ -67,7 +65,7 @@ Trinity v6.37.0 — 第一个正式发布版本。
 - PostgreSQL 多租户支持
 
 ### 质量
-- 45 单元测试全部通过
+- 测试与门禁状态以仓库内当前产物为准（不在本清单中声明通过数量）。
 - 检索延迟 P50=21ms（比 Mem0 快 5-12x）
 - 开放域推理（BeliefNetwork 证据/推理分离）
 - API Key 认证（Bearer token）
